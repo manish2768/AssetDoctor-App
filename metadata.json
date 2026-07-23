@@ -1,0 +1,6 @@
+{
+  "name": "AssetDoctor",
+  "description": "AssetDoctor - Smart Asset & Warranty Vault with OCR Receipt Scanner, Emergency Service Mechanic Directory, and WhatsApp Sharing",
+  "requestFramePermissions": ["camera", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
