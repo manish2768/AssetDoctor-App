@@ -1,0 +1,40 @@
+{
+  "short_name": "AssetDoctor",
+  "name": "AssetDoctor - Smart Care & Warranty Vault",
+  "description": "Smart Care & Warranty Vault for home assets, bills, and warranties with offline IndexedDB storage.",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0B0E14",
+  "theme_color": "#0B0E14",
+  "categories": ["utilities", "finance", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Scan Receipt",
+      "short_name": "Scan",
+      "description": "Scan new bill or invoice",
+      "url": "/?action=scan"
+    },
+    {
+      "name": "FASTag Check",
+      "short_name": "FASTag",
+      "description": "Check FASTag balance & tag health",
+      "url": "/?action=fastag"
+    }
+  ]
+}
