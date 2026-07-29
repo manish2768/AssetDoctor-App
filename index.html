@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Asset Doctor - Multi-Asset Hub</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    * { font-family: 'Plus Jakarta Sans', sans-serif; box-sizing: border-box; }
+    
+    html, body { height: 100%; overflow: hidden; background: #03050a; display: flex; justify-content: center; align-items: center; margin: 0; padding: 0; }
+    
+    .glass-card { background: rgba(255, 255, 255, 0.04); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); }
+    .glass-glow { background: linear-gradient(135deg, rgba(124, 58, 237, 0.25) 0%, rgba(79, 70, 229, 0.1) 100%); border: 1px solid rgba(139, 92, 246, 0.3); }
+    
+    .page { display: none; height: 100%; overflow-y: auto; padding-bottom: 90px; }
+    .page.active { display: block; }
+    
+    .modal { display: none; }
+    .modal.active { display: flex; }
+    
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 10px; }
+
+    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); }
+  </style>
+</head>
+<body>
+
+  <!-- App Container Frame -->
+  <div class="w-[390px] h-[810px] max-h-[100vh] bg-[#0a0e1a] rounded-[44px] border-[8px] border-[#1e293b] shadow-[0_0_80px_rgba(79,70,229,0.3)] overflow-hidden relative flex flex-col justify-between">
+
+    <!-- Ambient Lighting Glows -->
+    <div class="absolute -top-20 -left-20 w-60 h-60 bg-purple-600/20 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="absolute top-1/2 -right-20 w-60 h-60 bg-blue-600/15 rounded-full blur-3xl pointer-events-none"></div>
+
+    <!-- NATIVE APP HEADER -->
+    <div class="p-5 pb-3 pt-6 relative z-20 border-b border-white/5 bg-[#0a0e1a]/90 backdrop-blur-md flex justify-between items-center">
+      <div class="flex items-center gap-3 cursor-pointer" onclick="showPage('page-profile')">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-500 p-[2px] shadow-lg shadow-indigo-500/30">
+          <div id="header-initials" class="w-full h-full bg-[#0a0e1a] rounded-[14px] flex items-center justify-center font-bold text-white text-xs">MR</div>
+        </div>
+        <div>
+          <p class="text-[9px] text-gray-400 font-semibold uppercase tracking-wider">Welcome Back</p>
+          <h2 class="font-bold text-white text-sm leading-tight flex items-center gap-1">
+            <span id="header-name">Manish Rai</span>
+            <i class="fa-solid fa-angle-right text-[10px] text-indigo-400"></i>
+          </h2>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <div onclick="openModal('modal-family')" class="w-9 h-9 rounded-xl bg-purple-600/20 border border-purple-500/40 flex items-center justify-center text-purple-300 cursor-pointer" title="Family Sharing">
+          <i class="fa-solid fa-users text-xs"></i>
+        </div>
+        <div onclick="openAddAssetModal()" class="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 cursor-pointer" title="AI Scan">
+          <i class="fa-solid fa-qrcode text-xs"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN SCROLLABLE APP BODY -->
+    <div class="flex-1 relative z-10 overflow-hidden">
+
+      <!-- ================= PAGE 1: HOME DASHBOARD ================= -->
+      <div id="page-home" class="page active p-5 space-y-4">
+        <!-- Net Worth Banner -->
+        <div class="glass-glow p-4 rounded-3xl relative overflow-hidden shadow-xl">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-[9px] text-indigo-300 font-bold uppercase tracking-wider">Total Managed Net Worth</p>
+              <h1 id="net-worth-total" class="text-2xl font-black text-white tracking-tight mt-0.5">₹ 0</h1>
+            </div>
+            <span class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+              <i class="fa-solid fa-shield-halved"></i> Active Locker
+            </span>
+          </div>
+          <div class="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-white/10 text-[10px]">
+            <div class="text-gray-300 flex items-center gap-1.5"><i class="fa-solid fa-motorcycle text-indigo-400"></i> Vehicles: <b id="net-worth-vehicles" class="text-white">₹ 0</b></div>
+            <div class="text-gray-300 flex items-center gap-1.5"><i class="fa-solid fa-tv text-purple-400"></i> Gadgets/Home: <b id="net-worth-gadgets" class="text-white">₹ 0</b></div>
+          </div>
+        </div>
+
+        <!-- QUICK ACTION BAR: SCAN & EXPORT PDF -->
+        <div class="grid grid-cols-2 gap-2.5">
+          <button onclick="openAddAssetModal()" class="bg-gradient-to-r from-violet-600 to-indigo-600 p-3 rounded-2xl flex items-center gap-2.5 shadow-lg active:scale-95 transition">
+            <i class="fa-solid fa-camera text-white text-base"></i>
+            <div class="text-left">
+              <h4 class="font-bold text-xs text-white">AI Bill Scan</h4>
+              <p class="text-[8px] text-indigo-200">Fake Check & Save</p>
+            </div>
+          </button>
+
+          <button onclick="exportAllBillsPDF()" class="glass-card border-emerald-500/40 p-3 rounded-2xl flex items-center gap-2.5 shadow-lg active:scale-95 transition">
+            <i class="fa-solid fa-file-pdf text-emerald-400 text-base"></i>
+            <div class="text-left">
+              <h4 class="font-bold text-xs text-white">Export PDF</h4>
+              <p class="text-[8px] text-emerald-400">Download All Bills</p>
+            </div>
+          </button>
+        </div>
+
+        <!-- Family Sharing Banner -->
+        <div onclick="openModal('modal-family')" class="glass-card p-3 rounded-2xl flex justify-between items-center border-l-4 border-l-purple-500 cursor-pointer">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center text-sm font-bold">
+              <i class="fa-solid fa-users-rectangle"></i>
+            </div>
+            <div>
+              <h4 class="font-bold text-xs text-white">Family Vault Access</h4>
+              <p id="family-banner-text" class="text-[9px] text-gray-400">Shared with 2 Members (Active)</p>
+            </div>
+          </div>
+          <i class="fa-solid fa-angle-right text-gray-500 text-xs"></i>
+        </div>
+
+        <!-- Urgent Alerts -->
+        <div>
+          <h3 class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Urgent Reminders</h3>
+          <div id="reminders-list" class="space-y-2">
+            <!-- Filled dynamically -->
+          </div>
+        </div>
+
+        <!-- MULTI-ASSET HUB PREVIEW -->
+        <div>
+          <div class="flex justify-between items-center mb-2">
+            <h3 class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">All Managed Assets</h3>
+            <span onclick="showPage('page-garage')" class="text-[10px] text-indigo-400 font-bold cursor-pointer">View All →</span>
+          </div>
+          <div id="home-assets-list" class="space-y-2">
+            <!-- Filled dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= PAGE 2: FOLDERS & LOCKER ================= -->
+      <div id="page-folders" class="page p-5 space-y-3">
+        <div class="flex justify-between items-center">
+          <div>
+            <h2 class="font-bold text-white text-sm">Category Folders</h2>
+            <p class="text-[10px] text-gray-400">Organized Vaults for Invoices & Documents</p>
+          </div>
+          <button onclick="exportAllBillsPDF()" class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] font-bold px-2.5 py-1 rounded-xl">
+            <i class="fa-solid fa-file-pdf"></i> PDF Export
+          </button>
+        </div>
+
+        <div class="glass-card p-3.5 rounded-2xl space-y-2">
+          <div class="flex justify-between items-center">
+            <div class="flex items-center gap-2.5">
+              <i class="fa-solid fa-folder text-amber-400 text-lg"></i>
+              <h4 class="font-bold text-xs text-white">Vehicles & Garage Documents</h4>
+            </div>
+            <span id="folder-count-vehicle" class="text-[9px] bg-white/5 text-gray-300 px-2 py-0.5 rounded-full border border-white/10">0 Saved</span>
+          </div>
+        </div>
+
+        <div class="glass-card p-3.5 rounded-2xl space-y-2">
+          <div class="flex justify-between items-center">
+            <div class="flex items-center gap-2.5">
+              <i class="fa-solid fa-folder text-blue-400 text-lg"></i>
+              <h4 class="font-bold text-xs text-white">Electronics & Home Gadgets</h4>
+            </div>
+            <span id="folder-count-electronics" class="text-[9px] bg-white/5 text-gray-300 px-2 py-0.5 rounded-full border border-white/10">0 Verified</span>
+          </div>
+        </div>
+
+        <div class="glass-card p-3.5 rounded-2xl space-y-2">
+          <div class="flex justify-between items-center">
+            <div class="flex items-center gap-2.5">
+              <i class="fa-solid fa-folder text-emerald-400 text-lg"></i>
+              <h4 class="font-bold text-xs text-white">Property & Legal ID Papers</h4>
+            </div>
+            <span id="folder-count-property" class="text-[9px] bg-white/5 text-gray-300 px-2 py-0.5 rounded-full border border-white/10">0 Saved</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= PAGE 3: SMART ASSETS & GARAGE HUB ================= -->
+      <div id="page-garage" class="page p-5 space-y-3">
+        <div class="flex justify-between items-center">
+          <div>
+            <h2 class="font-bold text-white text-sm">Assets & Garage Hub</h2>
+            <p class="text-[10px] text-gray-400">Track Vehicles, Electronics & Properties</p>
+          </div>
+          <button onclick="openAddAssetModal()" class="bg-indigo-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-xl">+ Add Asset</button>
+        </div>
+
+        <!-- Search / Filter by asset name -->
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-[10px]"></i>
+          <input
+            id="asset-search"
+            type="search"
+            placeholder="Search assets by name…"
+            oninput="renderGarage()"
+            autocomplete="off"
+            class="w-full bg-white/5 border border-white/10 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder:text-gray-600 focus:outline-none focus:border-indigo-500/50"
+          >
+        </div>
+
+        <div id="garage-assets-list" class="space-y-3">
+          <!-- Filled dynamically -->
+        </div>
+      </div>
+
+      <!-- ================= PAGE 4: PROFILE ================= -->
+      <div id="page-profile" class="page p-5 space-y-3">
+        <h2 class="font-bold text-white text-sm">Profile & Address Manager</h2>
+        <form id="profile-form" class="glass-card p-4 rounded-3xl space-y-3" onsubmit="saveProfile(event)">
+          <div>
+            <label class="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Full Name</label>
+            <input id="profile-name" type="text" required class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white mt-1">
+          </div>
+          <div>
+            <label class="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Mobile Number</label>
+            <input id="profile-mobile" type="text" required class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white mt-1">
+          </div>
+          <div>
+            <label class="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Residence Address</label>
+            <textarea id="profile-address" rows="2" required class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white mt-1"></textarea>
+          </div>
+          <button type="submit" class="w-full bg-indigo-600 text-white font-bold py-2 rounded-xl text-xs shadow-lg shadow-indigo-600/30">
+            Save Profile Details
+          </button>
+        </form>
+      </div>
+
+      <!-- ================= PAGE 5: SETTINGS ================= -->
+      <div id="page-settings" class="page p-5 space-y-3">
+        <h2 class="font-bold text-white text-sm">Settings & Family Hub</h2>
+        <div class="space-y-2">
+          
+          <div onclick="openModal('modal-family')" class="glass-card p-3 rounded-2xl flex justify-between items-center text-xs text-purple-300 cursor-pointer">
+            <span class="flex items-center gap-2.5"><i class="fa-solid fa-users text-purple-400"></i> Family Sharing Vault</span>
+            <span id="settings-family-count" class="text-[9px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full font-bold">2 Members</span>
+          </div>
+
+          <div onclick="exportAllBillsPDF()" class="glass-card p-3 rounded-2xl flex justify-between items-center text-xs text-emerald-300 cursor-pointer">
+            <span class="flex items-center gap-2.5"><i class="fa-solid fa-file-pdf text-emerald-400"></i> Export All Asset Bills (PDF Zip)</span>
+            <i class="fa-solid fa-download text-[10px]"></i>
+          </div>
+
+          <div onclick="alert('Google Drive Sync Active!')" class="glass-card p-3 rounded-2xl flex justify-between items-center text-xs text-white cursor-pointer">
+            <span class="flex items-center gap-2.5"><i class="fa-brands fa-google-drive text-blue-400"></i> Google Drive Cloud Sync</span>
+            <span class="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-bold">Active</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- FIXED NATIVE BOTTOM NAVIGATION BAR -->
+    <div id="main-nav" class="absolute bottom-0 left-0 right-0 p-2 m-3 glass-card rounded-2xl flex justify-around items-center border border-white/10 z-50 bg-[#0a0e1a]/95 backdrop-blur-2xl">
+      <button onclick="showPage('page-home', this)" class="nav-btn text-indigo-400 flex flex-col items-center gap-1 px-3 py-1">
+        <i class="fa-solid fa-house text-sm"></i><span class="text-[8px] font-bold">Home</span>
+      </button>
+      <button onclick="showPage('page-folders', this)" class="nav-btn text-gray-500 flex flex-col items-center gap-1 px-3 py-1">
+        <i class="fa-solid fa-folder-closed text-sm"></i><span class="text-[8px]">Folders</span>
+      </button>
+      <button onclick="showPage('page-garage', this)" class="nav-btn text-gray-500 flex flex-col items-center gap-1 px-3 py-1">
+        <i class="fa-solid fa-boxes-stacked text-sm"></i><span class="text-[8px]">Assets</span>
+      </button>
+      <button onclick="showPage('page-profile', this)" class="nav-btn text-gray-500 flex flex-col items-center gap-1 px-3 py-1">
+        <i class="fa-solid fa-user text-sm"></i><span class="text-[8px]">Profile</span>
+      </button>
+      <button onclick="showPage('page-settings', this)" class="nav-btn text-gray-500 flex flex-col items-center gap-1 px-3 py-1">
+        <i class="fa-solid fa-gear text-sm"></i><span class="text-[8px]">Settings</span>
+      </button>
+    </div>
+
+    <!-- ================= MODAL: FAMILY SHARING ================= -->
+    <div id="modal-family" class="modal fixed inset-0 bg-black/80 backdrop-blur-md z-50 justify-center items-center p-4">
+      <div class="glass-card w-full max-w-xs p-4 rounded-3xl space-y-3 border border-purple-500/30">
+        <div class="flex justify-between items-center border-b border-white/10 pb-2">
+          <h3 class="text-xs font-bold text-white"><i class="fa-solid fa-users text-purple-400 mr-1"></i> Family Vault Sharing</h3>
+          <button onclick="closeModal('modal-family')" class="text-gray-400 text-base">&times;</button>
+        </div>
+        <div class="space-y-2 text-[10px]">
+          <p class="text-gray-300">Share vehicle RCs, warranty bills & home documents with family members.</p>
+          <div class="bg-white/5 p-2 rounded-xl flex justify-between items-center">
+            <span>👨‍👩‍👦 Connected: <b>Priya Rai (Spouse)</b></span>
+            <span class="text-emerald-400 text-[8px]">Full Access</span>
+          </div>
+          <div>
+            <label class="text-[8px] text-gray-400 uppercase font-bold">Invite New Member (Mobile / Email)</label>
+            <input id="family-invite-input" type="text" placeholder="+91 9935XXXXXX" class="w-full bg-white/5 border border-white/10 rounded-xl px-2.5 py-1 text-xs text-white mt-0.5">
+          </div>
+          <button onclick="sendFamilyInvite()" class="w-full bg-purple-600 text-white font-bold py-2 rounded-xl text-xs shadow-lg">
+            Send Family Invite
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= MODAL: AI SCAN / ADD / EDIT ASSET ================= -->
+    <div id="modal-scan" class="modal fixed inset-0 bg-black/80 backdrop-blur-md z-50 justify-center items-center p-4">
+      <div class="glass-card w-full max-w-xs p-4 rounded-3xl space-y-3 border border-indigo-500/30 max-h-[90%] overflow-y-auto">
+        <div class="flex justify-between items-center border-b border-white/10 pb-2">
+          <h3 id="modal-scan-title" class="text-xs font-bold text-white"><i class="fa-solid fa-robot text-indigo-400 mr-1"></i> AI Multi-Asset Scanner</h3>
+          <button onclick="closeModal('modal-scan')" class="text-gray-400 text-base">&times;</button>
+        </div>
+        <form id="asset-form" class="space-y-2" onsubmit="saveAsset(event)">
+          <input type="hidden" id="asset-edit-id" value="">
+
+          <div>
+            <label class="text-[8px] text-gray-400 uppercase font-bold">Asset Type</label>
+            <select id="asset-type" onchange="toggleAssetFields()" class="w-full bg-[#121829] border border-white/10 rounded-xl px-2 py-1.5 text-xs text-white mt-0.5">
+              <option value="vehicle">🚗 Vehicle (Car/Bike RC & Ins.)</option>
+              <option value="electronics">📺 Electronics & Appliances</option>
+              <option value="property">🏠 Property & Legal Documents</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="text-[8px] text-gray-400 uppercase font-bold">Asset Name</label>
+            <input id="asset-name" type="text" required placeholder="e.g. TVS Ronin 225 TD" class="w-full bg-white/5 border border-white/10 rounded-xl px-2.5 py-1 text-xs text-white mt-0.5">
+          </div>
+
+          <div>
+            <label class="text-[8px] text-gray-400 uppercase font-bold">Store / Issuer Name</label>
+            <input id="asset-store" type="text" placeholder="e.g. Croma / TVS / RTO" class="w-full bg-white/5 border border-white/10 rounded-xl px-2.5 py-1 text-xs text-white mt-0.5">
+          </div>
+
+          <div>
+            <label class="text-[8px] text-gray-400 uppercase font-bold">Asset Value (₹)</label>
+            <input id="asset-value" type="number" min="0" step="1" required placeholder="e.g. 172000" class="w-full bg-white/5 border border-white/10 rounded-xl px-2.5 py-1 text-xs text-white mt-0.5">
+          </div>
+
+          <div>
+            <label class="text-[8px] text-gray-400 uppercase font-bold">Registration / GSTIN / Ref Number</label>
+            <input id="asset-registration" type="text" placeholder="UP32 AB 1234 or 09AAAAA0000A1Z5" class="w-full bg-white/5 border border-white/10 rounded-xl px-2.5 py-1 text-xs text-white mt-0.5">
+          </div>
+
+          <!-- Vehicle-specific expiry fields -->
+          <div id="fields-vehicle" class="space-y-2">
+            <div>
+              <label class="text-[8px] text-gray-400 uppercase font-bold">Insurance Expiry</label>
+              <input id="asset-insurance" type="date" class="w-full bg-white/5 border border-white/10 rounded-xl px-2.5 py-1 text-xs text-white mt-0.5">
+            </div>
+            <div>
+              <label class="text-[8px] text-gray-400 uppercase font-bold">PUC Expiry</label>
+              <input id="asset-puc" type="date" class="w-full bg-white/5 border border-white/10 rounded-xl px-2.5 py-1 text-xs text-white mt-0.5">
+            </div>
+          </div>
+
+          <!-- Electronics / Property warranty -->
+          <div id="fields-warranty" class="hidden">
+            <label class="text-[8px] text-gray-400 uppercase font-bold">Warranty / Document Expiry</label>
+            <input id="asset-warranty" type="date" class="w-full bg-white/5 border border-white/10 rounded-xl px-2.5 py-1 text-xs text-white mt-0.5">
+          </div>
+
+          <button type="submit" id="asset-submit-btn" class="w-full bg-indigo-600 text-white font-bold py-2 rounded-xl text-xs shadow-lg">
+            Verify & Save to Asset Vault
+          </button>
+        </form>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    /* =========================================================
+       Asset Doctor SPA — State, Persistence & UI Rendering
+       ========================================================= */
+
+    // ---------- Constants & Storage Keys ----------
+    const STORAGE_KEY = 'assetDoctorApp';
+    const URGENT_DAYS = 30; // Show reminder if expiry is within this many days
+
+    // ---------- Seed Data (first launch only) ----------
+    function getDefaultState() {
+      // Insurance expiry ~3 days from "today" so the urgent badge matches the prototype
+      const insuranceSoon = new Date();
+      insuranceSoon.setDate(insuranceSoon.getDate() + 3);
+
+      return {
+        profile: {
+          name: 'Manish Rai',
+          mobile: '+91 9876543210',
+          address: 'Patrakarpuram, Gomti Nagar, Lucknow, UP - 226010'
+        },
+        familyMembers: 2,
+        assets: [
+          {
+            id: 'seed-vehicle-1',
+            type: 'vehicle',
+            name: 'TVS Ronin 225 TD',
+            store: 'TVS',
+            value: 172000,
+            registration: 'UP32 AB 1234',
+            insuranceExpiry: insuranceSoon.toISOString().slice(0, 10),
+            pucExpiry: '2026-11-15',
+            warrantyExpiry: null,
+            createdAt: new Date().toISOString()
+          },
+          {
+            id: 'seed-electronics-1',
+            type: 'electronics',
+            name: 'LG Smart LED TV (55")',
+            store: 'Croma',
+            value: 68000,
+            registration: 'Bill_LG_2024.pdf',
+            insuranceExpiry: null,
+            pucExpiry: null,
+            warrantyExpiry: '2027-08-14',
+            createdAt: new Date().toISOString()
+          },
+          {
+            id: 'seed-electronics-2',
+            type: 'electronics',
+            name: 'Samsung 8kg Washing Machine',
+            store: 'Reliance Digital',
+            value: 32900,
+            registration: 'GST-09AAAAA0000A1Z5',
+            insuranceExpiry: null,
+            pucExpiry: null,
+            warrantyExpiry: '2026-12-01',
+            createdAt: new Date().toISOString()
+          },
+          {
+            id: 'seed-vehicle-2',
+            type: 'vehicle',
+            name: 'Maruti Swift VXi',
+            store: 'Maruti Arena',
+            value: 448000,
+            registration: 'UP32 CD 5678',
+            insuranceExpiry: '2026-09-20',
+            pucExpiry: '2026-10-01',
+            warrantyExpiry: null,
+            createdAt: new Date().toISOString()
+          },
+          {
+            id: 'seed-property-1',
+            type: 'property',
+            name: 'Apartment Sale Deed',
+            store: 'Sub-Registrar Lucknow',
+            value: 296100,
+            registration: 'DEED-LKO-2023-441',
+            insuranceExpiry: null,
+            pucExpiry: null,
+            warrantyExpiry: null,
+            createdAt: new Date().toISOString()
+          }
+        ]
+      };
+    }
+
+    // ---------- App State ----------
+    let state = loadState();
+    let editingAssetId = null; // null = create mode
+
+    // ---------- LocalStorage ----------
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) {
+          const seed = getDefaultState();
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
+          return seed;
+        }
+        return JSON.parse(raw);
+      } catch (e) {
+        console.warn('Corrupt storage — resetting to defaults', e);
+        const seed = getDefaultState();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
+        return seed;
+      }
+    }
+
+    function persistState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    // ---------- Helpers: Formatting & Dates ----------
+    function formatINR(amount) {
+      return '₹ ' + Number(amount || 0).toLocaleString('en-IN');
+    }
+
+    function formatLakhs(amount) {
+      const n = Number(amount || 0);
+      if (n >= 100000) return '₹ ' + (n / 100000).toFixed(2) + 'L';
+      return formatINR(n);
+    }
+
+    function getInitials(name) {
+      return (name || '')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map(w => w[0].toUpperCase())
+        .join('') || '?';
+    }
+
+    function daysUntil(dateStr) {
+      if (!dateStr) return null;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const target = new Date(dateStr + 'T00:00:00');
+      return Math.round((target - today) / (1000 * 60 * 60 * 24));
+    }
+
+    function formatDateShort(dateStr) {
+      if (!dateStr) return '—';
+      const d = new Date(dateStr + 'T00:00:00');
+      return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+
+    /** Returns { label, status, days, colorClass } for a single expiry date */
+    function getExpiryStatus(dateStr) {
+      const days = daysUntil(dateStr);
+      if (days === null) return null;
+      if (days < 0) {
+        return { label: 'EXPIRED', status: 'expired', days, color: 'rose' };
+      }
+      if (days === 0) {
+        return { label: 'TODAY', status: 'urgent', days, color: 'rose' };
+      }
+      if (days <= URGENT_DAYS) {
+        return { label: days + ' DAYS', status: 'urgent', days, color: 'rose' };
+      }
+      return { label: 'VALID', status: 'valid', days, color: 'emerald' };
+    }
+
+    function typeMeta(type) {
+      const map = {
+        vehicle:     { emoji: '🏍️', color: 'indigo',  border: 'border-l-indigo-500',  accent: 'text-indigo-400',  bg: 'bg-indigo-500/20',  text: 'text-indigo-300' },
+        electronics: { emoji: '📺', color: 'purple',  border: 'border-l-purple-500',  accent: 'text-purple-400',  bg: 'bg-purple-500/20',  text: 'text-purple-300' },
+        property:    { emoji: '🏠', color: 'emerald', border: 'border-l-emerald-500', accent: 'text-emerald-400', bg: 'bg-emerald-500/20', text: 'text-emerald-300' }
+      };
+      return map[type] || map.property;
+    }
+
+    function uid() {
+      return 'asset-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+    }
+
+    // ---------- Totals ----------
+    function calcTotals() {
+      const totals = { all: 0, vehicle: 0, electronics: 0, property: 0 };
+      state.assets.forEach(a => {
+        const v = Number(a.value) || 0;
+        totals.all += v;
+        if (totals[a.type] !== undefined) totals[a.type] += v;
+      });
+      return totals;
+    }
+
+    function countByType() {
+      return {
+        vehicle: state.assets.filter(a => a.type === 'vehicle').length,
+        electronics: state.assets.filter(a => a.type === 'electronics').length,
+        property: state.assets.filter(a => a.type === 'property').length
+      };
+    }
+
+    // ---------- Urgent Reminders ----------
+    function getUrgentReminders() {
+      const reminders = [];
+      state.assets.forEach(asset => {
+        const checks = [
+          { key: 'insuranceExpiry', label: 'Insurance' },
+          { key: 'pucExpiry', label: 'PUC' },
+          { key: 'warrantyExpiry', label: 'Warranty' }
+        ];
+        checks.forEach(({ key, label }) => {
+          const status = getExpiryStatus(asset[key]);
+          if (status && (status.status === 'urgent' || status.status === 'expired')) {
+            reminders.push({
+              assetId: asset.id,
+              name: asset.name,
+              registration: asset.registration,
+              kind: label,
+              status
+            });
+          }
+        });
+      });
+      // Soonest first
+      reminders.sort((a, b) => a.status.days - b.status.days);
+      return reminders;
+    }
+
+    // ---------- Asset status line (home preview) ----------
+    function getAssetStatusLine(asset) {
+      if (asset.type === 'vehicle') {
+        const ins = getExpiryStatus(asset.insuranceExpiry);
+        const puc = getExpiryStatus(asset.pucExpiry);
+        const parts = [];
+        if (puc) parts.push(puc.status === 'valid' ? 'PUC Valid' : 'PUC ' + puc.label);
+        if (ins) parts.push(ins.status === 'valid' ? 'Insurance OK' : 'Insurance Due');
+        return parts.join(' • ') || 'No expiry set';
+      }
+      if (asset.warrantyExpiry) {
+        const w = getExpiryStatus(asset.warrantyExpiry);
+        if (!w) return 'No warranty set';
+        if (w.status === 'valid') return 'Warranty Active Till ' + new Date(asset.warrantyExpiry).getFullYear();
+        if (w.status === 'expired') return 'Warranty Expired';
+        return 'Warranty Expires in ' + w.days + ' days';
+      }
+      return asset.store ? ('Issuer: ' + asset.store) : 'Document on file';
+    }
+
+    // ========================================================
+    // RENDERERS
+    // ========================================================
+
+    function renderProfile() {
+      const p = state.profile;
+      document.getElementById('header-name').textContent = p.name;
+      document.getElementById('header-initials').textContent = getInitials(p.name);
+      document.getElementById('profile-name').value = p.name;
+      document.getElementById('profile-mobile').value = p.mobile;
+      document.getElementById('profile-address').value = p.address;
+
+      const members = state.familyMembers || 0;
+      document.getElementById('family-banner-text').textContent =
+        members > 0 ? `Shared with ${members} Members (Active)` : 'No members shared yet';
+      document.getElementById('settings-family-count').textContent = members + ' Members';
+    }
+
+    function renderNetWorth() {
+      const t = calcTotals();
+      document.getElementById('net-worth-total').textContent = formatINR(t.all);
+      document.getElementById('net-worth-vehicles').textContent = formatLakhs(t.vehicle);
+      // Gadgets + Property combined (matches original "Gadgets/Home" banner)
+      document.getElementById('net-worth-gadgets').textContent = formatLakhs(t.electronics + t.property);
+    }
+
+    function renderFolders() {
+      const c = countByType();
+      document.getElementById('folder-count-vehicle').textContent = c.vehicle + ' Saved';
+      document.getElementById('folder-count-electronics').textContent = c.electronics + ' Verified';
+      document.getElementById('folder-count-property').textContent = c.property + ' Saved';
+    }
+
+    function renderReminders() {
+      const list = document.getElementById('reminders-list');
+      const reminders = getUrgentReminders();
+
+      if (!reminders.length) {
+        list.innerHTML = `
+          <div class="glass-card p-3 rounded-2xl border-l-4 border-l-emerald-500 flex gap-3 items-center">
+            <div class="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 text-sm">
+              <i class="fa-solid fa-circle-check"></i>
+            </div>
+            <div class="flex-1">
+              <h4 class="font-bold text-xs text-white">All Clear</h4>
+              <p class="text-[9px] text-gray-400">No urgent insurance, PUC, or warranty expiries</p>
+            </div>
+          </div>`;
+        return;
+      }
+
+      list.innerHTML = reminders.slice(0, 5).map(r => {
+        const badgeBg = r.status.status === 'expired' ? 'bg-rose-700' : 'bg-rose-500';
+        return `
+          <div class="glass-card p-3 rounded-2xl border-l-4 border-l-rose-500 flex gap-3 items-center">
+            <div class="w-9 h-9 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 text-sm">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <div class="flex-1">
+              <div class="flex justify-between items-center">
+                <h4 class="font-bold text-xs text-white">${escapeHtml(r.name)}</h4>
+                <span class="text-[8px] ${badgeBg} text-white font-bold px-1.5 py-0.5 rounded">${r.status.label}</span>
+              </div>
+              <p class="text-[9px] text-gray-400">${r.kind} ${r.status.status === 'expired' ? 'Expired' : 'Expiring'}${r.registration ? ' • ' + escapeHtml(r.registration) : ''}</p>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    function renderHomeAssets() {
+      const list = document.getElementById('home-assets-list');
+      const preview = state.assets.slice(0, 4);
+
+      if (!preview.length) {
+        list.innerHTML = `<p class="text-[10px] text-gray-500 text-center py-4">No assets yet — tap AI Bill Scan to add one.</p>`;
+        return;
+      }
+
+      list.innerHTML = preview.map(asset => {
+        const meta = typeMeta(asset.type);
+        const statusLine = getAssetStatusLine(asset);
+        const statusColor = statusLine.toLowerCase().includes('due') || statusLine.toLowerCase().includes('expired')
+          ? 'text-rose-400' : 'text-emerald-400';
+        return `
+          <div class="glass-card p-3 rounded-2xl flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-xl ${meta.bg} ${meta.text} flex items-center justify-center text-sm">${meta.emoji}</div>
+              <div>
+                <h4 class="font-bold text-xs text-white">${escapeHtml(asset.name)}</h4>
+                <p class="text-[9px] ${statusColor} font-semibold">${escapeHtml(statusLine)}</p>
+              </div>
+            </div>
+            <span class="text-xs font-bold text-white">${formatINR(asset.value)}</span>
+          </div>`;
+      }).join('');
+    }
+
+    function renderGarage() {
+      const list = document.getElementById('garage-assets-list');
+      const query = (document.getElementById('asset-search').value || '').trim().toLowerCase();
+
+      let assets = state.assets;
+      if (query) {
+        assets = assets.filter(a => (a.name || '').toLowerCase().includes(query));
+      }
+
+      if (!assets.length) {
+        list.innerHTML = `<p class="text-[10px] text-gray-500 text-center py-6">${query ? 'No assets match your search.' : 'No assets yet. Tap + Add Asset to begin.'}</p>`;
+        return;
+      }
+
+      list.innerHTML = assets.map(asset => {
+        const meta = typeMeta(asset.type);
+        let detailHtml = '';
+
+        if (asset.type === 'vehicle') {
+          const ins = getExpiryStatus(asset.insuranceExpiry);
+          const puc = getExpiryStatus(asset.pucExpiry);
+          const insText = !ins ? 'Not set'
+            : ins.status === 'expired' ? 'Expired'
+            : ins.status === 'urgent' ? 'Expires in ' + ins.days + ' Days'
+            : 'Valid Till ' + formatDateShort(asset.insuranceExpiry);
+          const pucText = !puc ? 'Not set'
+            : puc.status === 'expired' ? 'Expired'
+            : puc.status === 'urgent' ? 'Expires in ' + puc.days + ' Days'
+            : 'Valid Till ' + formatDateShort(asset.pucExpiry);
+          const insColor = !ins ? 'text-gray-400' : ins.status === 'valid' ? 'text-emerald-400' : 'text-rose-400';
+          const pucColor = !puc ? 'text-gray-400' : puc.status === 'valid' ? 'text-emerald-400' : 'text-rose-400';
+
+          detailHtml = `
+            <div class="grid grid-cols-2 gap-2 text-[10px]">
+              <div class="bg-white/5 p-2 rounded-xl border border-white/5">
+                <p class="text-gray-400 text-[8px]">INSURANCE</p>
+                <p class="${insColor} font-bold mt-0.5">${insText}</p>
+              </div>
+              <div class="bg-white/5 p-2 rounded-xl border border-white/5">
+                <p class="text-gray-400 text-[8px]">PUC CERTIFICATE</p>
+                <p class="${pucColor} font-bold mt-0.5">${pucText}</p>
+              </div>
+            </div>`;
+        } else if (asset.warrantyExpiry) {
+          const w = getExpiryStatus(asset.warrantyExpiry);
+          const wColor = !w ? 'text-gray-400' : w.status === 'valid' ? 'text-emerald-400' : 'text-rose-400';
+          const wText = !w ? 'Not set'
+            : w.status === 'expired' ? 'Expired'
+            : w.status === 'urgent' ? 'Expires in ' + w.days + ' days'
+            : formatDateShort(asset.warrantyExpiry);
+          detailHtml = `
+            <div class="bg-white/5 p-2 rounded-xl border border-white/5 text-[10px] flex justify-between">
+              <span class="text-gray-400">Warranty Expiry:</span>
+              <span class="${wColor} font-bold">${wText}</span>
+            </div>`;
+        } else {
+          detailHtml = `
+            <div class="bg-white/5 p-2 rounded-xl border border-white/5 text-[10px] text-gray-400">
+              ${asset.store ? 'Issuer: ' + escapeHtml(asset.store) : 'No expiry dates set'}
+            </div>`;
+        }
+
+        const subtitle = asset.registration
+          ? escapeHtml(asset.registration) + (asset.store ? ' • ' + escapeHtml(asset.store) : '')
+          : (asset.store ? escapeHtml(asset.store) : 'No reference');
+
+        return `
+          <div class="glass-card p-4 rounded-3xl space-y-3 ${meta.border} border-l-4">
+            <div class="flex justify-between items-start">
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="text-base">${meta.emoji}</span>
+                <div class="min-w-0">
+                  <h3 class="font-extrabold text-sm text-white truncate">${escapeHtml(asset.name)}</h3>
+                  <p class="text-[10px] text-gray-400 font-mono truncate">${subtitle}</p>
+                </div>
+              </div>
+              <span class="text-xs font-black ${meta.accent} shrink-0 ml-2">${formatINR(asset.value)}</span>
+            </div>
+            ${detailHtml}
+            <div class="flex gap-2 pt-1">
+              <button type="button" onclick="openEditAssetModal('${asset.id}')" class="flex-1 bg-white/5 border border-white/10 text-gray-300 text-[10px] font-bold py-1.5 rounded-xl active:scale-95 transition">
+                <i class="fa-solid fa-pen text-[9px] mr-1"></i> Edit
+              </button>
+              <button type="button" onclick="deleteAsset('${asset.id}')" class="flex-1 bg-rose-500/20 border border-rose-500/40 text-rose-300 text-[10px] font-bold py-1.5 rounded-xl active:scale-95 transition hover:bg-rose-500/30">
+                <i class="fa-solid fa-trash text-[9px] mr-1"></i> Delete
+              </button>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    function renderAll() {
+      renderProfile();
+      renderNetWorth();
+      renderFolders();
+      renderReminders();
+      renderHomeAssets();
+      renderGarage();
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // ========================================================
+    // CRUD — Assets
+    // ========================================================
+
+    function toggleAssetFields() {
+      const type = document.getElementById('asset-type').value;
+      const vehicleFields = document.getElementById('fields-vehicle');
+      const warrantyFields = document.getElementById('fields-warranty');
+
+      if (type === 'vehicle') {
+        vehicleFields.classList.remove('hidden');
+        warrantyFields.classList.add('hidden');
+      } else {
+        vehicleFields.classList.add('hidden');
+        warrantyFields.classList.remove('hidden');
+      }
+    }
+
+    function resetAssetForm() {
+      editingAssetId = null;
+      document.getElementById('asset-edit-id').value = '';
+      document.getElementById('asset-form').reset();
+      document.getElementById('asset-type').value = 'vehicle';
+      document.getElementById('modal-scan-title').innerHTML =
+        '<i class="fa-solid fa-robot text-indigo-400 mr-1"></i> AI Multi-Asset Scanner';
+      document.getElementById('asset-submit-btn').textContent = 'Verify & Save to Asset Vault';
+      toggleAssetFields();
+    }
+
+    function openAddAssetModal() {
+      resetAssetForm();
+      openModal('modal-scan');
+    }
+
+    function openEditAssetModal(id) {
+      const asset = state.assets.find(a => a.id === id);
+      if (!asset) return;
+
+      editingAssetId = id;
+      document.getElementById('asset-edit-id').value = id;
+      document.getElementById('asset-type').value = asset.type;
+      document.getElementById('asset-name').value = asset.name || '';
+      document.getElementById('asset-store').value = asset.store || '';
+      document.getElementById('asset-value').value = asset.value || '';
+      document.getElementById('asset-registration').value = asset.registration || '';
+      document.getElementById('asset-insurance').value = asset.insuranceExpiry || '';
+      document.getElementById('asset-puc').value = asset.pucExpiry || '';
+      document.getElementById('asset-warranty').value = asset.warrantyExpiry || '';
+
+      document.getElementById('modal-scan-title').innerHTML =
+        '<i class="fa-solid fa-pen text-indigo-400 mr-1"></i> Edit Asset';
+      document.getElementById('asset-submit-btn').textContent = 'Update Asset';
+      toggleAssetFields();
+      openModal('modal-scan');
+    }
+
+    function saveAsset(event) {
+      event.preventDefault();
+
+      const type = document.getElementById('asset-type').value;
+      const name = document.getElementById('asset-name').value.trim();
+      const store = document.getElementById('asset-store').value.trim();
+      const value = Number(document.getElementById('asset-value').value);
+      const registration = document.getElementById('asset-registration').value.trim();
+
+      if (!name || isNaN(value) || value < 0) {
+        alert('Please enter a valid asset name and value.');
+        return;
+      }
+
+      const payload = {
+        type,
+        name,
+        store,
+        value,
+        registration,
+        insuranceExpiry: type === 'vehicle' ? (document.getElementById('asset-insurance').value || null) : null,
+        pucExpiry: type === 'vehicle' ? (document.getElementById('asset-puc').value || null) : null,
+        warrantyExpiry: type !== 'vehicle' ? (document.getElementById('asset-warranty').value || null) : null
+      };
+
+      if (editingAssetId) {
+        const idx = state.assets.findIndex(a => a.id === editingAssetId);
+        if (idx !== -1) {
+          state.assets[idx] = { ...state.assets[idx], ...payload };
+        }
+        alert('✅ Asset updated successfully!');
+      } else {
+        state.assets.unshift({
+          id: uid(),
+          ...payload,
+          createdAt: new Date().toISOString()
+        });
+        alert('✅ Verification Passed: Original Asset Added to Vault!');
+      }
+
+      persistState();
+      resetAssetForm();
+      closeModal('modal-scan');
+      renderAll();
+    }
+
+    function deleteAsset(id) {
+      const asset = state.assets.find(a => a.id === id);
+      if (!asset) return;
+      if (!confirm(`Delete "${asset.name}" from your vault? This cannot be undone.`)) return;
+
+      state.assets = state.assets.filter(a => a.id !== id);
+      persistState();
+      renderAll();
+    }
+
+    // ========================================================
+    // Profile
+    // ========================================================
+
+    function saveProfile(event) {
+      event.preventDefault();
+      state.profile = {
+        name: document.getElementById('profile-name').value.trim(),
+        mobile: document.getElementById('profile-mobile').value.trim(),
+        address: document.getElementById('profile-address').value.trim()
+      };
+      persistState();
+      renderProfile();
+      alert('Profile saved successfully!');
+    }
+
+    // ========================================================
+    // Family Invite (simple counter bump for demo)
+    // ========================================================
+
+    function sendFamilyInvite() {
+      const input = document.getElementById('family-invite-input');
+      const val = (input.value || '').trim();
+      if (!val) {
+        alert('Please enter a mobile number or email to invite.');
+        return;
+      }
+      state.familyMembers = (state.familyMembers || 0) + 1;
+      persistState();
+      input.value = '';
+      alert('Family Invite Sent to ' + val + '!');
+      closeModal('modal-family');
+      renderProfile();
+    }
+
+    // ========================================================
+    // Navigation & Modals
+    // ========================================================
+
+    function showPage(pageId, btn) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.getElementById(pageId).classList.add('active');
+
+      // Sync bottom nav highlight (also when opened from header / View All)
+      const pageToNav = {
+        'page-home': 0,
+        'page-folders': 1,
+        'page-garage': 2,
+        'page-profile': 3,
+        'page-settings': 4
+      };
+      const navButtons = document.querySelectorAll('.nav-btn');
+      navButtons.forEach((b, i) => {
+        const active = btn ? (b === btn) : (i === pageToNav[pageId]);
+        b.classList.toggle('text-indigo-400', active);
+        b.classList.toggle('text-gray-500', !active);
+        b.querySelector('span').classList.toggle('font-bold', active);
+      });
+    }
+
+    function openModal(id) {
+      document.getElementById(id).classList.add('active');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('active');
+      if (id === 'modal-scan') resetAssetForm();
+    }
+
+    function exportAllBillsPDF() {
+      const t = calcTotals();
+      const lines = state.assets.map((a, i) =>
+        `${i + 1}. [${a.type}] ${a.name} — ${formatINR(a.value)}${a.registration ? ' (' + a.registration + ')' : ''}`
+      );
+      alert(
+        '📄 Generating Complete Asset PDF Summary...\n\n' +
+        'Total Net Worth: ' + formatINR(t.all) + '\n' +
+        'Assets: ' + state.assets.length + '\n\n' +
+        (lines.length ? lines.join('\n') : 'No assets on file.') +
+        '\n\nAll verified bills, warranties, and garage document PDFs are ready for download!'
+      );
+    }
+
+    // ========================================================
+    // Boot
+    // ========================================================
+
+    document.addEventListener('DOMContentLoaded', () => {
+      renderAll();
+    });
+  </script>
+</body>
+</html>

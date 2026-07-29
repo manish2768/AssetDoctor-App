@@ -1,0 +1,43 @@
+---
+description: Asset Doctor core stack, Firebase, haptics, and OCR field rules
+alwaysApply: true
+---
+
+# Asset Doctor — Project Rules
+
+Creator concept: Ashutosh Rai. Product: multi-asset vault (vehicles, gadgets, documents).
+
+## Stack
+
+- Mobile client: **React Native** or **Flutter** (pick one per app; do not mix frameworks in the same codebase).
+- Backend: **Google Firebase** — Auth (Gmail + Phone OTP), **Firestore**, **Storage**.
+- OCR: **ML Kit** (on-device). Keep extraction strict to allowed fields only.
+
+## Code quality
+
+- Write clean, modular, production-ready code.
+- Prefer small modules (auth, assets, OCR, storage) over monolithic files.
+- Preserve existing UX patterns when porting from the `index.html` prototype.
+
+## Firebase
+
+- Auth: Google (Gmail) and Phone OTP only unless product expands.
+- Persist assets, profile, reminders, and family sharing in Firestore.
+- Store bill/document images and PDFs in Firebase Storage; keep metadata in Firestore.
+
+## Haptic feedback
+
+- Trigger haptic feedback on every meaningful user action: button taps, save/delete confirm, scan success/fail, tab switches.
+- Use platform APIs (`react-native-haptic-feedback` / Flutter `HapticFeedback`) — never skip for primary CTAs.
+
+## OCR extraction (strict allowlist)
+
+Extract **only** these fields from bills/RC/warranty docs:
+
+1. Asset Name
+2. Store Name
+3. Purchase Date
+4. Serial / Chassis Number
+5. Warranty / Insurance Expiry
+
+Reject or ignore any other OCR tokens. Do not invent missing fields; leave blank and let the user confirm/edit before save.

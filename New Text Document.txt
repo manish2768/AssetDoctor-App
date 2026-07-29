@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Asset Doctor - Multi-Asset Hub</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    * { font-family: 'Plus Jakarta Sans', sans-serif; box-sizing: border-box; }
+    
+    html, body { height: 100%; overflow: hidden; background: #03050a; display: flex; justify-content: center; align-items: center; margin: 0; padding: 0; }
+    
+    .glass-card { background: rgba(255, 255, 255, 0.04); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); }
+    .glass-glow { background: linear-gradient(135deg, rgba(124, 58, 237, 0.25) 0%, rgba(79, 70, 229, 0.1) 100%); border: 1px solid rgba(139, 92, 246, 0.3); }
+    
+    .page { display: none; height: 100%; overflow-y: auto; padding-bottom: 90px; }
+    .page.active { display: block; }
+    
+    .modal { display: none; }
+    .modal.active { display: flex; }
+    
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 10px; }
+  </style>
+</head>
+<body>
+
+  <!-- App Container Frame -->
+  <div class="w-[390px] h-[810px] max-h-[100vh] bg-[#0a0e1a] rounded-[44px] border-[8px] border-[#1e293b] shadow-[0_0_80px_rgba(79,70,229,0.3)] overflow-hidden relative flex flex-col justify-between">
+
+    <!-- Ambient Lighting Glows -->
+    <div class="absolute -top-20 -left-20 w-60 h-60 bg-purple-600/20 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="absolute top-1/2 -right-20 w-60 h-60 bg-blue-600/15 rounded-full blur-3xl pointer-events-none"></div>
+
+    <!-- NATIVE APP HEADER -->
+    <div class="p-5 pb-3 pt-6 relative z-20 border-b border-white/5 bg-[#0a0e1a]/90 backdrop-blur-md flex justify-between items-center">
+      <div class="flex items-center gap-3 cursor-pointer" onclick="showPage('page-profile')">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-500 p-[2px] shadow-lg shadow-indigo-500/30">
+          <div class="w-full h-full bg-[#0a0e1a] rounded-[14px] flex items-center justify-center font-bold text-white text-xs">MR</div>
+        </div>
+        <div>
+          <p class="text-[9px] text-gray-400 font-semibold uppercase tracking-wider">Welcome Back</p>
+          <h2 class="font-bold text-white text-sm leading-tight flex items-center gap-1">Manish Rai <i class="fa-solid fa-angle-right text-[10px] text-indigo-400"></i></h2>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <div onclick="openModal('modal-family')" class="w-9 h-9 rounded-xl bg-purple-600/20 border border-purple-500/40 flex items-center justify-center text-purple-300 cursor-pointer" title="Family Sharing">
+          <i class="fa-solid fa-users text-xs"></i>
+        </div>
+        <div onclick="openModal('modal-scan')" class="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 cursor-pointer" title="AI Scan">
+          <i class="fa-solid fa-qrcode text-xs"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN SCROLLABLE APP BODY -->
+    <div class="flex-1 relative z-10 overflow-hidden">
+
+      <!-- ================= PAGE 1: HOME DASHBOARD ================= -->
+      <div id="page-home" class="page active p-5 space-y-4">
+        <!-- Net Worth Banner -->
+        <div class="glass-glow p-4 rounded-3xl relative overflow-hidden shadow-xl">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-[9px] text-indigo-300 font-bold uppercase tracking-wider">Total Managed Net Worth</p>
+              <h1 class="text-2xl font-black text-white tracking-tight mt-0.5">₹ 10,17,000</h1>
+            </div>
+            <span class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+              <i class="fa-solid fa-shield-halved"></i> Active Locker
+            </span>
+          </div>
+          <div class="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-white/10 text-[10px]">
+            <div class="text-gray-300 flex items-center gap-1.5"><i class="fa-solid fa-motorcycle text-indigo-400"></i> Vehicles: <b class="text-white">₹ 6.20L</b></div>
+            <div class="text-gray-300 flex items-center gap-1.5"><i class="fa-solid fa-tv text-purple-400"></i> Gadgets/Home: <b class="text-white">₹ 3.97L</b></div>
+          </div>
+        </div>
+
+        <!-- QUICK ACTION BAR: SCAN & EXPORT PDF -->
+        <div class="grid grid-cols-2 gap-2.5">
+          <button onclick="openModal('modal-scan')" class="bg-gradient-to-r from-violet-600 to-indigo-600 p-3 rounded-2xl flex items-center gap-2.5 shadow-lg active:scale-95 transition">
+            <i class="fa-solid fa-camera text-white text-base"></i>
+            <div class="text-left">
+              <h4 class="font-bold text-xs text-white">AI Bill Scan</h4>
+              <p class="text-[8px] text-indigo-200">Fake Check & Save</p>
+            </div>
+          </button>
+
+          <button onclick="exportAllBillsPDF()" class="glass-card border-emerald-500/40 p-3 rounded-2xl flex items-center gap-2.5 shadow-lg active:scale-95 transition">
+            <i class="fa-solid fa-file-pdf text-emerald-400 text-base"></i>
+            <div class="text-left">
+              <h4 class="font-bold text-xs text-white">Export PDF</h4>
+              <p class="text-[8px] text-emerald-400">Download All Bills</p>
+            </div>
+          </button>
+        </div>
+
+        <!-- Family Sharing Banner -->
+        <div onclick="openModal('modal-family')" class="glass-card p-3 rounded-2xl flex justify-between items-center border-l-4 border-l-purple-500 cursor-pointer">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center text-sm font-bold">
+              <i class="fa-solid fa-users-rectangle"></i>
+            </div>
+            <div>
+              <h4 class="font-bold text-xs text-white">Family Vault Access</h4>
+              <p class="text-[9px] text-gray-400">Shared with 2 Members (Active)</p>
+            </div>
+          </div>
+          <i class="fa-solid fa-angle-right text-gray-500 text-xs"></i>
+        </div>
+
+        <!-- Urgent Alerts -->
+        <div>
+          <h3 class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Urgent Reminders</h3>
+          <div class="glass-card p-3 rounded-2xl border-l-4 border-l-rose-500 flex gap-3 items-center">
+            <div class="w-9 h-9 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 text-sm">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <div class="flex-1">
+              <div class="flex justify-between items-center">
+                <h4 class="font-bold text-xs text-white">TVS Ronin 225 TD</h4>
+                <span class="text-[8px] bg-rose-500 text-white font-bold px-1.5 py-0.5 rounded">3 DAYS</span>
+              </div>
+              <p class="text-[9px] text-gray-400">Insurance Expiring • UP32 AB 1234</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- MULTI-ASSET HUB PREVIEW -->
+        <div>
+          <div class="flex justify-between items-center mb-2">
+            <h3 class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">All Managed Assets</h3>
+            <span onclick="showPage('page-garage')" class="text-[10px] text-indigo-400 font-bold cursor-pointer">View All →</span>
+          </div>
+          
+          <div class="space-y-2">
+            <div class="glass-card p-3 rounded-2xl flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-sm">🏍️</div>
+                <div>
+                  <h4 class="font-bold text-xs text-white">TVS Ronin 225 TD</h4>
+                  <p class="text-[9px] text-emerald-400 font-semibold">PUC Valid • Insurance Due</p>
+                </div>
+              </div>
+              <span class="text-xs font-bold text-white">₹ 1,72,000</span>
+            </div>
+
+            <div class="glass-card p-3 rounded-2xl flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center text-sm">📺</div>
+                <div>
+                  <h4 class="font-bold text-xs text-white">LG Smart LED TV (55")</h4>
+                  <p class="text-[9px] text-gray-400">Warranty Active Till 2027</p>
+                </div>
+              </div>
+              <span class="text-xs font-bold text-white">₹ 68,000</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= PAGE 2: FOLDERS & LOCKER ================= -->
+      <div id="page-folders" class="page p-5 space-y-3">
+        <div class="flex justify-between items-center">
+          <div>
+            <h2 class="font-bold text-white text-sm">Category Folders</h2>
+            <p class="text-[10px] text-gray-400">Organized Vaults for Invoices & Documents</p>
+          </div>
+          <button onclick="exportAllBillsPDF()" class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] font-bold px-2.5 py-1 rounded-xl">
+            <i class="fa-solid fa-file-pdf"></i> PDF Export
+          </button>
+        </div>
+
+        <div class="glass-card p-3.5 rounded-2xl space-y-2">
+          <div class="flex justify-between items-center">
+            <div class="flex items-center gap-2.5">
+              <i class="fa-solid fa-folder text-amber-400 text-lg"></i>
+              <h4 class="font-bold text-xs text-white">Vehicles & Garage Documents</h4>
+            </div>
+            <span class="text-[9px] bg-white/5 text-gray-300 px-2 py-0.5 rounded-full border border-white/10">2 Saved</span>
+          </div>
+        </div>
+
+        <div class="glass-card p-3.5 rounded-2xl space-y-2">
+          <div class="flex justify-between items-center">
+            <div class="flex items-center gap-2.5">
+              <i class="fa-solid fa-folder text-blue-400 text-lg"></i>
+              <h4 class="font-bold text-xs text-white">Electronics & Home Gadgets</h4>
+            </div>
+            <span class="text-[9px] bg-white/5 text-gray-300 px-2 py-0.5 rounded-full border border-white/10">3 Verified</span>
+          </div>
+        </div>
+
+        <div class="glass-card p-3.5 rounded-2xl space-y-2">
+          <div class="flex justify-between items-center">
+            <div class="flex items-center gap-2.5">
+              <i class="fa-solid fa-folder text-emerald-400 text-lg"></i>
+              <h4 class="font-bold text-xs text-white">Property & Legal ID Papers</h4>
+            </div>
+            <span class="text-[9px] bg-white/5 text-gray-300 px-2 py-0.5 rounded-full border border-white/10">1 Saved</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= PAGE 3: SMART ASSETS & GARAGE HUB ================= -->
+      <div id="page-garage" class="page p-5 space-y-3">
+        <div class="flex justify-between items-center">
+          <div>
+            <h2 class="font-bold text-white text-sm">Assets & Garage Hub</h2>
+            <p class="text-[10px] text-gray-400">Track Vehicles, Electronics & Properties</p>
+          </div>
+          <button onclick="openModal('modal-scan')" class="bg-indigo-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-xl">+ Add Asset</button>
+        </div>
+
+        <div class="glass-card p-4 rounded-3xl space-y-3 border-l-4 border-l-indigo-500">
+          <div class="flex justify-between items-start">
+            <div class="flex items-center gap-2">
+              <span class="text-base">🏍️</span>
+              <div>
+                <h3 class="font-extrabold text-sm text-white">TVS Ronin 225 TD</h3>
+                <p class="text-[10px] text-gray-400 font-mono">UP32 AB 1234 • Bike RC & Insurance</p>
+              </div>
+            </div>
+            <span class="text-xs font-black text-indigo-400">₹ 1,72,000</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-[10px]">
+            <div class="bg-white/5 p-2 rounded-xl border border-white/5">
+              <p class="text-gray-400 text-[8px]">INSURANCE</p>
+              <p class="text-rose-400 font-bold mt-0.5">Expires in 3 Days</p>
+            </div>
+            <div class="bg-white/5 p-2 rounded-xl border border-white/5">
+              <p class="text-gray-400 text-[8px]">PUC CERTIFICATE</p>
+              <p class="text-emerald-400 font-bold mt-0.5">Valid Till Nov 2026</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="glass-card p-4 rounded-3xl space-y-2 border-l-4 border-l-purple-500">
+          <div class="flex justify-between items-start">
+            <div class="flex items-center gap-2">
+              <span class="text-base">📺</span>
+              <div>
+                <h3 class="font-extrabold text-sm text-white">LG Smart LED TV (55")</h3>
+                <p class="text-[10px] text-gray-400">Invoice: Bill_LG_2024.pdf</p>
+              </div>
+            </div>
+            <span class="text-xs font-black text-purple-400">₹ 68,000</span>
+          </div>
+          <div class="bg-white/5 p-2 rounded-xl border border-white/5 text-[10px] flex justify-between">
+            <span class="text-gray-400">Warranty Expiry:</span>
+            <span class="text-emerald-400 font-bold">14 Aug 2027</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= PAGE 4: PROFILE ================= -->
+      <div id="page-profile" class="page p-5 space-y-3">
+        <h2 class="font-bold text-white text-sm">Profile & Address Manager</h2>
+        <div class="glass-card p-4 rounded-3xl space-y-3">
+          <div>
+            <label class="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Full Name</label>
+            <input type="text" value="Manish Rai" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white mt-1">
+          </div>
+          <div>
+            <label class="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Mobile Number</label>
+            <input type="text" value="+91 9876543210" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white mt-1">
+          </div>
+          <div>
+            <label class="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Residence Address</label>
+            <textarea rows="2" class="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white mt-1">Patrakarpuram, Gomti Nagar, Lucknow, UP - 226010</textarea>
+          </div>
+          <button class="w-full bg-indigo-600 text-white font-bold py-2 rounded-xl text-xs shadow-lg shadow-indigo-600/30">
+            Save Profile Details
+          </button>
+        </div>
+      </div>
+
+      <!-- ================= PAGE 5: SETTINGS ================= -->
+      <div id="page-settings" class="page p-5 space-y-3">
+        <h2 class="font-bold text-white text-sm">Settings & Family Hub</h2>
+        <div class="space-y-2">
+          
+          <div onclick="openModal('modal-family')" class="glass-card p-3 rounded-2xl flex justify-between items-center text-xs text-purple-300 cursor-pointer">
+            <span class="flex items-center gap-2.5"><i class="fa-solid fa-users text-purple-400"></i> Family Sharing Vault</span>
+            <span class="text-[9px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full font-bold">2 Members</span>
+          </div>
+
+          <div onclick="exportAllBillsPDF()" class="glass-card p-3 rounded-2xl flex justify-between items-center text-xs text-emerald-300 cursor-pointer">
+            <span class="flex items-center gap-2.5"><i class="fa-solid fa-file-pdf text-emerald-400"></i> Export All Asset Bills (PDF Zip)</span>
+            <i class="fa-solid fa-download text-[10px]"></i>
+          </div>
+
+          <div onclick="alert('Google Drive Sync Active!')" class="glass-card p-3 rounded-2xl flex justify-between items-center text-xs text-white cursor-pointer">
+            <span class="flex items-center gap-2.5"><i class="fa-brands fa-google-drive text-blue-400"></i> Google Drive Cloud Sync</span>
+            <span class="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-bold">Active</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- FIXED NATIVE BOTTOM NAVIGATION BAR -->
+    <div id="main-nav" class="absolute bottom-0 left-0 right-0 p-2 m-3 glass-card rounded-2xl flex justify-around items-center border border-white/10 z-50 bg-[#0a0e1a]/95 backdrop-blur-2xl">
+      <button onclick="showPage('page-home', this)" class="nav-btn text-indigo-400 flex flex-col items-center gap-1 px-3 py-1">
+        <i class="fa-solid fa-house text-sm"></i><span class="text-[8px] font-bold">Home</span>
+      </button>
+      <button onclick="showPage('page-folders', this)" class="nav-btn text-gray-500 flex flex-col items-center gap-1 px-3 py-1">
+        <i class="fa-solid fa-folder-closed text-sm"></i><span class="text-[8px]">Folders</span>
+      </button>
+      <button onclick="showPage('page-garage', this)" class="nav-btn text-gray-500 flex flex-col items-center gap-1 px-3 py-1">
+        <i class="fa-solid fa-boxes-stacked text-sm"></i><span class="text-[8px]">Assets</span>
+      </button>
+      <button onclick="showPage('page-profile', this)" class="nav-btn text-gray-500 flex flex-col items-center gap-1 px-3 py-1">
+        <i class="fa-solid fa-user text-sm"></i><span class="text-[8px]">Profile</span>
+      </button>
+      <button onclick="showPage('page-settings', this)" class="nav-btn text-gray-500 flex flex-col items-center gap-1 px-3 py-1">
+        <i class="fa-solid fa-gear text-sm"></i><span class="text-[8px]">Settings</span>
+      </button>
+    </div>
+
+    <!-- ================= MODAL: FAMILY SHARING ================= -->
+    <div id="modal-family" class="modal fixed inset-0 bg-black/80 backdrop-blur-md z-50 justify-center items-center p-4">
+      <div class="glass-card w-full max-w-xs p-4 rounded-3xl space-y-3 border border-purple-500/30">
+        <div class="flex justify-between items-center border-b border-white/10 pb-2">
+          <h3 class="text-xs font-bold text-white"><i class="fa-solid fa-users text-purple-400 mr-1"></i> Family Vault Sharing</h3>
+          <button onclick="closeModal('modal-family')" class="text-gray-400 text-base">&times;</button>
+        </div>
+        <div class="space-y-2 text-[10px]">
+          <p class="text-gray-300">Share vehicle RCs, warranty bills & home documents with family members.</p>
+          <div class="bg-white/5 p-2 rounded-xl flex justify-between items-center">
+            <span>👨‍👩‍👦 Connected: <b>Priya Rai (Spouse)</b></span>
+            <span class="text-emerald-400 text-[8px]">Full Access</span>
+          </div>
+          <div>
+            <label class="text-[8px] text-gray-400 uppercase font-bold">Invite New Member (Mobile / Email)</label>
+            <input type="text" placeholder="+91 9935XXXXXX" class="w-full bg-white/5 border border-white/10 rounded-xl px-2.5 py-1 text-xs text-white mt-0.5">
+          </div>
+          <button onclick="alert('Family Invite Sent!'); closeModal('modal-family');" class="w-full bg-purple-600 text-white font-bold py-2 rounded-xl text-xs shadow-lg">
+            Send Family Invite
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= MODAL: AI SCAN & FAKE DETECTOR ================= -->
+    <div id="modal-scan" class="modal fixed inset-0 bg-black/80 backdrop-blur-md z-50 justify-center items-center p-4">
+      <div class="glass-card w-full max-w-xs p-4 rounded-3xl space-y-3 border border-indigo-500/30">
+        <div class="flex justify-between items-center border-b border-white/10 pb-2">
+          <h3 class="text-xs font-bold text-white"><i class="fa-solid fa-robot text-indigo-400 mr-1"></i> AI Multi-Asset Scanner</h3>
+          <button onclick="closeModal('modal-scan')" class="text-gray-400 text-base">&times;</button>
+        </div>
+        <div class="space-y-2">
+          <div>
+            <label class="text-[8px] text-gray-400 uppercase font-bold">Asset Type</label>
+            <select class="w-full bg-[#121829] border border-white/10 rounded-xl px-2 py-1.5 text-xs text-white mt-0.5">
+              <option>🚗 Vehicle (Car/Bike RC & Ins.)</option>
+              <option>📺 Electronics & Appliances</option>
+              <option>🏠 Property & Legal Documents</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[8px] text-gray-400 uppercase font-bold">Store / Issuer Name</label>
+            <input type="text" placeholder="e.g. Croma / TVS / RTO" class="w-full bg-white/5 border border-white/10 rounded-xl px-2.5 py-1 text-xs text-white mt-0.5">
+          </div>
+          <div>
+            <label class="text-[8px] text-gray-400 uppercase font-bold">GSTIN / Ref Number (Fake Check)</label>
+            <input type="text" placeholder="09AAAAA0000A1Z5" class="w-full bg-white/5 border border-white/10 rounded-xl px-2.5 py-1 text-xs text-white mt-0.5">
+          </div>
+          <button onclick="runFakeDetector()" class="w-full bg-indigo-600 text-white font-bold py-2 rounded-xl text-xs shadow-lg">
+            Verify & Save to Asset Vault
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    function exportAllBillsPDF() {
+      alert("📄 Generating Complete Asset PDF Summary...\n\nAll verified bills, warranties, and garage document PDFs are ready for download!");
+    }
+
+    function runFakeDetector() {
+      alert("✅ Verification Passed: Original Asset Added to Vault!");
+      closeModal('modal-scan');
+    }
+
+    function showPage(pageId, btn) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.getElementById(pageId).classList.add('active');
+      if(btn) {
+        document.querySelectorAll('.nav-btn').forEach(b => {
+          b.classList.remove('text-indigo-400');
+          b.classList.add('text-gray-500');
+          b.querySelector('span').classList.remove('font-bold');
+        });
+        btn.classList.add('text-indigo-400');
+        btn.classList.remove('text-gray-500');
+        btn.querySelector('span').classList.add('font-bold');
+      }
+    }
+
+    function openModal(id) { document.getElementById(id).classList.add('active'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+  </script>
+</body>
+</html>
