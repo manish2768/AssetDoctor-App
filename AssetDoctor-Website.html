@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Asset Doctor — Protect, Track &amp; Save</title>
+  <meta name="description" content="Asset Doctor is your smart household and vehicle utility vault — warranties, RC, PUC, insurance, and more." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            slate50: '#F8FAFC',
+            ink: '#0A1628',
+            teal: { DEFAULT: '#0D9488', dark: '#0F766E', soft: '#CCFBF1' },
+            cyan: '#0891B2'
+          },
+          fontFamily: {
+            sans: ['Outfit', 'system-ui', 'sans-serif'],
+            display: ['"Source Serif 4"', 'Georgia', 'serif']
+          }
+        }
+      }
+    };
+  </script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <style>
+    html { scroll-behavior: smooth; }
+    .hero-glow {
+      background:
+        radial-gradient(ellipse 80% 60% at 70% 20%, rgba(13,148,136,0.18), transparent 55%),
+        radial-gradient(ellipse 50% 40% at 15% 80%, rgba(8,145,178,0.12), transparent 50%),
+        linear-gradient(180deg, #F8FAFC 0%, #EEF6F5 45%, #F8FAFC 100%);
+    }
+  </style>
+</head>
+<body class="bg-slate50 text-ink font-sans antialiased">
+
+  <!-- Nav -->
+  <nav class="sticky top-0 z-40 border-b border-slate-200/80 bg-white/80 backdrop-blur-md">
+    <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
+      <a href="#top" class="flex items-center gap-2 font-extrabold tracking-tight">
+        <img src="./icon.png" alt="Asset Doctor" class="h-9 w-9 rounded-xl object-cover" width="36" height="36" />
+        Asset Doctor
+      </a>
+      <div class="hidden items-center gap-6 text-sm font-semibold text-slate-600 sm:flex">
+        <a href="#features" class="hover:text-teal">Features</a>
+        <a href="#login" class="hover:text-teal">Login / Assets</a>
+        <a href="privacy/" class="hover:text-teal">Privacy</a>
+      </div>
+      <a href="#login" class="rounded-full bg-ink px-4 py-2 text-sm font-bold text-white hover:bg-slate-800">
+        View Assets
+      </a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <header id="top" class="hero-glow">
+    <div class="mx-auto grid max-w-6xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:items-center lg:py-24">
+      <div>
+        <p class="text-xs font-bold uppercase tracking-[0.25em] text-teal">Smart Asset &amp; Vehicle Utility Vault</p>
+        <h1 class="mt-4 font-display text-5xl font-bold leading-[1.05] text-ink sm:text-6xl">
+          Asset Doctor
+        </h1>
+        <p class="mt-5 max-w-lg text-lg font-semibold text-slate-700">
+          Protect, Track &amp; Save — The Smart Asset Vault
+        </p>
+        <p class="mt-3 max-w-lg text-slate-500">
+          One secure place for RC, PUC, insurance, warranties, bills, and renewals —
+          with roadside help and trusted partners when you need them.
+        </p>
+        <div class="mt-8 flex flex-wrap gap-3">
+          <a
+            id="downloadCta"
+            href="https://play.google.com/store/apps/details?id=com.assetdoctor.app"
+            target="_blank"
+            rel="noopener"
+            class="inline-flex items-center justify-center rounded-2xl bg-teal px-6 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-teal/25 hover:bg-teal-dark"
+          >
+            Download App
+          </a>
+          <a
+            href="#login"
+            class="inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-6 py-3.5 text-sm font-extrabold text-ink hover:border-teal hover:text-teal"
+          >
+            Login / View Assets
+          </a>
+        </div>
+        <p class="mt-4 text-xs text-slate-400">Crafted by Ashutosh (14) · Free on Google Play</p>
+      </div>
+      <div class="relative">
+        <div class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/60">
+          <div class="rounded-2xl bg-gradient-to-br from-teal to-cyan p-6 text-white">
+            <p class="text-xs font-bold uppercase tracking-widest text-white/80">Vault snapshot</p>
+            <p class="mt-3 text-3xl font-black">Your assets. On call.</p>
+            <ul class="mt-5 space-y-2 text-sm text-white/90">
+              <li>✓ Expiry alerts for PUC &amp; insurance</li>
+              <li>✓ Bills &amp; warranty cards offline-ready</li>
+              <li>✓ Partner RSA, renewals &amp; service booking</li>
+            </ul>
+          </div>
+          <div class="mt-4 grid grid-cols-3 gap-2 text-center text-xs font-bold text-slate-600">
+            <div class="rounded-xl bg-slate-50 p-3"><span class="block text-lg text-ink">RC</span>Vault</div>
+            <div class="rounded-xl bg-slate-50 p-3"><span class="block text-lg text-ink">24×7</span>RSA</div>
+            <div class="rounded-xl bg-slate-50 p-3"><span class="block text-lg text-ink">OCR</span>Scan</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Features -->
+  <section id="features" class="border-t border-slate-200 bg-white py-16">
+    <div class="mx-auto max-w-6xl px-4 sm:px-6">
+      <h2 class="font-display text-3xl font-bold text-ink sm:text-4xl">Built for real life on the road &amp; at home</h2>
+      <p class="mt-3 max-w-2xl text-slate-500">Four pillars that keep your vehicles, gadgets, and policies under control.</p>
+
+      <div class="mt-10 grid gap-5 sm:grid-cols-2">
+        <article class="rounded-3xl border border-slate-200 bg-slate50 p-6">
+          <p class="text-xs font-bold uppercase tracking-wider text-teal">Vehicle Vault</p>
+          <h3 class="mt-2 text-xl font-extrabold">RC, Insurance &amp; PUC reminders</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-600">
+            Store registration, insurance, and PUC in one sleeve. Get fine-protection alerts before expiry so you renew on time.
+          </p>
+        </article>
+
+        <article class="rounded-3xl border border-slate-200 bg-slate50 p-6">
+          <p class="text-xs font-bold uppercase tracking-wider text-cyan">Emergency RSA</p>
+          <h3 class="mt-2 text-xl font-extrabold">24×7 Roadside Assistance</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-600">
+            Stuck on the highway? Get roadside help powered by <strong>ReadyAssist</strong> — tow, battery, puncture support when every minute counts.
+          </p>
+        </article>
+
+        <article class="rounded-3xl border border-slate-200 bg-slate50 p-6">
+          <p class="text-xs font-bold uppercase tracking-wider text-amber-700">Insurance Renewals</p>
+          <h3 class="mt-2 text-xl font-extrabold">Motor &amp; Health in minutes</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-600">
+            Instant motor &amp; health policy renewal journeys powered by <strong>Policybazaar</strong> — renew from the vault when alerts fire.
+          </p>
+        </article>
+
+        <article class="rounded-3xl border border-slate-200 bg-slate50 p-6">
+          <p class="text-xs font-bold uppercase tracking-wider text-slate-700">Gadget &amp; Appliance Care</p>
+          <h3 class="mt-2 text-xl font-extrabold">Warranty, bills &amp; service</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-600">
+            Keep warranty cards and purchase bills for ACs, phones, and more. Book doorstep service powered by <strong>Onsitego</strong>.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- Login / Asset preview -->
+  <section id="login" class="border-t border-slate-200 bg-slate50 py-16">
+    <div class="mx-auto max-w-6xl px-4 sm:px-6">
+      <div class="mb-8 max-w-2xl">
+        <h2 class="font-display text-3xl font-bold text-ink">Login / View your assets</h2>
+        <p class="mt-2 text-slate-500">
+          Existing Asset Doctor users can sign in with the same email &amp; password used in the app
+          (or Google, if enabled) to preview vehicles and appliances from the web.
+        </p>
+      </div>
+
+      <div class="grid gap-6 lg:grid-cols-5">
+        <!-- Auth panel -->
+        <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
+          <h3 class="font-extrabold text-ink">Sign in</h3>
+          <p id="authStatus" class="mt-1 text-xs text-slate-400">Not signed in</p>
+
+          <div class="mt-4 space-y-3">
+            <input id="email" type="email" placeholder="Email"
+              class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal" />
+            <input id="password" type="password" placeholder="Password"
+              class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal" />
+            <button id="btnEmailLogin" type="button"
+              class="w-full rounded-xl bg-teal py-2.5 text-sm font-bold text-white hover:bg-teal-dark">
+              Login with Email
+            </button>
+            <button id="btnGoogle" type="button"
+              class="w-full rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-bold text-ink hover:border-teal">
+              Continue with Google
+            </button>
+          </div>
+
+          <div class="my-5 border-t border-slate-100 pt-5">
+            <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Or phone OTP</p>
+            <div class="mt-3 flex gap-2">
+              <input id="phone" type="tel" placeholder="+91XXXXXXXXXX"
+                class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal" />
+            </div>
+            <div id="recaptcha-container" class="mt-2"></div>
+            <button id="btnSendOtp" type="button"
+              class="mt-2 w-full rounded-xl border border-slate-200 py-2.5 text-sm font-bold hover:border-teal">
+              Send OTP
+            </button>
+            <div class="mt-2 flex gap-2">
+              <input id="otp" type="text" placeholder="6-digit OTP"
+                class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal" />
+              <button id="btnVerifyOtp" type="button"
+                class="shrink-0 rounded-xl bg-ink px-4 py-2.5 text-sm font-bold text-white">
+                Verify
+              </button>
+            </div>
+          </div>
+
+          <button id="btnLogout" type="button" class="mt-2 text-sm font-semibold text-slate-500 hover:text-rose-600">
+            Sign out
+          </button>
+          <p id="authError" class="mt-3 hidden rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700"></p>
+        </div>
+
+        <!-- Assets panel -->
+        <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-3">
+          <div class="flex items-center justify-between gap-3">
+            <h3 class="font-extrabold text-ink">Your vault preview</h3>
+            <button id="btnRefresh" type="button"
+              class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:border-teal">
+              Refresh
+            </button>
+          </div>
+          <p id="assetsHint" class="mt-1 text-sm text-slate-400">Sign in to load vehicles &amp; appliances from Firestore.</p>
+          <div id="assetsList" class="mt-4 space-y-3 min-h-[200px]"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-200 bg-ink text-slate-300">
+    <div class="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:px-6 md:grid-cols-3">
+      <div>
+        <p class="flex items-center gap-2 text-lg font-extrabold text-white">
+          <img src="./icon.png" alt="" class="h-8 w-8 rounded-lg object-cover" width="32" height="32" />
+          Asset Doctor
+        </p>
+        <p class="mt-2 text-sm text-slate-400">Protect, Track &amp; Save — The Smart Asset Vault</p>
+        <p class="mt-4 text-xs text-slate-500">Crafted by Ashutosh (14)</p>
+      </div>
+      <div>
+        <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Quick links</p>
+        <ul class="mt-3 space-y-2 text-sm">
+          <li><a class="hover:text-white" href="#features">Features</a></li>
+          <li><a class="hover:text-white" href="#login">Login / View Assets</a></li>
+          <li><a class="hover:text-white" href="https://play.google.com/store/apps/details?id=com.assetdoctor.app" target="_blank" rel="noopener">Download App</a></li>
+          <li><a class="hover:text-white" href="privacy/">Privacy Policy</a></li>
+          <li><a class="hover:text-white" href="#terms">Terms</a></li>
+        </ul>
+      </div>
+      <div>
+        <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Contact</p>
+        <ul class="mt-3 space-y-2 text-sm">
+          <li>Email: <a class="text-teal soft hover:underline" href="mailto:support@assetdoctor.in">support@assetdoctor.in</a></li>
+          <li>Package: com.assetdoctor.app</li>
+        </ul>
+      </div>
+    </div>
+    <div id="terms" class="border-t border-white/10 px-4 py-6 text-center text-xs text-slate-500">
+      By using Asset Doctor you agree to store documents you own and receive service reminders.
+      Partner services (RSA, insurance, appliance care) are provided by third parties under their own terms.
+      © <span id="year"></span> Asset Doctor
+    </div>
+  </footer>
+
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    // ===== Firebase (Asset Doctor) =====
+    const firebaseConfig = {
+      apiKey: "AIzaSyAYpEIXCZz3VKFMza3jpUMGTSRbi37qk-c",
+      authDomain: "assetdoctor-5fd25.firebaseapp.com",
+      projectId: "assetdoctor-5fd25",
+      storageBucket: "assetdoctor-5fd25.firebasestorage.app",
+      messagingSenderId: "926559836985",
+      appId: "1:926559836985:android:842e878c508df93d2b66e8"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    let confirmationResult = null;
+    let recaptchaVerifier = null;
+
+    const VEHICLE = new Set(['car', 'bike', 'scooter', 'motorcycle', 'vehicle']);
+    const APPLIANCE = new Set(['ac', 'mobile', 'phone', 'tablet', 'laptop', 'fridge', 'tv', 'washing_machine', 'appliance', 'geyser', 'microwave']);
+
+    function $(id) { return document.getElementById(id); }
+
+    function showAuthError(msg) {
+      const el = $('authError');
+      if (!msg) {
+        el.classList.add('hidden');
+        el.textContent = '';
+        return;
+      }
+      el.classList.remove('hidden');
+      el.textContent = msg;
+    }
+
+    function isActive(a) {
+      if (a.deletedAt) return false;
+      const s = String(a.status || 'active').toLowerCase();
+      return s === 'active' || s === 'in_repair' || !a.status;
+    }
+
+    function cat(a) {
+      return String(a.categoryId || a.category || '').toLowerCase();
+    }
+
+    function kind(a) {
+      const id = cat(a);
+      if (VEHICLE.has(id)) return 'Vehicle';
+      if (APPLIANCE.has(id)) return 'Appliance';
+      return 'Document';
+    }
+
+    function renderAssets(list) {
+      const box = $('assetsList');
+      if (!list.length) {
+        box.innerHTML = '<p class="text-sm text-slate-400">No active assets found in your vault yet. Add them from the mobile app.</p>';
+        return;
+      }
+      box.innerHTML = list.map(function (a) {
+        const title = a.assetName || 'Untitled asset';
+        const meta = [a.categoryLabel || a.categoryId || '', a.registration || a.storeName || ''].filter(Boolean).join(' · ');
+        const badge = kind(a);
+        const badgeColor = badge === 'Vehicle' ? 'bg-teal/10 text-teal' : badge === 'Appliance' ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600';
+        return (
+          '<div class="rounded-2xl border border-slate-200 bg-slate50 p-4">' +
+            '<div class="flex items-start justify-between gap-3">' +
+              '<div>' +
+                '<p class="font-extrabold text-ink">' + escapeHtml(title) + '</p>' +
+                '<p class="mt-1 text-xs text-slate-500">' + escapeHtml(meta) + '</p>' +
+              '</div>' +
+              '<span class="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ' + badgeColor + '">' + badge + '</span>' +
+            '</div>' +
+            (a.warrantyExpiry ? '<p class="mt-2 text-xs text-slate-500">Warranty: ' + escapeHtml(String(a.warrantyExpiry)) + '</p>' : '') +
+            (a.pucExpiry ? '<p class="text-xs text-slate-500">PUC: ' + escapeHtml(String(a.pucExpiry)) + '</p>' : '') +
+            (a.insuranceExpiry ? '<p class="text-xs text-slate-500">Insurance: ' + escapeHtml(String(a.insuranceExpiry)) + '</p>' : '') +
+          '</div>'
+        );
+      }).join('');
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    async function loadAssets(uid) {
+      $('assetsHint').textContent = 'Loading your vault…';
+      $('assetsList').innerHTML = '';
+      try {
+        const snap = await db.collection('Users').doc(uid).collection('Assets').get();
+        const rows = [];
+        snap.forEach(function (doc) {
+          const data = doc.data() || {};
+          if (isActive(data)) rows.push(Object.assign({ id: doc.id }, data));
+        });
+        rows.sort(function (a, b) {
+          return String(a.assetName || '').localeCompare(String(b.assetName || ''));
+        });
+        $('assetsHint').textContent = rows.length + ' active item(s) in your vault';
+        renderAssets(rows);
+      } catch (err) {
+        console.error(err);
+        $('assetsHint').textContent = 'Could not load assets.';
+        showAuthError(err.message || 'Firestore error');
+      }
+    }
+
+    auth.onAuthStateChanged(function (user) {
+      if (user) {
+        $('authStatus').textContent = 'Signed in as ' + (user.email || user.phoneNumber || user.uid);
+        showAuthError('');
+        loadAssets(user.uid);
+      } else {
+        $('authStatus').textContent = 'Not signed in';
+        $('assetsHint').textContent = 'Sign in to load vehicles & appliances from Firestore.';
+        $('assetsList').innerHTML = '';
+      }
+    });
+
+    $('btnEmailLogin').onclick = async function () {
+      showAuthError('');
+      try {
+        await auth.signInWithEmailAndPassword($('email').value.trim(), $('password').value);
+      } catch (err) {
+        showAuthError(err.message || 'Email login failed');
+      }
+    };
+
+    $('btnGoogle').onclick = async function () {
+      showAuthError('');
+      try {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        await auth.signInWithPopup(provider);
+      } catch (err) {
+        showAuthError(err.message || 'Google sign-in failed. Add this site to Firebase Authorized domains.');
+      }
+    };
+
+    function ensureRecaptcha() {
+      if (recaptchaVerifier) return;
+      recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+        size: 'normal',
+        callback: function () {}
+      });
+      recaptchaVerifier.render();
+    }
+
+    $('btnSendOtp').onclick = async function () {
+      showAuthError('');
+      try {
+        ensureRecaptcha();
+        const phone = $('phone').value.trim();
+        confirmationResult = await auth.signInWithPhoneNumber(phone, recaptchaVerifier);
+        showAuthError('');
+        alert('OTP sent. Enter the code and tap Verify.');
+      } catch (err) {
+        showAuthError(err.message || 'Could not send OTP. Use +91… format and enable Phone auth in Firebase.');
+      }
+    };
+
+    $('btnVerifyOtp').onclick = async function () {
+      showAuthError('');
+      try {
+        if (!confirmationResult) throw new Error('Send OTP first.');
+        await confirmationResult.confirm($('otp').value.trim());
+      } catch (err) {
+        showAuthError(err.message || 'OTP verification failed');
+      }
+    };
+
+    $('btnLogout').onclick = function () { auth.signOut(); };
+    $('btnRefresh').onclick = function () {
+      if (auth.currentUser) loadAssets(auth.currentUser.uid);
+      else showAuthError('Sign in first.');
+    };
+  </script>
+</body>
+</html>
