@@ -38,6 +38,8 @@
         radial-gradient(ellipse 50% 40% at 15% 80%, rgba(8,145,178,0.12), transparent 50%),
         linear-gradient(180deg, #F8FAFC 0%, #EEF6F5 45%, #F8FAFC 100%);
     }
+    .modal-open { overflow: hidden; }
+    dialog::backdrop { background: rgba(10, 22, 40, 0.55); backdrop-filter: blur(4px); }
   </style>
 </head>
 <body class="bg-slate50 text-ink font-sans antialiased">
@@ -157,80 +159,184 @@
     </div>
   </section>
 
-  <!-- Login / Asset preview -->
-  <section id="login" class="border-t border-slate-200 bg-slate50 py-16">
+  <!-- Login / Vault dashboard -->
+  <section id="login" class="border-t border-slate-200 bg-slate50 py-12 sm:py-16">
     <div class="mx-auto max-w-6xl px-4 sm:px-6">
       <div class="mb-8 max-w-2xl">
-        <h2 class="font-display text-3xl font-bold text-ink">Login / View your assets</h2>
+        <h2 class="font-display text-3xl font-bold text-ink">Your web vault</h2>
         <p class="mt-2 text-slate-500">
-          Existing Asset Doctor users can sign in with the same email &amp; password used in the app
-          (or Google, if enabled) to preview vehicles and appliances from the web.
+          Sign in with the same account as the app to manage vehicles and appliances from the browser.
         </p>
       </div>
 
-      <div class="grid gap-6 lg:grid-cols-5">
-        <!-- Auth panel -->
-        <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
-          <h3 class="font-extrabold text-ink">Sign in</h3>
-          <p id="authStatus" class="mt-1 text-xs text-slate-400">Not signed in</p>
+      <div class="grid gap-6 lg:grid-cols-12 lg:items-start">
+        <!-- Left: auth OR profile -->
+        <aside class="lg:col-span-4">
+          <!-- Signed out: sign-in form -->
+          <div id="panelSignedOut" class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <h3 class="font-extrabold text-ink">Sign in</h3>
+            <p class="mt-1 text-xs text-slate-400">Email, Google, or phone OTP</p>
 
-          <div class="mt-4 space-y-3">
-            <input id="email" type="email" placeholder="Email"
-              class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal" />
-            <input id="password" type="password" placeholder="Password"
-              class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal" />
-            <button id="btnEmailLogin" type="button"
-              class="w-full rounded-xl bg-teal py-2.5 text-sm font-bold text-white hover:bg-teal-dark">
-              Login with Email
-            </button>
-            <button id="btnGoogle" type="button"
-              class="w-full rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-bold text-ink hover:border-teal">
-              Continue with Google
-            </button>
-          </div>
-
-          <div class="my-5 border-t border-slate-100 pt-5">
-            <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Or phone OTP</p>
-            <div class="mt-3 flex gap-2">
-              <input id="phone" type="tel" placeholder="+91XXXXXXXXXX"
+            <div class="mt-4 space-y-3">
+              <input id="email" type="email" placeholder="Email" autocomplete="username"
                 class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal" />
-            </div>
-            <div id="recaptcha-container" class="mt-2"></div>
-            <button id="btnSendOtp" type="button"
-              class="mt-2 w-full rounded-xl border border-slate-200 py-2.5 text-sm font-bold hover:border-teal">
-              Send OTP
-            </button>
-            <div class="mt-2 flex gap-2">
-              <input id="otp" type="text" placeholder="6-digit OTP"
+              <input id="password" type="password" placeholder="Password" autocomplete="current-password"
                 class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal" />
-              <button id="btnVerifyOtp" type="button"
-                class="shrink-0 rounded-xl bg-ink px-4 py-2.5 text-sm font-bold text-white">
-                Verify
+              <button id="btnEmailLogin" type="button"
+                class="w-full rounded-xl bg-teal py-2.5 text-sm font-bold text-white hover:bg-teal-dark">
+                Login with Email
+              </button>
+              <button id="btnGoogle" type="button"
+                class="w-full rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-bold text-ink hover:border-teal">
+                Continue with Google
               </button>
             </div>
+
+            <div class="my-5 border-t border-slate-100 pt-5">
+              <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Or phone OTP</p>
+              <input id="phone" type="tel" placeholder="+91XXXXXXXXXX"
+                class="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal" />
+              <div id="recaptcha-container" class="mt-2"></div>
+              <button id="btnSendOtp" type="button"
+                class="mt-2 w-full rounded-xl border border-slate-200 py-2.5 text-sm font-bold hover:border-teal">
+                Send OTP
+              </button>
+              <div class="mt-2 flex flex-col gap-2 sm:flex-row">
+                <input id="otp" type="text" placeholder="6-digit OTP" inputmode="numeric"
+                  class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal" />
+                <button id="btnVerifyOtp" type="button"
+                  class="shrink-0 rounded-xl bg-ink px-4 py-2.5 text-sm font-bold text-white">
+                  Verify
+                </button>
+              </div>
+            </div>
+            <p id="authError" class="mt-3 hidden rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700"></p>
           </div>
 
-          <button id="btnLogout" type="button" class="mt-2 text-sm font-semibold text-slate-500 hover:text-rose-600">
-            Sign out
-          </button>
-          <p id="authError" class="mt-3 hidden rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700"></p>
-        </div>
+          <!-- Signed in: profile -->
+          <div id="panelSignedIn" class="hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div class="flex items-start gap-3">
+              <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-teal/10 text-lg font-extrabold text-teal" id="profileAvatar">AD</div>
+              <div class="min-w-0">
+                <p class="text-xs font-bold uppercase tracking-wider text-teal">Signed in</p>
+                <p id="profileIdentity" class="mt-1 truncate text-base font-extrabold text-ink">—</p>
+                <p id="profileMeta" class="mt-0.5 text-xs text-slate-400">Vault ready</p>
+              </div>
+            </div>
+            <div class="mt-5 grid gap-2">
+              <button id="btnRefreshVault" type="button"
+                class="w-full rounded-xl border border-slate-200 py-2.5 text-sm font-bold text-ink hover:border-teal hover:text-teal">
+                Refresh Vault
+              </button>
+              <button id="btnLogout" type="button"
+                class="w-full rounded-xl bg-rose-50 py-2.5 text-sm font-bold text-rose-700 hover:bg-rose-100">
+                Sign Out
+              </button>
+            </div>
+            <p id="profileError" class="mt-3 hidden rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700"></p>
+          </div>
+        </aside>
 
-        <!-- Assets panel -->
-        <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-3">
-          <div class="flex items-center justify-between gap-3">
-            <h3 class="font-extrabold text-ink">Your vault preview</h3>
-            <button id="btnRefresh" type="button"
-              class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:border-teal">
-              Refresh
+        <!-- Right: vault -->
+        <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6 lg:col-span-8">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 class="font-extrabold text-ink">Vault dashboard</h3>
+              <p id="assetsHint" class="mt-1 text-sm text-slate-400">Sign in to manage vehicles &amp; appliances.</p>
+            </div>
+            <button id="btnAddAsset" type="button" disabled
+              class="inline-flex items-center justify-center rounded-xl bg-teal px-4 py-2.5 text-sm font-bold text-white hover:bg-teal-dark disabled:cursor-not-allowed disabled:opacity-40">
+              + Add New Asset
             </button>
           </div>
-          <p id="assetsHint" class="mt-1 text-sm text-slate-400">Sign in to load vehicles &amp; appliances from Firestore.</p>
-          <div id="assetsList" class="mt-4 space-y-3 min-h-[200px]"></div>
+
+          <div id="vaultStats" class="mt-5 hidden grid grid-cols-3 gap-2">
+            <div class="rounded-2xl bg-slate50 px-3 py-3 text-center">
+              <p id="statTotal" class="text-xl font-black text-ink">0</p>
+              <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Total</p>
+            </div>
+            <div class="rounded-2xl bg-teal/10 px-3 py-3 text-center">
+              <p id="statVehicles" class="text-xl font-black text-teal">0</p>
+              <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Vehicles</p>
+            </div>
+            <div class="rounded-2xl bg-amber-50 px-3 py-3 text-center">
+              <p id="statAppliances" class="text-xl font-black text-amber-800">0</p>
+              <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Appliances</p>
+            </div>
+          </div>
+
+          <div id="assetsList" class="mt-5 grid gap-3 sm:grid-cols-2"></div>
         </div>
       </div>
     </div>
   </section>
+
+  <!-- Add / Edit asset modal -->
+  <dialog id="assetModal" class="w-[min(100%,28rem)] rounded-3xl border-0 p-0 shadow-2xl backdrop:bg-ink/50">
+    <form id="assetForm" method="dialog" class="p-5 sm:p-6">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h3 id="assetModalTitle" class="text-lg font-extrabold text-ink">Add New Asset</h3>
+          <p class="mt-1 text-xs text-slate-400">Saved to your Firebase vault</p>
+        </div>
+        <button type="button" id="btnCloseModal" class="rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-100 hover:text-ink" aria-label="Close">✕</button>
+      </div>
+
+      <input type="hidden" id="assetEditId" value="" />
+
+      <div class="mt-4 space-y-3">
+        <label class="block text-xs font-bold text-slate-500">Asset name *
+          <input id="fAssetName" required class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal" placeholder="e.g. Hyundai Creta" />
+        </label>
+        <label class="block text-xs font-bold text-slate-500">Category *
+          <select id="fCategory" required class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal">
+            <optgroup label="Vehicles">
+              <option value="car">Car</option>
+              <option value="bike">Bike</option>
+              <option value="scooter">Scooter</option>
+            </optgroup>
+            <optgroup label="Appliances">
+              <option value="ac">AC</option>
+              <option value="mobile">Mobile</option>
+              <option value="tv">TV</option>
+              <option value="fridge">Fridge</option>
+              <option value="washing_machine">Washing machine</option>
+              <option value="laptop">Laptop</option>
+              <option value="appliance">Other appliance</option>
+            </optgroup>
+            <option value="document">Document / other</option>
+          </select>
+        </label>
+        <label class="block text-xs font-bold text-slate-500">Registration / Serial
+          <input id="fRegSerial" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal" placeholder="MH12 AB 1234 or serial" />
+        </label>
+        <label class="block text-xs font-bold text-slate-500">Store / Dealer
+          <input id="fStore" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal" placeholder="Optional" />
+        </label>
+        <label class="block text-xs font-bold text-slate-500">Purchase date
+          <input id="fPurchase" type="date" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal" />
+        </label>
+        <div class="grid gap-3 sm:grid-cols-3">
+          <label class="block text-xs font-bold text-slate-500">Warranty
+            <input id="fWarranty" type="date" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal" />
+          </label>
+          <label class="block text-xs font-bold text-slate-500">PUC
+            <input id="fPuc" type="date" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal" />
+          </label>
+          <label class="block text-xs font-bold text-slate-500">Insurance
+            <input id="fInsurance" type="date" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal" />
+          </label>
+        </div>
+      </div>
+
+      <p id="assetFormError" class="mt-3 hidden rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700"></p>
+
+      <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button type="button" id="btnCancelModal" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50">Cancel</button>
+        <button type="submit" id="btnSaveAsset" class="rounded-xl bg-teal px-4 py-2.5 text-sm font-bold text-white hover:bg-teal-dark">Save Asset</button>
+      </div>
+    </form>
+  </dialog>
 
   <!-- Footer -->
   <footer class="border-t border-slate-200 bg-ink text-slate-300">
@@ -270,7 +376,6 @@
   <script>
     document.getElementById('year').textContent = new Date().getFullYear();
 
-    // ===== Firebase (Asset Doctor) =====
     const firebaseConfig = {
       apiKey: "AIzaSyAYpEIXCZz3VKFMza3jpUMGTSRbi37qk-c",
       authDomain: "assetdoctor-5fd25.firebaseapp.com",
@@ -284,16 +389,36 @@
     const auth = firebase.auth();
     const db = firebase.firestore();
 
-    let confirmationResult = null;
-    let recaptchaVerifier = null;
-
     const VEHICLE = new Set(['car', 'bike', 'scooter', 'motorcycle', 'vehicle']);
     const APPLIANCE = new Set(['ac', 'mobile', 'phone', 'tablet', 'laptop', 'fridge', 'tv', 'washing_machine', 'appliance', 'geyser', 'microwave']);
+    const CATEGORY_LABELS = {
+      car: 'Car', bike: 'Bike', scooter: 'Scooter', motorcycle: 'Motorcycle', vehicle: 'Vehicle',
+      ac: 'AC', mobile: 'Mobile', phone: 'Phone', tablet: 'Tablet', laptop: 'Laptop',
+      fridge: 'Fridge', tv: 'TV', washing_machine: 'Washing machine', appliance: 'Appliance',
+      geyser: 'Geyser', microwave: 'Microwave', document: 'Document'
+    };
+
+    const state = {
+      user: null,
+      assets: [],
+      confirmationResult: null,
+      recaptchaVerifier: null,
+      saving: false
+    };
 
     function $(id) { return document.getElementById(id); }
 
-    function showAuthError(msg) {
-      const el = $('authError');
+    function escapeHtml(s) {
+      return String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function showError(elId, msg) {
+      const el = $(elId);
+      if (!el) return;
       if (!msg) {
         el.classList.add('hidden');
         el.textContent = '';
@@ -320,45 +445,116 @@
       return 'Document';
     }
 
+    function initials(identity) {
+      const s = String(identity || 'AD').trim();
+      if (s.includes('@')) return s.slice(0, 2).toUpperCase();
+      const digits = s.replace(/\D/g, '');
+      if (digits.length >= 2) return digits.slice(-2);
+      return s.slice(0, 2).toUpperCase() || 'AD';
+    }
+
+    function setAuthUI(user) {
+      state.user = user || null;
+      const signedOut = $('panelSignedOut');
+      const signedIn = $('panelSignedIn');
+      const addBtn = $('btnAddAsset');
+
+      if (user) {
+        signedOut.classList.add('hidden');
+        signedIn.classList.remove('hidden');
+        const identity = user.email || user.phoneNumber || user.uid;
+        $('profileIdentity').textContent = identity;
+        $('profileMeta').textContent = user.email ? 'Email account' : (user.phoneNumber ? 'Phone account' : 'Signed in');
+        $('profileAvatar').textContent = initials(identity);
+        addBtn.disabled = false;
+        $('vaultStats').classList.remove('hidden');
+        showError('authError', '');
+        showError('profileError', '');
+      } else {
+        signedOut.classList.remove('hidden');
+        signedIn.classList.add('hidden');
+        addBtn.disabled = true;
+        $('vaultStats').classList.add('hidden');
+        $('assetsHint').textContent = 'Sign in to manage vehicles & appliances.';
+        $('assetsList').innerHTML = '';
+        state.assets = [];
+        updateStats([]);
+      }
+    }
+
+    function updateStats(list) {
+      const vehicles = list.filter((a) => kind(a) === 'Vehicle').length;
+      const appliances = list.filter((a) => kind(a) === 'Appliance').length;
+      $('statTotal').textContent = String(list.length);
+      $('statVehicles').textContent = String(vehicles);
+      $('statAppliances').textContent = String(appliances);
+    }
+
     function renderAssets(list) {
+      state.assets = list;
+      updateStats(list);
       const box = $('assetsList');
-      if (!list.length) {
-        box.innerHTML = '<p class="text-sm text-slate-400">No active assets found in your vault yet. Add them from the mobile app.</p>';
+
+      if (!state.user) {
+        box.innerHTML = '';
         return;
       }
+
+      if (!list.length) {
+        box.innerHTML =
+          '<div class="sm:col-span-2 rounded-2xl border border-dashed border-slate-200 bg-slate50 px-4 py-10 text-center">' +
+            '<p class="font-extrabold text-ink">Vault is empty</p>' +
+            '<p class="mt-1 text-sm text-slate-500">Add your first vehicle or appliance from the web.</p>' +
+            '<button type="button" data-action="add" class="mt-4 rounded-xl bg-teal px-4 py-2 text-sm font-bold text-white hover:bg-teal-dark">+ Add New Asset</button>' +
+          '</div>';
+        return;
+      }
+
       box.innerHTML = list.map(function (a) {
         const title = a.assetName || 'Untitled asset';
-        const meta = [a.categoryLabel || a.categoryId || '', a.registration || a.storeName || ''].filter(Boolean).join(' · ');
         const badge = kind(a);
-        const badgeColor = badge === 'Vehicle' ? 'bg-teal/10 text-teal' : badge === 'Appliance' ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600';
+        const badgeColor = badge === 'Vehicle'
+          ? 'bg-teal/10 text-teal'
+          : badge === 'Appliance'
+            ? 'bg-amber-50 text-amber-800'
+            : 'bg-slate-100 text-slate-600';
+        const meta = [a.categoryLabel || CATEGORY_LABELS[cat(a)] || cat(a), a.registration || a.serialNumber || a.storeName || '']
+          .filter(Boolean)
+          .join(' · ');
+        const rows = [
+          a.warrantyExpiry ? ['Warranty', a.warrantyExpiry] : null,
+          a.pucExpiry ? ['PUC', a.pucExpiry] : null,
+          a.insuranceExpiry ? ['Insurance', a.insuranceExpiry] : null,
+          a.purchaseDate ? ['Purchased', a.purchaseDate] : null
+        ].filter(Boolean);
+
         return (
-          '<div class="rounded-2xl border border-slate-200 bg-slate50 p-4">' +
+          '<article class="flex flex-col rounded-2xl border border-slate-200 bg-slate50 p-4 transition hover:border-teal/40 hover:shadow-sm">' +
             '<div class="flex items-start justify-between gap-3">' +
-              '<div>' +
-                '<p class="font-extrabold text-ink">' + escapeHtml(title) + '</p>' +
-                '<p class="mt-1 text-xs text-slate-500">' + escapeHtml(meta) + '</p>' +
+              '<div class="min-w-0">' +
+                '<p class="truncate font-extrabold text-ink">' + escapeHtml(title) + '</p>' +
+                '<p class="mt-1 truncate text-xs text-slate-500">' + escapeHtml(meta) + '</p>' +
               '</div>' +
-              '<span class="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ' + badgeColor + '">' + badge + '</span>' +
+              '<span class="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ' + badgeColor + '">' + badge + '</span>' +
             '</div>' +
-            (a.warrantyExpiry ? '<p class="mt-2 text-xs text-slate-500">Warranty: ' + escapeHtml(String(a.warrantyExpiry)) + '</p>' : '') +
-            (a.pucExpiry ? '<p class="text-xs text-slate-500">PUC: ' + escapeHtml(String(a.pucExpiry)) + '</p>' : '') +
-            (a.insuranceExpiry ? '<p class="text-xs text-slate-500">Insurance: ' + escapeHtml(String(a.insuranceExpiry)) + '</p>' : '') +
-          '</div>'
+            (rows.length
+              ? '<ul class="mt-3 space-y-1 border-t border-slate-200/80 pt-3 text-xs text-slate-500">' +
+                  rows.map(function (r) {
+                    return '<li class="flex justify-between gap-2"><span>' + escapeHtml(r[0]) + '</span><span class="font-semibold text-slate-700">' + escapeHtml(String(r[1])) + '</span></li>';
+                  }).join('') +
+                '</ul>'
+              : '<p class="mt-3 text-xs text-slate-400">No expiry dates set yet.</p>') +
+            '<div class="mt-4 flex gap-2">' +
+              '<button type="button" data-action="edit" data-id="' + escapeHtml(a.id) + '" class="flex-1 rounded-xl border border-slate-200 bg-white py-2 text-xs font-bold text-ink hover:border-teal hover:text-teal">Edit Details</button>' +
+            '</div>' +
+          '</article>'
         );
       }).join('');
     }
 
-    function escapeHtml(s) {
-      return String(s)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-    }
-
     async function loadAssets(uid) {
       $('assetsHint').textContent = 'Loading your vault…';
-      $('assetsList').innerHTML = '';
+      $('assetsList').innerHTML = '<p class="sm:col-span-2 text-sm text-slate-400">Fetching assets…</p>';
       try {
         const snap = await db.collection('Users').doc(uid).collection('Assets').get();
         const rows = [];
@@ -374,78 +570,204 @@
       } catch (err) {
         console.error(err);
         $('assetsHint').textContent = 'Could not load assets.';
-        showAuthError(err.message || 'Firestore error');
+        showError('profileError', err.message || 'Firestore error');
+        $('assetsList').innerHTML = '';
       }
     }
 
-    auth.onAuthStateChanged(function (user) {
-      if (user) {
-        $('authStatus').textContent = 'Signed in as ' + (user.email || user.phoneNumber || user.uid);
-        showAuthError('');
-        loadAssets(user.uid);
+    function openAssetModal(asset) {
+      const modal = $('assetModal');
+      showError('assetFormError', '');
+      if (asset) {
+        $('assetModalTitle').textContent = 'Edit Details';
+        $('assetEditId').value = asset.id || '';
+        $('fAssetName').value = asset.assetName || '';
+        $('fCategory').value = cat(asset) || 'document';
+        $('fRegSerial').value = asset.registration || asset.serialNumber || '';
+        $('fStore').value = asset.storeName || '';
+        $('fPurchase').value = asset.purchaseDate || '';
+        $('fWarranty').value = asset.warrantyExpiry || '';
+        $('fPuc').value = asset.pucExpiry || '';
+        $('fInsurance').value = asset.insuranceExpiry || '';
       } else {
-        $('authStatus').textContent = 'Not signed in';
-        $('assetsHint').textContent = 'Sign in to load vehicles & appliances from Firestore.';
-        $('assetsList').innerHTML = '';
+        $('assetModalTitle').textContent = 'Add New Asset';
+        $('assetEditId').value = '';
+        $('assetForm').reset();
       }
+      if (typeof modal.showModal === 'function') modal.showModal();
+      else modal.setAttribute('open', '');
+      document.body.classList.add('modal-open');
+    }
+
+    function closeAssetModal() {
+      const modal = $('assetModal');
+      if (typeof modal.close === 'function') modal.close();
+      else modal.removeAttribute('open');
+      document.body.classList.remove('modal-open');
+    }
+
+    function buildPayload() {
+      const categoryId = $('fCategory').value;
+      const name = $('fAssetName').value.trim();
+      const regSerial = $('fRegSerial').value.trim();
+      const isVehicle = VEHICLE.has(categoryId);
+      const payload = {
+        assetName: name,
+        categoryId: categoryId,
+        categoryLabel: CATEGORY_LABELS[categoryId] || categoryId,
+        storeName: $('fStore').value.trim() || '',
+        purchaseDate: $('fPurchase').value || '',
+        warrantyExpiry: $('fWarranty').value || '',
+        pucExpiry: $('fPuc').value || '',
+        insuranceExpiry: $('fInsurance').value || '',
+        status: 'active',
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      if (isVehicle) {
+        payload.registration = regSerial.toUpperCase().replace(/\s+/g, ' ');
+        payload.serialNumber = '';
+      } else {
+        payload.serialNumber = regSerial;
+        payload.registration = '';
+      }
+      return payload;
+    }
+
+    async function saveAsset(event) {
+      event.preventDefault();
+      if (!state.user) {
+        showError('assetFormError', 'Sign in first.');
+        return;
+      }
+      if (state.saving) return;
+
+      const name = $('fAssetName').value.trim();
+      if (!name) {
+        showError('assetFormError', 'Asset name is required.');
+        return;
+      }
+
+      state.saving = true;
+      $('btnSaveAsset').textContent = 'Saving…';
+      showError('assetFormError', '');
+
+      try {
+        const uid = state.user.uid;
+        const editId = $('assetEditId').value.trim();
+        const payload = buildPayload();
+        const col = db.collection('Users').doc(uid).collection('Assets');
+
+        if (editId) {
+          await col.doc(editId).set(payload, { merge: true });
+        } else {
+          const ref = col.doc();
+          await ref.set(Object.assign({}, payload, {
+            assetId: ref.id,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            ownerPhoneNumber: state.user.phoneNumber || ''
+          }));
+        }
+
+        closeAssetModal();
+        await loadAssets(uid);
+      } catch (err) {
+        console.error(err);
+        showError('assetFormError', err.message || 'Could not save asset');
+      } finally {
+        state.saving = false;
+        $('btnSaveAsset').textContent = 'Save Asset';
+      }
+    }
+
+    function ensureRecaptcha() {
+      if (state.recaptchaVerifier) return;
+      state.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+        size: 'normal',
+        callback: function () {}
+      });
+      state.recaptchaVerifier.render();
+    }
+
+    // ----- Auth listeners -----
+    auth.onAuthStateChanged(function (user) {
+      setAuthUI(user);
+      if (user) loadAssets(user.uid);
     });
 
     $('btnEmailLogin').onclick = async function () {
-      showAuthError('');
+      showError('authError', '');
       try {
         await auth.signInWithEmailAndPassword($('email').value.trim(), $('password').value);
       } catch (err) {
-        showAuthError(err.message || 'Email login failed');
+        showError('authError', err.message || 'Email login failed');
       }
     };
 
     $('btnGoogle').onclick = async function () {
-      showAuthError('');
+      showError('authError', '');
       try {
         const provider = new firebase.auth.GoogleAuthProvider();
         await auth.signInWithPopup(provider);
       } catch (err) {
-        showAuthError(err.message || 'Google sign-in failed. Add this site to Firebase Authorized domains.');
+        showError('authError', err.message || 'Google sign-in failed. Add this site to Firebase Authorized domains.');
       }
     };
 
-    function ensureRecaptcha() {
-      if (recaptchaVerifier) return;
-      recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
-        size: 'normal',
-        callback: function () {}
-      });
-      recaptchaVerifier.render();
-    }
-
     $('btnSendOtp').onclick = async function () {
-      showAuthError('');
+      showError('authError', '');
       try {
         ensureRecaptcha();
         const phone = $('phone').value.trim();
-        confirmationResult = await auth.signInWithPhoneNumber(phone, recaptchaVerifier);
-        showAuthError('');
+        state.confirmationResult = await auth.signInWithPhoneNumber(phone, state.recaptchaVerifier);
         alert('OTP sent. Enter the code and tap Verify.');
       } catch (err) {
-        showAuthError(err.message || 'Could not send OTP. Use +91… format and enable Phone auth in Firebase.');
+        showError('authError', err.message || 'Could not send OTP. Use +91… format and enable Phone auth in Firebase.');
       }
     };
 
     $('btnVerifyOtp').onclick = async function () {
-      showAuthError('');
+      showError('authError', '');
       try {
-        if (!confirmationResult) throw new Error('Send OTP first.');
-        await confirmationResult.confirm($('otp').value.trim());
+        if (!state.confirmationResult) throw new Error('Send OTP first.');
+        await state.confirmationResult.confirm($('otp').value.trim());
       } catch (err) {
-        showAuthError(err.message || 'OTP verification failed');
+        showError('authError', err.message || 'OTP verification failed');
       }
     };
 
     $('btnLogout').onclick = function () { auth.signOut(); };
-    $('btnRefresh').onclick = function () {
-      if (auth.currentUser) loadAssets(auth.currentUser.uid);
-      else showAuthError('Sign in first.');
+
+    $('btnRefreshVault').onclick = function () {
+      if (state.user) loadAssets(state.user.uid);
+      else showError('profileError', 'Sign in first.');
     };
+
+    $('btnAddAsset').onclick = function () {
+      if (!state.user) return;
+      openAssetModal(null);
+    };
+
+    $('assetsList').addEventListener('click', function (e) {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const action = btn.getAttribute('data-action');
+      if (action === 'add') {
+        openAssetModal(null);
+        return;
+      }
+      if (action === 'edit') {
+        const id = btn.getAttribute('data-id');
+        const asset = state.assets.find(function (a) { return a.id === id; });
+        if (asset) openAssetModal(asset);
+      }
+    });
+
+    $('btnCloseModal').onclick = closeAssetModal;
+    $('btnCancelModal').onclick = closeAssetModal;
+    $('assetModal').addEventListener('close', function () {
+      document.body.classList.remove('modal-open');
+    });
+    $('assetForm').addEventListener('submit', saveAsset);
   </script>
 </body>
 </html>
