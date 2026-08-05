@@ -168,6 +168,14 @@
         <a href="#support" class="hover:text-emerald-400 transition">Support</a>
       </div>
       <div class="flex items-center gap-2">
+        <button
+          id="btnNavProfile"
+          type="button"
+          aria-label="Open profile"
+          class="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-xs font-extrabold text-emerald-300 ring-1 ring-emerald-500/40 transition hover:ring-emerald-400/70"
+        >
+          <span id="navProfileInitials">AD</span>
+        </button>
         <a
           href="https://play.google.com/store/apps/details?id=com.assetdoctor.app"
           target="_blank"
@@ -672,7 +680,26 @@
               <button id="btnGoogle" type="button" class="w-full rounded-xl border border-white/15 bg-white/5 py-2.5 text-sm font-bold text-white hover:border-emerald-400/40 transition">
                 Continue with Google
               </button>
+              <button id="btnForgotPassword" type="button" class="mx-auto block text-xs font-bold text-emerald-400 hover:text-emerald-300 hover:underline">
+                Forgot Password?
+              </button>
             </div>
+
+            <div id="resetPasswordCard" class="hidden mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Reset your password</p>
+              <p class="mt-1 text-xs text-slate-400">We'll email you a secure reset link.</p>
+              <input id="resetEmail" type="email" placeholder="Registered email" autocomplete="email" class="field mt-3" />
+              <div class="mt-3 flex gap-2">
+                <button id="btnSendReset" type="button" class="flex-1 rounded-xl bg-emerald-500 py-2.5 text-sm font-bold text-slate-950 hover:bg-emerald-400 transition">
+                  Send Reset Link
+                </button>
+                <button id="btnCancelReset" type="button" class="rounded-xl border border-white/15 px-4 py-2.5 text-sm font-bold text-slate-300 hover:bg-white/5">
+                  Cancel
+                </button>
+              </div>
+              <p id="resetStatus" class="mt-3 hidden rounded-xl px-3 py-2 text-xs"></p>
+            </div>
+
             <div class="my-5 border-t border-white/10 pt-5">
               <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Or phone OTP</p>
               <input id="phone" type="tel" placeholder="+91XXXXXXXXXX" class="field mt-3" />
@@ -735,6 +762,58 @@
             <div class="rounded-2xl bg-cyan-400/10 px-3 py-3 text-center ring-1 ring-cyan-400/20">
               <p id="statAppliances" class="text-xl font-black text-cyan-300">0</p>
               <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Appliances</p>
+            </div>
+          </div>
+
+          <div class="mt-6 border-t border-white/10 pt-6">
+            <h4 class="font-display text-sm font-bold uppercase tracking-wide text-slate-400">Quick actions</h4>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button type="button" id="btnQuickAdd" class="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-400 px-4 py-2 text-xs font-bold text-slate-950">
+                <i data-lucide="circle-plus" class="h-3.5 w-3.5"></i> Add Asset
+              </button>
+              <a href="#alerts" class="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-xs font-bold text-white hover:border-cyan-400/40">
+                <i data-lucide="bell" class="h-3.5 w-3.5"></i> Manage Alerts
+              </a>
+              <button type="button" id="btnDownloadReport" class="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-xs font-bold text-white hover:border-emerald-400/40">
+                <i data-lucide="file-down" class="h-3.5 w-3.5"></i> Download Report
+              </button>
+            </div>
+
+            <h4 class="mt-6 font-display text-sm font-bold uppercase tracking-wide text-slate-400">Dashboard tools</h4>
+            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+              <a href="#vehicle-vault" class="feature-card glass rounded-2xl border border-emerald-500/20 p-4">
+                <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400">
+                  <i data-lucide="car" class="h-4 w-4"></i>
+                </div>
+                <p class="mt-3 text-sm font-bold text-white">Vehicle RC/PUC Expiry Tracker</p>
+                <p class="mt-1 text-xs text-slate-400">Jump to countdowns for every RC, PUC &amp; insurance date.</p>
+              </a>
+              <a href="#appliance-vault" class="feature-card glass rounded-2xl border border-cyan-400/20 p-4">
+                <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-400/15 text-cyan-300">
+                  <i data-lucide="cpu" class="h-4 w-4"></i>
+                </div>
+                <p class="mt-3 text-sm font-bold text-white">Appliance Warranty Locker</p>
+                <p class="mt-1 text-xs text-slate-400">Bills &amp; warranty windows for every gadget you own.</p>
+              </a>
+              <a href="tel:18001023435" class="feature-card glass rounded-2xl border border-amber-400/20 p-4">
+                <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-400/15 text-amber-300">
+                  <i data-lucide="siren" class="h-4 w-4"></i>
+                </div>
+                <p class="mt-3 text-sm font-bold text-white">24×7 Roadside Assistance</p>
+                <p class="mt-1 text-xs text-slate-400">Tap to dial ReadyAssist for tow, battery &amp; puncture help.</p>
+              </a>
+              <div class="feature-card glass rounded-2xl border border-white/10 p-4">
+                <div class="flex items-center justify-between">
+                  <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-slate-200">
+                    <i data-lucide="receipt" class="h-4 w-4"></i>
+                  </div>
+                  <span class="text-[10px] font-bold uppercase text-slate-500">Recent</span>
+                </div>
+                <p class="mt-3 text-sm font-bold text-white">Recent Invoices</p>
+                <ul id="recentInvoices" class="mt-2 space-y-1 text-xs text-slate-400">
+                  <li class="text-slate-500">Sign in to see your last 3 assets.</li>
+                </ul>
+              </div>
             </div>
           </div>
 
@@ -898,6 +977,54 @@
         </button>
       </div>
     </form>
+  </dialog>
+
+  <!-- Profile modal -->
+  <dialog id="profileModal" class="w-[min(100%,26rem)]">
+    <div class="glass-strong neon-border m-4 rounded-3xl p-5 sm:p-6">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <div id="profileModalAvatar" class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/15 text-sm font-extrabold text-emerald-300">AD</div>
+          <div>
+            <h3 class="font-display text-lg font-bold text-white">My Profile</h3>
+            <p class="mt-0.5 text-xs text-slate-400">Account &amp; vault summary</p>
+          </div>
+        </div>
+        <button type="button" id="btnCloseProfile" class="rounded-lg px-2 py-1 text-slate-400 hover:bg-white/10 hover:text-white" aria-label="Close">✕</button>
+      </div>
+      <div class="mt-5 space-y-3 text-sm">
+        <div class="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+          <span class="text-slate-400">User Name</span>
+          <span id="profileModalName" class="truncate font-bold text-white">—</span>
+        </div>
+        <div class="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+          <span class="text-slate-400">Registered Email</span>
+          <span id="profileModalEmail" class="truncate font-bold text-white">—</span>
+        </div>
+        <div class="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+          <span class="text-slate-400">Mobile Number</span>
+          <span id="profileModalPhone" class="truncate font-bold text-white">—</span>
+        </div>
+        <div class="flex items-center justify-between gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3">
+          <span class="text-slate-300">Total Vaulted Assets</span>
+          <span id="profileModalTotal" class="font-black text-emerald-300">0</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div class="rounded-xl bg-white/5 px-3 py-2 text-center ring-1 ring-white/10">
+            <p id="profileModalVehicles" class="text-base font-black text-emerald-300">0</p>
+            <p class="uppercase tracking-wide text-slate-500">Vehicles</p>
+          </div>
+          <div class="rounded-xl bg-white/5 px-3 py-2 text-center ring-1 ring-white/10">
+            <p id="profileModalAppliances" class="text-base font-black text-cyan-300">0</p>
+            <p class="uppercase tracking-wide text-slate-500">Appliances</p>
+          </div>
+        </div>
+      </div>
+      <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button type="button" id="btnProfileClose" class="rounded-xl border border-white/15 px-4 py-2.5 text-sm font-bold text-slate-300 hover:bg-white/5">Close</button>
+        <button type="button" id="btnProfileLogout" class="rounded-xl bg-rose-500/15 px-4 py-2.5 text-sm font-bold text-rose-300 hover:bg-rose-500/25">Logout</button>
+      </div>
+    </div>
   </dialog>
 
   <script>
@@ -1218,11 +1345,13 @@
       const signedIn = $('panelSignedIn');
       const addBtn = $('btnAddAsset');
       const stats = $('vaultStats');
+      const navProfile = $('btnNavProfile');
 
       if (user) {
         signedOut.classList.add('hidden');
         signedIn.classList.remove('hidden');
         const identity = user.email || user.phoneNumber || user.uid;
+        const displayName = user.displayName || (user.email ? user.email.split('@')[0] : identity);
         $('profileIdentity').textContent = identity;
         $('profileMeta').textContent = user.email ? 'Email account' : (user.phoneNumber ? 'Phone account' : 'Signed in');
         $('profileAvatar').textContent = initials(identity);
@@ -1231,6 +1360,14 @@
         stats.classList.add('grid');
         showError('authError', '');
         showError('profileError', '');
+
+        navProfile.classList.remove('hidden');
+        navProfile.classList.add('inline-flex');
+        $('navProfileInitials').textContent = initials(identity);
+        $('profileModalAvatar').textContent = initials(identity);
+        $('profileModalName').textContent = displayName || '—';
+        $('profileModalEmail').textContent = user.email || '—';
+        $('profileModalPhone').textContent = user.phoneNumber || '—';
       } else {
         signedOut.classList.remove('hidden');
         signedIn.classList.add('hidden');
@@ -1241,6 +1378,15 @@
         $('assetsList').innerHTML = '';
         state.assets = [];
         updateStats([]);
+        renderRecentInvoices([]);
+
+        navProfile.classList.add('hidden');
+        navProfile.classList.remove('inline-flex');
+        closeProfileModal();
+        closeResetCard();
+        $('profileModalName').textContent = '—';
+        $('profileModalEmail').textContent = '—';
+        $('profileModalPhone').textContent = '—';
       }
     }
 
@@ -1250,11 +1396,64 @@
       $('statTotal').textContent = String(list.length);
       $('statVehicles').textContent = String(vehicles);
       $('statAppliances').textContent = String(appliances);
+      $('profileModalTotal').textContent = String(list.length);
+      $('profileModalVehicles').textContent = String(vehicles);
+      $('profileModalAppliances').textContent = String(appliances);
+    }
+
+    function renderRecentInvoices(list) {
+      const box = $('recentInvoices');
+      if (!box) return;
+      if (!state.user) {
+        box.innerHTML = '<li class="text-slate-500">Sign in to see your last 3 assets.</li>';
+        return;
+      }
+      if (!list.length) {
+        box.innerHTML = '<li class="text-slate-500">No assets yet — add one to see invoices.</li>';
+        return;
+      }
+      box.innerHTML = list.slice(0, 3).map(function (a) {
+        return (
+          '<li class="flex items-center justify-between gap-2">' +
+            '<span class="truncate text-slate-300">' + escapeHtml(a.assetName || 'Untitled') + '</span>' +
+            '<span class="shrink-0 text-slate-500">' + escapeHtml(a.purchaseDate || '—') + '</span>' +
+          '</li>'
+        );
+      }).join('');
+    }
+
+    function downloadAssetsCsv(list) {
+      const headers = ['Asset Name', 'Category', 'Registration/Serial', 'Store', 'Purchase Date', 'Warranty Expiry', 'PUC Expiry', 'Insurance Expiry'];
+      const rows = list.map(function (a) {
+        return [
+          a.assetName || '',
+          a.categoryLabel || CATEGORY_LABELS[cat(a)] || cat(a),
+          a.registration || a.serialNumber || '',
+          a.storeName || '',
+          a.purchaseDate || '',
+          a.warrantyExpiry || '',
+          a.pucExpiry || '',
+          a.insuranceExpiry || ''
+        ];
+      });
+      const csv = [headers].concat(rows).map(function (r) {
+        return r.map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(',');
+      }).join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'asset-doctor-vault-report.csv';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     }
 
     function renderAssets(list) {
       state.assets = list;
       updateStats(list);
+      renderRecentInvoices(list);
       const box = $('assetsList');
 
       if (!state.user) {
@@ -1498,6 +1697,83 @@
     };
     $('btnAddAsset').onclick = function () {
       if (state.user) openAssetModal(null);
+    };
+
+    /* ---------- Profile modal ---------- */
+    function openProfileModal() {
+      const modal = $('profileModal');
+      if (typeof modal.showModal === 'function') modal.showModal();
+      else modal.setAttribute('open', '');
+      document.body.classList.add('modal-open');
+    }
+    function closeProfileModal() {
+      const modal = $('profileModal');
+      if (typeof modal.close === 'function') modal.close();
+      else modal.removeAttribute('open');
+      document.body.classList.remove('modal-open');
+    }
+    $('btnNavProfile').addEventListener('click', openProfileModal);
+    $('btnCloseProfile').onclick = closeProfileModal;
+    $('btnProfileClose').onclick = closeProfileModal;
+    $('profileModal').addEventListener('close', function () { document.body.classList.remove('modal-open'); });
+    $('btnProfileLogout').onclick = function () {
+      closeProfileModal();
+      auth.signOut();
+    };
+
+    /* ---------- Forgot password ---------- */
+    function setResetStatus(msg, isError) {
+      const el = $('resetStatus');
+      if (!msg) {
+        el.classList.add('hidden');
+        el.textContent = '';
+        return;
+      }
+      el.classList.remove('hidden', 'bg-emerald-500/10', 'text-emerald-300', 'bg-rose-500/10', 'text-rose-300');
+      el.classList.add(isError ? 'bg-rose-500/10' : 'bg-emerald-500/10', isError ? 'text-rose-300' : 'text-emerald-300');
+      el.textContent = msg;
+    }
+    function openResetCard() {
+      $('resetPasswordCard').classList.remove('hidden');
+      $('resetEmail').value = $('email').value.trim();
+      setResetStatus('', false);
+    }
+    function closeResetCard() {
+      $('resetPasswordCard').classList.add('hidden');
+      setResetStatus('', false);
+    }
+    $('btnForgotPassword').addEventListener('click', openResetCard);
+    $('btnCancelReset').addEventListener('click', closeResetCard);
+    $('btnSendReset').addEventListener('click', async function () {
+      const email = $('resetEmail').value.trim();
+      if (!email) {
+        setResetStatus('Please enter your registered email.', true);
+        return;
+      }
+      try {
+        await auth.sendPasswordResetEmail(email);
+        setResetStatus('Reset link sent! Check your inbox (and spam folder).', false);
+      } catch (err) {
+        setResetStatus(err.message || 'Could not send reset email.', true);
+      }
+    });
+
+    /* ---------- Dashboard quick actions ---------- */
+    $('btnQuickAdd').onclick = function () {
+      if (state.user) {
+        openAssetModal(null);
+      } else {
+        $('panelSignedOut').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        showError('authError', 'Please sign in to add an asset.');
+      }
+    };
+    $('btnDownloadReport').onclick = function () {
+      if (!state.user) {
+        $('panelSignedOut').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        showError('authError', 'Please sign in to download your vault report.');
+        return;
+      }
+      downloadAssetsCsv(state.assets);
     };
 
     $('assetsList').addEventListener('click', function (e) {

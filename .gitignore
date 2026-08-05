@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+functions/node_modules/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+!functions/.env.example
+# google-services.json is client config (needed for EAS/Firebase) — keep tracked
+GoogleService-Info.plist
+*-firebase-adminsdk-*.json
+functions/serviceAccount.json
+credentials.json
+google-services (1).json
+
+# Logs / OS
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
