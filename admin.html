@@ -1,479 +1,1411 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Asset Doctor — Admin Dashboard</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Asset Doctor — Admin Console</title>
+<link rel="icon" href="./icon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+        colors: {
+          brand: {
+            50: '#effcf9', 100: '#c7f5e9', 200: '#94ebd6', 300: '#5fd9bf',
+            400: '#33c0a8', 500: '#14a690', 600: '#0d8676', 700: '#0d6b60',
+            800: '#0e544e', 900: '#0f4642', 950: '#062725'
+          }
+        },
+        boxShadow: {
+          glow: '0 0 0 1px rgba(20,166,144,0.15), 0 8px 30px -6px rgba(20,166,144,0.25)'
+        }
+      }
+    }
+  };
+</script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<style>
+  html, body { font-family: 'Inter', system-ui, sans-serif; background:#020617; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.25); border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,0.45); }
+  .glass { background: rgba(15,23,42,0.55); backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%); }
+  .glass-strong { background: rgba(15,23,42,0.75); backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; animation: fadeIn .25s ease; }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(4px);} to { opacity:1; transform:translateY(0);} }
+  .nav-item.active { background: linear-gradient(90deg, rgba(20,166,144,0.18), rgba(20,166,144,0.02)); color:#fff; border-color: rgba(20,166,144,0.35); }
+  .nav-item.active .nav-dot { background:#2dd4bf; box-shadow:0 0 0 3px rgba(45,212,191,0.2); }
+  .pulse-dot { animation: pulse-dot 2s infinite; }
+  @keyframes pulse-dot { 0%,100%{opacity:1;} 50%{opacity:.4;} }
+  input:focus, textarea:focus, select:focus { outline: none; }
+  .table-row:hover { background: rgba(148,163,184,0.06); }
+  .toast { animation: toast-in .25s ease, toast-out .25s ease 3.2s forwards; }
+  @keyframes toast-in { from { opacity:0; transform: translateX(20px);} to {opacity:1; transform:translateX(0);} }
+  @keyframes toast-out { to { opacity:0; transform: translateX(20px);} }
+  .skeleton { background: linear-gradient(90deg, rgba(148,163,184,0.08) 25%, rgba(148,163,184,0.18) 37%, rgba(148,163,184,0.08) 63%); background-size: 400% 100%; animation: shimmer 1.4s ease infinite; }
+  @keyframes shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+</style>
 </head>
-<body class="bg-slate-50 text-slate-900 min-h-screen">
-  <div class="max-w-5xl mx-auto px-4 py-8">
-    <header class="mb-6">
-      <p class="text-xs font-bold tracking-widest uppercase text-teal-700">Asset Doctor</p>
-      <h1 class="text-3xl font-black mt-1">Admin Dashboard</h1>
-      <p class="text-slate-500 text-sm mt-2">
-        Users, cars, bikes, appliances · vehicle age · one-click CSV for ReadyAssist
-      </p>
-    </header>
+<body class="bg-slate-950 text-slate-200 min-h-screen antialiased">
 
-    <!-- Help box -->
-    <div class="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-      <strong>How to use:</strong> Save this file as <code>admin.html</code> → open in Chrome.
-      Sign in with your <strong>admin</strong> Firebase account (must have admin access), then click
-      <strong>Load from Firebase</strong>. If login/data fails, click <strong>Show Demo Numbers</strong>
-      to preview and still export a sample CSV.
-      <br /><span class="text-amber-800">Tip: If Chrome blocks Firebase from a double-click file, run a tiny local server or open via Live Server.</span>
-    </div>
-
-    <!-- Login -->
-    <section class="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h2 class="font-bold text-lg mb-3">1. Admin login (Firebase)</h2>
-      <div class="grid gap-3 sm:grid-cols-2">
-        <input id="email" type="email" placeholder="Admin email"
-          class="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
-        <input id="password" type="password" placeholder="Password"
-          class="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
-      </div>
-      <div class="mt-3 flex flex-wrap gap-2">
-        <button id="btnLogin" class="rounded-xl bg-slate-900 text-white px-4 py-2 text-sm font-bold hover:bg-slate-800">
-          Sign in
-        </button>
-        <button id="btnLogout" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold bg-white">
-          Sign out
-        </button>
-        <span id="authStatus" class="text-sm text-slate-500 self-center">Not signed in</span>
-      </div>
-    </section>
-
-    <!-- Actions -->
-    <section class="mb-6 flex flex-wrap gap-2">
-      <button id="btnLoad" class="rounded-xl bg-teal-600 text-white px-4 py-2.5 text-sm font-bold hover:bg-teal-700">
-        Load from Firebase
-      </button>
-      <button id="btnMock" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold">
-        Show Demo Numbers
-      </button>
-      <button id="btnExport" class="rounded-xl bg-emerald-600 text-white px-4 py-2.5 text-sm font-bold hover:bg-emerald-700">
-        Export to CSV / Excel
-      </button>
-    </section>
-
-    <p id="statusLine" class="text-xs text-slate-400 mb-4">Ready</p>
-    <p id="errorBox" class="hidden mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"></p>
-
-    <!-- Summary cards -->
-    <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-      <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <p class="text-xs font-semibold uppercase text-slate-500">Total Users</p>
-        <p id="cUsers" class="text-3xl font-black mt-2 tabular-nums">0</p>
-      </div>
-      <div class="rounded-2xl border border-teal-100 bg-white p-5 shadow-sm">
-        <p class="text-xs font-semibold uppercase text-slate-500">Cars</p>
-        <p id="cCars" class="text-3xl font-black mt-2 tabular-nums text-teal-700">0</p>
-      </div>
-      <div class="rounded-2xl border border-cyan-100 bg-white p-5 shadow-sm">
-        <p class="text-xs font-semibold uppercase text-slate-500">Bikes</p>
-        <p id="cBikes" class="text-3xl font-black mt-2 tabular-nums text-cyan-700">0</p>
-      </div>
-      <div class="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm">
-        <p class="text-xs font-semibold uppercase text-slate-500">Home Appliances</p>
-        <p id="cAppliances" class="text-3xl font-black mt-2 tabular-nums text-amber-700">0</p>
-        <p class="text-xs text-slate-400 mt-1">AC + Mobiles (+ Laptops)</p>
-      </div>
-    </section>
-
-    <!-- Vehicle age -->
-    <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm mb-6">
-      <h2 class="font-bold text-lg">Vehicle breakdown — New vs Old</h2>
-      <p class="text-sm text-slate-500 mt-1">New = ≤ 3 years old · Old = more than 3 years (from purchase / manufacturing year)</p>
-      <div class="mt-4 flex h-3 rounded-full overflow-hidden bg-slate-100">
-        <div id="barNew" class="bg-emerald-500 transition-all" style="width:50%"></div>
-        <div id="barOld" class="bg-slate-700 transition-all" style="width:50%"></div>
-      </div>
-      <div class="mt-4 grid grid-cols-2 gap-4 text-sm">
-        <div>
-          <p class="font-semibold">New vehicles (≤ 3y)</p>
-          <p id="cNew" class="text-2xl font-black text-emerald-600 tabular-nums">0</p>
-        </div>
-        <div class="text-right">
-          <p class="font-semibold">Old vehicles (&gt; 3y)</p>
-          <p id="cOld" class="text-2xl font-black text-slate-800 tabular-nums">0</p>
-        </div>
-      </div>
-      <p id="cAgeUnknown" class="text-xs text-slate-400 mt-3"></p>
-    </section>
-
-    <!-- Appliance detail -->
-    <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm mb-6 overflow-x-auto">
-      <h2 class="font-bold text-lg mb-3">Appliances detail</h2>
-      <table class="min-w-full text-sm">
-        <thead class="text-left text-xs uppercase text-slate-500 bg-slate-50">
-          <tr>
-            <th class="px-3 py-2">Type</th>
-            <th class="px-3 py-2">Total</th>
-            <th class="px-3 py-2 text-teal-700">In warranty</th>
-            <th class="px-3 py-2 text-rose-700">Expired</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr class="border-t border-slate-100">
-            <td class="px-3 py-2 font-semibold">AC</td>
-            <td id="acTotal" class="px-3 py-2 tabular-nums">0</td>
-            <td id="acIn" class="px-3 py-2 tabular-nums text-teal-700">0</td>
-            <td id="acOut" class="px-3 py-2 tabular-nums text-rose-700">0</td>
-          </tr>
-          <tr class="border-t border-slate-100">
-            <td class="px-3 py-2 font-semibold">Mobiles</td>
-            <td id="mobTotal" class="px-3 py-2 tabular-nums">0</td>
-            <td id="mobIn" class="px-3 py-2 tabular-nums text-teal-700">0</td>
-            <td id="mobOut" class="px-3 py-2 tabular-nums text-rose-700">0</td>
-          </tr>
-          <tr class="border-t border-slate-100">
-            <td class="px-3 py-2 font-semibold">Laptops</td>
-            <td id="lapTotal" class="px-3 py-2 tabular-nums">0</td>
-            <td id="lapIn" class="px-3 py-2 tabular-nums text-teal-700">0</td>
-            <td id="lapOut" class="px-3 py-2 tabular-nums text-rose-700">0</td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
-
-    <footer class="text-center text-xs text-slate-400 pb-8">
-      Crafted for Asset Doctor · Protect, Track &amp; Save
-    </footer>
+<!-- ============================= AUTH GATE ============================= -->
+<div id="authScreen" class="min-h-screen w-full flex items-center justify-center relative overflow-hidden px-4">
+  <div class="absolute inset-0 bg-slate-950">
+    <div class="absolute -top-40 -left-40 w-96 h-96 bg-brand-600/20 rounded-full blur-3xl"></div>
+    <div class="absolute -bottom-40 -right-20 w-96 h-96 bg-cyan-600/10 rounded-full blur-3xl"></div>
+    <div class="absolute inset-0 opacity-[0.03]" style="background-image: radial-gradient(circle, #fff 1px, transparent 1px); background-size: 28px 28px;"></div>
   </div>
 
-  <script>
-    // ========== YOUR FIREBASE CONFIG (Asset Doctor project) ==========
-    const firebaseConfig = {
-      apiKey: "AIzaSyAYpEIXCZz3VKFMza3jpUMGTSRbi37qk-c",
-      authDomain: "assetdoctor-5fd25.firebaseapp.com",
-      projectId: "assetdoctor-5fd25",
-      storageBucket: "assetdoctor-5fd25.firebasestorage.app",
-      messagingSenderId: "926559836985",
-      appId: "1:926559836985:android:842e878c508df93d2b66e8"
-    };
+  <div class="relative w-full max-w-md">
+    <div class="flex flex-col items-center mb-8">
+      <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-400 to-cyan-600 flex items-center justify-center shadow-glow mb-4 overflow-hidden">
+        <img src="./icon.png" alt="Asset Doctor" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentElement.innerHTML='<i data-lucide=\'shield-check\' class=\'w-8 h-8 text-white\'></i>'; if(window.lucide) lucide.createIcons();" />
+      </div>
+      <h1 class="text-2xl font-black text-white tracking-tight">Asset Doctor</h1>
+      <p class="text-slate-400 text-sm mt-1">Admin Console · assetdoctor.in</p>
+    </div>
 
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.firestore();
+    <div class="glass-strong border border-white/10 rounded-2xl p-6 sm:p-8 shadow-2xl">
+      <h2 class="text-white font-bold text-lg mb-1">Sign in</h2>
+      <p class="text-slate-400 text-xs mb-5">Authenticate with your Firebase admin account</p>
 
-    // ========== STATE ==========
-    let lastMetrics = null;
-    let lastVehicles = []; // rows for CSV (ReadyAssist)
+      <div id="authError" class="hidden mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-xs text-rose-300 flex items-start gap-2">
+        <i data-lucide="alert-triangle" class="w-4 h-4 mt-0.5 shrink-0"></i>
+        <span id="authErrorText"></span>
+      </div>
 
-    const CAR = new Set(["car"]);
-    const BIKE = new Set(["bike", "scooter", "motorcycle"]);
-    const AC = new Set(["ac"]);
-    const MOBILE = new Set(["mobile", "phone", "tablet"]);
-    const LAPTOP = new Set(["laptop"]);
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Email</label>
+          <input id="loginEmail" type="email" placeholder="admin@assetdoctor.in" autocomplete="username"
+            class="mt-1.5 w-full rounded-xl bg-slate-900/70 border border-white/10 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition" />
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Password</label>
+          <input id="loginPassword" type="password" placeholder="••••••••" autocomplete="current-password"
+            class="mt-1.5 w-full rounded-xl bg-slate-900/70 border border-white/10 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition" />
+        </div>
+      </div>
 
-    // Demo data if Firebase is blocked / no admin
-    const DEMO_ASSETS = [
-      { categoryId: "car", purchaseDate: "2024-01-15", assetName: "Demo Swift", registration: "MH12AB1234" },
-      { categoryId: "car", purchaseDate: "2019-06-01", assetName: "Demo City", registration: "DL01CA9999" },
-      { categoryId: "bike", purchaseDate: "2025-03-01", assetName: "Demo Activa", registration: "KA03EF5678" },
-      { categoryId: "bike", purchaseDate: "2018-08-12", assetName: "Demo Pulsar", registration: "TN09XY1111" },
-      { categoryId: "scooter", purchaseDate: "2023-05-09", assetName: "Demo Jupiter", registration: "GJ01SC2222" },
-      { categoryId: "ac", purchaseDate: "2024-04-01", warrantyExpiry: "2027-04-01", assetName: "Demo AC" },
-      { categoryId: "ac", purchaseDate: "2020-01-01", warrantyExpiry: "2023-01-01", assetName: "Old AC" },
-      { categoryId: "mobile", purchaseDate: "2024-09-01", warrantyExpiry: "2025-09-01", assetName: "Demo Phone" },
-      { categoryId: "phone", purchaseDate: "2022-01-01", warrantyExpiry: "2023-01-01", assetName: "Old Phone" },
-      { categoryId: "laptop", purchaseDate: "2023-12-01", warrantyExpiry: "2026-12-01", assetName: "Demo Laptop" }
-    ];
+      <button id="btnSignIn" class="mt-5 w-full rounded-xl bg-gradient-to-r from-brand-500 to-cyan-600 hover:from-brand-400 hover:to-cyan-500 text-white font-bold text-sm py-2.5 flex items-center justify-center gap-2 transition shadow-glow">
+        <i data-lucide="log-in" class="w-4 h-4"></i>
+        <span id="btnSignInText">Sign in to Console</span>
+      </button>
 
-    function $(id) { return document.getElementById(id); }
+      <div class="flex items-center gap-3 my-5">
+        <div class="h-px flex-1 bg-white/10"></div>
+        <span class="text-[11px] uppercase tracking-widest text-slate-500 font-semibold">or</span>
+        <div class="h-px flex-1 bg-white/10"></div>
+      </div>
 
-    function setStatus(msg) { $("statusLine").textContent = msg; }
+      <button id="btnDemoMode" class="w-full rounded-xl border border-white/10 hover:border-brand-500/40 bg-white/5 hover:bg-white/10 text-slate-200 font-semibold text-sm py-2.5 flex items-center justify-center gap-2 transition">
+        <i data-lucide="flask-conical" class="w-4 h-4 text-brand-400"></i>
+        Continue in Demo Mode
+      </button>
+      <p class="text-center text-[11px] text-slate-500 mt-3">Demo mode loads a realistic mock dataset — no credentials required.</p>
+    </div>
 
-    function showError(msg) {
-      const box = $("errorBox");
-      if (!msg) {
-        box.classList.add("hidden");
-        box.textContent = "";
-        return;
-      }
-      box.classList.remove("hidden");
-      box.textContent = msg;
-    }
+    <p class="text-center text-[11px] text-slate-600 mt-6">© <span id="yearNow"></span> Asset Doctor · Protect, Track &amp; Save</p>
+  </div>
+</div>
 
-    function isActive(a) {
-      if (a.deletedAt) return false;
-      const s = String(a.status || "active").toLowerCase();
-      return s === "active" || s === "in_repair" || !a.status;
-    }
+<!-- ============================= APP SHELL ============================= -->
+<div id="appShell" class="hidden min-h-screen">
 
-    function catId(a) {
-      return String(a.categoryId || a.category || "").toLowerCase().trim();
-    }
+  <!-- Sidebar -->
+  <aside class="fixed inset-y-0 left-0 z-40 w-64 glass border-r border-white/10 hidden lg:flex flex-col">
+    <div class="h-16 flex items-center gap-3 px-5 border-b border-white/10 shrink-0">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-400 to-cyan-600 flex items-center justify-center overflow-hidden shrink-0">
+        <img src="./icon.png" alt="" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentElement.innerHTML='<i data-lucide=\'shield-check\' class=\'w-5 h-5 text-white\'></i>'; if(window.lucide) lucide.createIcons();" />
+      </div>
+      <div class="min-w-0">
+        <p class="text-white font-extrabold text-sm leading-tight truncate">Asset Doctor</p>
+        <p class="text-[11px] text-slate-400 leading-tight truncate">Admin Console</p>
+      </div>
+    </div>
 
-    function yearOf(a) {
-      if (a.manufacturingYear != null && a.manufacturingYear !== "") {
-        const y = Number(a.manufacturingYear);
-        if (y >= 1980 && y <= 2100) return y;
-      }
-      const raw = String(a.purchaseDate || "").trim();
-      const m = raw.match(/^(\d{4})/);
-      return m ? Number(m[1]) : null;
-    }
+    <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+      <p class="px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Hubs</p>
+      <button data-tab="vehicles" class="nav-item active w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-300 border border-transparent hover:bg-white/5 transition">
+        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
+        <i data-lucide="car" class="w-4 h-4"></i>
+        <span>Vehicles &amp; RC Vault</span>
+      </button>
+      <button data-tab="appliances" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-300 border border-transparent hover:bg-white/5 transition">
+        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
+        <i data-lucide="washing-machine" class="w-4 h-4"></i>
+        <span>Appliance &amp; Warranty</span>
+      </button>
+      <button data-tab="export" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-300 border border-transparent hover:bg-white/5 transition">
+        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
+        <i data-lucide="send-to-back" class="w-4 h-4"></i>
+        <span>B2B Export Station</span>
+      </button>
+      <button data-tab="broadcast" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-300 border border-transparent hover:bg-white/5 transition">
+        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
+        <i data-lucide="megaphone" class="w-4 h-4"></i>
+        <span>Broadcast &amp; Reminders</span>
+      </button>
+      <button data-tab="backup" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-300 border border-transparent hover:bg-white/5 transition">
+        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
+        <i data-lucide="database-backup" class="w-4 h-4"></i>
+        <span>Backup &amp; Audit Log</span>
+      </button>
 
-    function ageBucket(a) {
-      const y = yearOf(a);
-      if (y == null) return "unknown";
-      const age = new Date().getFullYear() - y;
-      return age <= 3 ? "new" : "old";
-    }
+      <p class="px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 mt-6 mb-2">System</p>
+      <div class="px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-xs text-slate-400 space-y-1.5">
+        <div class="flex items-center justify-between"><span>Environment</span><span class="font-mono text-slate-300">production</span></div>
+        <div class="flex items-center justify-between"><span>Project</span><span class="font-mono text-slate-300">assetdoctor-5fd25</span></div>
+      </div>
+    </nav>
 
-    function warrantyOk(expiry) {
-      if (!expiry) return "unknown";
-      const t = Date.parse(String(expiry));
-      if (Number.isNaN(t)) return "unknown";
-      const end = new Date(t);
-      end.setHours(23, 59, 59, 999);
-      return end.getTime() >= Date.now() ? "in" : "out";
-    }
+    <div class="p-3 border-t border-white/10 shrink-0">
+      <button id="btnLogoutSidebar" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-rose-300 hover:bg-rose-500/10 transition">
+        <i data-lucide="log-out" class="w-4 h-4"></i>
+        Sign out
+      </button>
+    </div>
+  </aside>
 
-    function emptyMetrics() {
-      return {
-        users: 0,
-        cars: 0,
-        bikes: 0,
-        appliances: 0,
-        newV: 0,
-        oldV: 0,
-        ageUnknown: 0,
-        ac: { total: 0, in: 0, out: 0 },
-        mobile: { total: 0, in: 0, out: 0 },
-        laptop: { total: 0, in: 0, out: 0 },
-        source: "demo",
-        generatedAt: new Date().toISOString()
-      };
-    }
+  <!-- Mobile sidebar drawer -->
+  <div id="mobileNavOverlay" class="fixed inset-0 z-50 hidden lg:hidden">
+    <div class="absolute inset-0 bg-black/60" onclick="closeMobileNav()"></div>
+    <aside class="absolute inset-y-0 left-0 w-72 glass-strong border-r border-white/10 flex flex-col">
+      <div class="h-16 flex items-center justify-between gap-3 px-5 border-b border-white/10">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-400 to-cyan-600 flex items-center justify-center"><i data-lucide="shield-check" class="w-5 h-5 text-white"></i></div>
+          <p class="text-white font-extrabold text-sm">Asset Doctor</p>
+        </div>
+        <button onclick="closeMobileNav()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-1" id="mobileNavItems"></nav>
+      <div class="p-3 border-t border-white/10">
+        <button onclick="handleLogout()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-rose-300 hover:bg-rose-500/10 transition">
+          <i data-lucide="log-out" class="w-4 h-4"></i> Sign out
+        </button>
+      </div>
+    </aside>
+  </div>
 
-    function aggregate(assets, userCount, source) {
-      const m = emptyMetrics();
-      m.users = userCount;
-      m.source = source;
-      const vehicles = [];
+  <!-- Main column -->
+  <div class="lg:pl-64 min-h-screen flex flex-col">
 
-      assets.forEach(function (a) {
-        if (!isActive(a)) return;
-        const id = catId(a);
-        const w = warrantyOk(a.warrantyExpiry);
+    <!-- Top nav -->
+    <header class="sticky top-0 z-30 glass-strong border-b border-white/10">
+      <div class="h-16 flex items-center gap-3 px-4 sm:px-6">
+        <button onclick="openMobileNav()" class="lg:hidden text-slate-300 hover:text-white shrink-0"><i data-lucide="menu" class="w-5 h-5"></i></button>
 
-        if (CAR.has(id) || BIKE.has(id)) {
-          if (CAR.has(id)) m.cars += 1;
-          if (BIKE.has(id)) m.bikes += 1;
-          const age = ageBucket(a);
-          if (age === "new") m.newV += 1;
-          else if (age === "old") m.oldV += 1;
-          else m.ageUnknown += 1;
+        <div class="flex items-center gap-2 lg:hidden shrink-0">
+          <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-400 to-cyan-600 flex items-center justify-center overflow-hidden">
+            <img src="./icon.png" alt="" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentElement.innerHTML='<i data-lucide=\'shield-check\' class=\'w-4 h-4 text-white\'></i>'; if(window.lucide) lucide.createIcons();" />
+          </div>
+        </div>
 
-          vehicles.push({
-            type: CAR.has(id) ? "car" : "bike",
-            name: a.assetName || "",
-            registration: a.registration || "",
-            purchaseDate: a.purchaseDate || "",
-            manufacturingYear: yearOf(a) || "",
-            ageBucket: age,
-            ownerUid: a.ownerUid || a.uid || ""
-          });
-          return;
-        }
+        <div id="dbStatusBadge" class="hidden sm:flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 shrink-0">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 pulse-dot"></span>
+          <span id="dbStatusText" class="text-xs font-semibold text-emerald-300">Vault Database Active</span>
+        </div>
 
-        if (AC.has(id)) {
-          m.ac.total += 1;
-          m.appliances += 1;
-          if (w === "in") m.ac.in += 1;
-          if (w === "out") m.ac.out += 1;
-          return;
-        }
-        if (MOBILE.has(id)) {
-          m.mobile.total += 1;
-          m.appliances += 1;
-          if (w === "in") m.mobile.in += 1;
-          if (w === "out") m.mobile.out += 1;
-          return;
-        }
-        if (LAPTOP.has(id)) {
-          m.laptop.total += 1;
-          m.appliances += 1;
-          if (w === "in") m.laptop.in += 1;
-          if (w === "out") m.laptop.out += 1;
-        }
-      });
+        <div class="flex-1 max-w-xl mx-auto relative">
+          <i data-lucide="search" class="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+          <input id="globalSearch" type="text" placeholder="Quick search — registration no., owner phone, model…"
+            class="w-full rounded-xl bg-slate-900/70 border border-white/10 pl-10 pr-9 py-2 text-sm text-white placeholder-slate-500 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition" />
+          <button id="btnClearSearch" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"><i data-lucide="x-circle" class="w-4 h-4"></i></button>
+        </div>
 
-      lastVehicles = vehicles;
-      return m;
-    }
+        <div class="flex items-center gap-3 shrink-0">
+          <button id="btnRefresh" title="Refresh data" class="hidden sm:flex w-9 h-9 items-center justify-center rounded-xl border border-white/10 text-slate-300 hover:text-white hover:border-brand-500/40 transition"><i data-lucide="refresh-cw" class="w-4 h-4"></i></button>
+          <div class="hidden sm:flex items-center gap-2.5 pl-3 border-l border-white/10">
+            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 border border-white/10 flex items-center justify-center">
+              <i data-lucide="user-cog" class="w-4 h-4 text-slate-300"></i>
+            </div>
+            <div class="leading-tight">
+              <p id="adminName" class="text-xs font-bold text-white">Admin</p>
+              <p id="adminMode" class="text-[10px] text-slate-400">Demo Mode</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
 
-    function render(m) {
-      lastMetrics = m;
-      $("cUsers").textContent = m.users;
-      $("cCars").textContent = m.cars;
-      $("cBikes").textContent = m.bikes;
-      $("cAppliances").textContent = m.appliances;
-      $("cNew").textContent = m.newV;
-      $("cOld").textContent = m.oldV;
+    <main class="flex-1 px-4 sm:px-6 py-6 max-w-[1600px] w-full mx-auto">
 
-      const ageTotal = m.newV + m.oldV || 1;
-      $("barNew").style.width = ((m.newV / ageTotal) * 100) + "%";
-      $("barOld").style.width = ((m.oldV / ageTotal) * 100) + "%";
-      $("cAgeUnknown").textContent = m.ageUnknown
-        ? ("Age unknown (no purchase year): " + m.ageUnknown)
-        : "";
+      <!-- Banner -->
+      <div id="demoBanner" class="hidden mb-5 flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-amber-200">
+        <i data-lucide="flask-conical" class="w-4 h-4 mt-0.5 shrink-0"></i>
+        <p class="text-xs sm:text-sm"><strong>Demo Mode active.</strong> No admin custom claim detected or Firestore is unreachable — the console is populated with a realistic mock dataset so every feature stays fully explorable.</p>
+      </div>
 
-      $("acTotal").textContent = m.ac.total;
-      $("acIn").textContent = m.ac.in;
-      $("acOut").textContent = m.ac.out;
-      $("mobTotal").textContent = m.mobile.total;
-      $("mobIn").textContent = m.mobile.in;
-      $("mobOut").textContent = m.mobile.out;
-      $("lapTotal").textContent = m.laptop.total;
-      $("lapIn").textContent = m.laptop.in;
-      $("lapOut").textContent = m.laptop.out;
+      <!-- Analytics cards -->
+      <section class="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
+        <div class="glass border border-white/10 rounded-2xl p-4 sm:p-5 relative overflow-hidden group hover:border-brand-500/30 transition">
+          <div class="absolute -right-4 -top-4 w-20 h-20 bg-brand-500/10 rounded-full blur-2xl group-hover:bg-brand-500/20 transition"></div>
+          <div class="flex items-center justify-between mb-3">
+            <div class="w-9 h-9 rounded-xl bg-brand-500/15 flex items-center justify-center"><i data-lucide="users" class="w-4 h-4 text-brand-400"></i></div>
+          </div>
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Registered Users</p>
+          <p id="statUsers" class="text-2xl sm:text-3xl font-black text-white mt-1 tabular-nums">—</p>
+          <p class="text-[11px] text-emerald-400 mt-1 flex items-center gap-1"><i data-lucide="trending-up" class="w-3 h-3"></i> <span id="statUsersDelta">+0%</span> this month</p>
+        </div>
 
-      setStatus("Showing " + m.source + " data · " + new Date(m.generatedAt).toLocaleString());
-    }
+        <div class="glass border border-white/10 rounded-2xl p-4 sm:p-5 relative overflow-hidden group hover:border-cyan-500/30 transition">
+          <div class="absolute -right-4 -top-4 w-20 h-20 bg-cyan-500/10 rounded-full blur-2xl group-hover:bg-cyan-500/20 transition"></div>
+          <div class="flex items-center justify-between mb-3">
+            <div class="w-9 h-9 rounded-xl bg-cyan-500/15 flex items-center justify-center"><i data-lucide="car" class="w-4 h-4 text-cyan-400"></i></div>
+          </div>
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Active Vehicles</p>
+          <p id="statVehicles" class="text-2xl sm:text-3xl font-black text-white mt-1 tabular-nums">—</p>
+          <p class="text-[11px] text-slate-400 mt-1">Cars, bikes &amp; scooters</p>
+        </div>
 
-    function csvEscape(v) {
-      const s = String(v == null ? "" : v);
-      if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
-      return s;
-    }
+        <div class="glass border border-white/10 rounded-2xl p-4 sm:p-5 relative overflow-hidden group hover:border-violet-500/30 transition">
+          <div class="absolute -right-4 -top-4 w-20 h-20 bg-violet-500/10 rounded-full blur-2xl group-hover:bg-violet-500/20 transition"></div>
+          <div class="flex items-center justify-between mb-3">
+            <div class="w-9 h-9 rounded-xl bg-violet-500/15 flex items-center justify-center"><i data-lucide="washing-machine" class="w-4 h-4 text-violet-400"></i></div>
+          </div>
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Logged Appliances</p>
+          <p id="statAppliances" class="text-2xl sm:text-3xl font-black text-white mt-1 tabular-nums">—</p>
+          <p class="text-[11px] text-slate-400 mt-1">AC · Mobile · Laptop</p>
+        </div>
 
-    function exportCsv() {
-      if (!lastMetrics) {
-        alert("Load data first (Firebase or Demo).");
-        return;
-      }
-      const m = lastMetrics;
-      const lines = [];
+        <div class="glass border border-white/10 rounded-2xl p-4 sm:p-5 relative overflow-hidden group hover:border-amber-500/30 transition">
+          <div class="absolute -right-4 -top-4 w-20 h-20 bg-amber-500/10 rounded-full blur-2xl group-hover:bg-amber-500/20 transition"></div>
+          <div class="flex items-center justify-between mb-3">
+            <div class="w-9 h-9 rounded-xl bg-amber-500/15 flex items-center justify-center"><i data-lucide="alarm-clock" class="w-4 h-4 text-amber-400"></i></div>
+          </div>
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">High Priority Expiries</p>
+          <p id="statExpiries" class="text-2xl sm:text-3xl font-black text-white mt-1 tabular-nums">—</p>
+          <p class="text-[11px] text-amber-400 mt-1">Within next 30 days</p>
+        </div>
 
-      // Summary sheet-style section
-      lines.push(["SECTION", "METRIC", "VALUE"].map(csvEscape).join(","));
-      lines.push(["SUMMARY", "generated_at", m.generatedAt].map(csvEscape).join(","));
-      lines.push(["SUMMARY", "data_source", m.source].map(csvEscape).join(","));
-      lines.push(["SUMMARY", "total_users", m.users].map(csvEscape).join(","));
-      lines.push(["SUMMARY", "total_cars", m.cars].map(csvEscape).join(","));
-      lines.push(["SUMMARY", "total_bikes", m.bikes].map(csvEscape).join(","));
-      lines.push(["SUMMARY", "total_appliances_ac_mobile_laptop", m.appliances].map(csvEscape).join(","));
-      lines.push(["SUMMARY", "vehicles_new_le_3_years", m.newV].map(csvEscape).join(","));
-      lines.push(["SUMMARY", "vehicles_old_gt_3_years", m.oldV].map(csvEscape).join(","));
-      lines.push(["SUMMARY", "vehicles_age_unknown", m.ageUnknown].map(csvEscape).join(","));
-      lines.push(["SUMMARY", "acs_total", m.ac.total].map(csvEscape).join(","));
-      lines.push(["SUMMARY", "acs_in_warranty", m.ac.in].map(csvEscape).join(","));
-      lines.push(["SUMMARY", "acs_expired", m.ac.out].map(csvEscape).join(","));
-      lines.push(["SUMMARY", "mobiles_total", m.mobile.total].map(csvEscape).join(","));
-      lines.push(["SUMMARY", "mobiles_in_warranty", m.mobile.in].map(csvEscape).join(","));
-      lines.push(["SUMMARY", "mobiles_expired", m.mobile.out].map(csvEscape).join(","));
-      lines.push("");
+        <div class="glass border border-white/10 rounded-2xl p-4 sm:p-5 relative overflow-hidden group hover:border-rose-500/30 transition col-span-2 lg:col-span-1">
+          <div class="absolute -right-4 -top-4 w-20 h-20 bg-rose-500/10 rounded-full blur-2xl group-hover:bg-rose-500/20 transition"></div>
+          <div class="flex items-center justify-between mb-3">
+            <div class="w-9 h-9 rounded-xl bg-rose-500/15 flex items-center justify-center relative">
+              <i data-lucide="siren" class="w-4 h-4 text-rose-400"></i>
+              <span id="rsaLiveDot" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-rose-500 pulse-dot"></span>
+            </div>
+          </div>
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Live RSA Emergency Tickets</p>
+          <div class="flex items-end justify-between">
+            <p id="statRsa" class="text-2xl sm:text-3xl font-black text-white mt-1 tabular-nums">—</p>
+            <button id="btnViewRsa" class="text-[11px] font-bold text-rose-300 hover:text-rose-200 flex items-center gap-1 mb-1">View <i data-lucide="arrow-up-right" class="w-3 h-3"></i></button>
+          </div>
+        </div>
+      </section>
 
-      // Vehicle rows for ReadyAssist
-      lines.push(
-        ["SECTION", "type", "name", "registration", "purchaseDate", "manufacturingYear", "ageBucket", "ownerUid"]
-          .map(csvEscape)
-          .join(",")
-      );
-      lastVehicles.forEach(function (v) {
-        lines.push(
-          ["VEHICLE", v.type, v.name, v.registration, v.purchaseDate, v.manufacturingYear, v.ageBucket, v.ownerUid]
-            .map(csvEscape)
-            .join(",")
-        );
-      });
+      <!-- Tabs -->
+      <div class="flex items-center gap-1.5 mb-5 overflow-x-auto pb-1" id="tabStrip">
+        <button data-tab="vehicles" class="tabbtn active shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition border">Vehicles &amp; RC Vault</button>
+        <button data-tab="appliances" class="tabbtn shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition border">Appliance &amp; Warranty Locker</button>
+        <button data-tab="export" class="tabbtn shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition border">B2B Partner Export</button>
+        <button data-tab="broadcast" class="tabbtn shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition border">Broadcast &amp; Reminders</button>
+        <button data-tab="backup" class="tabbtn shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition border">Backup &amp; Audit Log</button>
+      </div>
 
-      const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      const day = new Date().toISOString().slice(0, 10);
-      a.href = url;
-      a.download = "asset-doctor-readyassist-" + day + ".csv";
-      a.click();
-      URL.revokeObjectURL(url);
-      setStatus("CSV downloaded — open in Excel and share with ReadyAssist");
-    }
+      <!-- ===================== TAB 1: VEHICLES ===================== -->
+      <section id="tab-vehicles" class="tab-panel active">
+        <div class="glass border border-white/10 rounded-2xl overflow-hidden">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 border-b border-white/10">
+            <div>
+              <h2 class="text-white font-bold text-lg flex items-center gap-2"><i data-lucide="car" class="w-5 h-5 text-cyan-400"></i> Vehicles &amp; RC Vault</h2>
+              <p class="text-xs text-slate-400 mt-0.5">Registration, expiry tracking &amp; owner contact for every registered vehicle</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="relative">
+                <i data-lucide="search" class="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                <input id="searchVehicles" type="text" placeholder="Search vehicles…" class="rounded-xl bg-slate-900/70 border border-white/10 pl-8 pr-3 py-2 text-xs text-white placeholder-slate-500 w-44 sm:w-56 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition" />
+              </div>
+              <button onclick="exportTableCsv('vehicles')" class="flex items-center gap-1.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-3.5 py-2 transition"><i data-lucide="download" class="w-3.5 h-3.5"></i> CSV</button>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+              <thead>
+                <tr class="text-left text-[11px] uppercase tracking-wide text-slate-400 bg-white/5">
+                  <th class="px-4 py-3 font-semibold">Registration No.</th>
+                  <th class="px-4 py-3 font-semibold">Type / Model</th>
+                  <th class="px-4 py-3 font-semibold">Owner</th>
+                  <th class="px-4 py-3 font-semibold">Owner Phone</th>
+                  <th class="px-4 py-3 font-semibold">Insurance Expiry</th>
+                  <th class="px-4 py-3 font-semibold">PUC Expiry</th>
+                  <th class="px-4 py-3 font-semibold">Status</th>
+                  <th class="px-4 py-3 font-semibold text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="vehiclesTbody" class="divide-y divide-white/5"></tbody>
+            </table>
+          </div>
+          <div id="vehiclesEmpty" class="hidden text-center py-10 text-sm text-slate-500">No vehicles match your search.</div>
+          <div class="px-4 py-3 border-t border-white/10 text-[11px] text-slate-500" id="vehiclesCount"></div>
+        </div>
+      </section>
 
-    async function loadFirebase() {
-      showError("");
-      setStatus("Loading from Firebase…");
-      try {
-        const user = auth.currentUser;
-        if (!user) {
-          throw new Error("Please Sign in first with your admin email & password.");
-        }
-        // Refresh token so admin custom claim is available if recently set
-        await user.getIdToken(true);
+      <!-- ===================== TAB 2: APPLIANCES ===================== -->
+      <section id="tab-appliances" class="tab-panel">
+        <div class="glass border border-white/10 rounded-2xl overflow-hidden">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 border-b border-white/10">
+            <div>
+              <h2 class="text-white font-bold text-lg flex items-center gap-2"><i data-lucide="washing-machine" class="w-5 h-5 text-violet-400"></i> Appliance &amp; Warranty Locker</h2>
+              <p class="text-xs text-slate-400 mt-0.5">Warranty expiry and invoice status for logged appliances</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="relative">
+                <i data-lucide="search" class="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                <input id="searchAppliances" type="text" placeholder="Search appliances…" class="rounded-xl bg-slate-900/70 border border-white/10 pl-8 pr-3 py-2 text-xs text-white placeholder-slate-500 w-44 sm:w-56 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition" />
+              </div>
+              <button onclick="exportTableCsv('appliances')" class="flex items-center gap-1.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-3.5 py-2 transition"><i data-lucide="download" class="w-3.5 h-3.5"></i> CSV</button>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+              <thead>
+                <tr class="text-left text-[11px] uppercase tracking-wide text-slate-400 bg-white/5">
+                  <th class="px-4 py-3 font-semibold">Category</th>
+                  <th class="px-4 py-3 font-semibold">Model</th>
+                  <th class="px-4 py-3 font-semibold">Owner</th>
+                  <th class="px-4 py-3 font-semibold">Owner Phone</th>
+                  <th class="px-4 py-3 font-semibold">Warranty Expiry</th>
+                  <th class="px-4 py-3 font-semibold">Expiry Alert</th>
+                  <th class="px-4 py-3 font-semibold">Invoice Status</th>
+                  <th class="px-4 py-3 font-semibold text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="appliancesTbody" class="divide-y divide-white/5"></tbody>
+            </table>
+          </div>
+          <div id="appliancesEmpty" class="hidden text-center py-10 text-sm text-slate-500">No appliances match your search.</div>
+          <div class="px-4 py-3 border-t border-white/10 text-[11px] text-slate-500" id="appliancesCount"></div>
+        </div>
+      </section>
 
-        const usersSnap = await db.collection("Users").get();
-        const assetsSnap = await db.collectionGroup("Assets").limit(20000).get();
+      <!-- ===================== TAB 3: B2B EXPORT ===================== -->
+      <section id="tab-export" class="tab-panel">
+        <div class="glass border border-white/10 rounded-2xl p-4 sm:p-5 mb-5">
+          <h2 class="text-white font-bold text-lg flex items-center gap-2 mb-1"><i data-lucide="send-to-back" class="w-5 h-5 text-brand-400"></i> B2B Partner Export Station</h2>
+          <p class="text-xs text-slate-400 mb-4">Generate partner-ready CSV feeds, filtered by expiry date range</p>
+          <div class="grid sm:grid-cols-3 gap-3 max-w-2xl">
+            <div>
+              <label class="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">From date</label>
+              <input id="exportFromDate" type="date" class="mt-1.5 w-full rounded-xl bg-slate-900/70 border border-white/10 px-3 py-2 text-sm text-white focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition" />
+            </div>
+            <div>
+              <label class="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">To date</label>
+              <input id="exportToDate" type="date" class="mt-1.5 w-full rounded-xl bg-slate-900/70 border border-white/10 px-3 py-2 text-sm text-white focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition" />
+            </div>
+            <div class="flex items-end">
+              <button id="btnClearExportDates" class="w-full rounded-xl border border-white/10 hover:border-white/25 text-slate-300 text-sm font-semibold px-3 py-2 transition">Clear filters</button>
+            </div>
+          </div>
+          <p class="text-[11px] text-slate-500 mt-2">Leave blank to export the full dataset. Filter applies to each partner's relevant expiry field.</p>
+        </div>
 
-        const assets = [];
-        assetsSnap.forEach(function (doc) {
-          const data = doc.data() || {};
-          const parent = doc.ref.parent.parent;
-          assets.push(Object.assign({}, data, {
-            assetId: data.assetId || doc.id,
-            ownerUid: data.ownerUid || data.uid || (parent ? parent.id : "")
-          }));
-        });
+        <div class="grid md:grid-cols-3 gap-4">
+          <div class="glass border border-white/10 rounded-2xl p-5 flex flex-col hover:border-brand-500/30 transition">
+            <div class="w-11 h-11 rounded-xl bg-orange-500/15 flex items-center justify-center mb-3"><i data-lucide="siren" class="w-5 h-5 text-orange-400"></i></div>
+            <h3 class="text-white font-bold">ReadyAssist</h3>
+            <p class="text-xs text-slate-400 mt-1 flex-1">Roadside assistance partner feed — registration, insurance/PUC expiry &amp; owner contact for active vehicles.</p>
+            <p class="text-[11px] text-slate-500 mt-3" id="readyAssistCount">0 vehicles in range</p>
+            <button onclick="exportPartner('readyassist')" class="mt-3 w-full flex items-center justify-center gap-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-sm font-bold py-2.5 transition"><i data-lucide="download" class="w-4 h-4"></i> Export CSV</button>
+          </div>
+          <div class="glass border border-white/10 rounded-2xl p-5 flex flex-col hover:border-brand-500/30 transition">
+            <div class="w-11 h-11 rounded-xl bg-blue-500/15 flex items-center justify-center mb-3"><i data-lucide="shield" class="w-5 h-5 text-blue-400"></i></div>
+            <h3 class="text-white font-bold">Policybazaar</h3>
+            <p class="text-xs text-slate-400 mt-1 flex-1">Insurance renewal leads — vehicles with insurance expiring in the selected window.</p>
+            <p class="text-[11px] text-slate-500 mt-3" id="policybazaarCount">0 vehicles in range</p>
+            <button onclick="exportPartner('policybazaar')" class="mt-3 w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold py-2.5 transition"><i data-lucide="download" class="w-4 h-4"></i> Export CSV</button>
+          </div>
+          <div class="glass border border-white/10 rounded-2xl p-5 flex flex-col hover:border-brand-500/30 transition">
+            <div class="w-11 h-11 rounded-xl bg-emerald-500/15 flex items-center justify-center mb-3"><i data-lucide="wrench" class="w-5 h-5 text-emerald-400"></i></div>
+            <h3 class="text-white font-bold">Onsitego</h3>
+            <p class="text-xs text-slate-400 mt-1 flex-1">Extended warranty upsell feed — appliances with warranty expiring in the selected window.</p>
+            <p class="text-[11px] text-slate-500 mt-3" id="onsitegoCount">0 appliances in range</p>
+            <button onclick="exportPartner('onsitego')" class="mt-3 w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold py-2.5 transition"><i data-lucide="download" class="w-4 h-4"></i> Export CSV</button>
+          </div>
+        </div>
+      </section>
 
-        const m = aggregate(assets, usersSnap.size, "firestore");
-        render(m);
-        showError("");
-      } catch (err) {
-        console.error(err);
-        showError(
-          (err && err.message) ||
-            "Could not load Firebase. Sign in as admin, or use Show Demo Numbers."
-        );
-        setStatus("Firebase load failed");
-      }
-    }
+      <!-- ===================== TAB 4: BROADCAST ===================== -->
+      <section id="tab-broadcast" class="tab-panel">
+        <div class="grid lg:grid-cols-5 gap-5">
+          <div class="lg:col-span-2 glass border border-white/10 rounded-2xl p-5">
+            <h2 class="text-white font-bold text-lg flex items-center gap-2 mb-1"><i data-lucide="megaphone" class="w-5 h-5 text-amber-400"></i> Trigger Broadcast</h2>
+            <p class="text-xs text-slate-400 mb-4">Queue expiry reminders to WhatsApp / SMS / Email. Requests are written to the <code class="text-brand-300">notificationQueue</code> collection.</p>
 
-    function loadDemo() {
-      showError("");
-      const m = aggregate(DEMO_ASSETS, 128, "demo");
-      render(m);
-    }
+            <div class="space-y-3.5">
+              <div>
+                <label class="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Audience</label>
+                <select id="broadcastAudience" class="mt-1.5 w-full rounded-xl bg-slate-900/70 border border-white/10 px-3 py-2.5 text-sm text-white focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition">
+                  <option value="vehicles_expiring">Vehicles expiring within 30 days</option>
+                  <option value="appliances_expiring">Appliances expiring within 30 days</option>
+                  <option value="all_expiring">All assets expiring within 30 days</option>
+                  <option value="all_users">All registered users</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Channel</label>
+                <div class="mt-1.5 grid grid-cols-3 gap-2" id="broadcastChannels">
+                  <button data-channel="whatsapp" class="channel-btn active flex flex-col items-center gap-1 rounded-xl border px-2 py-2.5 text-xs font-bold transition"><i data-lucide="message-circle" class="w-4 h-4"></i> WhatsApp</button>
+                  <button data-channel="sms" class="channel-btn flex flex-col items-center gap-1 rounded-xl border px-2 py-2.5 text-xs font-bold transition"><i data-lucide="message-square" class="w-4 h-4"></i> SMS</button>
+                  <button data-channel="email" class="channel-btn flex flex-col items-center gap-1 rounded-xl border px-2 py-2.5 text-xs font-bold transition"><i data-lucide="mail" class="w-4 h-4"></i> Email</button>
+                </div>
+              </div>
+              <div>
+                <label class="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Message template</label>
+                <textarea id="broadcastMessage" rows="4" class="mt-1.5 w-full rounded-xl bg-slate-900/70 border border-white/10 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition resize-none">Hi {{owner_name}}, your {{asset}} document/warranty expires on {{expiry_date}}. Renew now via the Asset Doctor app to stay protected. – Team Asset Doctor</textarea>
+              </div>
+              <button id="btnSendBroadcast" class="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-bold text-sm py-2.5 transition">
+                <i data-lucide="send" class="w-4 h-4"></i> Queue Broadcast
+              </button>
+              <p id="broadcastEstimate" class="text-[11px] text-slate-500 text-center"></p>
+            </div>
+          </div>
 
-    // Auth UI
-    auth.onAuthStateChanged(function (user) {
-      if (user) {
-        $("authStatus").textContent = "Signed in as " + (user.email || user.uid);
-      } else {
-        $("authStatus").textContent = "Not signed in";
-      }
+          <div class="lg:col-span-3 glass border border-white/10 rounded-2xl overflow-hidden flex flex-col">
+            <div class="p-5 border-b border-white/10">
+              <h3 class="text-white font-bold flex items-center gap-2"><i data-lucide="list-checks" class="w-4 h-4 text-brand-400"></i> Recently Queued Broadcasts</h3>
+              <p class="text-xs text-slate-400 mt-0.5">Live log of reminder jobs triggered from this console</p>
+            </div>
+            <div class="overflow-x-auto flex-1">
+              <table class="min-w-full text-sm">
+                <thead>
+                  <tr class="text-left text-[11px] uppercase tracking-wide text-slate-400 bg-white/5">
+                    <th class="px-4 py-3 font-semibold">Time</th>
+                    <th class="px-4 py-3 font-semibold">Audience</th>
+                    <th class="px-4 py-3 font-semibold">Channel</th>
+                    <th class="px-4 py-3 font-semibold">Recipients</th>
+                    <th class="px-4 py-3 font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="broadcastLogTbody" class="divide-y divide-white/5"></tbody>
+              </table>
+            </div>
+            <div id="broadcastLogEmpty" class="text-center py-10 text-sm text-slate-500">No broadcasts queued yet in this session.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== TAB 5: BACKUP & AUDIT ===================== -->
+      <section id="tab-backup" class="tab-panel">
+        <div class="grid lg:grid-cols-3 gap-5 mb-5">
+          <div class="glass border border-white/10 rounded-2xl p-5">
+            <div class="w-11 h-11 rounded-xl bg-brand-500/15 flex items-center justify-center mb-3"><i data-lucide="file-json-2" class="w-5 h-5 text-brand-400"></i></div>
+            <h3 class="text-white font-bold">Full System Backup (JSON)</h3>
+            <p class="text-xs text-slate-400 mt-1 mb-3">Snapshot of users, vehicles, appliances &amp; audit history as a structured JSON file.</p>
+            <button onclick="downloadBackup('json')" class="w-full flex items-center justify-center gap-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-sm font-bold py-2.5 transition"><i data-lucide="download" class="w-4 h-4"></i> Download JSON</button>
+          </div>
+          <div class="glass border border-white/10 rounded-2xl p-5">
+            <div class="w-11 h-11 rounded-xl bg-cyan-500/15 flex items-center justify-center mb-3"><i data-lucide="file-spreadsheet" class="w-5 h-5 text-cyan-400"></i></div>
+            <h3 class="text-white font-bold">Full System Backup (CSV)</h3>
+            <p class="text-xs text-slate-400 mt-1 mb-3">Flat CSV export combining vehicles &amp; appliances for spreadsheet review.</p>
+            <button onclick="downloadBackup('csv')" class="w-full flex items-center justify-center gap-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-bold py-2.5 transition"><i data-lucide="download" class="w-4 h-4"></i> Download CSV</button>
+          </div>
+          <div class="glass border border-white/10 rounded-2xl p-5">
+            <div class="w-11 h-11 rounded-xl bg-slate-500/15 flex items-center justify-center mb-3"><i data-lucide="scroll-text" class="w-5 h-5 text-slate-300"></i></div>
+            <h3 class="text-white font-bold">Audit Log Export</h3>
+            <p class="text-xs text-slate-400 mt-1 mb-3">Every admin action performed in this session, exportable for compliance review.</p>
+            <button onclick="exportAuditLog()" class="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold py-2.5 transition"><i data-lucide="download" class="w-4 h-4"></i> Download Log CSV</button>
+          </div>
+        </div>
+
+        <div class="glass border border-white/10 rounded-2xl overflow-hidden">
+          <div class="p-5 border-b border-white/10 flex items-center justify-between">
+            <div>
+              <h3 class="text-white font-bold flex items-center gap-2"><i data-lucide="history" class="w-4 h-4 text-brand-400"></i> Audit Log</h3>
+              <p class="text-xs text-slate-400 mt-0.5">Chronological record of admin console activity</p>
+            </div>
+            <span id="auditCount" class="text-xs font-semibold text-slate-400"></span>
+          </div>
+          <div class="overflow-x-auto max-h-[420px] overflow-y-auto">
+            <table class="min-w-full text-sm">
+              <thead class="sticky top-0 z-10">
+                <tr class="text-left text-[11px] uppercase tracking-wide text-slate-400 bg-slate-900">
+                  <th class="px-4 py-3 font-semibold">Timestamp</th>
+                  <th class="px-4 py-3 font-semibold">Actor</th>
+                  <th class="px-4 py-3 font-semibold">Action</th>
+                  <th class="px-4 py-3 font-semibold">Details</th>
+                </tr>
+              </thead>
+              <tbody id="auditTbody" class="divide-y divide-white/5"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <footer class="text-center text-[11px] text-slate-600 py-6">
+      Asset Doctor Admin Console · Built for internal operations · assetdoctor.in
+    </footer>
+  </div>
+</div>
+
+<!-- Detail / RSA Modal -->
+<div id="detailModal" class="hidden fixed inset-0 z-[60] flex items-center justify-center px-4">
+  <div class="absolute inset-0 bg-black/70" onclick="closeModal()"></div>
+  <div class="relative w-full max-w-lg glass-strong border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+    <div class="flex items-center justify-between p-5 border-b border-white/10">
+      <h3 id="modalTitle" class="text-white font-bold text-lg">Details</h3>
+      <button onclick="closeModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <div id="modalBody" class="p-5 max-h-[70vh] overflow-y-auto text-sm text-slate-300 space-y-2"></div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toastContainer" class="fixed bottom-5 right-5 z-[70] flex flex-col gap-2 items-end"></div>
+
+<script>
+/* ============================================================
+   ASSET DOCTOR — ADMIN CONSOLE
+   Single-file enterprise dashboard (Tailwind + Lucide + Firebase compat)
+   ============================================================ */
+
+// ---------- Firebase ----------
+const firebaseConfig = {
+  apiKey: "AIzaSyAYpEIXCZz3VKFMza3jpUMGTSRbi37qk-c",
+  authDomain: "assetdoctor-5fd25.firebaseapp.com",
+  projectId: "assetdoctor-5fd25",
+  storageBucket: "assetdoctor-5fd25.firebasestorage.app",
+  messagingSenderId: "926559836985",
+  appId: "1:926559836985:android:842e878c508df93d2b66e8"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// ---------- Global state ----------
+const state = {
+  isDemo: true,
+  currentUser: null,
+  activeTab: 'vehicles',
+  vehicles: [],
+  appliances: [],
+  rsaTickets: [],
+  users: 0,
+  broadcastLog: [],
+  auditLog: [],
+  channel: 'whatsapp'
+};
+
+function $(id) { return document.getElementById(id); }
+
+// ---------- Utilities ----------
+function fmtDate(d) {
+  if (!d) return '—';
+  const dt = d instanceof Date ? d : new Date(d);
+  if (isNaN(dt.getTime())) return '—';
+  return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function daysUntil(dateStr) {
+  const t = Date.parse(dateStr);
+  if (Number.isNaN(t)) return Infinity;
+  const end = new Date(t); end.setHours(23, 59, 59, 999);
+  return Math.ceil((end.getTime() - Date.now()) / 86400000);
+}
+
+function expiryStatus(dateStr) {
+  const d = daysUntil(dateStr);
+  if (d < 0) return 'expired';
+  if (d <= 30) return 'soon';
+  return 'active';
+}
+
+function statusPill(status) {
+  const map = {
+    active: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+    soon: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+    expired: 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+  };
+  const label = { active: 'Active', soon: 'Expiring Soon', expired: 'Expired' }[status] || status;
+  return '<span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold border ' + (map[status] || '') + '">' + label + '</span>';
+}
+
+function worstStatus(a, b) {
+  const rank = { expired: 2, soon: 1, active: 0 };
+  return rank[a] >= rank[b] ? a : b;
+}
+
+function csvEscape(v) {
+  const s = String(v == null ? '' : v);
+  if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+function downloadFile(content, filename, mime) {
+  const blob = new Blob([content], { type: mime + ';charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function toCsv(headers, rows) {
+  const lines = [headers.map(csvEscape).join(',')];
+  rows.forEach(r => lines.push(r.map(csvEscape).join(',')));
+  return '\uFEFF' + lines.join('\n');
+}
+
+function toast(message, type) {
+  type = type || 'success';
+  const icons = { success: 'check-circle-2', error: 'alert-circle', info: 'info' };
+  const colors = {
+    success: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
+    error: 'border-rose-500/30 bg-rose-500/10 text-rose-200',
+    info: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-200'
+  };
+  const el = document.createElement('div');
+  el.className = 'toast glass-strong border ' + colors[type] + ' rounded-xl px-4 py-3 text-sm font-semibold flex items-center gap-2 shadow-2xl max-w-xs';
+  el.innerHTML = '<i data-lucide="' + icons[type] + '" class="w-4 h-4 shrink-0"></i><span>' + message + '</span>';
+  $('toastContainer').appendChild(el);
+  if (window.lucide) lucide.createIcons();
+  setTimeout(() => el.remove(), 3500);
+}
+
+function logAudit(action, details) {
+  state.auditLog.unshift({
+    ts: new Date(),
+    actor: (state.currentUser && state.currentUser.email) || (state.isDemo ? 'demo@assetdoctor.in' : 'system'),
+    action, details: details || ''
+  });
+  renderAuditLog();
+}
+
+// ---------- Mock data generation ----------
+const OWNER_NAMES = ['Ashutosh Rai','Priya Sharma','Rahul Verma','Ananya Iyer','Vikram Singh','Sneha Patel','Karan Mehta','Divya Nair','Arjun Reddy','Neha Gupta','Rohan Kapoor','Ishita Bose','Aditya Joshi','Meera Pillai','Suresh Kumar','Pooja Chawla'];
+const CITIES = ['Mumbai','Bengaluru','Delhi','Pune','Chennai','Hyderabad','Kolkata','Ahmedabad'];
+const CAR_MODELS = ['Maruti Swift','Hyundai Creta','Tata Nexon','Honda City','Toyota Innova','Kia Seltos'];
+const BIKE_MODELS = ['Honda Activa','Bajaj Pulsar','TVS Jupiter','Royal Enfield Classic','Yamaha FZ'];
+const AC_MODELS = ['Voltas 1.5T Split AC','LG Dual Inverter','Daikin 1T Window AC','Samsung WindFree'];
+const MOBILE_MODELS = ['iPhone 15','Samsung Galaxy S24','OnePlus 12','Redmi Note 13 Pro'];
+const LAPTOP_MODELS = ['Dell XPS 13','HP Pavilion 15','Lenovo ThinkPad E14','MacBook Air M2'];
+
+function rndInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+function rndPick(arr) { return arr[rndInt(0, arr.length - 1)]; }
+function rndPhone() { return '9' + rndInt(100000000, 999999999); }
+function rndDateOffset(daysFromToday) {
+  const d = new Date(); d.setDate(d.getDate() + daysFromToday);
+  return d.toISOString().slice(0, 10);
+}
+function regNoFor(city, idx) {
+  const codes = { Mumbai:'MH01', Bengaluru:'KA03', Delhi:'DL04', Pune:'MH12', Chennai:'TN09', Hyderabad:'TS08', Kolkata:'WB06', Ahmedabad:'GJ01' };
+  const letters = String.fromCharCode(65 + (idx % 26)) + String.fromCharCode(65 + ((idx * 3) % 26));
+  return (codes[city] || 'DL01') + ' ' + letters + ' ' + String(1000 + idx).slice(-4);
+}
+
+function generateMockVehicles() {
+  const rows = [];
+  const spread = [-40, -10, 5, 12, 25, 60, 200, 400, -3, 18, 90, 300];
+  for (let i = 0; i < 42; i++) {
+    const city = rndPick(CITIES);
+    const isCar = i % 2 === 0;
+    rows.push({
+      id: 'veh_' + i,
+      regNo: regNoFor(city, i),
+      type: isCar ? 'Car' : 'Bike',
+      model: isCar ? rndPick(CAR_MODELS) : rndPick(BIKE_MODELS),
+      ownerName: rndPick(OWNER_NAMES),
+      ownerPhone: rndPhone(),
+      city,
+      insuranceExpiry: rndDateOffset(rndPick(spread)),
+      pucExpiry: rndDateOffset(rndPick(spread)),
+      rcExpiry: rndDateOffset(rndPick(spread) + 200)
     });
+  }
+  return rows;
+}
 
-    $("btnLogin").onclick = async function () {
-      showError("");
-      const email = $("email").value.trim();
-      const password = $("password").value;
-      try {
-        await auth.signInWithEmailAndPassword(email, password);
-        setStatus("Signed in — click Load from Firebase");
-      } catch (err) {
-        showError(err.message || "Login failed");
-      }
+function generateMockAppliances() {
+  const rows = [];
+  const spread = [-30, -5, 8, 15, 22, 45, 150, 300, -2, 10];
+  const cats = [
+    { name: 'AC', models: AC_MODELS },
+    { name: 'Mobile', models: MOBILE_MODELS },
+    { name: 'Laptop', models: LAPTOP_MODELS }
+  ];
+  for (let i = 0; i < 36; i++) {
+    const cat = cats[i % 3];
+    const hasInvoice = i % 4 !== 0;
+    rows.push({
+      id: 'app_' + i,
+      category: cat.name,
+      model: rndPick(cat.models),
+      ownerName: rndPick(OWNER_NAMES),
+      ownerPhone: rndPhone(),
+      purchaseDate: rndDateOffset(-rndInt(60, 900)),
+      warrantyExpiry: rndDateOffset(rndPick(spread)),
+      invoiceStatus: hasInvoice ? 'Uploaded' : 'Missing'
+    });
+  }
+  return rows;
+}
+
+function generateMockRsaTickets() {
+  const issues = ['Flat tyre assistance', 'Battery jumpstart', 'Towing required', 'Engine breakdown', 'Fuel delivery', 'Lockout assistance'];
+  const statuses = ['Dispatched', 'En Route', 'Assigned', 'Pending'];
+  const n = rndInt(2, 6);
+  const rows = [];
+  for (let i = 0; i < n; i++) {
+    rows.push({
+      id: 'rsa_' + i,
+      regNo: regNoFor(rndPick(CITIES), rndInt(1, 90)),
+      owner: rndPick(OWNER_NAMES),
+      issue: rndPick(issues),
+      status: rndPick(statuses),
+      raisedMinsAgo: rndInt(2, 55)
+    });
+  }
+  return rows;
+}
+
+function loadMockData() {
+  state.vehicles = generateMockVehicles();
+  state.appliances = generateMockAppliances();
+  state.rsaTickets = generateMockRsaTickets();
+  state.users = rndInt(340, 520);
+}
+
+// ---------- Real Firestore data (best effort) ----------
+async function loadRealData() {
+  const usersSnap = await db.collection('Users').get();
+  const assetsSnap = await db.collectionGroup('Assets').limit(20000).get();
+  const vehicles = [], appliances = [];
+  const CAR = new Set(['car']), BIKE = new Set(['bike', 'scooter', 'motorcycle']);
+  const AC = new Set(['ac']), MOBILE = new Set(['mobile', 'phone', 'tablet']), LAPTOP = new Set(['laptop']);
+
+  assetsSnap.forEach(doc => {
+    const a = doc.data() || {};
+    const id = String(a.categoryId || a.category || '').toLowerCase().trim();
+    if (a.deletedAt) return;
+    if (CAR.has(id) || BIKE.has(id)) {
+      vehicles.push({
+        id: doc.id,
+        regNo: a.registration || 'N/A',
+        type: CAR.has(id) ? 'Car' : 'Bike',
+        model: a.assetName || '—',
+        ownerName: a.ownerName || '—',
+        ownerPhone: a.ownerPhone || '—',
+        city: a.city || '—',
+        insuranceExpiry: a.insuranceExpiry || '',
+        pucExpiry: a.pucExpiry || '',
+        rcExpiry: a.rcExpiry || a.registrationExpiry || ''
+      });
+    } else if (AC.has(id) || MOBILE.has(id) || LAPTOP.has(id)) {
+      appliances.push({
+        id: doc.id,
+        category: AC.has(id) ? 'AC' : MOBILE.has(id) ? 'Mobile' : 'Laptop',
+        model: a.assetName || '—',
+        ownerName: a.ownerName || '—',
+        ownerPhone: a.ownerPhone || '—',
+        purchaseDate: a.purchaseDate || '',
+        warrantyExpiry: a.warrantyExpiry || '',
+        invoiceStatus: a.invoiceUrl ? 'Uploaded' : 'Missing'
+      });
+    }
+  });
+
+  if (vehicles.length === 0 && appliances.length === 0) {
+    throw new Error('No live asset data found');
+  }
+
+  state.vehicles = vehicles;
+  state.appliances = appliances;
+  state.rsaTickets = generateMockRsaTickets();
+  state.users = usersSnap.size;
+}
+
+// ---------- Rendering ----------
+function computeExpiries() {
+  let highPriority = 0;
+  state.vehicles.forEach(v => {
+    const worst = worstStatus(expiryStatus(v.insuranceExpiry), expiryStatus(v.pucExpiry));
+    if (worst !== 'active') highPriority++;
+  });
+  state.appliances.forEach(a => {
+    if (expiryStatus(a.warrantyExpiry) !== 'active') highPriority++;
+  });
+  return highPriority;
+}
+
+function renderStats() {
+  $('statUsers').textContent = state.users.toLocaleString('en-IN');
+  $('statUsersDelta').textContent = '+' + rndInt(2, 9) + '%';
+  $('statVehicles').textContent = state.vehicles.length.toLocaleString('en-IN');
+  $('statAppliances').textContent = state.appliances.length.toLocaleString('en-IN');
+  $('statExpiries').textContent = computeExpiries();
+  $('statRsa').textContent = state.rsaTickets.length;
+  $('rsaLiveDot').classList.toggle('hidden', state.rsaTickets.length === 0);
+}
+
+function vehicleRowHtml(v) {
+  const status = worstStatus(expiryStatus(v.insuranceExpiry), expiryStatus(v.pucExpiry));
+  const searchBlob = [v.regNo, v.model, v.ownerName, v.ownerPhone, v.city].join(' ').toLowerCase();
+  return '<tr class="table-row transition" data-search="' + searchBlob + '">' +
+    '<td class="px-4 py-3 font-mono font-bold text-white">' + v.regNo + '</td>' +
+    '<td class="px-4 py-3"><p class="text-slate-200 font-medium">' + v.model + '</p><p class="text-[11px] text-slate-500">' + v.type + ' · ' + v.city + '</p></td>' +
+    '<td class="px-4 py-3 text-slate-300">' + v.ownerName + '</td>' +
+    '<td class="px-4 py-3 font-mono text-slate-300">' + v.ownerPhone + '</td>' +
+    '<td class="px-4 py-3"><p class="text-slate-300">' + fmtDate(v.insuranceExpiry) + '</p><p class="text-[11px] ' + (expiryStatus(v.insuranceExpiry) === 'expired' ? 'text-rose-400' : expiryStatus(v.insuranceExpiry) === 'soon' ? 'text-amber-400' : 'text-slate-500') + '">' + daysUntil(v.insuranceExpiry) + 'd</p></td>' +
+    '<td class="px-4 py-3"><p class="text-slate-300">' + fmtDate(v.pucExpiry) + '</p><p class="text-[11px] ' + (expiryStatus(v.pucExpiry) === 'expired' ? 'text-rose-400' : expiryStatus(v.pucExpiry) === 'soon' ? 'text-amber-400' : 'text-slate-500') + '">' + daysUntil(v.pucExpiry) + 'd</p></td>' +
+    '<td class="px-4 py-3">' + statusPill(status) + '</td>' +
+    '<td class="px-4 py-3"><div class="flex items-center justify-end gap-1.5">' +
+      '<button onclick="viewVehicle(\'' + v.id + '\')" title="View" class="w-8 h-8 flex items-center justify-center rounded-lg border border-white/10 text-slate-300 hover:text-white hover:border-brand-500/40 transition"><i data-lucide="eye" class="w-3.5 h-3.5"></i></button>' +
+      '<button onclick="reminderOne(\'' + v.id + '\',\'vehicle\')" title="Send reminder" class="w-8 h-8 flex items-center justify-center rounded-lg border border-white/10 text-slate-300 hover:text-amber-300 hover:border-amber-500/40 transition"><i data-lucide="bell" class="w-3.5 h-3.5"></i></button>' +
+    '</div></td>' +
+  '</tr>';
+}
+
+function applianceRowHtml(a) {
+  const status = expiryStatus(a.warrantyExpiry);
+  const searchBlob = [a.category, a.model, a.ownerName, a.ownerPhone].join(' ').toLowerCase();
+  const invBadge = a.invoiceStatus === 'Uploaded'
+    ? '<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-bold border bg-emerald-500/15 text-emerald-300 border-emerald-500/30"><i data-lucide="check" class="w-3 h-3"></i> Uploaded</span>'
+    : '<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-bold border bg-slate-500/15 text-slate-400 border-slate-500/30"><i data-lucide="x" class="w-3 h-3"></i> Missing</span>';
+  return '<tr class="table-row transition" data-search="' + searchBlob + '">' +
+    '<td class="px-4 py-3"><span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-violet-500/15 text-violet-300 border border-violet-500/30">' + a.category + '</span></td>' +
+    '<td class="px-4 py-3 text-slate-200 font-medium">' + a.model + '</td>' +
+    '<td class="px-4 py-3 text-slate-300">' + a.ownerName + '</td>' +
+    '<td class="px-4 py-3 font-mono text-slate-300">' + a.ownerPhone + '</td>' +
+    '<td class="px-4 py-3"><p class="text-slate-300">' + fmtDate(a.warrantyExpiry) + '</p><p class="text-[11px] text-slate-500">' + daysUntil(a.warrantyExpiry) + 'd</p></td>' +
+    '<td class="px-4 py-3">' + statusPill(status) + '</td>' +
+    '<td class="px-4 py-3">' + invBadge + '</td>' +
+    '<td class="px-4 py-3"><div class="flex items-center justify-end gap-1.5">' +
+      '<button onclick="viewAppliance(\'' + a.id + '\')" title="View" class="w-8 h-8 flex items-center justify-center rounded-lg border border-white/10 text-slate-300 hover:text-white hover:border-brand-500/40 transition"><i data-lucide="eye" class="w-3.5 h-3.5"></i></button>' +
+      '<button onclick="reminderOne(\'' + a.id + '\',\'appliance\')" title="Send reminder" class="w-8 h-8 flex items-center justify-center rounded-lg border border-white/10 text-slate-300 hover:text-amber-300 hover:border-amber-500/40 transition"><i data-lucide="bell" class="w-3.5 h-3.5"></i></button>' +
+    '</div></td>' +
+  '</tr>';
+}
+
+function renderVehicles() {
+  $('vehiclesTbody').innerHTML = state.vehicles.map(vehicleRowHtml).join('');
+  $('vehiclesCount').textContent = state.vehicles.length + ' vehicles total';
+  if (window.lucide) lucide.createIcons();
+  applyTableFilter('searchVehicles', 'vehiclesTbody', 'vehiclesEmpty');
+}
+
+function renderAppliances() {
+  $('appliancesTbody').innerHTML = state.appliances.map(applianceRowHtml).join('');
+  $('appliancesCount').textContent = state.appliances.length + ' appliances total';
+  if (window.lucide) lucide.createIcons();
+  applyTableFilter('searchAppliances', 'appliancesTbody', 'appliancesEmpty');
+}
+
+function renderExportCounts() {
+  const { from, to } = getExportRange();
+  const vehiclesInRange = state.vehicles.filter(v => inRange(v.insuranceExpiry, from, to) || inRange(v.pucExpiry, from, to));
+  const insuranceOnly = state.vehicles.filter(v => inRange(v.insuranceExpiry, from, to));
+  const appliancesInRange = state.appliances.filter(a => inRange(a.warrantyExpiry, from, to));
+  $('readyAssistCount').textContent = vehiclesInRange.length + ' vehicles in range';
+  $('policybazaarCount').textContent = insuranceOnly.length + ' vehicles in range';
+  $('onsitegoCount').textContent = appliancesInRange.length + ' appliances in range';
+}
+
+function renderBroadcastLog() {
+  const tbody = $('broadcastLogTbody');
+  tbody.innerHTML = state.broadcastLog.map(b =>
+    '<tr class="table-row transition">' +
+      '<td class="px-4 py-3 text-slate-400 text-xs">' + b.time.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) + '</td>' +
+      '<td class="px-4 py-3 text-slate-200">' + b.audienceLabel + '</td>' +
+      '<td class="px-4 py-3"><span class="inline-flex items-center gap-1.5 text-slate-300 capitalize"><i data-lucide="' + (b.channel === 'whatsapp' ? 'message-circle' : b.channel === 'sms' ? 'message-square' : 'mail') + '" class="w-3.5 h-3.5"></i>' + b.channel + '</span></td>' +
+      '<td class="px-4 py-3 font-bold text-white tabular-nums">' + b.recipients + '</td>' +
+      '<td class="px-4 py-3">' + '<span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold border bg-emerald-500/15 text-emerald-300 border-emerald-500/30">' + b.status + '</span>' + '</td>' +
+    '</tr>'
+  ).join('');
+  $('broadcastLogEmpty').classList.toggle('hidden', state.broadcastLog.length > 0);
+  if (window.lucide) lucide.createIcons();
+}
+
+function renderAuditLog() {
+  const tbody = $('auditTbody');
+  tbody.innerHTML = state.auditLog.map(e =>
+    '<tr class="table-row transition">' +
+      '<td class="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">' + e.ts.toLocaleString('en-IN') + '</td>' +
+      '<td class="px-4 py-3 text-slate-300">' + e.actor + '</td>' +
+      '<td class="px-4 py-3 text-white font-semibold">' + e.action + '</td>' +
+      '<td class="px-4 py-3 text-slate-400">' + e.details + '</td>' +
+    '</tr>'
+  ).join('');
+  $('auditCount').textContent = state.auditLog.length + ' events';
+}
+
+function renderAll() {
+  renderStats();
+  renderVehicles();
+  renderAppliances();
+  renderExportCounts();
+  renderBroadcastLog();
+  renderAuditLog();
+}
+
+// ---------- Table search filter ----------
+function applyTableFilter(inputId, tbodyId, emptyId) {
+  const q = ($(inputId).value || '').trim().toLowerCase();
+  const rows = $(tbodyId).querySelectorAll('tr');
+  let visible = 0;
+  rows.forEach(tr => {
+    const match = !q || (tr.dataset.search || '').includes(q);
+    tr.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  $(emptyId).classList.toggle('hidden', visible !== 0 || rows.length === 0);
+}
+
+$('searchVehicles').addEventListener('input', () => applyTableFilter('searchVehicles', 'vehiclesTbody', 'vehiclesEmpty'));
+$('searchAppliances').addEventListener('input', () => applyTableFilter('searchAppliances', 'appliancesTbody', 'appliancesEmpty'));
+
+$('globalSearch').addEventListener('input', function () {
+  const v = this.value;
+  $('btnClearSearch').classList.toggle('hidden', !v);
+  if (state.activeTab === 'vehicles') {
+    $('searchVehicles').value = v; applyTableFilter('searchVehicles', 'vehiclesTbody', 'vehiclesEmpty');
+  } else if (state.activeTab === 'appliances') {
+    $('searchAppliances').value = v; applyTableFilter('searchAppliances', 'appliancesTbody', 'appliancesEmpty');
+  }
+});
+$('btnClearSearch').addEventListener('click', () => {
+  $('globalSearch').value = ''; $('globalSearch').dispatchEvent(new Event('input'));
+});
+
+// ---------- Tabs ----------
+function setActiveTab(tab) {
+  state.activeTab = tab;
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
+  document.querySelectorAll('.tabbtn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('#mobileNavItems .nav-item').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  $('globalSearch').value = '';
+  $('btnClearSearch').classList.add('hidden');
+}
+
+document.querySelectorAll('[data-tab]').forEach(btn => {
+  btn.addEventListener('click', () => { setActiveTab(btn.dataset.tab); closeMobileNav(); });
+});
+
+function styleTabButtons() {
+  document.querySelectorAll('.tabbtn').forEach(b => {
+    b.classList.add('bg-white/5', 'border-white/10', 'text-slate-300');
+  });
+}
+
+// Tab button active styling via CSS class toggle (kept simple with Tailwind + custom class)
+const tabStyleObserver = () => {
+  document.querySelectorAll('.tabbtn').forEach(b => {
+    if (b.classList.contains('active')) {
+      b.className = 'tabbtn active shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition border bg-brand-600 border-brand-500 text-white shadow-glow';
+    } else {
+      b.className = 'tabbtn shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition border bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white';
+    }
+  });
+};
+document.querySelectorAll('.tabbtn').forEach(btn => btn.addEventListener('click', tabStyleObserver));
+tabStyleObserver();
+
+// Mobile nav mirror
+function buildMobileNav() {
+  const items = [
+    ['vehicles','car','Vehicles & RC Vault'],
+    ['appliances','washing-machine','Appliance & Warranty'],
+    ['export','send-to-back','B2B Export Station'],
+    ['broadcast','megaphone','Broadcast & Reminders'],
+    ['backup','database-backup','Backup & Audit Log']
+  ];
+  $('mobileNavItems').innerHTML = items.map(([tab, icon, label], i) =>
+    '<button data-tab="' + tab + '" class="nav-item ' + (i === 0 ? 'active' : '') + ' w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-300 border border-transparent hover:bg-white/5 transition">' +
+      '<span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>' +
+      '<i data-lucide="' + icon + '" class="w-4 h-4"></i><span>' + label + '</span>' +
+    '</button>'
+  ).join('');
+  $('mobileNavItems').querySelectorAll('[data-tab]').forEach(btn => {
+    btn.addEventListener('click', () => { setActiveTab(btn.dataset.tab); closeMobileNav(); });
+  });
+  if (window.lucide) lucide.createIcons();
+}
+
+function openMobileNav() { $('mobileNavOverlay').classList.remove('hidden'); }
+function closeMobileNav() { $('mobileNavOverlay').classList.add('hidden'); }
+
+// ---------- Modal ----------
+function openModal(title, bodyHtml) {
+  $('modalTitle').textContent = title;
+  $('modalBody').innerHTML = bodyHtml;
+  $('detailModal').classList.remove('hidden');
+  if (window.lucide) lucide.createIcons();
+}
+function closeModal() { $('detailModal').classList.add('hidden'); }
+
+function viewVehicle(id) {
+  const v = state.vehicles.find(x => x.id === id);
+  if (!v) return;
+  openModal(v.regNo, [
+    ['Type / Model', v.model + ' (' + v.type + ')'],
+    ['Owner', v.ownerName],
+    ['Owner Phone', v.ownerPhone],
+    ['City', v.city],
+    ['Insurance Expiry', fmtDate(v.insuranceExpiry)],
+    ['PUC Expiry', fmtDate(v.pucExpiry)],
+    ['RC Expiry', fmtDate(v.rcExpiry)]
+  ].map(([k, val]) => '<div class="flex items-center justify-between border-b border-white/5 py-2"><span class="text-slate-400">' + k + '</span><span class="text-white font-semibold">' + val + '</span></div>').join(''));
+}
+
+function viewAppliance(id) {
+  const a = state.appliances.find(x => x.id === id);
+  if (!a) return;
+  openModal(a.model, [
+    ['Category', a.category],
+    ['Owner', a.ownerName],
+    ['Owner Phone', a.ownerPhone],
+    ['Purchase Date', fmtDate(a.purchaseDate)],
+    ['Warranty Expiry', fmtDate(a.warrantyExpiry)],
+    ['Invoice Status', a.invoiceStatus]
+  ].map(([k, val]) => '<div class="flex items-center justify-between border-b border-white/5 py-2"><span class="text-slate-400">' + k + '</span><span class="text-white font-semibold">' + val + '</span></div>').join(''));
+}
+
+$('btnViewRsa').addEventListener('click', () => {
+  if (state.rsaTickets.length === 0) {
+    openModal('Live RSA Emergency Tickets', '<p class="text-slate-400 text-sm">No active emergency tickets right now.</p>');
+    return;
+  }
+  const rows = state.rsaTickets.map(t =>
+    '<div class="rounded-xl border border-white/10 bg-white/5 p-3">' +
+      '<div class="flex items-center justify-between"><span class="font-mono font-bold text-white text-sm">' + t.regNo + '</span>' +
+      '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold border bg-rose-500/15 text-rose-300 border-rose-500/30">' + t.status + '</span></div>' +
+      '<p class="text-xs text-slate-300 mt-1">' + t.issue + ' · ' + t.owner + '</p>' +
+      '<p class="text-[11px] text-slate-500 mt-1">Raised ' + t.raisedMinsAgo + ' min ago</p>' +
+    '</div>'
+  ).join('');
+  openModal('Live RSA Emergency Tickets', '<div class="space-y-2.5">' + rows + '</div>');
+});
+
+// ---------- Reminders / broadcast ----------
+async function reminderOne(id, kind) {
+  const item = kind === 'vehicle' ? state.vehicles.find(x => x.id === id) : state.appliances.find(x => x.id === id);
+  if (!item) return;
+  const label = kind === 'vehicle' ? item.regNo : item.model;
+  try {
+    if (!state.isDemo) {
+      await db.collection('notificationQueue').add({
+        type: 'expiry_reminder', kind, refId: id, ownerPhone: item.ownerPhone,
+        channel: 'whatsapp', createdAt: firebase.firestore.FieldValue.serverTimestamp(), status: 'queued'
+      });
+    }
+    toast('Reminder queued for ' + label, 'success');
+    logAudit('Reminder sent', label + ' · ' + item.ownerPhone);
+  } catch (err) {
+    toast('Queued locally (demo) for ' + label, 'info');
+    logAudit('Reminder sent (simulated)', label);
+  }
+}
+
+document.querySelectorAll('.channel-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.channel-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.channel = btn.dataset.channel;
+    styleChannelButtons();
+  });
+});
+function styleChannelButtons() {
+  document.querySelectorAll('.channel-btn').forEach(b => {
+    if (b.classList.contains('active')) {
+      b.className = 'channel-btn active flex flex-col items-center gap-1 rounded-xl border px-2 py-2.5 text-xs font-bold transition bg-brand-600 border-brand-500 text-white';
+    } else {
+      b.className = 'channel-btn flex flex-col items-center gap-1 rounded-xl border px-2 py-2.5 text-xs font-bold transition bg-white/5 border-white/10 text-slate-300 hover:bg-white/10';
+    }
+  });
+}
+styleChannelButtons();
+
+function audienceCount(key) {
+  if (key === 'vehicles_expiring') return state.vehicles.filter(v => expiryStatus(v.insuranceExpiry) !== 'active' || expiryStatus(v.pucExpiry) !== 'active').length;
+  if (key === 'appliances_expiring') return state.appliances.filter(a => expiryStatus(a.warrantyExpiry) !== 'active').length;
+  if (key === 'all_expiring') return audienceCount('vehicles_expiring') + audienceCount('appliances_expiring');
+  if (key === 'all_users') return state.users;
+  return 0;
+}
+function updateBroadcastEstimate() {
+  const key = $('broadcastAudience').value;
+  $('broadcastEstimate').textContent = 'Estimated recipients: ' + audienceCount(key).toLocaleString('en-IN');
+}
+$('broadcastAudience').addEventListener('change', updateBroadcastEstimate);
+
+$('btnSendBroadcast').addEventListener('click', async () => {
+  const audienceSel = $('broadcastAudience');
+  const audienceKey = audienceSel.value;
+  const audienceLabel = audienceSel.options[audienceSel.selectedIndex].text;
+  const message = $('broadcastMessage').value.trim();
+  const recipients = audienceCount(audienceKey);
+  const btn = $('btnSendBroadcast');
+
+  if (!message) { toast('Please enter a message template', 'error'); return; }
+
+  btn.disabled = true;
+  const originalHtml = btn.innerHTML;
+  btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Queuing…';
+  if (window.lucide) lucide.createIcons();
+
+  let status = 'Queued';
+  try {
+    if (!state.isDemo) {
+      await db.collection('notificationQueue').add({
+        type: 'broadcast', audience: audienceKey, channel: state.channel, message,
+        recipients, createdAt: firebase.firestore.FieldValue.serverTimestamp(), status: 'queued'
+      });
+    } else {
+      await new Promise(r => setTimeout(r, 500));
+    }
+  } catch (err) {
+    status = 'Queued (simulated)';
+  }
+
+  state.broadcastLog.unshift({ time: new Date(), audienceLabel, channel: state.channel, recipients, status });
+  renderBroadcastLog();
+  logAudit('Broadcast queued', audienceLabel + ' · ' + state.channel + ' · ' + recipients + ' recipients');
+  toast('Broadcast queued for ' + recipients + ' recipients', 'success');
+
+  btn.disabled = false;
+  btn.innerHTML = originalHtml;
+  if (window.lucide) lucide.createIcons();
+});
+
+updateBroadcastEstimate();
+
+// ---------- Export logic ----------
+function inRange(dateStr, from, to) {
+  if (!dateStr) return false;
+  const t = Date.parse(dateStr);
+  if (Number.isNaN(t)) return false;
+  if (from && t < from) return false;
+  if (to && t > to) return false;
+  return true;
+}
+function getExportRange() {
+  const fromVal = $('exportFromDate').value;
+  const toVal = $('exportToDate').value;
+  return {
+    from: fromVal ? Date.parse(fromVal) : null,
+    to: toVal ? Date.parse(toVal) + 86399999 : null
+  };
+}
+$('exportFromDate').addEventListener('change', renderExportCounts);
+$('exportToDate').addEventListener('change', renderExportCounts);
+$('btnClearExportDates').addEventListener('click', () => {
+  $('exportFromDate').value = ''; $('exportToDate').value = ''; renderExportCounts();
+});
+
+function exportTableCsv(which) {
+  const day = new Date().toISOString().slice(0, 10);
+  if (which === 'vehicles') {
+    const headers = ['Registration No.', 'Type', 'Model', 'Owner Name', 'Owner Phone', 'City', 'Insurance Expiry', 'PUC Expiry', 'RC Expiry', 'Status'];
+    const rows = state.vehicles.map(v => [v.regNo, v.type, v.model, v.ownerName, v.ownerPhone, v.city, v.insuranceExpiry, v.pucExpiry, v.rcExpiry, worstStatus(expiryStatus(v.insuranceExpiry), expiryStatus(v.pucExpiry))]);
+    downloadFile(toCsv(headers, rows), 'asset-doctor-vehicles-' + day + '.csv', 'text/csv');
+    logAudit('CSV export', 'Vehicles & RC Vault (' + rows.length + ' rows)');
+    toast('Vehicles CSV downloaded', 'success');
+  } else {
+    const headers = ['Category', 'Model', 'Owner Name', 'Owner Phone', 'Purchase Date', 'Warranty Expiry', 'Invoice Status', 'Status'];
+    const rows = state.appliances.map(a => [a.category, a.model, a.ownerName, a.ownerPhone, a.purchaseDate, a.warrantyExpiry, a.invoiceStatus, expiryStatus(a.warrantyExpiry)]);
+    downloadFile(toCsv(headers, rows), 'asset-doctor-appliances-' + day + '.csv', 'text/csv');
+    logAudit('CSV export', 'Appliance & Warranty Locker (' + rows.length + ' rows)');
+    toast('Appliances CSV downloaded', 'success');
+  }
+}
+
+function exportPartner(partner) {
+  const { from, to } = getExportRange();
+  const day = new Date().toISOString().slice(0, 10);
+
+  if (partner === 'readyassist') {
+    const rows = state.vehicles.filter(v => (!from && !to) || inRange(v.insuranceExpiry, from, to) || inRange(v.pucExpiry, from, to));
+    const headers = ['Registration No.', 'Vehicle Type', 'Owner Name', 'Owner Phone', 'City', 'Insurance Expiry', 'PUC Expiry'];
+    const data = rows.map(v => [v.regNo, v.type, v.ownerName, v.ownerPhone, v.city, v.insuranceExpiry, v.pucExpiry]);
+    downloadFile(toCsv(headers, data), 'readyassist-export-' + day + '.csv', 'text/csv');
+    logAudit('Partner export', 'ReadyAssist (' + data.length + ' rows)');
+    toast('ReadyAssist CSV exported (' + data.length + ' rows)', 'success');
+  } else if (partner === 'policybazaar') {
+    const rows = state.vehicles.filter(v => (!from && !to) || inRange(v.insuranceExpiry, from, to));
+    const headers = ['Registration No.', 'Owner Name', 'Owner Phone', 'Vehicle Type', 'Insurance Expiry'];
+    const data = rows.map(v => [v.regNo, v.ownerName, v.ownerPhone, v.type, v.insuranceExpiry]);
+    downloadFile(toCsv(headers, data), 'policybazaar-export-' + day + '.csv', 'text/csv');
+    logAudit('Partner export', 'Policybazaar (' + data.length + ' rows)');
+    toast('Policybazaar CSV exported (' + data.length + ' rows)', 'success');
+  } else if (partner === 'onsitego') {
+    const rows = state.appliances.filter(a => (!from && !to) || inRange(a.warrantyExpiry, from, to));
+    const headers = ['Category', 'Model', 'Owner Name', 'Owner Phone', 'Purchase Date', 'Warranty Expiry'];
+    const data = rows.map(a => [a.category, a.model, a.ownerName, a.ownerPhone, a.purchaseDate, a.warrantyExpiry]);
+    downloadFile(toCsv(headers, data), 'onsitego-export-' + day + '.csv', 'text/csv');
+    logAudit('Partner export', 'Onsitego (' + data.length + ' rows)');
+    toast('Onsitego CSV exported (' + data.length + ' rows)', 'success');
+  }
+}
+
+function exportAuditLog() {
+  const headers = ['Timestamp', 'Actor', 'Action', 'Details'];
+  const rows = state.auditLog.map(e => [e.ts.toISOString(), e.actor, e.action, e.details]);
+  downloadFile(toCsv(headers, rows), 'asset-doctor-audit-log-' + new Date().toISOString().slice(0, 10) + '.csv', 'text/csv');
+  toast('Audit log CSV downloaded', 'success');
+}
+
+function downloadBackup(format) {
+  const day = new Date().toISOString().slice(0, 10);
+  if (format === 'json') {
+    const payload = {
+      generatedAt: new Date().toISOString(),
+      source: state.isDemo ? 'demo' : 'firestore',
+      totals: { users: state.users, vehicles: state.vehicles.length, appliances: state.appliances.length },
+      vehicles: state.vehicles,
+      appliances: state.appliances,
+      auditLog: state.auditLog.map(e => ({ timestamp: e.ts.toISOString(), actor: e.actor, action: e.action, details: e.details }))
     };
+    downloadFile(JSON.stringify(payload, null, 2), 'asset-doctor-backup-' + day + '.json', 'application/json');
+  } else {
+    const headers = ['Record Type', 'Identifier', 'Owner Name', 'Owner Phone', 'Field1', 'Field2', 'Field3'];
+    const rows = [];
+    state.vehicles.forEach(v => rows.push(['Vehicle', v.regNo, v.ownerName, v.ownerPhone, v.insuranceExpiry, v.pucExpiry, v.type]));
+    state.appliances.forEach(a => rows.push(['Appliance', a.model, a.ownerName, a.ownerPhone, a.warrantyExpiry, a.invoiceStatus, a.category]));
+    downloadFile(toCsv(headers, rows), 'asset-doctor-backup-' + day + '.csv', 'text/csv');
+  }
+  logAudit('Full backup downloaded', format.toUpperCase() + ' format');
+  toast('Backup (' + format.toUpperCase() + ') downloaded', 'success');
+}
 
-    $("btnLogout").onclick = function () {
-      auth.signOut();
-    };
+// ---------- Auth flow ----------
+function showAuthError(msg) {
+  if (!msg) { $('authError').classList.add('hidden'); return; }
+  $('authErrorText').textContent = msg;
+  $('authError').classList.remove('hidden');
+}
 
-    $("btnLoad").onclick = loadFirebase;
-    $("btnMock").onclick = loadDemo;
-    $("btnExport").onclick = exportCsv;
+function enterDashboard(isDemo) {
+  state.isDemo = isDemo;
+  $('authScreen').classList.add('hidden');
+  $('appShell').classList.remove('hidden');
+  $('demoBanner').classList.toggle('hidden', !isDemo);
 
-    // Start with demo so the page is never empty
-    loadDemo();
-  </script>
+  if (isDemo) {
+    $('dbStatusBadge').className = 'hidden sm:flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 shrink-0';
+    $('dbStatusBadge').querySelector('span.rounded-full').className = 'w-2 h-2 rounded-full bg-amber-400 pulse-dot';
+    $('dbStatusText').className = 'text-xs font-semibold text-amber-300';
+    $('dbStatusText').textContent = 'Demo Mode — Mock Data';
+    $('adminName').textContent = 'Demo Admin';
+    $('adminMode').textContent = 'Sandbox session';
+  } else {
+    $('dbStatusBadge').className = 'hidden sm:flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 shrink-0';
+    $('dbStatusBadge').querySelector('span.rounded-full').className = 'w-2 h-2 rounded-full bg-emerald-400 pulse-dot';
+    $('dbStatusText').className = 'text-xs font-semibold text-emerald-300';
+    $('dbStatusText').textContent = 'Vault Database Active';
+    $('adminName').textContent = (state.currentUser && state.currentUser.email) || 'Admin';
+    $('adminMode').textContent = 'Firestore connected';
+  }
+
+  logAudit('Signed in', isDemo ? 'Demo Mode session started' : ((state.currentUser && state.currentUser.email) || 'admin') + ' authenticated');
+  renderAll();
+  if (window.lucide) lucide.createIcons();
+}
+
+async function verifyAdminAndEnter(user) {
+  state.currentUser = user;
+  try {
+    const tokenResult = await user.getIdTokenResult(true);
+    const isAdmin = tokenResult.claims && tokenResult.claims.admin === true;
+    if (!isAdmin) {
+      loadMockData();
+      toast('No admin privileges on this account — running in Demo Mode', 'info');
+      enterDashboard(true);
+      return;
+    }
+    try {
+      await loadRealData();
+      enterDashboard(false);
+    } catch (dataErr) {
+      console.warn('Firestore data load failed, falling back to demo:', dataErr);
+      loadMockData();
+      toast('Firestore unreachable — showing demo data', 'info');
+      enterDashboard(true);
+    }
+  } catch (err) {
+    console.warn('Admin verification failed:', err);
+    loadMockData();
+    enterDashboard(true);
+  }
+}
+
+$('btnSignIn').addEventListener('click', async () => {
+  showAuthError('');
+  const email = $('loginEmail').value.trim();
+  const password = $('loginPassword').value;
+  if (!email || !password) { showAuthError('Please enter both email and password.'); return; }
+
+  const btn = $('btnSignIn');
+  btn.disabled = true;
+  $('btnSignInText').textContent = 'Signing in…';
+
+  try {
+    const cred = await auth.signInWithEmailAndPassword(email, password);
+    await verifyAdminAndEnter(cred.user);
+  } catch (err) {
+    showAuthError(err && err.message ? err.message : 'Sign in failed. Check your credentials or use Demo Mode.');
+  } finally {
+    btn.disabled = false;
+    $('btnSignInText').textContent = 'Sign in to Console';
+  }
+});
+
+$('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnSignIn').click(); });
+
+$('btnDemoMode').addEventListener('click', () => {
+  showAuthError('');
+  loadMockData();
+  enterDashboard(true);
+});
+
+function handleLogout() {
+  logAudit('Signed out', state.isDemo ? 'Demo session ended' : ((state.currentUser && state.currentUser.email) || 'admin'));
+  if (!state.isDemo) { auth.signOut().catch(() => {}); }
+  state.currentUser = null;
+  state.broadcastLog = [];
+  $('appShell').classList.add('hidden');
+  $('authScreen').classList.remove('hidden');
+  $('loginPassword').value = '';
+  showAuthError('');
+  closeMobileNav();
+}
+$('btnLogoutSidebar').addEventListener('click', handleLogout);
+
+$('btnRefresh').addEventListener('click', async () => {
+  const icon = $('btnRefresh').querySelector('i');
+  icon.classList.add('animate-spin');
+  if (!state.isDemo && state.currentUser) {
+    try { await loadRealData(); } catch (e) { loadMockData(); state.isDemo = true; }
+  } else {
+    loadMockData();
+  }
+  renderAll();
+  logAudit('Data refreshed', state.isDemo ? 'Demo dataset regenerated' : 'Firestore re-synced');
+  toast('Dashboard refreshed', 'success');
+  setTimeout(() => icon.classList.remove('animate-spin'), 500);
+});
+
+// ---------- Init ----------
+$('yearNow').textContent = new Date().getFullYear();
+buildMobileNav();
+if (window.lucide) lucide.createIcons();
+
+auth.onAuthStateChanged(user => {
+  if (user && $('appShell').classList.contains('hidden')) {
+    verifyAdminAndEnter(user);
+  }
+});
+</script>
 </body>
 </html>

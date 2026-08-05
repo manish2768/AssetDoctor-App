@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Asset Doctor — Protect, Track &amp; Manage</title>
-  <meta name="description" content="Protect, track and manage vehicles &amp; home assets in one smart vault — RC, PUC, insurance, warranties, and 24×7 roadside assistance." />
+  <title>Asset Doctor — India's #1 Smart Utility &amp; Emergency Asset Vault</title>
+  <meta name="description" content="Never lose a warranty, expire a PUC, or get stranded on the road again. Asset Doctor is India's smart utility vault for vehicles, appliances &amp; documents — with 24×7 roadside assistance and encrypted expiry alerts." />
   <link rel="icon" href="./icon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Poppins:wght@600;700;800;900&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -36,13 +36,16 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <style>
     :root { color-scheme: dark; }
+    html { scroll-behavior: smooth; }
     body {
       background:
-        radial-gradient(ellipse 80% 50% at 20% -10%, rgba(16,185,129,0.18), transparent 55%),
-        radial-gradient(ellipse 60% 40% at 90% 10%, rgba(34,211,238,0.12), transparent 50%),
-        radial-gradient(ellipse 50% 30% at 50% 100%, rgba(16,185,129,0.08), transparent 45%),
+        radial-gradient(ellipse 80% 50% at 15% -10%, rgba(16,185,129,0.20), transparent 55%),
+        radial-gradient(ellipse 60% 40% at 95% 5%, rgba(34,211,238,0.14), transparent 50%),
+        radial-gradient(ellipse 55% 35% at 50% 60%, rgba(16,185,129,0.07), transparent 50%),
+        radial-gradient(ellipse 50% 30% at 10% 100%, rgba(34,211,238,0.08), transparent 45%),
         #020617;
     }
+    section[id], header[id] { scroll-margin-top: 5.5rem; }
     .glass {
       background: rgba(255,255,255,0.05);
       backdrop-filter: blur(16px);
@@ -50,7 +53,7 @@
       border: 1px solid rgba(255,255,255,0.08);
     }
     .glass-strong {
-      background: rgba(15,23,42,0.72);
+      background: rgba(15,23,42,0.82);
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
       border: 1px solid rgba(255,255,255,0.1);
@@ -64,7 +67,7 @@
       transition: box-shadow .25s ease, transform .25s ease;
     }
     .cta-glow:hover {
-      box-shadow: 0 0 0 1px rgba(34,211,238,0.5), 0 12px 40px rgba(34,211,238,0.35);
+      box-shadow: 0 0 0 1px rgba(34,211,238,0.5), 0 12px 40px rgba(34,211,238,0.4);
       transform: translateY(-1px);
     }
     .feature-card { transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease; }
@@ -92,7 +95,8 @@
     dialog { border: none; padding: 0; background: transparent; max-width: 100vw; }
     .legal-body h3 { margin-top: 1.25rem; margin-bottom: 0.4rem; font-weight: 700; color: #ecfdf5; }
     .legal-body p { margin-bottom: 0.65rem; color: #94a3b8; font-size: 0.9rem; line-height: 1.6; }
-    input, select, button { font-family: inherit; }
+    .legal-body ul { margin: 0 0 0.65rem 1.1rem; color: #94a3b8; font-size: 0.9rem; line-height: 1.6; list-style: disc; }
+    input, select, button, textarea { font-family: inherit; }
     .field {
       width: 100%;
       border-radius: 0.75rem;
@@ -105,49 +109,116 @@
     }
     .field:focus { border-color: rgba(16,185,129,0.55); box-shadow: 0 0 0 3px rgba(16,185,129,0.15); }
     .field::placeholder { color: #64748b; }
+    .toggle-btn {
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.04);
+      color: #cbd5e1;
+      transition: all .2s ease;
+    }
+    .toggle-btn[data-active="true"] {
+      border-color: rgba(16,185,129,0.55);
+      background: linear-gradient(135deg, rgba(16,185,129,0.22), rgba(34,211,238,0.14));
+      color: #ecfdf5;
+      box-shadow: 0 0 22px rgba(16,185,129,0.2);
+    }
+    .badge-pulse {
+      position: relative;
+    }
+    .badge-pulse::before {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: 9999px;
+      background: linear-gradient(90deg, rgba(16,185,129,0.5), rgba(34,211,238,0.5));
+      opacity: 0.35;
+      filter: blur(8px);
+      z-index: -1;
+      animation: badgeGlow 2.4s ease-in-out infinite;
+    }
+    @keyframes badgeGlow {
+      0%, 100% { opacity: 0.25; }
+      50% { opacity: 0.55; }
+    }
+    .timeline-dot {
+      width: 0.65rem;
+      height: 0.65rem;
+      border-radius: 9999px;
+      flex-shrink: 0;
+    }
+    .mobile-menu { max-height: 0; overflow: hidden; transition: max-height .3s ease; }
+    .mobile-menu.open { max-height: 26rem; }
+    #contactModal textarea { resize: vertical; min-height: 6rem; }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 font-sans antialiased">
 
   <!-- Nav -->
   <nav class="sticky top-0 z-50 border-b border-white/5 glass-strong">
-    <div class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-      <a href="#top" class="flex items-center gap-2.5 font-display text-base font-bold tracking-tight">
+    <div class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+      <a href="#top" class="flex shrink-0 items-center gap-2.5 font-display text-base font-bold tracking-tight">
         <img src="./icon.png" alt="Asset Doctor" class="h-9 w-9 rounded-xl object-cover ring-1 ring-emerald-500/40" width="36" height="36" />
         <span>Asset Doctor</span>
       </a>
-      <div class="hidden items-center gap-7 text-sm font-semibold text-slate-300 lg:flex">
-        <a href="#features" class="hover:text-emerald-400 transition">Features</a>
+      <div class="hidden items-center gap-6 text-sm font-semibold text-slate-300 xl:flex">
+        <a href="#vehicle-vault" class="hover:text-emerald-400 transition">Vehicle Vault</a>
+        <a href="#appliance-vault" class="hover:text-emerald-400 transition">Appliance Vault</a>
+        <a href="#partners" class="hover:text-emerald-400 transition">B2B Partners</a>
         <a href="#founder" class="hover:text-emerald-400 transition">Founder Story</a>
-        <a href="#login" class="hover:text-emerald-400 transition">Login / Assets</a>
+        <a href="#security" class="hover:text-emerald-400 transition">Security</a>
         <a href="#support" class="hover:text-emerald-400 transition">Support</a>
       </div>
-      <a
-        href="https://play.google.com/store/apps/details?id=com.assetdoctor.app"
-        target="_blank"
-        rel="noopener"
-        class="cta-glow inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-cyan-400 px-4 py-2 text-sm font-bold text-slate-950"
-      >
-        <i data-lucide="download" class="h-4 w-4"></i>
-        Download App
-      </a>
+      <div class="flex items-center gap-2">
+        <a
+          href="https://play.google.com/store/apps/details?id=com.assetdoctor.app"
+          target="_blank"
+          rel="noopener"
+          class="cta-glow hidden items-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-cyan-400 px-4 py-2 text-sm font-bold text-slate-950 sm:inline-flex"
+        >
+          <i data-lucide="download" class="h-4 w-4"></i>
+          Download App
+        </a>
+        <button id="btnMobileMenu" type="button" aria-label="Open menu" class="rounded-lg border border-white/10 bg-white/5 p-2 text-slate-200 xl:hidden">
+          <i data-lucide="menu" class="h-5 w-5"></i>
+        </button>
+      </div>
+    </div>
+    <div id="mobileMenu" class="mobile-menu border-t border-white/5 xl:hidden">
+      <div class="flex flex-col gap-1 px-4 py-3 text-sm font-semibold text-slate-300">
+        <a href="#vehicle-vault" class="rounded-lg px-3 py-2.5 hover:bg-white/5 hover:text-emerald-400">Vehicle Vault</a>
+        <a href="#appliance-vault" class="rounded-lg px-3 py-2.5 hover:bg-white/5 hover:text-emerald-400">Appliance Vault</a>
+        <a href="#partners" class="rounded-lg px-3 py-2.5 hover:bg-white/5 hover:text-emerald-400">B2B Partners</a>
+        <a href="#founder" class="rounded-lg px-3 py-2.5 hover:bg-white/5 hover:text-emerald-400">Founder Story</a>
+        <a href="#security" class="rounded-lg px-3 py-2.5 hover:bg-white/5 hover:text-emerald-400">Security</a>
+        <a href="#support" class="rounded-lg px-3 py-2.5 hover:bg-white/5 hover:text-emerald-400">Support</a>
+        <a href="#login" class="rounded-lg px-3 py-2.5 hover:bg-white/5 hover:text-emerald-400">Login / Web Vault</a>
+        <a
+          href="https://play.google.com/store/apps/details?id=com.assetdoctor.app"
+          target="_blank"
+          rel="noopener"
+          class="mt-2 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-400 px-4 py-2.5 text-sm font-extrabold text-slate-950"
+        >
+          <i data-lucide="download" class="h-4 w-4"></i>
+          Download App
+        </a>
+      </div>
     </div>
   </nav>
 
   <!-- Hero -->
   <header id="top" class="relative overflow-hidden">
-    <div class="mx-auto grid max-w-6xl items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:py-24">
+    <div class="mx-auto grid max-w-7xl items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:py-24">
       <div>
-        <p class="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-emerald-300">
-          <i data-lucide="shield-check" class="h-3.5 w-3.5"></i>
-          Smart Asset Vault
+        <p class="badge-pulse inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-emerald-300">
+          <i data-lucide="sparkles" class="h-3.5 w-3.5"></i>
+          India's #1 Smart Utility &amp; Emergency Asset Vault
         </p>
-        <h1 class="mt-6 font-display text-4xl font-extrabold leading-[1.08] tracking-tight text-white sm:text-5xl lg:text-[3.25rem]">
-          Protect, Track &amp; Manage All Your Vehicles &amp; Home Assets in One Smart Vault.
+        <h1 class="mt-6 font-display text-4xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-[3.1rem]">
+          Never Lose a Warranty, Expire a PUC, or Get Stranded on the Road Again.
         </h1>
         <p class="mt-5 max-w-xl text-base leading-relaxed text-slate-400 sm:text-lg">
-          Never miss an RC, PUC, or insurance renewal. Track appliance warranties and bills.
-          Get 24×7 roadside assistance when you need it — all from one secure utility vault.
+          Asset Doctor locks every RC, PUC, insurance, warranty, and bill inside one encrypted vault —
+          then pings you on WhatsApp &amp; push before anything expires. Add 24×7 roadside assistance
+          and instant partner connect, and you're covered on the road and at home.
         </p>
         <div class="mt-8 flex flex-wrap gap-3">
           <a
@@ -163,8 +234,16 @@
             <i data-lucide="layout-dashboard" class="h-4 w-4"></i>
             Open Web Vault
           </a>
+          <a href="#alerts" class="inline-flex items-center gap-2 rounded-2xl border border-cyan-400/20 bg-cyan-400/5 px-6 py-3.5 text-sm font-bold text-cyan-200 hover:border-cyan-400/40 hover:bg-cyan-400/10 transition">
+            <i data-lucide="bell-ring" class="h-4 w-4"></i>
+            Try Alert Calculator
+          </a>
         </div>
-        <p class="mt-5 text-xs text-slate-500">Crafted by Ashutosh (14) · Trusted for Indian households</p>
+        <p class="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-500">
+          <span class="inline-flex items-center gap-1.5"><i data-lucide="shield-check" class="h-3.5 w-3.5 text-emerald-400"></i>256-bit encrypted</span>
+          <span class="inline-flex items-center gap-1.5"><i data-lucide="lock" class="h-3.5 w-3.5 text-emerald-400"></i>Local-first privacy</span>
+          <span class="inline-flex items-center gap-1.5"><i data-lucide="user" class="h-3.5 w-3.5 text-emerald-400"></i>Crafted by 14-year-old Ashutosh</span>
+        </p>
       </div>
 
       <!-- Phone mockup -->
@@ -229,74 +308,330 @@
     </div>
   </header>
 
-  <!-- Features -->
-  <section id="features" class="border-t border-white/5 py-16 sm:py-20">
-    <div class="mx-auto max-w-6xl px-4 sm:px-6">
+  <!-- Feature Hub -->
+  <section id="features" class="scroll-mt-24 border-t border-white/5 py-16 sm:py-20">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6">
       <div class="max-w-2xl">
-        <p class="text-xs font-bold uppercase tracking-[0.25em] text-emerald-400">Feature pillars</p>
-        <h2 class="mt-3 font-display text-3xl font-bold text-white sm:text-4xl">Built for real life on the road &amp; at home</h2>
-        <p class="mt-3 text-slate-400">Four interactive systems that keep your documents, renewals, and emergencies under control.</p>
+        <p class="text-xs font-bold uppercase tracking-[0.25em] text-emerald-400">Feature hub</p>
+        <h2 class="mt-3 font-display text-3xl font-bold text-white sm:text-4xl">One vault. Every vehicle, appliance &amp; document.</h2>
+        <p class="mt-3 text-slate-400">Four interconnected systems keep your renewals, warranties, and emergencies under control.</p>
       </div>
 
-      <div class="mt-10 grid gap-4 sm:grid-cols-2">
-        <article class="feature-card glass neon-border rounded-3xl p-6">
+      <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <a href="#vehicle-vault" class="feature-card glass neon-border block rounded-3xl p-6">
           <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-400">
             <i data-lucide="car" class="h-5 w-5"></i>
           </div>
-          <h3 class="mt-4 font-display text-xl font-bold text-white">Vehicle Utility Vault</h3>
-          <p class="mt-2 text-sm leading-relaxed text-slate-400">RC, PUC &amp; Insurance expiry alert system — renew before fines, not after them.</p>
+          <h3 class="mt-4 font-display text-lg font-bold text-white">Smart Vehicle Care</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-400">RC, PUC &amp; insurance expiry alerts plus 24×7 roadside assistance dispatch.</p>
+          <span class="mt-4 inline-flex items-center gap-1 text-xs font-bold text-emerald-400">Explore <i data-lucide="arrow-right" class="h-3.5 w-3.5"></i></span>
+        </a>
+
+        <a href="#appliance-vault" class="feature-card glass block rounded-3xl p-6 border border-cyan-500/25 hover:!border-cyan-400/50">
+          <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-400/15 text-cyan-300">
+            <i data-lucide="cpu" class="h-5 w-5"></i>
+          </div>
+          <h3 class="mt-4 font-display text-lg font-bold text-white">Appliance &amp; Tech Vault</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-400">Bill &amp; warranty tracking for ACs, mobiles, laptops, and every home purchase.</p>
+          <span class="mt-4 inline-flex items-center gap-1 text-xs font-bold text-cyan-300">Explore <i data-lucide="arrow-right" class="h-3.5 w-3.5"></i></span>
+        </a>
+
+        <a href="#security" class="feature-card glass block rounded-3xl p-6 border border-white/10">
+          <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-400">
+            <i data-lucide="lock" class="h-5 w-5"></i>
+          </div>
+          <h3 class="mt-4 font-display text-lg font-bold text-white">Encrypted Document Safe</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-400">256-bit encrypted storage for bills, RCs &amp; policies — private, local-first, ad-free.</p>
+          <span class="mt-4 inline-flex items-center gap-1 text-xs font-bold text-emerald-400">Explore <i data-lucide="arrow-right" class="h-3.5 w-3.5"></i></span>
+        </a>
+
+        <a href="#partners" class="feature-card glass block rounded-3xl p-6 border border-white/10">
+          <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-400/15 text-cyan-300">
+            <i data-lucide="zap" class="h-5 w-5"></i>
+          </div>
+          <h3 class="mt-4 font-display text-lg font-bold text-white">Instant Partner Connect</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-400">One tap to ReadyAssist, insurance aggregators &amp; electronics service centers.</p>
+          <span class="mt-4 inline-flex items-center gap-1 text-xs font-bold text-cyan-300">Explore <i data-lucide="arrow-right" class="h-3.5 w-3.5"></i></span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Vehicle Vault -->
+  <section id="vehicle-vault" class="scroll-mt-24 border-t border-white/5 py-16 sm:py-20">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6">
+      <div class="grid gap-10 lg:grid-cols-2 lg:items-center">
+        <div>
+          <p class="text-xs font-bold uppercase tracking-[0.25em] text-emerald-400">Vehicle vault</p>
+          <h2 class="mt-3 font-display text-3xl font-bold leading-tight text-white sm:text-4xl">Smart Vehicle Care that never sleeps</h2>
+          <p class="mt-4 text-base leading-relaxed text-slate-400">
+            RC copies, PUC certificates, and insurance policies — all tracked in one place with automatic
+            countdown alerts, so you renew before fines, not after them.
+          </p>
+          <div class="mt-6 grid gap-3 sm:grid-cols-2">
+            <div class="glass rounded-2xl border border-white/10 p-4">
+              <i data-lucide="file-text" class="h-5 w-5 text-emerald-400"></i>
+              <p class="mt-2 text-sm font-bold text-white">RC &amp; PUC tracking</p>
+              <p class="mt-1 text-xs text-slate-400">Digital copies with expiry countdowns.</p>
+            </div>
+            <div class="glass rounded-2xl border border-white/10 p-4">
+              <i data-lucide="shield" class="h-5 w-5 text-emerald-400"></i>
+              <p class="mt-2 text-sm font-bold text-white">Insurance renewals</p>
+              <p class="mt-1 text-xs text-slate-400">Policy dates synced with alerts.</p>
+            </div>
+            <div class="glass rounded-2xl border border-white/10 p-4">
+              <i data-lucide="siren" class="h-5 w-5 text-emerald-400"></i>
+              <p class="mt-2 text-sm font-bold text-white">24×7 roadside assistance</p>
+              <p class="mt-1 text-xs text-slate-400">Tow, battery &amp; puncture help on tap.</p>
+            </div>
+            <div class="glass rounded-2xl border border-white/10 p-4">
+              <i data-lucide="bell" class="h-5 w-5 text-emerald-400"></i>
+              <p class="mt-2 text-sm font-bold text-white">WhatsApp + push alerts</p>
+              <p class="mt-1 text-xs text-slate-400">Reminders before every deadline.</p>
+            </div>
+          </div>
+        </div>
+        <div class="glass-strong neon-border rounded-[2rem] p-6 sm:p-8">
+          <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Sample vehicle card</p>
+          <div class="mt-4 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4">
+            <div class="flex items-center justify-between">
+              <p class="font-bold text-white">MH 12 AB 1234 · Hyundai Creta</p>
+              <span class="rounded-full bg-emerald-500/20 px-2.5 py-1 text-[10px] font-bold uppercase text-emerald-300">Vehicle</span>
+            </div>
+            <ul class="mt-4 space-y-2 text-sm text-slate-300">
+              <li class="flex items-center justify-between"><span class="text-slate-400">PUC expiry</span><span class="font-bold text-amber-300">18 days left</span></li>
+              <li class="flex items-center justify-between"><span class="text-slate-400">Insurance</span><span class="font-bold text-emerald-300">Active · 210 days</span></li>
+              <li class="flex items-center justify-between"><span class="text-slate-400">RC status</span><span class="font-bold text-emerald-300">Verified</span></li>
+            </ul>
+          </div>
+          <a href="#alerts" class="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 py-2.5 text-sm font-bold text-white hover:border-emerald-400/40">
+            <i data-lucide="calculator" class="h-4 w-4"></i>
+            Try the alert calculator
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Appliance Vault -->
+  <section id="appliance-vault" class="scroll-mt-24 border-t border-white/5 py-16 sm:py-20">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6">
+      <div class="grid gap-10 lg:grid-cols-2 lg:items-center">
+        <div class="order-2 lg:order-1 glass-strong rounded-[2rem] border border-cyan-500/25 p-6 sm:p-8">
+          <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Sample appliance card</p>
+          <div class="mt-4 rounded-2xl border border-cyan-400/25 bg-cyan-400/10 p-4">
+            <div class="flex items-center justify-between">
+              <p class="font-bold text-white">Daikin 1.5T Inverter AC</p>
+              <span class="rounded-full bg-cyan-400/20 px-2.5 py-1 text-[10px] font-bold uppercase text-cyan-300">Appliance</span>
+            </div>
+            <ul class="mt-4 space-y-2 text-sm text-slate-300">
+              <li class="flex items-center justify-between"><span class="text-slate-400">Warranty</span><span class="font-bold text-cyan-200">Dec 2026</span></li>
+              <li class="flex items-center justify-between"><span class="text-slate-400">Store</span><span class="font-bold text-slate-200">Croma, Pune</span></li>
+              <li class="flex items-center justify-between"><span class="text-slate-400">Bill copy</span><span class="font-bold text-emerald-300">Uploaded</span></li>
+            </ul>
+          </div>
+          <a href="#partners" class="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 py-2.5 text-sm font-bold text-white hover:border-cyan-400/40">
+            <i data-lucide="wrench" class="h-4 w-4"></i>
+            Find a service center partner
+          </a>
+        </div>
+        <div class="order-1 lg:order-2">
+          <p class="text-xs font-bold uppercase tracking-[0.25em] text-cyan-300">Appliance vault</p>
+          <h2 class="mt-3 font-display text-3xl font-bold leading-tight text-white sm:text-4xl">Every bill &amp; warranty, one tech vault</h2>
+          <p class="mt-4 text-base leading-relaxed text-slate-400">
+            Store invoices for ACs, mobiles, laptops, TVs &amp; more. Asset Doctor tracks warranty and AMC
+            windows automatically, so replacement claims never slip past their deadline.
+          </p>
+          <div class="mt-6 grid gap-3 sm:grid-cols-2">
+            <div class="glass rounded-2xl border border-white/10 p-4">
+              <i data-lucide="receipt" class="h-5 w-5 text-cyan-300"></i>
+              <p class="mt-2 text-sm font-bold text-white">Bill &amp; invoice scans</p>
+              <p class="mt-1 text-xs text-slate-400">OCR-extracted purchase details.</p>
+            </div>
+            <div class="glass rounded-2xl border border-white/10 p-4">
+              <i data-lucide="calendar-clock" class="h-5 w-5 text-cyan-300"></i>
+              <p class="mt-2 text-sm font-bold text-white">Warranty &amp; AMC tracking</p>
+              <p class="mt-1 text-xs text-slate-400">Countdown to every expiry date.</p>
+            </div>
+            <div class="glass rounded-2xl border border-white/10 p-4">
+              <i data-lucide="wrench" class="h-5 w-5 text-cyan-300"></i>
+              <p class="mt-2 text-sm font-bold text-white">Service center connect</p>
+              <p class="mt-1 text-xs text-slate-400">Repair partners a tap away.</p>
+            </div>
+            <div class="glass rounded-2xl border border-white/10 p-4">
+              <i data-lucide="smartphone" class="h-5 w-5 text-cyan-300"></i>
+              <p class="mt-2 text-sm font-bold text-white">Mobile &amp; laptop coverage</p>
+              <p class="mt-1 text-xs text-slate-400">Every gadget, one dashboard.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Expiry Alert Calculator -->
+  <section id="alerts" class="scroll-mt-24 border-t border-white/5 py-16 sm:py-20">
+    <div class="mx-auto max-w-4xl px-4 sm:px-6">
+      <div class="max-w-2xl">
+        <p class="text-xs font-bold uppercase tracking-[0.25em] text-emerald-400">Interactive demo</p>
+        <h2 class="mt-3 font-display text-3xl font-bold text-white sm:text-4xl">Expiry Alert Calculator</h2>
+        <p class="mt-3 text-slate-400">Pick a category, choose a document, and see exactly when WhatsApp &amp; push reminders would fire before expiry.</p>
+      </div>
+
+      <div class="mt-8 glass neon-border rounded-[2rem] p-6 sm:p-8">
+        <p class="text-xs font-bold uppercase tracking-wide text-slate-500">1. Choose asset type</p>
+        <div class="mt-3 flex flex-wrap gap-3">
+          <button type="button" id="btnAlertVehicle" data-alert-type="vehicle" data-active="true" class="toggle-btn inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold">
+            <i data-lucide="car" class="h-4 w-4"></i> Vehicle
+          </button>
+          <button type="button" id="btnAlertAppliance" data-alert-type="appliance" data-active="false" class="toggle-btn inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold">
+            <i data-lucide="cpu" class="h-4 w-4"></i> Appliance
+          </button>
+        </div>
+
+        <div class="mt-6 grid gap-4 sm:grid-cols-2">
+          <label class="block text-xs font-bold text-slate-400">2. Document type
+            <select id="alertDocType" class="field mt-1"></select>
+          </label>
+          <label class="block text-xs font-bold text-slate-400">3. Expiry date
+            <input id="alertDate" type="date" class="field mt-1" />
+          </label>
+        </div>
+
+        <button id="btnCalcAlert" type="button" class="cta-glow mt-5 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-400 px-5 py-2.5 text-sm font-extrabold text-slate-950">
+          <i data-lucide="calculator" class="h-4 w-4"></i>
+          Calculate Reminders
+        </button>
+        <p id="alertCalcError" class="mt-3 hidden rounded-xl bg-rose-500/10 px-3 py-2 text-xs text-rose-300"></p>
+
+        <div id="alertResult" class="mt-7 hidden border-t border-white/10 pt-6">
+          <p class="text-sm text-slate-300">
+            <span id="alertResultLabel" class="font-bold text-white"></span>
+            expires on <span id="alertResultDate" class="font-bold text-emerald-300"></span>
+            — <span id="alertResultDays" class="font-bold text-white"></span>
+          </p>
+          <div id="alertTimeline" class="mt-5 space-y-3"></div>
+          <p class="mt-5 text-xs text-slate-500">This is a UI demo of the reminder engine used inside the Asset Doctor app — no real messages are sent from this website.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- B2B Partners -->
+  <section id="partners" class="scroll-mt-24 border-t border-white/5 py-16 sm:py-20">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6">
+      <div class="max-w-2xl">
+        <p class="text-xs font-bold uppercase tracking-[0.25em] text-cyan-300">B2B partners</p>
+        <h2 class="mt-3 font-display text-3xl font-bold text-white sm:text-4xl">Instant Partner Connect network</h2>
+        <p class="mt-3 text-slate-400">Asset Doctor plugs users directly into trusted service networks — one tap, no hunting for phone numbers.</p>
+      </div>
+
+      <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <article class="feature-card glass neon-border rounded-3xl p-6">
+          <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-400">
+            <i data-lucide="truck" class="h-5 w-5"></i>
+          </div>
+          <h3 class="mt-4 font-display text-lg font-bold text-white">ReadyAssist</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-400">24×7 roadside assistance dispatch — towing, battery jumpstart, puncture &amp; fuel delivery, integrated directly into the vehicle vault.</p>
         </article>
 
         <article class="feature-card glass rounded-3xl p-6 border border-cyan-500/25 hover:!border-cyan-400/50">
           <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-400/15 text-cyan-300">
-            <i data-lucide="cpu" class="h-5 w-5"></i>
+            <i data-lucide="shield-half" class="h-5 w-5"></i>
           </div>
-          <h3 class="mt-4 font-display text-xl font-bold text-white">Smart Appliance Manager</h3>
-          <p class="mt-2 text-sm leading-relaxed text-slate-400">Bill &amp; warranty tracking for ACs, mobiles, laptops, and every home purchase that matters.</p>
+          <h3 class="mt-4 font-display text-lg font-bold text-white">Insurance Aggregators</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-400">Compare and renew vehicle &amp; appliance insurance policies through partner aggregators the moment an alert fires.</p>
         </article>
 
         <article class="feature-card glass rounded-3xl p-6 border border-white/10">
           <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-400">
-            <i data-lucide="siren" class="h-5 w-5"></i>
+            <i data-lucide="wrench" class="h-5 w-5"></i>
           </div>
-          <h3 class="mt-4 font-display text-xl font-bold text-white">24×7 Roadside Assistance</h3>
-          <p class="mt-2 text-sm leading-relaxed text-slate-400">Instant help engine for breakdowns — tow, battery, puncture support when every minute counts.</p>
+          <h3 class="mt-4 font-display text-lg font-bold text-white">Electronics Service Centers</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-400">Authorized repair &amp; warranty-claim centers for ACs, mobiles, laptops and appliances — booked straight from your vault.</p>
+        </article>
+      </div>
+
+      <div class="mt-8 glass-strong rounded-3xl border border-white/10 p-6 text-center sm:p-8">
+        <h3 class="font-display text-xl font-bold text-white">Want to become an Asset Doctor service partner?</h3>
+        <p class="mt-2 text-sm text-slate-400">We're onboarding RSA providers, insurers &amp; service centers across India.</p>
+        <button type="button" data-open-contact class="cta-glow mt-5 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-400 px-5 py-2.5 text-sm font-extrabold text-slate-950">
+          <i data-lucide="handshake" class="h-4 w-4"></i>
+          Partner With Us
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Security -->
+  <section id="security" class="scroll-mt-24 border-t border-white/5 py-16 sm:py-20">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6">
+      <div class="max-w-2xl">
+        <p class="text-xs font-bold uppercase tracking-[0.25em] text-emerald-400">Security &amp; privacy</p>
+        <h2 class="mt-3 font-display text-3xl font-bold text-white sm:text-4xl">Your documents. Your device. Your rules.</h2>
+        <p class="mt-3 text-slate-400">Asset Doctor is built local-first — your data works for you, never for advertisers.</p>
+      </div>
+
+      <div class="mt-10 grid gap-4 sm:grid-cols-3">
+        <article class="feature-card glass neon-border rounded-3xl p-6">
+          <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-400">
+            <i data-lucide="lock" class="h-5 w-5"></i>
+          </div>
+          <h3 class="mt-4 font-display text-lg font-bold text-white">256-bit Encryption</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-400">Every document and record is encrypted in transit and at rest inside Firebase, isolated per user account.</p>
+        </article>
+
+        <article class="feature-card glass rounded-3xl p-6 border border-cyan-500/25 hover:!border-cyan-400/50">
+          <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-400/15 text-cyan-300">
+            <i data-lucide="house" class="h-5 w-5"></i>
+          </div>
+          <h3 class="mt-4 font-display text-lg font-bold text-white">Local-First Privacy</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-400">Data is cached on-device first and synced only to your own vault — never pooled, profiled, or resold.</p>
         </article>
 
         <article class="feature-card glass rounded-3xl p-6 border border-white/10">
-          <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-400/15 text-cyan-300">
-            <i data-lucide="zap" class="h-5 w-5"></i>
+          <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-400">
+            <i data-lucide="ban" class="h-5 w-5"></i>
           </div>
-          <h3 class="mt-4 font-display text-xl font-bold text-white">1-Click Renewal Hub</h3>
-          <p class="mt-2 text-sm leading-relaxed text-slate-400">Fast, effortless policy and warranty renewals — from alert to done in a few taps.</p>
+          <h3 class="mt-4 font-display text-lg font-bold text-white">Zero Unsolicited Ads</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-400">No third-party ad networks, no spam notifications — only the reminders you set and the partners you tap.</p>
         </article>
+      </div>
+
+      <div class="mt-6 text-center">
+        <button type="button" data-legal="security" class="inline-flex items-center gap-2 text-sm font-bold text-emerald-400 hover:text-emerald-300">
+          <i data-lucide="file-lock-2" class="h-4 w-4"></i>
+          Read the full Data Security Statement
+        </button>
       </div>
     </div>
   </section>
 
   <!-- Founder -->
-  <section id="founder" class="border-t border-white/5 py-16 sm:py-20">
-    <div class="mx-auto max-w-6xl px-4 sm:px-6">
+  <section id="founder" class="scroll-mt-24 border-t border-white/5 py-16 sm:py-20">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6">
       <div class="glass neon-border relative overflow-hidden rounded-[2rem] p-6 sm:p-10 lg:p-12">
         <div class="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-emerald-500/20 blur-3xl"></div>
         <div class="relative grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
           <div>
             <p class="text-xs font-bold uppercase tracking-[0.25em] text-emerald-400">Founder story</p>
             <h2 class="mt-3 font-display text-3xl font-bold leading-tight text-white sm:text-4xl">
-              Meet Ashutosh — The 14-Year-Old Mastermind Behind Asset Doctor
+              Meet Ashutosh — The 14-Year-Old Prodigy Behind Asset Doctor
             </h2>
             <p class="mt-5 text-base leading-relaxed text-slate-300">
               Like millions of Indian families, Ashutosh saw the chaos of lost warranty bills, expired RCs,
               forgotten PUC dates, and sudden roadside emergencies with no documents ready.
             </p>
             <p class="mt-3 text-base leading-relaxed text-slate-400">
-              So he built Asset Doctor — a smart utility vault that helps everyday people safely store vehicle
-              papers, track home appliance warranties, and get timely renewal alerts — before problems become penalties.
+              At just 14, he designed and built Asset Doctor from the ground up — a smart utility vault that helps
+              everyday people safely store vehicle papers, track home appliance warranties, connect instantly with
+              service partners, and get timely renewal alerts before problems become penalties.
             </p>
             <div class="mt-6 flex flex-wrap gap-3 text-xs font-semibold text-slate-300">
               <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">Lost bills → solved</span>
               <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">Expired RC risk → alerts</span>
               <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">RSA panic → one tap</span>
+              <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">Age 14 · Self-taught builder</span>
             </div>
           </div>
           <div class="rounded-3xl border border-white/10 bg-gradient-to-br from-emerald-500/20 via-slate-900 to-cyan-500/10 p-6 text-center">
@@ -304,9 +639,9 @@
               <img src="./icon.png" alt="" class="h-14 w-14 rounded-2xl object-cover" width="56" height="56" />
             </div>
             <p class="mt-4 font-display text-2xl font-bold text-white">Ashutosh</p>
-            <p class="mt-1 text-sm text-emerald-300">Creator · Age 14</p>
+            <p class="mt-1 text-sm text-emerald-300">Creator &amp; Founder · Age 14</p>
             <p class="mt-4 text-xs leading-relaxed text-slate-400">
-              “Protect, Track &amp; Save — so every Indian household stays ready.”
+              "Protect, Track &amp; Save — so every Indian household stays ready."
             </p>
           </div>
         </div>
@@ -315,8 +650,8 @@
   </section>
 
   <!-- Login / Vault -->
-  <section id="login" class="border-t border-white/5 py-16 sm:py-20">
-    <div class="mx-auto max-w-6xl px-4 sm:px-6">
+  <section id="login" class="scroll-mt-24 border-t border-white/5 py-16 sm:py-20">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6">
       <div class="mb-8 max-w-2xl">
         <p class="text-xs font-bold uppercase tracking-[0.25em] text-emerald-400">Web vault</p>
         <h2 class="mt-3 font-display text-3xl font-bold text-white">Login / Manage your assets</h2>
@@ -410,34 +745,38 @@
   </section>
 
   <!-- Footer -->
-  <footer id="support" class="border-t border-white/5 bg-slate-950/80">
-    <div class="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:px-6 md:grid-cols-3">
+  <footer id="support" class="scroll-mt-24 border-t border-white/5 bg-slate-950/80">
+    <div class="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-6 md:grid-cols-3">
       <div>
         <p class="flex items-center gap-2 font-display text-lg font-bold text-white">
           <img src="./icon.png" alt="" class="h-8 w-8 rounded-lg object-cover ring-1 ring-emerald-500/30" width="32" height="32" />
           Asset Doctor
         </p>
-        <p class="mt-2 text-sm text-slate-400">Protect, Track &amp; Manage — The Smart Asset Vault</p>
+        <p class="mt-2 text-sm text-slate-400">India's #1 Smart Utility &amp; Emergency Asset Vault</p>
         <p class="mt-4 text-xs text-slate-500">Crafted by Ashutosh (14)</p>
       </div>
       <div>
         <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Quick links</p>
         <ul class="mt-3 space-y-2 text-sm text-slate-300">
-          <li><a class="hover:text-emerald-400" href="#features">Features</a></li>
+          <li><a class="hover:text-emerald-400" href="#vehicle-vault">Vehicle Vault</a></li>
+          <li><a class="hover:text-emerald-400" href="#appliance-vault">Appliance Vault</a></li>
+          <li><a class="hover:text-emerald-400" href="#partners">B2B Partners</a></li>
           <li><a class="hover:text-emerald-400" href="#founder">Founder Story</a></li>
           <li><a class="hover:text-emerald-400" href="#login">Login / Assets</a></li>
           <li><a class="hover:text-emerald-400" href="https://play.google.com/store/apps/details?id=com.assetdoctor.app" target="_blank" rel="noopener">Download App</a></li>
-          <li><button type="button" data-legal="privacy" class="hover:text-emerald-400">Privacy Policy</button></li>
-          <li><button type="button" data-legal="terms" class="hover:text-emerald-400">Terms of Service</button></li>
         </ul>
       </div>
       <div>
-        <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Support</p>
+        <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Support &amp; legal</p>
         <ul class="mt-3 space-y-2 text-sm text-slate-300">
           <li class="flex items-center gap-2">
             <i data-lucide="mail" class="h-4 w-4 text-emerald-400"></i>
             <a class="text-emerald-300 hover:underline" href="mailto:support@assetdoctor.in">support@assetdoctor.in</a>
           </li>
+          <li><button type="button" data-legal="privacy" class="hover:text-emerald-400">Privacy Policy</button></li>
+          <li><button type="button" data-legal="terms" class="hover:text-emerald-400">Terms of Service</button></li>
+          <li><button type="button" data-legal="security" class="hover:text-emerald-400">Data Security</button></li>
+          <li><button type="button" data-open-contact class="hover:text-emerald-400">Contact</button></li>
         </ul>
       </div>
     </div>
@@ -521,6 +860,46 @@
     </div>
   </dialog>
 
+  <!-- Contact modal -->
+  <dialog id="contactModal" class="w-[min(100%,30rem)]">
+    <form id="contactForm" class="glass-strong neon-border m-4 rounded-3xl p-5 sm:p-6">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h3 class="font-display text-lg font-bold text-white">Contact Asset Doctor</h3>
+          <p class="mt-1 text-xs text-slate-400">We'll open your email app addressed to support@assetdoctor.in</p>
+        </div>
+        <button type="button" id="btnCloseContact" class="rounded-lg px-2 py-1 text-slate-400 hover:bg-white/10 hover:text-white" aria-label="Close">✕</button>
+      </div>
+      <div class="mt-4 space-y-3">
+        <label class="block text-xs font-bold text-slate-400">Your name
+          <input id="cName" class="field mt-1" placeholder="Full name" />
+        </label>
+        <label class="block text-xs font-bold text-slate-400">Your email
+          <input id="cEmail" type="email" class="field mt-1" placeholder="you@example.com" />
+        </label>
+        <label class="block text-xs font-bold text-slate-400">Subject
+          <select id="cSubject" class="field mt-1">
+            <option value="Support request">Support request</option>
+            <option value="B2B Partnership enquiry">B2B partnership enquiry</option>
+            <option value="Bug report">Bug report</option>
+            <option value="Feature request">Feature request</option>
+            <option value="Other">Other</option>
+          </select>
+        </label>
+        <label class="block text-xs font-bold text-slate-400">Message
+          <textarea id="cMessage" class="field mt-1" placeholder="How can we help?"></textarea>
+        </label>
+      </div>
+      <p id="contactFormError" class="mt-3 hidden rounded-xl bg-rose-500/10 px-3 py-2 text-xs text-rose-300"></p>
+      <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button type="button" id="btnCancelContact" class="rounded-xl border border-white/15 px-4 py-2.5 text-sm font-bold text-slate-300 hover:bg-white/5">Cancel</button>
+        <button type="submit" id="btnSendContact" class="cta-glow rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-400 px-4 py-2.5 text-sm font-extrabold text-slate-950">
+          <i data-lucide="send" class="mr-1 inline h-4 w-4"></i>Send via Email
+        </button>
+      </div>
+    </form>
+  </dialog>
+
   <script>
     document.getElementById('year').textContent = new Date().getFullYear();
     if (window.lucide) lucide.createIcons();
@@ -557,11 +936,31 @@
           <h3>3. Your responsibilities</h3>
           <p>You are responsible for the accuracy of documents and dates you enter. Expiry alerts are best-effort reminders and do not replace legal or insurance obligations.</p>
           <h3>4. Partner services</h3>
-          <p>RSA, insurance, and appliance care journeys may be fulfilled by third parties under their own terms. Asset Doctor is not liable for partner service outcomes.</p>
+          <p>RSA, insurance, and appliance care journeys may be fulfilled by third parties (including ReadyAssist, insurance aggregators, and electronics service centers) under their own terms. Asset Doctor is not liable for partner service outcomes.</p>
           <h3>5. Accounts</h3>
           <p>Keep your login secure. Do not share OTP codes. We may suspend accounts that abuse the service or upload unlawful content.</p>
           <h3>6. Contact</h3>
           <p>Questions: <a class="text-emerald-400 underline" href="mailto:support@assetdoctor.in">support@assetdoctor.in</a></p>
+        `
+      },
+      security: {
+        title: 'Data Security Statement',
+        html: `
+          <p class="text-slate-500 text-xs mb-4">Asset Doctor · Last updated August 2026</p>
+          <h3>1. Encryption</h3>
+          <p>All documents and asset records are protected with 256-bit encryption in transit (TLS) and at rest inside Google Firebase infrastructure.</p>
+          <h3>2. Local-first architecture</h3>
+          <p>The app caches your vault on-device first and syncs only to your own authenticated account — your data is never pooled across users or sold to third parties.</p>
+          <h3>3. Per-user isolation</h3>
+          <p>Firestore security rules scope every read/write to <code>Users/{uid}/Assets</code>, so no other account can access your vault, even indirectly.</p>
+          <h3>4. Zero unsolicited ads</h3>
+          <p>Asset Doctor carries no third-party ad SDKs. You will never see banner ads, interstitials, or unsolicited marketing notifications inside the app.</p>
+          <h3>5. App Lock</h3>
+          <p>Optional App Lock uses your device's native PIN, pattern, or biometrics — we never create or store a separate password for this feature.</p>
+          <h3>6. Your rights</h3>
+          <p>You can export, edit, or permanently delete any asset or document at any time, and request full account deletion by contacting support.</p>
+          <h3>7. Contact</h3>
+          <p>Security concerns or disclosures: <a class="text-emerald-400 underline" href="mailto:support@assetdoctor.in">support@assetdoctor.in</a></p>
         `
       }
     };
@@ -593,7 +992,8 @@
       assets: [],
       confirmationResult: null,
       recaptchaVerifier: null,
-      saving: false
+      saving: false,
+      alertType: 'vehicle'
     };
 
     function $(id) { return document.getElementById(id); }
@@ -643,6 +1043,16 @@
       return s.slice(0, 2).toUpperCase() || 'AD';
     }
 
+    /* ---------- Mobile menu ---------- */
+    const mobileMenu = $('mobileMenu');
+    $('btnMobileMenu').addEventListener('click', function () {
+      mobileMenu.classList.toggle('open');
+    });
+    mobileMenu.querySelectorAll('a').forEach(function (a) {
+      a.addEventListener('click', function () { mobileMenu.classList.remove('open'); });
+    });
+
+    /* ---------- Legal modal ---------- */
     function openLegal(key) {
       const data = LEGAL[key];
       if (!data) return;
@@ -661,6 +1071,147 @@
       document.body.classList.remove('modal-open');
     }
 
+    document.querySelectorAll('[data-legal]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        openLegal(el.getAttribute('data-legal'));
+      });
+    });
+    $('btnCloseLegal').onclick = closeLegal;
+    $('legalModal').addEventListener('close', function () { document.body.classList.remove('modal-open'); });
+
+    /* ---------- Contact modal ---------- */
+    function openContact() {
+      showError('contactFormError', '');
+      const modal = $('contactModal');
+      if (typeof modal.showModal === 'function') modal.showModal();
+      else modal.setAttribute('open', '');
+      document.body.classList.add('modal-open');
+    }
+    function closeContact() {
+      const modal = $('contactModal');
+      if (typeof modal.close === 'function') modal.close();
+      else modal.removeAttribute('open');
+      document.body.classList.remove('modal-open');
+    }
+    document.querySelectorAll('[data-open-contact]').forEach(function (el) {
+      el.addEventListener('click', openContact);
+    });
+    $('btnCloseContact').onclick = closeContact;
+    $('btnCancelContact').onclick = closeContact;
+    $('contactModal').addEventListener('close', function () { document.body.classList.remove('modal-open'); });
+
+    $('contactForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      const name = $('cName').value.trim();
+      const email = $('cEmail').value.trim();
+      const subject = $('cSubject').value;
+      const message = $('cMessage').value.trim();
+      if (!email || !message) {
+        showError('contactFormError', 'Please add your email and a message.');
+        return;
+      }
+      showError('contactFormError', '');
+      const body = 'Name: ' + name + '\nEmail: ' + email + '\n\n' + message;
+      const mailto = 'mailto:support@assetdoctor.in' +
+        '?subject=' + encodeURIComponent('[Asset Doctor] ' + subject) +
+        '&body=' + encodeURIComponent(body);
+      window.location.href = mailto;
+      closeContact();
+    });
+
+    /* ---------- Expiry Alert Calculator ---------- */
+    const ALERT_DOCS = {
+      vehicle: [
+        { value: 'rc', label: 'RC Renewal' },
+        { value: 'puc', label: 'PUC Certificate' },
+        { value: 'insurance', label: 'Insurance Policy' }
+      ],
+      appliance: [
+        { value: 'warranty', label: 'Warranty' },
+        { value: 'amc', label: 'AMC Contract' },
+        { value: 'insurance', label: 'Extended Insurance' }
+      ]
+    };
+    const REMINDER_SCHEDULE = [
+      { offset: 30, channel: 'WhatsApp', icon: 'message-circle', color: 'text-emerald-300 bg-emerald-500/15' },
+      { offset: 15, channel: 'Push notification', icon: 'bell', color: 'text-cyan-300 bg-cyan-400/15' },
+      { offset: 7, channel: 'WhatsApp', icon: 'message-circle', color: 'text-emerald-300 bg-emerald-500/15' },
+      { offset: 1, channel: 'Push notification (urgent)', icon: 'bell-ring', color: 'text-amber-300 bg-amber-400/15' }
+    ];
+
+    function populateAlertDocTypes() {
+      const sel = $('alertDocType');
+      const docs = ALERT_DOCS[state.alertType];
+      sel.innerHTML = docs.map(function (d) { return '<option value="' + d.value + '">' + d.label + '</option>'; }).join('');
+    }
+
+    function setAlertType(type) {
+      state.alertType = type;
+      $('btnAlertVehicle').setAttribute('data-active', String(type === 'vehicle'));
+      $('btnAlertAppliance').setAttribute('data-active', String(type === 'appliance'));
+      populateAlertDocTypes();
+      $('alertResult').classList.add('hidden');
+      showError('alertCalcError', '');
+    }
+
+    $('btnAlertVehicle').addEventListener('click', function () { setAlertType('vehicle'); });
+    $('btnAlertAppliance').addEventListener('click', function () { setAlertType('appliance'); });
+    populateAlertDocTypes();
+
+    function fmtDate(d) {
+      return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+
+    $('btnCalcAlert').addEventListener('click', function () {
+      showError('alertCalcError', '');
+      const dateVal = $('alertDate').value;
+      if (!dateVal) {
+        showError('alertCalcError', 'Please choose an expiry date.');
+        return;
+      }
+      const expiry = new Date(dateVal + 'T00:00:00');
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const daysLeft = Math.round((expiry - today) / 86400000);
+      const docLabel = $('alertDocType').selectedOptions[0].textContent;
+      const typeLabel = state.alertType === 'vehicle' ? 'Vehicle' : 'Appliance';
+
+      $('alertResultLabel').textContent = typeLabel + ' · ' + docLabel;
+      $('alertResultDate').textContent = fmtDate(expiry);
+      $('alertResultDays').textContent = daysLeft > 0
+        ? daysLeft + ' day(s) remaining'
+        : (daysLeft === 0 ? 'expires today' : Math.abs(daysLeft) + ' day(s) overdue');
+
+      const timeline = $('alertTimeline');
+      timeline.innerHTML = REMINDER_SCHEDULE.map(function (r) {
+        const fireDate = new Date(expiry);
+        fireDate.setDate(fireDate.getDate() - r.offset);
+        let status, statusColor, dotColor;
+        if (fireDate < today && expiry >= today) {
+          status = 'Already sent'; statusColor = 'text-emerald-300'; dotColor = 'bg-emerald-400';
+        } else if (fireDate >= today) {
+          status = 'Scheduled'; statusColor = 'text-slate-300'; dotColor = 'bg-slate-500';
+        } else {
+          status = 'Missed (expired)'; statusColor = 'text-rose-300'; dotColor = 'bg-rose-400';
+        }
+        return (
+          '<div class="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">' +
+            '<span class="timeline-dot ' + dotColor + '"></span>' +
+            '<span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ' + r.color + '"><i data-lucide="' + r.icon + '" class="h-4 w-4"></i></span>' +
+            '<div class="min-w-0 flex-1">' +
+              '<p class="text-sm font-bold text-white">' + r.channel + ' · T-' + r.offset + ' days</p>' +
+              '<p class="text-xs text-slate-400">' + fmtDate(fireDate) + '</p>' +
+            '</div>' +
+            '<span class="text-xs font-bold ' + statusColor + '">' + status + '</span>' +
+          '</div>'
+        );
+      }).join('');
+
+      $('alertResult').classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    });
+
+    /* ---------- Firebase vault ---------- */
     function setAuthUI(user) {
       state.user = user || null;
       const signedOut = $('panelSignedOut');
@@ -960,27 +1511,10 @@
       }
     });
 
-    document.querySelectorAll('[data-legal]').forEach(function (el) {
-      el.addEventListener('click', function () {
-        openLegal(el.getAttribute('data-legal'));
-      });
-    });
-
     $('btnCloseModal').onclick = closeAssetModal;
     $('btnCancelModal').onclick = closeAssetModal;
-    $('btnCloseLegal').onclick = closeLegal;
     $('assetModal').addEventListener('close', function () { document.body.classList.remove('modal-open'); });
-    $('legalModal').addEventListener('close', function () { document.body.classList.remove('modal-open'); });
     $('assetForm').addEventListener('submit', saveAsset);
-
-    // Nav Privacy link if any
-    const navPrivacy = document.querySelector('a[href="privacy/"]');
-    if (navPrivacy) {
-      navPrivacy.addEventListener('click', function (e) {
-        e.preventDefault();
-        openLegal('privacy');
-      });
-    }
   </script>
 </body>
 </html>
