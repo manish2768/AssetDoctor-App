@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Asset Doctor — Admin Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+  <div class="max-w-5xl mx-auto px-4 py-8">
+    <header class="mb-6">
+      <p class="text-xs font-bold tracking-widest uppercase text-teal-700">Asset Doctor</p>
+      <h1 class="text-3xl font-black mt-1">Admin Dashboard</h1>
+      <p class="text-slate-500 text-sm mt-2">
+        Users, cars, bikes, appliances · vehicle age · one-click CSV for ReadyAssist
+      </p>
+    </header>
+
+    <!-- Help box -->
+    <div class="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+      <strong>How to use:</strong> Save this file as <code>admin.html</code> → open in Chrome.
+      Sign in with your <strong>admin</strong> Firebase account (must have admin access), then click
+      <strong>Load from Firebase</strong>. If login/data fails, click <strong>Show Demo Numbers</strong>
+      to preview and still export a sample CSV.
+      <br /><span class="text-amber-800">Tip: If Chrome blocks Firebase from a double-click file, run a tiny local server or open via Live Server.</span>
+    </div>
+
+    <!-- Login -->
+    <section class="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 class="font-bold text-lg mb-3">1. Admin login (Firebase)</h2>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <input id="email" type="email" placeholder="Admin email"
+          class="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+        <input id="password" type="password" placeholder="Password"
+          class="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+      </div>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button id="btnLogin" class="rounded-xl bg-slate-900 text-white px-4 py-2 text-sm font-bold hover:bg-slate-800">
+          Sign in
+        </button>
+        <button id="btnLogout" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold bg-white">
+          Sign out
+        </button>
+        <span id="authStatus" class="text-sm text-slate-500 self-center">Not signed in</span>
+      </div>
+    </section>
+
+    <!-- Actions -->
+    <section class="mb-6 flex flex-wrap gap-2">
+      <button id="btnLoad" class="rounded-xl bg-teal-600 text-white px-4 py-2.5 text-sm font-bold hover:bg-teal-700">
+        Load from Firebase
+      </button>
+      <button id="btnMock" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold">
+        Show Demo Numbers
+      </button>
+      <button id="btnExport" class="rounded-xl bg-emerald-600 text-white px-4 py-2.5 text-sm font-bold hover:bg-emerald-700">
+        Export to CSV / Excel
+      </button>
+    </section>
+
+    <p id="statusLine" class="text-xs text-slate-400 mb-4">Ready</p>
+    <p id="errorBox" class="hidden mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"></p>
+
+    <!-- Summary cards -->
+    <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+      <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <p class="text-xs font-semibold uppercase text-slate-500">Total Users</p>
+        <p id="cUsers" class="text-3xl font-black mt-2 tabular-nums">0</p>
+      </div>
+      <div class="rounded-2xl border border-teal-100 bg-white p-5 shadow-sm">
+        <p class="text-xs font-semibold uppercase text-slate-500">Cars</p>
+        <p id="cCars" class="text-3xl font-black mt-2 tabular-nums text-teal-700">0</p>
+      </div>
+      <div class="rounded-2xl border border-cyan-100 bg-white p-5 shadow-sm">
+        <p class="text-xs font-semibold uppercase text-slate-500">Bikes</p>
+        <p id="cBikes" class="text-3xl font-black mt-2 tabular-nums text-cyan-700">0</p>
+      </div>
+      <div class="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm">
+        <p class="text-xs font-semibold uppercase text-slate-500">Home Appliances</p>
+        <p id="cAppliances" class="text-3xl font-black mt-2 tabular-nums text-amber-700">0</p>
+        <p class="text-xs text-slate-400 mt-1">AC + Mobiles (+ Laptops)</p>
+      </div>
+    </section>
+
+    <!-- Vehicle age -->
+    <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm mb-6">
+      <h2 class="font-bold text-lg">Vehicle breakdown — New vs Old</h2>
+      <p class="text-sm text-slate-500 mt-1">New = ≤ 3 years old · Old = more than 3 years (from purchase / manufacturing year)</p>
+      <div class="mt-4 flex h-3 rounded-full overflow-hidden bg-slate-100">
+        <div id="barNew" class="bg-emerald-500 transition-all" style="width:50%"></div>
+        <div id="barOld" class="bg-slate-700 transition-all" style="width:50%"></div>
+      </div>
+      <div class="mt-4 grid grid-cols-2 gap-4 text-sm">
+        <div>
+          <p class="font-semibold">New vehicles (≤ 3y)</p>
+          <p id="cNew" class="text-2xl font-black text-emerald-600 tabular-nums">0</p>
+        </div>
+        <div class="text-right">
+          <p class="font-semibold">Old vehicles (&gt; 3y)</p>
+          <p id="cOld" class="text-2xl font-black text-slate-800 tabular-nums">0</p>
+        </div>
+      </div>
+      <p id="cAgeUnknown" class="text-xs text-slate-400 mt-3"></p>
+    </section>
+
+    <!-- Appliance detail -->
+    <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm mb-6 overflow-x-auto">
+      <h2 class="font-bold text-lg mb-3">Appliances detail</h2>
+      <table class="min-w-full text-sm">
+        <thead class="text-left text-xs uppercase text-slate-500 bg-slate-50">
+          <tr>
+            <th class="px-3 py-2">Type</th>
+            <th class="px-3 py-2">Total</th>
+            <th class="px-3 py-2 text-teal-700">In warranty</th>
+            <th class="px-3 py-2 text-rose-700">Expired</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="border-t border-slate-100">
+            <td class="px-3 py-2 font-semibold">AC</td>
+            <td id="acTotal" class="px-3 py-2 tabular-nums">0</td>
+            <td id="acIn" class="px-3 py-2 tabular-nums text-teal-700">0</td>
+            <td id="acOut" class="px-3 py-2 tabular-nums text-rose-700">0</td>
+          </tr>
+          <tr class="border-t border-slate-100">
+            <td class="px-3 py-2 font-semibold">Mobiles</td>
+            <td id="mobTotal" class="px-3 py-2 tabular-nums">0</td>
+            <td id="mobIn" class="px-3 py-2 tabular-nums text-teal-700">0</td>
+            <td id="mobOut" class="px-3 py-2 tabular-nums text-rose-700">0</td>
+          </tr>
+          <tr class="border-t border-slate-100">
+            <td class="px-3 py-2 font-semibold">Laptops</td>
+            <td id="lapTotal" class="px-3 py-2 tabular-nums">0</td>
+            <td id="lapIn" class="px-3 py-2 tabular-nums text-teal-700">0</td>
+            <td id="lapOut" class="px-3 py-2 tabular-nums text-rose-700">0</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer class="text-center text-xs text-slate-400 pb-8">
+      Crafted for Asset Doctor · Protect, Track &amp; Save
+    </footer>
+  </div>
+
+  <script>
+    // ========== YOUR FIREBASE CONFIG (Asset Doctor project) ==========
+    const firebaseConfig = {
+      apiKey: "AIzaSyAYpEIXCZz3VKFMza3jpUMGTSRbi37qk-c",
+      authDomain: "assetdoctor-5fd25.firebaseapp.com",
+      projectId: "assetdoctor-5fd25",
+      storageBucket: "assetdoctor-5fd25.firebasestorage.app",
+      messagingSenderId: "926559836985",
+      appId: "1:926559836985:android:842e878c508df93d2b66e8"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    // ========== STATE ==========
+    let lastMetrics = null;
+    let lastVehicles = []; // rows for CSV (ReadyAssist)
+
+    const CAR = new Set(["car"]);
+    const BIKE = new Set(["bike", "scooter", "motorcycle"]);
+    const AC = new Set(["ac"]);
+    const MOBILE = new Set(["mobile", "phone", "tablet"]);
+    const LAPTOP = new Set(["laptop"]);
+
+    // Demo data if Firebase is blocked / no admin
+    const DEMO_ASSETS = [
+      { categoryId: "car", purchaseDate: "2024-01-15", assetName: "Demo Swift", registration: "MH12AB1234" },
+      { categoryId: "car", purchaseDate: "2019-06-01", assetName: "Demo City", registration: "DL01CA9999" },
+      { categoryId: "bike", purchaseDate: "2025-03-01", assetName: "Demo Activa", registration: "KA03EF5678" },
+      { categoryId: "bike", purchaseDate: "2018-08-12", assetName: "Demo Pulsar", registration: "TN09XY1111" },
+      { categoryId: "scooter", purchaseDate: "2023-05-09", assetName: "Demo Jupiter", registration: "GJ01SC2222" },
+      { categoryId: "ac", purchaseDate: "2024-04-01", warrantyExpiry: "2027-04-01", assetName: "Demo AC" },
+      { categoryId: "ac", purchaseDate: "2020-01-01", warrantyExpiry: "2023-01-01", assetName: "Old AC" },
+      { categoryId: "mobile", purchaseDate: "2024-09-01", warrantyExpiry: "2025-09-01", assetName: "Demo Phone" },
+      { categoryId: "phone", purchaseDate: "2022-01-01", warrantyExpiry: "2023-01-01", assetName: "Old Phone" },
+      { categoryId: "laptop", purchaseDate: "2023-12-01", warrantyExpiry: "2026-12-01", assetName: "Demo Laptop" }
+    ];
+
+    function $(id) { return document.getElementById(id); }
+
+    function setStatus(msg) { $("statusLine").textContent = msg; }
+
+    function showError(msg) {
+      const box = $("errorBox");
+      if (!msg) {
+        box.classList.add("hidden");
+        box.textContent = "";
+        return;
+      }
+      box.classList.remove("hidden");
+      box.textContent = msg;
+    }
+
+    function isActive(a) {
+      if (a.deletedAt) return false;
+      const s = String(a.status || "active").toLowerCase();
+      return s === "active" || s === "in_repair" || !a.status;
+    }
+
+    function catId(a) {
+      return String(a.categoryId || a.category || "").toLowerCase().trim();
+    }
+
+    function yearOf(a) {
+      if (a.manufacturingYear != null && a.manufacturingYear !== "") {
+        const y = Number(a.manufacturingYear);
+        if (y >= 1980 && y <= 2100) return y;
+      }
+      const raw = String(a.purchaseDate || "").trim();
+      const m = raw.match(/^(\d{4})/);
+      return m ? Number(m[1]) : null;
+    }
+
+    function ageBucket(a) {
+      const y = yearOf(a);
+      if (y == null) return "unknown";
+      const age = new Date().getFullYear() - y;
+      return age <= 3 ? "new" : "old";
+    }
+
+    function warrantyOk(expiry) {
+      if (!expiry) return "unknown";
+      const t = Date.parse(String(expiry));
+      if (Number.isNaN(t)) return "unknown";
+      const end = new Date(t);
+      end.setHours(23, 59, 59, 999);
+      return end.getTime() >= Date.now() ? "in" : "out";
+    }
+
+    function emptyMetrics() {
+      return {
+        users: 0,
+        cars: 0,
+        bikes: 0,
+        appliances: 0,
+        newV: 0,
+        oldV: 0,
+        ageUnknown: 0,
+        ac: { total: 0, in: 0, out: 0 },
+        mobile: { total: 0, in: 0, out: 0 },
+        laptop: { total: 0, in: 0, out: 0 },
+        source: "demo",
+        generatedAt: new Date().toISOString()
+      };
+    }
+
+    function aggregate(assets, userCount, source) {
+      const m = emptyMetrics();
+      m.users = userCount;
+      m.source = source;
+      const vehicles = [];
+
+      assets.forEach(function (a) {
+        if (!isActive(a)) return;
+        const id = catId(a);
+        const w = warrantyOk(a.warrantyExpiry);
+
+        if (CAR.has(id) || BIKE.has(id)) {
+          if (CAR.has(id)) m.cars += 1;
+          if (BIKE.has(id)) m.bikes += 1;
+          const age = ageBucket(a);
+          if (age === "new") m.newV += 1;
+          else if (age === "old") m.oldV += 1;
+          else m.ageUnknown += 1;
+
+          vehicles.push({
+            type: CAR.has(id) ? "car" : "bike",
+            name: a.assetName || "",
+            registration: a.registration || "",
+            purchaseDate: a.purchaseDate || "",
+            manufacturingYear: yearOf(a) || "",
+            ageBucket: age,
+            ownerUid: a.ownerUid || a.uid || ""
+          });
+          return;
+        }
+
+        if (AC.has(id)) {
+          m.ac.total += 1;
+          m.appliances += 1;
+          if (w === "in") m.ac.in += 1;
+          if (w === "out") m.ac.out += 1;
+          return;
+        }
+        if (MOBILE.has(id)) {
+          m.mobile.total += 1;
+          m.appliances += 1;
+          if (w === "in") m.mobile.in += 1;
+          if (w === "out") m.mobile.out += 1;
+          return;
+        }
+        if (LAPTOP.has(id)) {
+          m.laptop.total += 1;
+          m.appliances += 1;
+          if (w === "in") m.laptop.in += 1;
+          if (w === "out") m.laptop.out += 1;
+        }
+      });
+
+      lastVehicles = vehicles;
+      return m;
+    }
+
+    function render(m) {
+      lastMetrics = m;
+      $("cUsers").textContent = m.users;
+      $("cCars").textContent = m.cars;
+      $("cBikes").textContent = m.bikes;
+      $("cAppliances").textContent = m.appliances;
+      $("cNew").textContent = m.newV;
+      $("cOld").textContent = m.oldV;
+
+      const ageTotal = m.newV + m.oldV || 1;
+      $("barNew").style.width = ((m.newV / ageTotal) * 100) + "%";
+      $("barOld").style.width = ((m.oldV / ageTotal) * 100) + "%";
+      $("cAgeUnknown").textContent = m.ageUnknown
+        ? ("Age unknown (no purchase year): " + m.ageUnknown)
+        : "";
+
+      $("acTotal").textContent = m.ac.total;
+      $("acIn").textContent = m.ac.in;
+      $("acOut").textContent = m.ac.out;
+      $("mobTotal").textContent = m.mobile.total;
+      $("mobIn").textContent = m.mobile.in;
+      $("mobOut").textContent = m.mobile.out;
+      $("lapTotal").textContent = m.laptop.total;
+      $("lapIn").textContent = m.laptop.in;
+      $("lapOut").textContent = m.laptop.out;
+
+      setStatus("Showing " + m.source + " data · " + new Date(m.generatedAt).toLocaleString());
+    }
+
+    function csvEscape(v) {
+      const s = String(v == null ? "" : v);
+      if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    }
+
+    function exportCsv() {
+      if (!lastMetrics) {
+        alert("Load data first (Firebase or Demo).");
+        return;
+      }
+      const m = lastMetrics;
+      const lines = [];
+
+      // Summary sheet-style section
+      lines.push(["SECTION", "METRIC", "VALUE"].map(csvEscape).join(","));
+      lines.push(["SUMMARY", "generated_at", m.generatedAt].map(csvEscape).join(","));
+      lines.push(["SUMMARY", "data_source", m.source].map(csvEscape).join(","));
+      lines.push(["SUMMARY", "total_users", m.users].map(csvEscape).join(","));
+      lines.push(["SUMMARY", "total_cars", m.cars].map(csvEscape).join(","));
+      lines.push(["SUMMARY", "total_bikes", m.bikes].map(csvEscape).join(","));
+      lines.push(["SUMMARY", "total_appliances_ac_mobile_laptop", m.appliances].map(csvEscape).join(","));
+      lines.push(["SUMMARY", "vehicles_new_le_3_years", m.newV].map(csvEscape).join(","));
+      lines.push(["SUMMARY", "vehicles_old_gt_3_years", m.oldV].map(csvEscape).join(","));
+      lines.push(["SUMMARY", "vehicles_age_unknown", m.ageUnknown].map(csvEscape).join(","));
+      lines.push(["SUMMARY", "acs_total", m.ac.total].map(csvEscape).join(","));
+      lines.push(["SUMMARY", "acs_in_warranty", m.ac.in].map(csvEscape).join(","));
+      lines.push(["SUMMARY", "acs_expired", m.ac.out].map(csvEscape).join(","));
+      lines.push(["SUMMARY", "mobiles_total", m.mobile.total].map(csvEscape).join(","));
+      lines.push(["SUMMARY", "mobiles_in_warranty", m.mobile.in].map(csvEscape).join(","));
+      lines.push(["SUMMARY", "mobiles_expired", m.mobile.out].map(csvEscape).join(","));
+      lines.push("");
+
+      // Vehicle rows for ReadyAssist
+      lines.push(
+        ["SECTION", "type", "name", "registration", "purchaseDate", "manufacturingYear", "ageBucket", "ownerUid"]
+          .map(csvEscape)
+          .join(",")
+      );
+      lastVehicles.forEach(function (v) {
+        lines.push(
+          ["VEHICLE", v.type, v.name, v.registration, v.purchaseDate, v.manufacturingYear, v.ageBucket, v.ownerUid]
+            .map(csvEscape)
+            .join(",")
+        );
+      });
+
+      const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const day = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = "asset-doctor-readyassist-" + day + ".csv";
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatus("CSV downloaded — open in Excel and share with ReadyAssist");
+    }
+
+    async function loadFirebase() {
+      showError("");
+      setStatus("Loading from Firebase…");
+      try {
+        const user = auth.currentUser;
+        if (!user) {
+          throw new Error("Please Sign in first with your admin email & password.");
+        }
+        // Refresh token so admin custom claim is available if recently set
+        await user.getIdToken(true);
+
+        const usersSnap = await db.collection("Users").get();
+        const assetsSnap = await db.collectionGroup("Assets").limit(20000).get();
+
+        const assets = [];
+        assetsSnap.forEach(function (doc) {
+          const data = doc.data() || {};
+          const parent = doc.ref.parent.parent;
+          assets.push(Object.assign({}, data, {
+            assetId: data.assetId || doc.id,
+            ownerUid: data.ownerUid || data.uid || (parent ? parent.id : "")
+          }));
+        });
+
+        const m = aggregate(assets, usersSnap.size, "firestore");
+        render(m);
+        showError("");
+      } catch (err) {
+        console.error(err);
+        showError(
+          (err && err.message) ||
+            "Could not load Firebase. Sign in as admin, or use Show Demo Numbers."
+        );
+        setStatus("Firebase load failed");
+      }
+    }
+
+    function loadDemo() {
+      showError("");
+      const m = aggregate(DEMO_ASSETS, 128, "demo");
+      render(m);
+    }
+
+    // Auth UI
+    auth.onAuthStateChanged(function (user) {
+      if (user) {
+        $("authStatus").textContent = "Signed in as " + (user.email || user.uid);
+      } else {
+        $("authStatus").textContent = "Not signed in";
+      }
+    });
+
+    $("btnLogin").onclick = async function () {
+      showError("");
+      const email = $("email").value.trim();
+      const password = $("password").value;
+      try {
+        await auth.signInWithEmailAndPassword(email, password);
+        setStatus("Signed in — click Load from Firebase");
+      } catch (err) {
+        showError(err.message || "Login failed");
+      }
+    };
+
+    $("btnLogout").onclick = function () {
+      auth.signOut();
+    };
+
+    $("btnLoad").onclick = loadFirebase;
+    $("btnMock").onclick = loadDemo;
+    $("btnExport").onclick = exportCsv;
+
+    // Start with demo so the page is never empty
+    loadDemo();
+  </script>
+</body>
+</html>
