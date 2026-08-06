@@ -15,6 +15,7 @@ import React, {
 import { AuthService } from '../services/auth';
 import { UserService } from '../services/user';
 import { Haptics } from '../services/haptics';
+import { CrashlyticsService } from '../services/crashlytics/CrashlyticsService';
 
 const AuthContext = createContext(null);
 
@@ -36,27 +37,59 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubAuth = AuthService.onAuthStateChanged(async (firebaseUser) => {
-      setUser(firebaseUser);
+    let unsubAuth = () => {};
+    try {
+      unsubAuth = AuthService.onAuthStateChanged(async (firebaseUser) => {
+        setUser(firebaseUser);
 
-      if (!firebaseUser) {
-        setProfile(null);
-        setLoading(false);
-        return;
-      }
+        if (!firebaseUser) {
+          setProfile(null);
+          CrashlyticsService.clearUser();
+          setLoading(false);
+          return;
+        }
 
+        CrashlyticsService.setUser(firebaseUser);
+
+        try {
+          const synced = await UserService.syncUserToFirestore(firebaseUser);
+          setProfile(synced);
+        } catch (error) {
+          console.warn('[AssetDoctor] profile sync failed:', error?.message || error);
+          try {
+            const existing = await UserService.getProfile(firebaseUser.uid);
+            setProfile(
+              existing || {
+                uid: firebaseUser.uid,
+                name: firebaseUser.displayName || 'Asset Owner',
+                email: firebaseUser.email || '',
+                phone: firebaseUser.phoneNumber || '',
+              },
+            );
+          } catch {
+            setProfile({
+              uid: firebaseUser.uid,
+              name: firebaseUser.displayName || 'Asset Owner',
+              email: firebaseUser.email || '',
+              phone: firebaseUser.phoneNumber || '',
+            });
+          }
+        } finally {
+          setLoading(false);
+        }
+      });
+    } catch (error) {
+      console.warn('[AssetDoctor] Auth listener failed:', error?.message || error);
+      setLoading(false);
+    }
+
+    return () => {
       try {
-        const synced = await UserService.syncUserToFirestore(firebaseUser);
-        setProfile(synced);
+        unsubAuth?.();
       } catch {
-        const existing = await UserService.getProfile(firebaseUser.uid);
-        setProfile(existing);
-      } finally {
-        setLoading(false);
+        /* ignore */
       }
-    });
-
-    return unsubAuth;
+    };
   }, []);
 
   // Live Firestore profile while signed in
@@ -66,6 +99,7 @@ export function AuthProvider({ children }) {
   }, [user?.uid]);
 
   const signInWithGoogle = useCallback(async (idToken) => {
+    // idToken optional — AuthService runs GoogleSignin when omitted
     const result = await AuthService.signInWithGoogle(idToken);
     if (result.success) setProfile(result.profile || null);
     return result;
@@ -78,6 +112,26 @@ export function AuthProvider({ children }) {
   const verifyOTP = useCallback(async (confirmation, otpCode) => {
     const result = await AuthService.verifyOTP(confirmation, otpCode);
     if (result.success) setProfile(result.profile || null);
+    return result;
+  }, []);
+
+  const signUpWithEmail = useCallback(async (payload) => {
+    const result = await AuthService.signUpWithEmail(payload);
+    if (result.success) setProfile(result.profile || null);
+    return result;
+  }, []);
+
+  const signInWithEmail = useCallback(async (payload) => {
+    const result = await AuthService.signInWithEmail(payload);
+    if (result.success) setProfile(result.profile || null);
+    return result;
+  }, []);
+
+  const sendEmailVerification = useCallback(async () => AuthService.sendEmailVerification(), []);
+
+  const reloadUser = useCallback(async () => {
+    const result = await AuthService.reloadUser();
+    if (result.success && result.user) setUser(result.user);
     return result;
   }, []);
 
@@ -99,6 +153,7 @@ export function AuthProvider({ children }) {
     if (result.success) {
       setUser(null);
       setProfile(null);
+      CrashlyticsService.clearUser();
     }
     return result;
   }, []);
@@ -109,17 +164,26 @@ export function AuthProvider({ children }) {
       profile,
       loading,
       signInWithGoogle,
+      signUpWithEmail,
+      signInWithEmail,
+      sendEmailVerification,
+      reloadUser,
       sendOTP,
       verifyOTP,
       updateProfile,
       signOut,
       isAuthenticated: Boolean(user),
+      emailVerified: Boolean(user?.emailVerified || profile?.emailVerified),
     }),
     [
       user,
       profile,
       loading,
       signInWithGoogle,
+      signUpWithEmail,
+      signInWithEmail,
+      sendEmailVerification,
+      reloadUser,
       sendOTP,
       verifyOTP,
       updateProfile,
