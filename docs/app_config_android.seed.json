@@ -1,0 +1,9 @@
+{
+  "promptEnabled": false,
+  "packageName": "com.assetdoctor.app",
+  "latestVersion": "2.0.2",
+  "minSupportedVersion": "2.0.0",
+  "latestVersionCode": 10,
+  "playStoreUrl": "https://play.google.com/store/apps/details?id=com.assetdoctor.app",
+  "message": "A newer version of Asset Doctor is available on the Google Play Store. Update to keep your vault secure and get the latest features."
+}

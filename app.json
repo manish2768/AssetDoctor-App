@@ -1,5 +1,112 @@
 {
-  "android": {
-    "package": "com.anonymous.assetdoctor"
+  "expo": {
+    "name": "Asset Doctor",
+    "slug": "asset-doctor",
+    "version": "2.0.2",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "assetdoctor",
+    "icon": "./assets/icon.png",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d599e887-1729-4cdf-966c-f0f75b9541b8",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
+    "android": {
+      "package": "com.assetdoctor.app",
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
+      ]
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.assetdoctor.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Asset Doctor needs the camera to scan household bills and vehicle documents.",
+        "NSPhotoLibraryUsageDescription": "Asset Doctor needs photo access for invoices, RC, PUC, insurance and warranty documents.",
+        "NSUserNotificationsUsageDescription": "Asset Doctor sends reminders before warranty, PUC and insurance expiry."
+      }
+    },
+    "plugins": [
+      "expo-updates",
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
+      "@react-native-firebase/crashlytics",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.926559836985-1jschm7e172vqo2rav99oif3uoq93ftq"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          },
+          "android": {
+            "minSdkVersion": 24,
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+          }
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F8FAFC",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 280,
+          "resizeMode": "contain"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#2563EB"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Asset Doctor to access your photos for household and vehicle documents.",
+          "cameraPermission": "Allow Asset Doctor to capture invoices, RC, PUC, insurance and warranty documents.",
+          "microphonePermission": false
+        }
+      ],
+      "expo-sharing",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Asset Doctor uses Face ID to unlock your vault with the same security as your phone lock."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "d599e887-1729-4cdf-966c-f0f75b9541b8"
+      },
+      "tagline": "Protect, Track & Save: The Smart Asset Vault",
+      "creator": "Crafted by Ashutosh (14)",
+      "emailProvider": "resend",
+      "googleWebClientId": "926559836985-1jschm7e172vqo2rav99oif3uoq93ftq.apps.googleusercontent.com",
+      "androidPackage": "com.assetdoctor.app",
+      "iosBundleIdentifier": "com.assetdoctor.app",
+      "playStoreUrl": "https://play.google.com/store/apps/details?id=com.assetdoctor.app"
+    }
   }
 }

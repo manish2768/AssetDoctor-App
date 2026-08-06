@@ -1,31 +1,78 @@
 {
   "name": "asset-doctor",
-  "version": "0.1.0",
+  "version": "2.0.2",
   "private": true,
-  "description": "Asset Doctor — multi-asset vault (React Native + Firebase)",
+  "main": "node_modules/expo/AppEntry.js",
+  "description": "Asset Doctor — Protect, Track & Save: The Smart Asset Vault — Crafted by Ashutosh (14)",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "icons": "node scripts/generate-app-icons.js",
+    "export:android": "npx expo export --platform android",
+    "export:check": "npx expo export --platform android --output-dir dist-bundle-check",
+    "doctor": "npx expo-doctor",
+    "build:apk": "eas build -p android --profile preview --non-interactive",
+    "build:aab": "eas build -p android --profile production --non-interactive",
+    "submit:play": "eas submit -p android --profile production --latest --non-interactive",
+    "seed:play-config": "node scripts/seed-app-config-android.js",
+    "update:preview": "eas update --channel preview --environment preview --platform android --message \"Asset Doctor preview OTA\" --non-interactive",
+    "update:production": "eas update --channel production --environment production --platform android --message \"Asset Doctor production OTA\" --non-interactive"
+  },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-firebase/app": "^21.0.0",
     "@react-native-firebase/auth": "^21.0.0",
+    "@react-native-firebase/crashlytics": "21.14.0",
     "@react-native-firebase/firestore": "^21.0.0",
     "@react-native-firebase/storage": "^21.0.0",
-    "@react-native-google-signin/google-signin": "^13.0.0",
-    "expo": "^57.0.8",
+    "@react-native-google-signin/google-signin": "^13.3.1",
+    "@react-native-ml-kit/text-recognition": "^2.0.0",
+    "@react-navigation/bottom-tabs": "^7.18.14",
+    "@react-navigation/native": "^7.0.0",
+    "@react-navigation/native-stack": "^7.0.0",
+    "expo": "~57.0.9",
+    "expo-build-properties": "~57.0.8",
+    "expo-constants": "~57.0.8",
+    "expo-document-picker": "~57.0.1",
+    "expo-file-system": "~57.0.1",
+    "expo-image-picker": "~57.0.7",
+    "expo-local-authentication": "~57.0.2",
+    "expo-notifications": "~57.0.8",
+    "expo-print": "~57.0.1",
+    "expo-sharing": "~57.0.8",
+    "expo-splash-screen": "~57.0.5",
+    "expo-updates": "~57.0.11",
+    "lottie-react-native": "^7.0.0",
+    "pdf-lib": "^1.17.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "react-native": "0.86.0",
+    "react-native": "0.86.2",
+    "react-native-gesture-handler": "~2.32.0",
     "react-native-haptic-feedback": "^2.3.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0",
+    "react-native-share": "^12.0.0",
+    "react-native-svg": "15.15.4",
+    "react-native-view-shot": "5.1.0",
     "react-native-web": "^0.21.2"
   },
-  "notes": {
-    "setup": [
-      "Scaffold React Native (Expo prebuild / bare RN) then copy src/ into the app.",
-      "Add google-services.json (Android) and GoogleService-Info.plist (iOS).",
-      "Enable Google + Phone providers in Firebase Console → Authentication.",
-      "Configure GoogleSignin.configure({ webClientId: '<WEB_CLIENT_ID>' }) at app boot.",
-      "Add SHA-1 for Android Phone Auth / Google Sign-In."
-    ]
-  },
   "devDependencies": {
-    "@react-native-community/cli": "^20.2.0"
+    "@react-native-community/cli": "^20.2.0",
+    "@resvg/resvg-js": "^2.6.2",
+    "babel-preset-expo": "^57.0.4"
+  },
+  "overrides": {
+    "@react-native-async-storage/async-storage": "2.2.0"
+  },
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "@react-native-ml-kit/text-recognition"
+        ]
+      }
+    }
   }
 }

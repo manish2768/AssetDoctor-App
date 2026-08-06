@@ -1,13 +1,31 @@
 /**
  * Google Sign-In config — never crash APK if native module misconfigured.
+ * webClientId MUST be the Firebase/GCP OAuth "Web client" (client_type: 3), not Android.
  */
+
+import Constants from 'expo-constants';
 
 import { ENV } from '../../config/env';
 
-export const GOOGLE_WEB_CLIENT_ID =
-  process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
-  ENV.googleWebClientId ||
+/** Firebase Web client ID (OAuth client_type 3) — required for idToken → Firebase Auth */
+export const FIREBASE_GOOGLE_WEB_CLIENT_ID =
   '926559836985-1jschm7e172vqo2rav99oif3uoq93ftq.apps.googleusercontent.com';
+
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    const s = String(value || '').trim();
+    if (s) return s;
+  }
+  return '';
+}
+
+export const GOOGLE_WEB_CLIENT_ID = firstNonEmpty(
+  process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+  Constants.expoConfig?.extra?.googleWebClientId,
+  Constants.easConfig?.extra?.googleWebClientId,
+  ENV.googleWebClientId,
+  FIREBASE_GOOGLE_WEB_CLIENT_ID
+);
 
 let configured = false;
 
@@ -27,12 +45,22 @@ export function configureGoogleSignIn() {
       console.warn('[AssetDoctor] Google Sign-In native module unavailable');
       return false;
     }
+
+    const webClientId = GOOGLE_WEB_CLIENT_ID || FIREBASE_GOOGLE_WEB_CLIENT_ID;
+    if (!webClientId.includes('apps.googleusercontent.com')) {
+      console.warn('[AssetDoctor] Invalid webClientId — check Firebase Web OAuth client');
+      return false;
+    }
+
     GoogleSignin.configure({
-      webClientId: GOOGLE_WEB_CLIENT_ID,
+      webClientId,
       offlineAccess: true,
       forceCodeForRefreshToken: true,
     });
     configured = true;
+    if (__DEV__) {
+      console.log('[AssetDoctor] GoogleSignin configured with webClientId:', webClientId);
+    }
     return true;
   } catch (error) {
     console.warn('[AssetDoctor] Google Sign-In configure failed:', error?.message || error);
@@ -86,6 +114,7 @@ export async function googleSignOut() {
 
 export default {
   GOOGLE_WEB_CLIENT_ID,
+  FIREBASE_GOOGLE_WEB_CLIENT_ID,
   configureGoogleSignIn,
   getGoogleIdToken,
   googleSignOut,
