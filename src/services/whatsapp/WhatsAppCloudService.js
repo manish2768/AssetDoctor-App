@@ -1,6 +1,6 @@
 /**
  * Client helper — WhatsApp Cloud API via Asset Doctor Cloud Functions.
- * OTP auth uses custom tokens; welcome can be triggered after signup.
+ * OTP auth uses custom tokens; welcome is sent server-side on first verify.
  */
 
 import auth from '@react-native-firebase/auth';
@@ -50,7 +50,7 @@ function normalizePhone(phoneNumber) {
 }
 
 export class WhatsAppCloudService {
-  /** Request OTP via template `asset_doctor_otp` */
+  /** Request OTP via Cloud Function `sendWhatsAppOtp` (template `asset_doctor_otp`). */
   static async sendOtp(phoneNumber) {
     Haptics.tap();
     try {
@@ -59,6 +59,9 @@ export class WhatsAppCloudService {
         throw new Error('Enter a valid mobile number with country code (e.g. +919876543210)');
       }
       const result = await postJson(functionUrl('sendWhatsAppOtp'), { phoneNumber: phone });
+      if (result?.success !== true) {
+        throw new Error(result?.error || 'Failed to send WhatsApp OTP');
+      }
       Haptics.success();
       return { success: true, ...result, phone };
     } catch (error) {
@@ -68,7 +71,8 @@ export class WhatsAppCloudService {
   }
 
   /**
-   * Verify OTP → sign in with custom token + sync profile.
+   * Verify OTP via `verifyWhatsAppOtp` → sign in with custom token only on success.
+   * Does NOT sign in on invalid OTP / API errors.
    * @returns {Promise<{ success: boolean, user?: object, profile?: object, isNewUser?: boolean, error?: string }>}
    */
   static async verifyOtp(phoneNumber, otpCode, { name } = {}) {
@@ -76,22 +80,33 @@ export class WhatsAppCloudService {
     try {
       const phone = normalizePhone(phoneNumber);
       const otp = String(otpCode || '').trim();
+      if (!phone) throw new Error('OTP session expired. Please request a new code.');
       if (!/^\d{6}$/.test(otp)) throw new Error('Enter the 6-digit OTP');
 
       const result = await postJson(functionUrl('verifyWhatsAppOtp'), {
         phoneNumber: phone,
         otp,
-        name: name || undefined,
+        name: name ? String(name).trim().slice(0, 80) : undefined,
       });
-      if (!result.customToken) throw new Error('Missing auth token from server');
+
+      // Hard gate — never treat a partial / missing token response as logged-in
+      if (result?.success !== true || !result?.customToken) {
+        throw new Error(result?.error || 'Invalid OTP');
+      }
 
       const credential = await auth().signInWithCustomToken(result.customToken);
+      if (!credential?.user?.uid) {
+        throw new Error('Sign-in failed after OTP verification');
+      }
+
+      const displayName = String(name || '').trim().slice(0, 80);
       const profile = await UserService.syncUserToFirestore(credential.user, {
         authProvider: 'whatsapp_otp',
         extra: {
           phone: result.phone || phone,
           phoneNumber: result.phone || phone,
-          name: name || credential.user.displayName || undefined,
+          name: displayName || undefined,
+          profileSetupComplete: Boolean(displayName),
         },
       });
 
@@ -112,7 +127,7 @@ export class WhatsAppCloudService {
 
   /**
    * Admin-only welcome retry — requires server WHATSAPP_ADMIN_SECRET.
-   * App login does not call this; verifyWhatsAppOtp / onUserCreated send welcome.
+   * App login does not call this; verifyWhatsAppOtp sends welcome for new users.
    */
   static async sendWelcome({ uid, phoneNumber, name, adminSecret } = {}) {
     try {
@@ -123,7 +138,7 @@ export class WhatsAppCloudService {
       return await postJson(functionUrl('sendWelcomeWhatsApp'), {
         uid,
         phoneNumber: normalizePhone(phoneNumber),
-        name: name || 'Asset Owner',
+        name: name || undefined,
         adminSecret,
       });
     } catch (error) {

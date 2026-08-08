@@ -1,6 +1,6 @@
 /**
  * Asset Doctor — Auth Service
- * Google Sign-In + Mobile OTP (WhatsApp Cloud API primary, Firebase SMS fallback).
+ * Google Sign-In + Mobile OTP (WhatsApp Cloud API for login tab; SMS only if channel:'sms').
  * All touch / success / error paths trigger haptic feedback.
  */
 
@@ -79,12 +79,18 @@ export class AuthService {
           emailVerified: false,
           welcomeEmailSent: false,
         },
+      }).catch((syncError) => {
+        console.warn('[AuthService] profile sync after signup:', syncError?.message || syncError);
+        return null;
       });
 
       const welcome = await EmailService.sendWelcomeEmail({
         uid: userCredential.user.uid,
         email: cleanEmail,
         name: cleanName,
+      }).catch((welcomeError) => {
+        console.warn('[AuthService] welcome email skipped:', welcomeError?.message || welcomeError);
+        return { success: false, error: welcomeError?.message };
       });
 
       Haptics.success();
@@ -104,6 +110,8 @@ export class AuthService {
 
   /**
    * Email / password login.
+   * Email is trimmed + lowercased; password is trimmed (case preserved).
+   * Profile sync failures never block a successful Firebase Auth login.
    * @param {{ email: string, password: string }} payload
    * @returns {Promise<AuthResult>}
    */
@@ -112,11 +120,24 @@ export class AuthService {
 
     try {
       const cleanEmail = String(email || '').trim().toLowerCase();
-      const userCredential = await auth().signInWithEmailAndPassword(cleanEmail, password);
-      const profile = await UserService.syncUserToFirestore(userCredential.user, {
-        authProvider: 'email',
-        extra: { emailVerified: Boolean(userCredential.user.emailVerified) },
-      });
+      const cleanPassword = String(password || '').trim();
+      if (!cleanEmail || !cleanEmail.includes('@')) {
+        throw new Error('Enter a valid email address');
+      }
+      if (!cleanPassword) {
+        throw new Error('Enter your password');
+      }
+
+      const userCredential = await auth().signInWithEmailAndPassword(cleanEmail, cleanPassword);
+      let profile = null;
+      try {
+        profile = await UserService.syncUserToFirestore(userCredential.user, {
+          authProvider: 'email',
+          extra: { emailVerified: Boolean(userCredential.user.emailVerified) },
+        });
+      } catch (syncError) {
+        console.warn('[AuthService] profile sync after email login:', syncError?.message || syncError);
+      }
       Haptics.success();
       return { success: true, user: userCredential.user, profile };
     } catch (error) {
@@ -177,6 +198,7 @@ export class AuthService {
     Haptics.tap();
 
     try {
+      // Always (re)configure with the Firebase Web OAuth client before sign-in
       configureGoogleSignIn();
 
       let token = idToken;
@@ -194,33 +216,49 @@ export class AuthService {
       const { user } = userCredential;
       const isNewUser = Boolean(userCredential.additionalUserInfo?.isNewUser);
 
-      // Explicit profile write: users/{userId}
-      const profile = await UserService.saveGoogleUserProfile(user);
+      let profile = null;
+      try {
+        profile = await UserService.saveGoogleUserProfile(user);
+      } catch (syncError) {
+        console.warn('[AuthService] profile sync after Google login:', syncError?.message || syncError);
+      }
 
       if (isNewUser && user.email) {
-        await user.getIdToken(true);
-        await EmailService.sendWelcomeEmail({
-          uid: user.uid,
-          email: user.email,
-          name: user.displayName || 'Asset Owner',
-        });
+        try {
+          await user.getIdToken(true);
+          await EmailService.sendWelcomeEmail({
+            uid: user.uid,
+            email: user.email,
+            name: user.displayName || 'Asset Owner',
+          });
+        } catch (welcomeError) {
+          console.warn('[AuthService] welcome email skipped:', welcomeError?.message || welcomeError);
+        }
       }
 
       Haptics.success();
       return { success: true, user, profile, isNewUser };
     } catch (error) {
       Haptics.error();
+      console.warn('[AuthService] signInWithGoogle error:', {
+        code: error?.code,
+        message: error?.message,
+        nativeMessage: error?.nativeMessage,
+      });
       return { success: false, error: mapAuthError(error) || error?.message || 'Google Sign-In failed' };
     }
   }
 
   /**
-   * 2. Send Mobile OTP — WhatsApp Cloud (`asset_doctor_otp`) by default.
-   * Set EXPO_PUBLIC_WHATSAPP_OTP=0 to use Firebase Phone Auth (SMS) only.
+   * 2. Send Mobile OTP.
+   * - channel `'whatsapp'` (login WhatsApp tab): Cloud Function `sendWhatsAppOtp` only — never SMS.
+   * - channel `'sms'`: Firebase `signInWithPhoneNumber` only.
+   * - channel `'auto'` (default): WhatsApp when EXPO_PUBLIC_WHATSAPP_OTP≠0, else SMS.
    * @param {string} phoneNumber - E.164 or 10-digit Indian mobile
+   * @param {{ channel?: 'whatsapp' | 'sms' | 'auto' }} [options]
    * @returns {Promise<object>}
    */
-  static async sendOTP(phoneNumber) {
+  static async sendOTP(phoneNumber, options = {}) {
     Haptics.tap();
 
     try {
@@ -229,7 +267,12 @@ export class AuthService {
         throw new Error('Enter a valid mobile number with country code (e.g. +919876543210)');
       }
 
-      if (PREFER_WHATSAPP_OTP) {
+      const requested = String(options.channel || 'auto').toLowerCase();
+      const useWhatsApp =
+        requested === 'whatsapp' || (requested === 'auto' && PREFER_WHATSAPP_OTP);
+      const forceSms = requested === 'sms';
+
+      if (useWhatsApp && !forceSms) {
         const wa = await WhatsAppCloudService.sendOtp(e164);
         if (wa.success) {
           return {
@@ -240,7 +283,10 @@ export class AuthService {
             expiresInSec: wa.expiresInSec,
           };
         }
-        // Fall through to Firebase SMS if WhatsApp backend is unavailable
+        // WhatsApp login tab must not fall back to Firebase SMS
+        if (requested === 'whatsapp') {
+          throw new Error(wa.error || 'Failed to send WhatsApp OTP');
+        }
         console.warn('[AuthService] WhatsApp OTP failed, trying SMS:', wa.error);
       }
 
@@ -255,11 +301,13 @@ export class AuthService {
 
   /**
    * Verify Mobile OTP (WhatsApp custom token or Firebase SMS confirmation).
+   * WhatsApp path signs in ONLY after `verifyWhatsAppOtp` returns success + customToken.
    * @param {object} confirmation
    * @param {string} otpCode
+   * @param {{ name?: string }} [options]
    * @returns {Promise<AuthResult>}
    */
-  static async verifyOTP(confirmation, otpCode) {
+  static async verifyOTP(confirmation, otpCode, options = {}) {
     triggerHaptic('impactMedium');
 
     try {
@@ -268,11 +316,21 @@ export class AuthService {
         throw new Error('Enter the 6-digit OTP');
       }
 
-      if (confirmation?.channel === 'whatsapp') {
+      if (!confirmation || typeof confirmation !== 'object') {
+        throw new Error('OTP session expired. Please request a new code.');
+      }
+
+      if (confirmation.channel === 'whatsapp') {
         const phone = confirmation.phone;
-        const result = await WhatsAppCloudService.verifyOtp(phone, code);
-        if (!result.success) throw new Error(result.error || 'Invalid OTP');
-        // Welcome template is sent server-side in verifyWhatsAppOtp (not via client HTTP)
+        if (!phone) {
+          throw new Error('OTP session expired. Please request a new code.');
+        }
+        const result = await WhatsAppCloudService.verifyOtp(phone, code, {
+          name: options.name,
+        });
+        if (!result.success || !result.user) {
+          throw new Error(result.error || 'Invalid OTP');
+        }
         Haptics.success();
         return {
           success: true,
@@ -301,7 +359,7 @@ export class AuthService {
         error?.code === 'auth/invalid-verification-code'
           ? 'Invalid OTP'
           : error?.message || 'Invalid OTP';
-      return { success: false, error: message };
+      return { success: false, error: message, user: null };
     }
   }
 
@@ -377,8 +435,8 @@ export class AuthService {
 }
 
 function mapAuthError(error) {
-  const code = error?.code || '';
-  const message = String(error?.message || '');
+  const code = String(error?.code || '');
+  const message = String(error?.message || error?.nativeMessage || '');
   if (code.includes('email-already-in-use')) return 'An account already exists with this email';
   if (code.includes('invalid-email')) return 'Enter a valid email address';
   if (code.includes('weak-password')) return 'Password must be at least 6 characters';
@@ -389,10 +447,18 @@ function mapAuthError(error) {
   if (message.includes('cancelled') || message.includes('canceled') || code === 'SIGN_IN_CANCELLED') {
     return 'Google Sign-In was cancelled';
   }
-  if (code.includes('DEVELOPER_ERROR') || message.includes('DEVELOPER_ERROR')) {
-    return 'Google Sign-In misconfigured. Check SHA-1 and webClientId.';
+  // Surface native Google / Firebase details so Play Console debugging is accurate
+  if (
+    code.includes('DEVELOPER_ERROR') ||
+    message.includes('DEVELOPER_ERROR') ||
+    code.includes('GOOGLE') ||
+    code.includes('SIGN_IN') ||
+    message.includes('[')
+  ) {
+    const parts = [code && `code=${code}`, message && `message=${message}`].filter(Boolean);
+    return parts.length ? `Google Sign-In failed (${parts.join(' | ')})` : 'Google Sign-In failed';
   }
-  return error?.message || 'Authentication failed';
+  return message || 'Authentication failed';
 }
 
 export default AuthService;

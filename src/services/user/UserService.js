@@ -18,7 +18,9 @@ import { Haptics } from '../haptics/triggerHaptic';
  * @property {string} [address]
  * @property {string} [pincode]
  * @property {string} [photoURL]
- * @property {string} [authProvider] - 'google' | 'phone' | 'unknown'
+ * @property {string} [authProvider] - 'google' | 'phone' | 'email' | 'whatsapp_otp' | 'unknown'
+ * @property {boolean} [profileSetupComplete]
+ * @property {boolean} [welcomeWhatsAppSent]
  * @property {FirebaseFirestoreTypes.FieldValue | Date} [createdAt]
  * @property {FirebaseFirestoreTypes.FieldValue | Date} [updatedAt]
  */
@@ -31,6 +33,26 @@ function usersCollection() {
 /** Legacy mirror: Users/{uid} (nested Assets / Vendors still hang off this tree) */
 function legacyUsersCollection() {
   return firestore().collection(COLLECTIONS.USERS);
+}
+
+/**
+ * Resolve a display name without inventing "Asset Owner".
+ * Preference: provided name → existing profile → Auth displayName (if not placeholder) → phone → ''.
+ */
+function resolveDisplayName({ provided, existing, authDisplayName, phone } = {}) {
+  const clean = (v) => {
+    const s = String(v || '').trim();
+    if (!s) return '';
+    if (s === DEFAULT_DISPLAY_NAME) return '';
+    return s.slice(0, 80);
+  };
+  return (
+    clean(provided) ||
+    clean(existing) ||
+    clean(authDisplayName) ||
+    clean(phone) ||
+    ''
+  );
 }
 
 export class UserService {
@@ -61,25 +83,44 @@ export class UserService {
       legacyExisting = { exists: false, data: () => null };
     }
 
+    const prior = legacyExisting.data() || {};
     const verifiedPhone =
+      options.extra?.phoneNumber ||
+      options.extra?.phone ||
       user.phoneNumber ||
-      legacyExisting.data()?.phoneNumber ||
-      legacyExisting.data()?.phone ||
+      prior.phoneNumber ||
+      prior.phone ||
       '';
+
+    const resolvedName = resolveDisplayName({
+      provided: options.extra?.name,
+      existing: prior.name,
+      authDisplayName: user.displayName,
+      phone: verifiedPhone,
+    });
 
     /** @type {Partial<UserProfile>} */
     const payload = {
       uid: user.uid,
-      email: user.email || legacyExisting.data()?.email || '',
+      email: user.email || prior.email || '',
       phone: verifiedPhone,
-      /** Verified Auth phone (E.164) — same as auth.currentUser.phoneNumber when linked */
       phoneNumber: verifiedPhone,
-      name: user.displayName || legacyExisting.data()?.name || DEFAULT_DISPLAY_NAME,
-      photoURL: user.photoURL || legacyExisting.data()?.photoURL || '',
-      authProvider: options.authProvider || legacyExisting.data()?.authProvider || 'unknown',
+      name: resolvedName,
+      photoURL: user.photoURL || prior.photoURL || '',
+      authProvider: options.authProvider || prior.authProvider || 'unknown',
       updatedAt: firestore.FieldValue.serverTimestamp(),
       ...options.extra,
     };
+
+    // Keep resolved name even if extra omitted name / sent placeholder
+    payload.name = resolveDisplayName({
+      provided: payload.name,
+      existing: prior.name,
+      authDisplayName: user.displayName,
+      phone: verifiedPhone,
+    });
+    payload.phone = verifiedPhone || payload.phone || '';
+    payload.phoneNumber = verifiedPhone || payload.phoneNumber || '';
 
     if (!legacyExisting.exists) {
       payload.createdAt = firestore.FieldValue.serverTimestamp();
@@ -98,7 +139,7 @@ export class UserService {
         uid: user.uid,
         email: payload.email || '',
         phone: payload.phone || '',
-        name: payload.name || DEFAULT_DISPLAY_NAME,
+        name: payload.name || '',
         photoURL: payload.photoURL || '',
         authProvider: payload.authProvider || 'unknown',
         address: payload.address || '',
@@ -183,6 +224,13 @@ export class UserService {
       if (typeof updates.pincode === 'string') allowed.pincode = updates.pincode.trim();
       if (typeof updates.photoURL === 'string') allowed.photoURL = updates.photoURL.trim();
       if (typeof updates.email === 'string') allowed.email = updates.email.trim();
+      if (typeof updates.phoneNumber === 'string') {
+        allowed.phoneNumber = updates.phoneNumber.trim();
+        if (!allowed.phone) allowed.phone = allowed.phoneNumber;
+      }
+      if (typeof updates.profileSetupComplete === 'boolean') {
+        allowed.profileSetupComplete = updates.profileSetupComplete;
+      }
       if (typeof updates.whatsappRemindersOptOut === 'boolean') {
         allowed.whatsappRemindersOptOut = updates.whatsappRemindersOptOut;
       }
@@ -214,6 +262,55 @@ export class UserService {
     } catch (error) {
       Haptics.error();
       return { success: false, error: error?.message || 'Failed to update profile' };
+    }
+  }
+
+  /**
+   * First-time profile setup after Gmail / email sign-in.
+   * Marks profileSetupComplete so welcome WhatsApp can fire server-side.
+   */
+  static async completeProfileSetup(uid, { name, phone, phoneNumber, photoURL } = {}) {
+    Haptics.tap();
+    try {
+      if (!uid) throw new Error('Missing user id');
+      const cleanName = String(name || '').trim();
+      const cleanPhone = String(phoneNumber || phone || '').trim();
+      if (!cleanName) throw new Error('Full name is required');
+      if (!cleanPhone) throw new Error('WhatsApp number is required');
+
+      const payload = {
+        name: cleanName,
+        phone: cleanPhone,
+        phoneNumber: cleanPhone,
+        profileSetupComplete: true,
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      };
+      if (typeof photoURL === 'string' && photoURL.trim()) {
+        payload.photoURL = photoURL.trim();
+      }
+
+      await Promise.all([
+        usersCollection().doc(uid).set(payload, { merge: true }),
+        legacyUsersCollection().doc(uid).set(payload, { merge: true }),
+      ]);
+
+      const profile = await this.getProfile(uid);
+      Haptics.success();
+      return { success: true, profile };
+    } catch (error) {
+      Haptics.error();
+      return { success: false, error: error?.message || 'Profile setup failed' };
+    }
+  }
+
+  /** Count non-deleted assets in Users/{uid}/Assets */
+  static async countVaultedAssets(uid) {
+    if (!uid) return 0;
+    try {
+      const snap = await legacyUsersCollection().doc(uid).collection('Assets').get();
+      return snap.docs.filter((d) => !d.data()?.deletedAt).length;
+    } catch {
+      return 0;
     }
   }
 

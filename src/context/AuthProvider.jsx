@@ -16,6 +16,7 @@ import { AuthService } from '../services/auth';
 import { UserService } from '../services/user';
 import { Haptics } from '../services/haptics';
 import { CrashlyticsService } from '../services/crashlytics/CrashlyticsService';
+import { needsProfileSetup as checkProfileSetup } from '../utils/profileSetup';
 
 const AuthContext = createContext(null);
 
@@ -25,8 +26,8 @@ const AuthContext = createContext(null);
  * @property {object | null} profile
  * @property {boolean} loading
  * @property {(idToken: string) => Promise<object>} signInWithGoogle
- * @property {(phone: string) => Promise<object>} sendOTP
- * @property {(confirmation: object, code: string) => Promise<object>} verifyOTP
+ * @property {(phone: string, options?: { channel?: 'whatsapp' | 'sms' | 'auto' }) => Promise<object>} sendOTP
+ * @property {(confirmation: object, code: string, options?: { name?: string }) => Promise<object>} verifyOTP
  * @property {(updates: object) => Promise<object>} updateProfile
  * @property {() => Promise<object>} signOut
  */
@@ -61,7 +62,7 @@ export function AuthProvider({ children }) {
             setProfile(
               existing || {
                 uid: firebaseUser.uid,
-                name: firebaseUser.displayName || 'Asset Owner',
+                name: firebaseUser.displayName || firebaseUser.phoneNumber || '',
                 email: firebaseUser.email || '',
                 phone: firebaseUser.phoneNumber || '',
               },
@@ -69,7 +70,7 @@ export function AuthProvider({ children }) {
           } catch {
             setProfile({
               uid: firebaseUser.uid,
-              name: firebaseUser.displayName || 'Asset Owner',
+              name: firebaseUser.displayName || firebaseUser.phoneNumber || '',
               email: firebaseUser.email || '',
               phone: firebaseUser.phoneNumber || '',
             });
@@ -105,13 +106,14 @@ export function AuthProvider({ children }) {
     return result;
   }, []);
 
-  const sendOTP = useCallback(async (phoneNumber) => {
-    return AuthService.sendOTP(phoneNumber);
+  const sendOTP = useCallback(async (phoneNumber, options) => {
+    return AuthService.sendOTP(phoneNumber, options);
   }, []);
 
-  const verifyOTP = useCallback(async (confirmation, otpCode) => {
-    const result = await AuthService.verifyOTP(confirmation, otpCode);
-    if (result.success) setProfile(result.profile || null);
+  const verifyOTP = useCallback(async (confirmation, otpCode, options) => {
+    const result = await AuthService.verifyOTP(confirmation, otpCode, options);
+    // Only attach profile after a verified success — never on invalid OTP
+    if (result.success && result.user) setProfile(result.profile || null);
     return result;
   }, []);
 
@@ -148,6 +150,33 @@ export function AuthProvider({ children }) {
     [user?.uid],
   );
 
+  const completeProfileSetup = useCallback(
+    async (payload) => {
+      if (!user?.uid) {
+        Haptics.error();
+        return { success: false, error: 'Not signed in' };
+      }
+      const result = await UserService.completeProfileSetup(user.uid, payload);
+      if (result.success) {
+        setProfile(result.profile || null);
+        try {
+          if (payload?.name && user.displayName !== payload.name) {
+            await user.updateProfile({ displayName: payload.name });
+          }
+        } catch {
+          /* non-blocking */
+        }
+      }
+      return result;
+    },
+    [user],
+  );
+
+  const needsProfileSetup = useMemo(
+    () => checkProfileSetup(profile, user),
+    [profile, user],
+  );
+
   const signOut = useCallback(async () => {
     const result = await AuthService.signOut();
     if (result.success) {
@@ -171,8 +200,10 @@ export function AuthProvider({ children }) {
       sendOTP,
       verifyOTP,
       updateProfile,
+      completeProfileSetup,
       signOut,
       isAuthenticated: Boolean(user),
+      needsProfileSetup,
       emailVerified: Boolean(user?.emailVerified || profile?.emailVerified),
     }),
     [
@@ -187,7 +218,9 @@ export function AuthProvider({ children }) {
       sendOTP,
       verifyOTP,
       updateProfile,
+      completeProfileSetup,
       signOut,
+      needsProfileSetup,
     ],
   );
 
