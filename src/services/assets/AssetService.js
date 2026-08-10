@@ -169,7 +169,15 @@ export class AssetService {
       let billStoragePath = '';
       let pendingImageLocalPath = '';
 
-      if (localImagePath) {
+      // OCR / scan path: never upload full-res bill images — Firestore JSON (+ micro-thumb) only.
+      const skipHeavyImageUpload =
+        Boolean(form.ocrDataOnly) ||
+        Boolean(options.ocrDataOnly) ||
+        Boolean(form.skipBillUpload) ||
+        options.skipBillUpload === true ||
+        (Boolean(form.ocrExtract || form.billThumbDataUrl) && options.storeBillImage !== true);
+
+      if (localImagePath && !skipHeavyImageUpload) {
         const uploaded = await uploadVaultInvoiceImage(userId, localImagePath);
         if (uploaded.success) {
           billImageUrl = uploaded.downloadUrl;
@@ -237,7 +245,18 @@ export class AssetService {
             : null,
         billImageUrl,
         billStoragePath,
-        hasBill: Boolean(billImageUrl && form.scanDocumentType !== 'rc'),
+        billThumbDataUrl: form.billThumbDataUrl || null,
+        ocrExtract: form.ocrExtract || form.invoiceMeta?.ocrExtract || null,
+        classifiedDocumentType:
+          form.classifiedDocumentType ||
+          form.geminiDocumentType ||
+          form.invoiceMeta?.classifiedDocumentType ||
+          '',
+        hasBill: Boolean(
+          (billImageUrl && form.scanDocumentType !== 'rc') ||
+            form.ocrExtract ||
+            form.billThumbDataUrl,
+        ),
         pendingBillUpload: Boolean(pendingImageLocalPath && !billImageUrl),
         invoiceMeta: form.invoiceMeta || null,
         pendingSync: false,
@@ -503,6 +522,10 @@ export class AssetService {
         'nextServiceDue',
         'icon',
         'invoiceMeta',
+        'activeDocumentIds',
+        'ocrExtract',
+        'billThumbDataUrl',
+        'classifiedDocumentType',
       ];
 
       for (const key of allow) {

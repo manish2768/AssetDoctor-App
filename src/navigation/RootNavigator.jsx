@@ -41,17 +41,35 @@ import { ONBOARDING_KEY } from '../constants/storageKeys';
 import { CustomBottomTabBar } from '../components/CustomBottomTabBar';
 import { navigationRef, goHomeDashboard } from './navActions';
 
-// Lazy-load scanner / review so OCR deps cannot blank the Home boot path
+// Lazy-load scanner / review so OCR deps cannot blank the Home boot path.
+// ScanBillScreen already wraps itself in ScanErrorBoundary.
 function ScanBillScreen(props) {
-  const Comp = require('../screens/ScanBillScreen').ScanBillScreen;
-  return <Comp {...props} />;
+  try {
+    const Comp = require('../screens/ScanBillScreen').ScanBillScreen;
+    return <Comp {...props} />;
+  } catch (error) {
+    console.error('[RootNavigator] ScanBill load failed:', error?.message || error);
+    const Boundary = require('../components/ScanErrorBoundary').ScanErrorBoundary;
+    return <Boundary navigation={props.navigation}>{null}</Boundary>;
+  }
 }
 function ReviewAssetScreen(props) {
-  const Comp = require('../screens/ReviewAssetScreen').ReviewAssetScreen;
-  return <Comp {...props} />;
+  try {
+    const Comp = require('../screens/ReviewAssetScreen').ReviewAssetScreen;
+    const Boundary = require('../components/ScanErrorBoundary').ScanErrorBoundary;
+    return (
+      <Boundary navigation={props.navigation}>
+        <Comp {...props} />
+      </Boundary>
+    );
+  } catch (error) {
+    console.error('[RootNavigator] ReviewAsset load failed:', error?.message || error);
+    const Boundary = require('../components/ScanErrorBoundary').ScanErrorBoundary;
+    return <Boundary navigation={props.navigation}>{null}</Boundary>;
+  }
 }
 
-export { navigationRef, openScanInvoice, openReviewInvoice, goHomeDashboard } from './navActions';
+export { navigationRef, openScanInvoice, openReviewInvoice, openRescanInvoice, goHomeDashboard } from './navActions';
 
 const RootStack = createNativeStackNavigator();
 const AuthStack = createNativeStackNavigator();

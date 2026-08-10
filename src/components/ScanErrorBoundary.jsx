@@ -1,6 +1,6 @@
 /**
  * Screen-level Error Boundary for Scan Invoice.
- * On crash → show recovery UI and navigate Home (never blank white).
+ * On crash → show recovery UI, then return to previous screen / Home.
  */
 
 import React, { Component } from 'react';
@@ -25,11 +25,14 @@ export class ScanErrorBoundary extends Component {
     console.error('[ScanErrorBoundary] stack:', info?.componentStack || '');
   }
 
-  goHome = () => {
+  goBackSafe = () => {
     Haptics.tap();
     this.setState({ error: null });
     try {
-      this.props.navigation?.goBack?.();
+      if (this.props.navigation?.canGoBack?.()) {
+        this.props.navigation.goBack();
+        return;
+      }
     } catch {
       /* ignore */
     }
@@ -48,7 +51,7 @@ export class ScanErrorBoundary extends Component {
           <Text style={styles.brand}>{BRAND.name}</Text>
           <Text style={styles.title}>Scanner hit an error</Text>
           <Text style={styles.sub}>
-            Camera / OCR failed safely. Your vault is fine — go Home or try again.
+            Camera / OCR failed safely. Go back to the previous screen or try again.
           </Text>
           <Text style={styles.err} selectable>
             {String(this.state.error?.message || this.state.error)}
@@ -56,8 +59,8 @@ export class ScanErrorBoundary extends Component {
           <Pressable style={styles.btn} onPress={this.retry}>
             <Text style={styles.btnText}>Try again</Text>
           </Pressable>
-          <Pressable style={[styles.btn, styles.btnGhost]} onPress={this.goHome}>
-            <Text style={styles.btnGhostText}>Back to Home</Text>
+          <Pressable style={[styles.btn, styles.btnGhost]} onPress={this.goBackSafe}>
+            <Text style={styles.btnGhostText}>Go back</Text>
           </Pressable>
         </View>
       );

@@ -19,7 +19,7 @@ function withTimeout(promise, ms) {
 }
 
 /** Short stamp so we can see on-device if this OTA bundle loaded. */
-export const OTA_BUNDLE_LABEL = 'FIX-0810-critical';
+export const OTA_BUNDLE_LABEL = 'FIX-0810-ocr-strict';
 
 export class OtaUpdateService {
   static isSupported() {

@@ -192,12 +192,13 @@ function score(text, patterns) {
 export function vaultTypeFromGeminiDocumentType(geminiDocumentType) {
   const t = String(geminiDocumentType || '')
     .trim()
-    .toUpperCase();
-  if (t === 'VEHICLE_RC') return DOC_TYPES.RC;
-  if (t === 'VEHICLE_INSURANCE') return DOC_TYPES.INSURANCE;
-  if (t === 'VEHICLE_PUC') return DOC_TYPES.PUC;
-  if (t === 'PURCHASE_INVOICE') return DOC_TYPES.BILL;
-  if (t === 'OTHER') return DOC_TYPES.OTHER;
+    .toUpperCase()
+    .replace(/\s+/g, '_');
+  if (t === 'VEHICLE_RC' || t === 'REGISTRATION_CERTIFICATE') return DOC_TYPES.RC;
+  if (t === 'VEHICLE_INSURANCE' || t === 'INSURANCE_POLICY') return DOC_TYPES.INSURANCE;
+  if (t === 'VEHICLE_PUC' || t === 'PUC_CERTIFICATE') return DOC_TYPES.PUC;
+  if (t === 'PURCHASE_INVOICE' || t === 'TAX_INVOICE') return DOC_TYPES.BILL;
+  if (t === 'OTHER' || t === 'OTHER_RECEIPT') return DOC_TYPES.OTHER;
   return null;
 }
 

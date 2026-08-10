@@ -25,6 +25,8 @@ import {
   listVehicleAssets,
   normalizeRegistration,
 } from '../utils/vehicleFolder';
+import { renewVehicleDocument } from '../services/vehicles/DocumentRenewalService';
+import { matchVehicleForDocument } from '../services/vehicles/VehicleMatchService';
 
 const AssetContext = createContext(null);
 
@@ -67,12 +69,10 @@ export function AssetProvider({ children }) {
       const linkedById = form.linkAssetId
         ? assets.find((a) => (a.assetId || a.id) === form.linkAssetId)
         : null;
-      const existing =
-        linkedById ||
-        findVehicleAsset(assets, form) ||
-        null;
+      const match = matchVehicleForDocument(assets, form);
+      const existing = linkedById || match.matched || findVehicleAsset(assets, form) || null;
 
-      // Insurance / PUC / RC / Warranty → always merge into vehicle passport (never new "Other" asset)
+      // Insurance / PUC / RC / Warranty → renew onto vehicle passport (never duplicate vehicle)
       if (attachDoc) {
         if (!existing) {
           const vehicles = listVehicleAssets(assets);
@@ -80,6 +80,7 @@ export function AssetProvider({ children }) {
             success: false,
             needsVehicleLink: true,
             vehicles,
+            matchBy: null,
             error:
               vehicles.length > 0
                 ? 'Select the vehicle this document belongs to.'
@@ -87,34 +88,27 @@ export function AssetProvider({ children }) {
           };
         }
         const assetId = existing.assetId || existing.id;
-        const vaultMeta = resolveVaultDocumentMeta(form);
-        const docType = vaultMeta.type;
-        const updates = {
-          ...(docType === 'puc' && form.pucExpiry ? { pucExpiry: form.pucExpiry } : {}),
-          ...(docType === 'insurance' && form.insuranceExpiry
-            ? { insuranceExpiry: form.insuranceExpiry }
-            : {}),
-          ...(docType === 'warranty' && form.warrantyExpiry
-            ? { warrantyExpiry: form.warrantyExpiry }
-            : {}),
-          ...(form.nextServiceDue ? { nextServiceDue: form.nextServiceDue } : {}),
-          ...(form.chassisNumber ? { chassisNumber: form.chassisNumber } : {}),
-          ...(form.engineNumber ? { engineNumber: form.engineNumber } : {}),
-          ...(form.registration ? { registration: form.registration } : {}),
-        };
-        const updated = await AssetService.updateAsset(user.uid, assetId, updates, null);
-        if (localImagePath) {
-          await DocumentVaultService.uploadDocument(user.uid, assetId, {
-            localPath: localImagePath,
-            type: vaultMeta.type,
-            label: vaultMeta.label,
-          }).catch(() => {});
+        const renewed = await renewVehicleDocument({
+          userId: user.uid,
+          assetId,
+          form,
+          localImagePath: localImagePath || null,
+          existingAsset: existing,
+        });
+        if (!renewed.success) {
+          return {
+            success: false,
+            error: renewed.error || 'Could not renew document on vehicle',
+          };
         }
         return {
           success: true,
           id: assetId,
           merged: true,
-          asset: updated.asset || { ...existing, ...updates },
+          renewed: true,
+          archivedCount: renewed.archivedCount || 0,
+          matchBy: match.matchBy || (linkedById ? 'link' : null),
+          asset: renewed.asset,
         };
       }
 

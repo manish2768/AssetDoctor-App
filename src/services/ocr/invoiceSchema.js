@@ -51,6 +51,11 @@ export function emptyInvoiceData() {
     documentLabel: 'Purchase Bill / Invoice',
     isVehicleInvoice: false,
     requiresVehicleLink: false,
+    classifiedDocumentType: '',
+    geminiDocumentType: '',
+    geminiCategory: '',
+    ocrExtract: null,
+    billThumbDataUrl: null,
     /** Line items from multi-product invoices */
     items: [],
     itemCount: 0,

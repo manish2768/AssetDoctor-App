@@ -135,77 +135,146 @@ export class CloudVisionOcrService {
     let data = mergeParsedFields(parsed.data, sweetBill);
     const energyHints = extractApplianceEnergyFromText(rawText);
 
-    // Gemini 1.5 Flash — classify documentType first, then type-specific fields
+    // Gemini + keyword classification — Insurance keywords beat Invoice
     let gemini = null;
     try {
-      const { extractAssetWithGemini, GEMINI_DOC_TYPES } = require('../gemini/geminiService');
+      const {
+        extractAssetWithGemini,
+        DOC_CLASS,
+        DOC_TYPE_LABELS,
+      } = require('../gemini/geminiService');
+      const {
+        classifyDocumentTypeFromKeywords,
+      } = require('./ocrFieldHeuristics');
+      const keywordClass = classifyDocumentTypeFromKeywords(rawText);
       const enhanced = await extractAssetWithGemini(rawText, {
         serialHint: data.serialNumber || data.chassisNumber || data.registration || '',
-        expectedDocumentType: data.documentType || data.documentKind || '',
+        expectedDocumentType:
+          keywordClass?.document_type || data.documentType || data.documentKind || '',
       });
       if (enhanced.success && enhanced.data) {
         gemini = enhanced.data;
-        const docType = gemini.documentType;
-        const vaultType = gemini.vaultType || 'bill';
+        const docType = gemini.document_type || gemini.documentType;
+        const vaultType = gemini.vaultType || keywordClass?.vaultType || 'bill';
 
-        // Always surface classification so Review / vault pick the right slot
         data.documentType = vaultType;
         data.documentKind = vaultType;
         data.geminiDocumentType = docType;
         data.scanDocumentType = vaultType;
+        data.documentLabel =
+          gemini.documentLabel ||
+          keywordClass?.label ||
+          DOC_TYPE_LABELS[docType] ||
+          data.documentLabel;
+        data.classifiedDocumentType = docType;
 
-        const modelName = [gemini.brand, gemini.model].filter(Boolean).join(' ').trim();
-        if (modelName) data.productName = modelName;
-        if (gemini.ownerName) data.customerName = gemini.ownerName;
-        if (gemini.registration) data.registration = gemini.registration;
-        if (gemini.chassisNumber) data.chassisNumber = gemini.chassisNumber;
-        if (gemini.engineNumber) data.engineNumber = gemini.engineNumber;
-        if (gemini.serialNumber) data.serialNumber = gemini.serialNumber;
-        if (gemini.vehicleClass) data.vehicleClass = gemini.vehicleClass;
+        if (gemini.asset_name || gemini.assetName) {
+          data.productName = String(gemini.asset_name || gemini.assetName).trim();
+        }
+        if (gemini.vendor_dealer_name || gemini.vendorDealerName || gemini.shopName) {
+          data.shopName = String(
+            gemini.vendor_dealer_name || gemini.vendorDealerName || gemini.shopName,
+          ).trim();
+        }
+        if (gemini.owner_buyer_name || gemini.ownerName || gemini.customerName) {
+          data.customerName = String(
+            gemini.owner_buyer_name || gemini.ownerName || gemini.customerName,
+          ).trim();
+        }
+        if (gemini.invoice_or_policy_no || gemini.invoiceNumber) {
+          data.invoiceNumber = String(
+            gemini.invoice_or_policy_no || gemini.invoiceNumber,
+          ).trim();
+        }
+        if (gemini.purchase_or_issue_date || gemini.invoiceDate) {
+          data.invoiceDate = String(
+            gemini.purchase_or_issue_date || gemini.invoiceDate,
+          ).trim();
+        }
+        if (gemini.registration) data.registration = String(gemini.registration).trim();
+        if (gemini.vehicle_registration_number && !data.registration) {
+          data.registration = String(gemini.vehicle_registration_number).trim();
+        }
+        if (gemini.chassis_or_frame_no || gemini.chassisNumber) {
+          data.chassisNumber = String(
+            gemini.chassis_or_frame_no || gemini.chassisNumber,
+          ).trim();
+        }
+        if (gemini.engineNumber) data.engineNumber = String(gemini.engineNumber).trim();
+        if (gemini.serialNumber) data.serialNumber = String(gemini.serialNumber).trim();
         if (gemini.category) data.geminiCategory = gemini.category;
-        if (gemini.subCategory) data.geminiSubCategory = gemini.subCategory;
         if (gemini.reminderText || gemini.whatsappReminderText) {
           data.reminderText = gemini.reminderText || gemini.whatsappReminderText;
           data.whatsappReminderText = data.reminderText;
         }
 
-        if (docType === GEMINI_DOC_TYPES.VEHICLE_RC) {
+        // Structured extract snapshot for Firestore (always non-null strings)
+        data.ocrExtract = {
+          document_type: docType,
+          asset_name: data.productName || '',
+          category: gemini.category || '',
+          vendor_dealer_name: data.shopName || '',
+          owner_buyer_name: data.customerName || '',
+          invoice_or_policy_no: data.invoiceNumber || '',
+          purchase_or_issue_date: data.invoiceDate || '',
+          total_amount: null,
+          chassis_or_frame_no: data.chassisNumber || '',
+          vehicle_registration_number: data.registration || '',
+          expiry_date: '',
+        };
+
+        if (docType === DOC_CLASS.REGISTRATION_CERTIFICATE) {
           data.purchaseCategory = 'Vehicles';
           data.isVehicleInvoice = false;
           data.requiresVehicleLink = true;
           data.totalAmount = null;
           data.warrantyExpiry = null;
-          if (gemini.registrationDate) data.invoiceDate = gemini.registrationDate;
+          data.ocrExtract.total_amount = null;
+          data.ocrExtract.expiry_date = gemini.expiry_date || gemini.fitnessExpiryDate || '';
           if (gemini.fitnessExpiryDate) data.fitnessExpiryDate = gemini.fitnessExpiryDate;
-          // RC must never look like a purchase bill
-          data.starRating = null;
-          data.estimatedMonthlyUnits = null;
-          data.estimatedMonthlyBillCost = null;
-        } else if (docType === GEMINI_DOC_TYPES.VEHICLE_INSURANCE) {
+        } else if (docType === DOC_CLASS.INSURANCE_POLICY) {
           data.purchaseCategory = 'Vehicles';
           data.requiresVehicleLink = true;
-          data.totalAmount = null;
           data.warrantyExpiry = null;
-          if (gemini.policyNumber || gemini.certificateNumber) {
-            data.invoiceNumber = gemini.policyNumber || gemini.certificateNumber;
+          if (gemini.total_amount != null && Number(gemini.total_amount) > 0) {
+            data.totalAmount = Number(gemini.total_amount);
+          } else {
+            data.totalAmount = null;
           }
-          if (gemini.issueDate) data.invoiceDate = gemini.issueDate;
-          if (gemini.insuranceExpiry) data.insuranceExpiry = gemini.insuranceExpiry;
-        } else if (docType === GEMINI_DOC_TYPES.VEHICLE_PUC) {
+          const expiry = String(gemini.expiry_date || gemini.insuranceExpiry || '').trim();
+          if (expiry) data.insuranceExpiry = expiry;
+          data.ocrExtract.total_amount = data.totalAmount;
+          data.ocrExtract.expiry_date = data.insuranceExpiry || '';
+          data.ocrExtract.category = 'Insurance';
+          data.ocrExtract.vehicle_registration_number = data.registration || '';
+          // Ensure review inputs hydrate even if productName empty
+          if (!data.productName) {
+            data.productName = data.shopName
+              ? `${data.shopName} Policy`
+              : 'Insurance Policy';
+            data.ocrExtract.asset_name = data.productName;
+          }
+        } else if (docType === DOC_CLASS.PUC_CERTIFICATE) {
           data.purchaseCategory = 'Vehicles';
           data.requiresVehicleLink = true;
           data.totalAmount = null;
           data.warrantyExpiry = null;
-          if (gemini.certificateNumber) data.invoiceNumber = gemini.certificateNumber;
-          if (gemini.issueDate) data.invoiceDate = gemini.issueDate;
-          if (gemini.pucExpiry) data.pucExpiry = gemini.pucExpiry;
-        } else if (docType === GEMINI_DOC_TYPES.PURCHASE_INVOICE) {
-          if (gemini.invoiceDate && !data.invoiceDate) data.invoiceDate = gemini.invoiceDate;
-          if (gemini.purchaseAmount != null && !(data.totalAmount > 0)) {
-            data.totalAmount = gemini.purchaseAmount;
+          if (gemini.expiry_date || gemini.pucExpiry) {
+            data.pucExpiry = gemini.expiry_date || gemini.pucExpiry;
+          }
+          data.ocrExtract.total_amount = null;
+          data.ocrExtract.expiry_date = data.pucExpiry || '';
+          data.ocrExtract.category = 'Vehicle';
+          data.ocrExtract.vehicle_registration_number = data.registration || '';
+        } else if (docType === DOC_CLASS.TAX_INVOICE) {
+          if (gemini.total_amount != null && !(data.totalAmount > 0)) {
+            data.totalAmount = Number(gemini.total_amount);
           }
           if (gemini.calculatedExpiryDate && !data.warrantyExpiry) {
             data.warrantyExpiry = gemini.calculatedExpiryDate;
+          }
+          if (gemini.warrantyMonths != null) {
+            data.warrantyPeriodMonths = gemini.warrantyMonths;
           }
           if (gemini.starRating != null) data.starRating = gemini.starRating;
           if (gemini.estimatedMonthlyUnits != null) {
@@ -214,21 +283,25 @@ export class CloudVisionOcrService {
           if (gemini.estimatedMonthlyBillCost != null) {
             data.estimatedMonthlyBillCost = gemini.estimatedMonthlyBillCost;
           }
-          if (gemini.warrantyMonths != null) {
-            data.warrantyPeriodMonths = gemini.warrantyMonths;
+          if (gemini.category === 'Vehicle' || /vehicle/i.test(String(gemini.category || ''))) {
+            data.purchaseCategory = 'Vehicles';
+            data.isVehicleInvoice = Boolean(data.chassisNumber || data.engineNumber);
           }
-          if (gemini.pucExpiry) data.pucExpiry = gemini.pucExpiry;
-          if (gemini.insuranceExpiry) data.insuranceExpiry = gemini.insuranceExpiry;
+          data.ocrExtract.total_amount = data.totalAmount;
+          data.ocrExtract.expiry_date = data.warrantyExpiry || gemini.expiry_date || '';
           if (energyHints && gemini.estimatedMonthlyUnits != null) {
             energyHints.estimatedMonthlyUnits = gemini.estimatedMonthlyUnits;
             energyHints.estimatedMonthlyBillCost = gemini.estimatedMonthlyBillCost;
           }
         } else {
-          // OTHER — only fill non-destructive fields
-          if (gemini.invoiceDate && !data.invoiceDate) data.invoiceDate = gemini.invoiceDate;
-          if (gemini.calculatedExpiryDate && !data.warrantyExpiry) {
-            data.warrantyExpiry = gemini.calculatedExpiryDate;
+          if (gemini.total_amount != null && !(data.totalAmount > 0)) {
+            data.totalAmount = Number(gemini.total_amount);
           }
+          if (gemini.expiry_date && !data.warrantyExpiry) {
+            data.warrantyExpiry = gemini.expiry_date;
+          }
+          data.ocrExtract.total_amount = data.totalAmount;
+          data.ocrExtract.expiry_date = gemini.expiry_date || '';
         }
       }
     } catch (err) {

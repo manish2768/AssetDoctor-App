@@ -37,8 +37,7 @@ import { ItemDetailCard } from '../components/ItemDetailCard';
 import { InvoicePostcard } from '../components/InvoicePostcard';
 import { pickPrimaryItem } from '../utils/billLineItems';
 import { InvoiceOfflineCache } from '../services/ocr/InvoiceOfflineCache';
-import { goHomeDashboard } from '../navigation/navActions';
-import { persistScannedImage } from '../services/vault/VaultInvoiceUpload';
+import { goHomeDashboard, openRescanInvoice } from '../navigation/navActions';
 import { formatINRExact } from '../utils/format';
 import { ASSET_CATEGORY_OPTIONS } from '../theme/branding';
 import { enrichItemWithCategory } from '../services/ocr/categoryClassifier';
@@ -49,6 +48,20 @@ import {
 } from '../utils/vehicleFolder';
 import { getExpiryTone } from '../utils/warrantyStatus';
 import { formatDateIN } from '../utils/dates';
+import {
+  DOC_CLASS,
+  DOC_TYPE_LABELS,
+  normalizeDocumentType,
+} from '../services/gemini/geminiService';
+import { makeMicroThumbnail } from '../utils/makeMicroThumbnail';
+
+/** Top-level review buckets requested for confirm UI */
+const REVIEW_CATEGORY_CHIPS = [
+  { id: SMART_CATEGORIES.VEHICLES, label: 'Vehicle' },
+  { id: SMART_CATEGORIES.GADGETS, label: 'Gadget' },
+  { id: SMART_CATEGORIES.HOME_APPLIANCES, label: 'Home' },
+];
+
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
@@ -121,6 +134,12 @@ export function ReviewAssetScreen({ navigation, route }) {
   const [linkAssetId, setLinkAssetId] = useState(null);
   const auditTimer = useRef(null);
 
+  // Re-hydrate when a new scan payload arrives (owner/vendor/expiry must fill inputs)
+  useEffect(() => {
+    setInvoice(sanitizeInvoice(initialInvoice));
+    setAudit(initialAudit);
+  }, [initialInvoice, initialAudit]);
+
   const docKind = String(
     invoice.documentKind || invoice.documentType || invoice.scanDocumentType || 'bill',
   ).toLowerCase();
@@ -138,11 +157,24 @@ export function ReviewAssetScreen({ navigation, route }) {
   const showVehicleReg =
     invoice.purchaseCategory === PURCHASE_CATEGORIES.VEHICLES ||
     Boolean(invoice.isVehicleInvoice) ||
+    invoice.smartCategory === SMART_CATEGORIES.VEHICLES ||
     isAttachDoc ||
     itemList.some((i) => i.smartCategory === SMART_CATEGORIES.VEHICLES);
   const vehicleOptions = useMemo(() => listVehicleAssets(assets), [assets]);
   const insuranceTone = getExpiryTone(invoice.insuranceExpiry, { urgentDays: 30 });
   const pucTone = getExpiryTone(invoice.pucExpiry, { urgentDays: 15 });
+  const classifiedType = normalizeDocumentType(
+    invoice.classifiedDocumentType ||
+      invoice.geminiDocumentType ||
+      invoice.ocrExtract?.document_type ||
+      (isAttachDoc && docKind === 'insurance'
+        ? DOC_CLASS.INSURANCE_POLICY
+        : isAttachDoc && docKind === 'rc'
+          ? DOC_CLASS.REGISTRATION_CERTIFICATE
+          : DOC_CLASS.TAX_INVOICE),
+  );
+  const documentTypeBadge =
+    DOC_TYPE_LABELS[classifiedType] || invoice.documentLabel || 'Document';
 
   const setItemCategory = (itemIndex, smartCategory) => {
     setInvoice((prev) => {
@@ -169,6 +201,37 @@ export function ReviewAssetScreen({ navigation, route }) {
       return next;
     });
   };
+
+  const setReviewCategory = (smartCategory) => {
+    Haptics.select();
+    setInvoice((prev) => {
+      const meta = buildCategoryMetadata(smartCategory, prev.productName || '');
+      const list = Array.isArray(prev.items)
+        ? prev.items.map((item) =>
+            item.index === selectedItemIndex || prev.items.length === 1
+              ? { ...item, ...meta, smartCategory }
+              : item,
+          )
+        : [];
+      return {
+        ...prev,
+        items: list,
+        itemCount: list.length,
+        smartCategory,
+        purchaseCategory:
+          smartCategory === SMART_CATEGORIES.VEHICLES
+            ? PURCHASE_CATEGORIES.VEHICLES
+            : PURCHASE_CATEGORIES.ELECTRONICS,
+        isVehicleInvoice: smartCategory === SMART_CATEGORIES.VEHICLES,
+      };
+    });
+  };
+
+  const activeReviewCategory =
+    invoice.smartCategory ||
+    (showVehicleReg ? SMART_CATEGORIES.VEHICLES : null) ||
+    itemList.find((i) => i.index === selectedItemIndex)?.smartCategory ||
+    SMART_CATEGORIES.OTHER;
 
   // Live Bill Check whenever edited invoice changes
   useEffect(() => {
@@ -343,12 +406,15 @@ export function ReviewAssetScreen({ navigation, route }) {
         await forgetInvoiceFingerprint(latestAudit.fingerprint);
       }
 
-      let durableImageUri = imageUri;
+      let durableImageUri = null;
+      let billThumbDataUrl = null;
+      // OCR path: micro-thumb only — never upload full-res scan to Storage
       if (imageUri && user?.uid) {
         try {
-          durableImageUri = await persistScannedImage(imageUri, user.uid);
+          const thumb = await makeMicroThumbnail(imageUri);
+          billThumbDataUrl = thumb?.dataUrl || null;
         } catch {
-          durableImageUri = imageUri;
+          billThumbDataUrl = null;
         }
       }
 
@@ -387,10 +453,29 @@ export function ReviewAssetScreen({ navigation, route }) {
 
       let lastId = null;
       for (const item of finalTargets) {
-        const payload = buildPayloadForItem(
-          { ...item, name: item.name || invoice.productName },
-          latestAudit,
-        );
+        const payload = {
+          ...buildPayloadForItem(
+            { ...item, name: item.name || invoice.productName },
+            latestAudit,
+          ),
+          ocrDataOnly: true,
+          skipBillUpload: true,
+          billThumbDataUrl,
+          ocrExtract: invoice.ocrExtract || {
+            document_type: classifiedType,
+            asset_name: invoice.productName || item.name || '',
+            category: invoice.geminiCategory || '',
+            vendor_dealer_name: invoice.shopName || '',
+            owner_buyer_name: invoice.customerName || '',
+            invoice_or_policy_no: invoice.invoiceNumber || '',
+            purchase_or_issue_date: invoice.invoiceDate || '',
+            total_amount: invoice.totalAmount ?? null,
+            chassis_or_frame_no: invoice.chassisNumber || '',
+            expiry_date: invoice.insuranceExpiry || invoice.warrantyExpiry || '',
+          },
+          classifiedDocumentType: classifiedType,
+          geminiDocumentType: classifiedType,
+        };
         // Force merge into known vehicle when re-saving same invoice
         if (chosenLink && !isAttachDoc) {
           payload.linkAssetId = chosenLink;
@@ -463,25 +548,18 @@ export function ReviewAssetScreen({ navigation, route }) {
 
       Haptics.success();
       Alert.alert(
-        'Saved',
+        'Saved to Vault',
         isAttachDoc
-          ? 'Document vehicle passport mein add ho gaya.'
+          ? 'Document vehicle passport mein add ho gaya. Net Worth Home pe update hoga.'
           : existingMatch || chosenLink
-            ? 'Passport updated with your details.'
+            ? 'Passport updated. Redirecting to Home…'
             : finalTargets.length > 1
-              ? `${finalTargets.length} items saved.`
-              : 'Saved to vault.',
+              ? `${finalTargets.length} items saved. Redirecting to Home…`
+              : 'Asset saved. Redirecting to Home with updated Net Worth…',
         [
           {
-            text: 'Passport',
-            onPress: () => navigation.replace('AssetPassport', { assetId: lastId }),
-          },
-          {
-            text: 'Done',
-            onPress: () => {
-              if (navigation.canGoBack()) navigation.goBack();
-              goHomeDashboard();
-            },
+            text: 'OK',
+            onPress: () => goHomeDashboard(),
           },
         ],
       );
@@ -553,8 +631,11 @@ export function ReviewAssetScreen({ navigation, route }) {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.topRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.eyebrow}>CONFIRM & SAVE</Text>
-            <Text style={styles.title}>Review bill</Text>
+            <Text style={styles.eyebrow}>REVIEW & CONFIRM</Text>
+            <Text style={styles.title}>Confirm extracted document</Text>
+            <View style={styles.docBadge}>
+              <Text style={styles.docBadgeText}>{documentTypeBadge}</Text>
+            </View>
           </View>
         </View>
 
@@ -582,7 +663,7 @@ export function ReviewAssetScreen({ navigation, route }) {
         </Section>
 
         <GlassCard style={styles.essentials}>
-          <Text style={styles.essentialsTitle}>Essentials</Text>
+          <Text style={styles.essentialsTitle}>Extracted details (editable)</Text>
           {isAttachDoc ? (
             <Text style={styles.attachHint}>
               {docKind === 'insurance'
@@ -594,14 +675,15 @@ export function ReviewAssetScreen({ navigation, route }) {
           ) : null}
           {!isAttachDoc ? (
             <GlassInput
-              label="Product / brand + model *"
+              label="Asset / Item Name *"
               value={blank(invoice.productName)}
               onChangeText={(t) => patch('productName', t)}
+              placeholder="e.g. TVS RONIN 1CH BASE LIGHTNING"
             />
           ) : null}
           {!isAttachDoc ? (
             <GlassInput
-              label="Bill total / Grand Total (₹) *"
+              label="Total Amount / Price (₹) *"
               value={
                 invoice.totalAmount != null && Number.isFinite(Number(invoice.totalAmount))
                   ? String(invoice.totalAmount)
@@ -609,13 +691,58 @@ export function ReviewAssetScreen({ navigation, route }) {
               }
               onChangeText={(t) => patch('totalAmount', parseMoneyInput(t))}
               keyboardType="decimal-pad"
+              placeholder="e.g. 135500"
             />
           ) : null}
           <GlassInput
-            label="Invoice date (YYYY-MM-DD)"
+            label="Seller / Dealer / Vendor"
+            value={blank(invoice.shopName)}
+            onChangeText={(t) => patch('shopName', t)}
+            placeholder="e.g. RAFTAAR MOTO / ICICI LOMBARD"
+          />
+          <GlassInput
+            label="Owner / Buyer Name"
+            value={blank(invoice.customerName)}
+            onChangeText={(t) => patch('customerName', t)}
+            placeholder="e.g. NIKLESH KUMAR"
+          />
+          <GlassInput
+            label={
+              classifiedType === DOC_CLASS.INSURANCE_POLICY
+                ? 'Policy Number'
+                : classifiedType === DOC_CLASS.REGISTRATION_CERTIFICATE
+                  ? 'RC / Certificate No'
+                  : 'Invoice Number'
+            }
+            value={blank(invoice.invoiceNumber)}
+            onChangeText={(t) => patch('invoiceNumber', t)}
+            placeholder="Invoice / policy no."
+          />
+          <GlassInput
+            label="Purchase / Issue Date (YYYY-MM-DD)"
             value={blank(invoice.invoiceDate)}
             onChangeText={(t) => patch('invoiceDate', t.trim() || null)}
+            placeholder="2025-07-14"
           />
+          {!isAttachDoc ? (
+            <View style={styles.linkBlock}>
+              <Text style={styles.linkLabel}>Category</Text>
+              <View style={styles.linkRow}>
+                {REVIEW_CATEGORY_CHIPS.map((chip) => {
+                  const on = activeReviewCategory === chip.id;
+                  return (
+                    <Pressable
+                      key={chip.id}
+                      onPress={() => setReviewCategory(chip.id)}
+                      style={[styles.linkChip, on && styles.catChipOn]}
+                    >
+                      <Text style={[styles.linkChipText, on && styles.catChipTextOn]}>{chip.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
           {(showVehicleReg || isAttachDoc) && vehicleOptions.length ? (
             <View style={styles.linkBlock}>
               <Text style={styles.linkLabel}>Link to vehicle *</Text>
@@ -868,6 +995,16 @@ export function ReviewAssetScreen({ navigation, route }) {
           disabled={saving}
           style={styles.saveBtn}
         />
+        <GlassButton
+          title="Cancel / Re-scan"
+          onPress={() => {
+            Haptics.select();
+            openRescanInvoice();
+          }}
+          variant="ghost"
+          disabled={saving}
+          style={styles.rescanBtn}
+        />
         {!totalOk ? <Text style={styles.blockHint}>Enter bill total to save.</Text> : null}
         {audit?.isDuplicate ? (
           <Text style={styles.blockHint}>
@@ -882,6 +1019,40 @@ export function ReviewAssetScreen({ navigation, route }) {
 /** Ensure no dummy strings leak into controlled inputs */
 function sanitizeInvoice(raw = {}) {
   const next = { ...raw };
+  const extract = raw.ocrExtract || {};
+
+  // Hydrate controlled inputs from structured OCR extract (non-null strings)
+  if (!next.shopName && extract.vendor_dealer_name) next.shopName = extract.vendor_dealer_name;
+  if (!next.customerName && extract.owner_buyer_name) next.customerName = extract.owner_buyer_name;
+  if (!next.invoiceNumber && extract.invoice_or_policy_no) {
+    next.invoiceNumber = extract.invoice_or_policy_no;
+  }
+  if (!next.invoiceDate && extract.purchase_or_issue_date) {
+    next.invoiceDate = extract.purchase_or_issue_date;
+  }
+  if (!next.productName && extract.asset_name) next.productName = extract.asset_name;
+  if (!next.chassisNumber && extract.chassis_or_frame_no) {
+    next.chassisNumber = extract.chassis_or_frame_no;
+  }
+  if (!next.registration && extract.vehicle_registration_number) {
+    next.registration = extract.vehicle_registration_number;
+  }
+  if (!next.insuranceExpiry && extract.expiry_date) {
+    const doc = String(
+      raw.classifiedDocumentType || extract.document_type || raw.documentKind || '',
+    ).toUpperCase();
+    if (doc.includes('INSURANCE')) next.insuranceExpiry = extract.expiry_date;
+    else if (doc.includes('PUC')) next.pucExpiry = extract.expiry_date;
+    else if (!next.warrantyExpiry) next.warrantyExpiry = extract.expiry_date;
+  }
+  if (extract.total_amount != null && !(Number(next.totalAmount) > 0)) {
+    next.totalAmount = Number(extract.total_amount);
+  }
+  if (extract.document_type && !next.classifiedDocumentType) {
+    next.classifiedDocumentType = extract.document_type;
+    next.geminiDocumentType = extract.document_type;
+  }
+
   const stringKeys = [
     'shopName',
     'shopGstin',
@@ -901,10 +1072,14 @@ function sanitizeInvoice(raw = {}) {
     'nextServiceDue',
     'insuranceExpiry',
     'warrantyExpiry',
+    'invoiceDate',
   ];
   for (const key of stringKeys) {
     if (next[key] == null) next[key] = '';
     else next[key] = String(next[key]).trim();
+  }
+  if (/^(?:\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|\d{4}-\d{2}-\d{2}|\d{1,2}:\d{2})/.test(next.shopName || '')) {
+    next.shopName = extract.vendor_dealer_name || '';
   }
   // Strip classic dummy / OCR-ghost plates if they somehow appear
   if (/^MH12AB1234$/i.test(next.registration)) next.registration = '';
@@ -956,6 +1131,17 @@ const styles = StyleSheet.create({
   sectionBody: { marginTop: 8 },
   essentials: { marginBottom: 10 },
   essentialsTitle: { color: COLORS.text, fontWeight: '800', fontSize: 14, marginBottom: 8 },
+  docBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    backgroundColor: 'rgba(13,148,136,0.14)',
+    borderColor: COLORS.emerald,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  docBadgeText: { color: COLORS.emerald, fontWeight: '800', fontSize: 12 },
   attachHint: {
     color: COLORS.amber,
     fontSize: 11,
@@ -986,8 +1172,13 @@ const styles = StyleSheet.create({
     borderColor: '#FF3B30',
     backgroundColor: 'rgba(255,59,48,0.16)',
   },
+  catChipOn: {
+    borderColor: COLORS.emerald,
+    backgroundColor: 'rgba(13,148,136,0.16)',
+  },
   linkChipText: { color: COLORS.muted, fontSize: 11, fontWeight: '700' },
   linkChipTextOn: { color: '#FF8A97' },
+  catChipTextOn: { color: COLORS.emerald },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   pill: {
     borderRadius: RADIUS.full,
@@ -1017,6 +1208,7 @@ const styles = StyleSheet.create({
   },
   saveAllText: { color: COLORS.neonBlue, fontWeight: '700', fontSize: 12 },
   saveBtn: { marginTop: 6 },
+  rescanBtn: { marginTop: 10 },
   blockHint: {
     color: COLORS.amber,
     textAlign: 'center',
