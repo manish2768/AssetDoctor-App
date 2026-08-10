@@ -87,6 +87,30 @@ export class EmailService {
       return { success: false, error: error?.message || 'Failed to queue verification email' };
     }
   }
+
+  /** Queue a generic reminder / notice email (expiry, service, etc.). */
+  static async sendGenericNotice({ email, subject, body, uid, name }) {
+    try {
+      if (!email) return { success: false, error: 'Email required' };
+      await firestore().collection(PATHS.mailQueue).add({
+        to: String(email).trim().toLowerCase(),
+        template: 'reminder',
+        provider: PROVIDER,
+        status: 'pending',
+        data: {
+          uid: uid || null,
+          name: name || 'Asset Owner',
+          subject: String(subject || `${BRAND.name} reminder`).slice(0, 120),
+          body: String(body || '').slice(0, 2000),
+          appName: BRAND.name,
+        },
+        createdAt: firestore.FieldValue.serverTimestamp(),
+      });
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error?.message || 'Failed to queue reminder email' };
+    }
+  }
 }
 
 export default EmailService;

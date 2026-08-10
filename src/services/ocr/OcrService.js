@@ -9,6 +9,7 @@
 
 import { Haptics } from '../haptics/triggerHaptic';
 import { ASSET_CATEGORIES, OCR_FIELDS } from '../constants';
+import { extractApplianceEnergyFromText } from '../../utils/powerCost';
 
 /** Empty OCR payload — all allowed keys present, values blank/null */
 export function emptyOcrResult() {
@@ -78,7 +79,7 @@ export function extractReceiptData(mlKitText) {
     data.storeName = matchLabeledValue(lines, [
       /^(?:store|shop|dealer|sold\s*by|merchant|vendor)\s*[:\-]\s*(.+)$/i,
       /^(?:from)\s*[:\-]\s*(.+)$/i,
-    ]) || guessStoreName(lines);
+    ]);
 
     data.assetName = matchLabeledValue(lines, [
       /^(?:asset|item|product|model|description|goods)\s*(?:name)?\s*[:\-]\s*(.+)$/i,
@@ -129,6 +130,43 @@ export function extractReceiptData(mlKitText) {
 }
 
 export class OcrService {
+  /**
+   * Run on-device ML Kit, then pass only recognized text through the strict
+   * allowlist parser. No unapproved OCR token reaches the asset form.
+   */
+  static async recognizeFromImage(uri) {
+    Haptics.tap();
+    try {
+      // Dynamic require keeps development/web previews functional.
+      // eslint-disable-next-line global-require
+      const module = require('@react-native-ml-kit/text-recognition');
+      const recognizer = module?.default || module;
+      const result = await recognizer.recognize(uri);
+      const rawText = result?.text || '';
+      const parsed = extractReceiptData(rawText);
+      // Appliance energy hints stay outside the vault OCR allowlist.
+      const energyHints = extractApplianceEnergyFromText(rawText);
+      return {
+        ...parsed,
+        energyHints,
+        rawText,
+        engine: 'mlkit',
+      };
+    } catch (error) {
+      Haptics.error();
+      const missingNative =
+        /cannot find module|native module|null|undefined/i.test(String(error?.message || error));
+      return {
+        success: false,
+        data: emptyOcrResult(),
+        needsNative: missingNative,
+        error: missingNative
+          ? 'On-device text recognition is unavailable in this build.'
+          : error?.message || 'Could not read this document.',
+      };
+    }
+  }
+
   /** @see extractReceiptData */
   static extractFromText(mlKitText) {
     return extractReceiptData(mlKitText);
@@ -171,22 +209,15 @@ function matchInline(text, re) {
   return m?.[1] ? m[1].trim() : '';
 }
 
-function guessStoreName(lines) {
-  // First non-date, non-label-looking line as weak store guess — still allowlisted as storeName
-  const skip = /^(invoice|tax|gst|total|qty|amount|bill|receipt|date|phone|tel|email|www\.)/i;
-  for (const line of lines.slice(0, 5)) {
-    if (line.length < 3 || skip.test(line) || /\d{2}[\/\-.]\d{2}/.test(line)) continue;
-    return line.slice(0, 80);
-  }
-  return '';
-}
-
 function inferCategory(data) {
   if (data.chassisNumber || /bike|car|vehicle|ronin|chassis|vin/i.test(data.assetName || '')) {
     return ASSET_CATEGORIES.VEHICLE;
   }
   if (data.serialNumber || /tv|laptop|phone|appliance|electronics/i.test(data.assetName || '')) {
     return ASSET_CATEGORIES.ELECTRONICS;
+  }
+  if (/property|house|home|rent|deed/i.test(data.assetName || '')) {
+    return ASSET_CATEGORIES.PROPERTY;
   }
   return ASSET_CATEGORIES.GENERAL;
 }
@@ -245,6 +276,15 @@ function parseDateFromMatch(raw) {
   }
 
   if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1990 || year > 2100) {
+    return null;
+  }
+
+  const candidate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    candidate.getUTCFullYear() !== year ||
+    candidate.getUTCMonth() !== month - 1 ||
+    candidate.getUTCDate() !== day
+  ) {
     return null;
   }
 

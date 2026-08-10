@@ -1,5 +1,6 @@
 /**
  * Splash — soft welcome + optional silent OTA check before entering the app.
+ * Uses welcome-vault illustration (not the house/bike graphic). App icon untouched.
  */
 
 import React, { useEffect, useRef } from 'react';
@@ -57,14 +58,17 @@ export function SplashScreen({ onFinish, holdMs = 2600 }) {
           paddingHorizontal: 28,
         }}
       >
-        <Image
-          source={require('../../../assets/logo-brand.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
+        <View style={styles.heroCard}>
+          <Image
+            source={require('../../../assets/welcome-vault.png')}
+            style={styles.heroArt}
+            resizeMode="contain"
+          />
+        </View>
         <Animated.View style={{ opacity: greet, alignItems: 'center' }}>
-          <Text style={styles.hello}>Welcome back</Text>
-          <Text style={styles.tag}>{BRAND.shortTagline}</Text>
+          <Text style={styles.hello}>Welcome to Asset Doctor</Text>
+          <Text style={styles.tag}>{BRAND.shortTagline || BRAND.tagline}</Text>
+          <Text style={styles.sub}>Your smart vault for vehicles, warranties &amp; renewals</Text>
         </Animated.View>
         <BrandFooter />
       </Animated.View>
@@ -79,23 +83,52 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logo: {
-    width: 260,
-    height: 260,
-    marginBottom: SPACING.sm,
+  heroCard: {
+    width: 220,
+    height: 220,
+    borderRadius: 36,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(13,148,136,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    marginBottom: SPACING.md,
+    shadowColor: '#0A1628',
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
+  },
+  heroArt: {
+    width: 200,
+    height: 200,
   },
   hello: {
     color: COLORS.text,
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '800',
-    marginTop: 4,
+    marginTop: 8,
+    letterSpacing: -0.3,
+    textAlign: 'center',
   },
   tag: {
-    color: COLORS.emerald,
+    color: COLORS.emerald || COLORS.teal || '#0D9488',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
+    marginTop: 8,
+    textAlign: 'center',
+    paddingHorizontal: 16,
+  },
+  sub: {
+    color: COLORS.muted,
+    fontSize: 13,
+    fontWeight: '500',
     marginTop: 6,
     marginBottom: SPACING.md,
+    textAlign: 'center',
+    lineHeight: 18,
+    paddingHorizontal: 12,
   },
 });
 

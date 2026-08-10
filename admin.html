@@ -510,7 +510,7 @@
         <div class="grid lg:grid-cols-5 gap-5">
           <div class="lg:col-span-2 glass border border-white/10 rounded-2xl p-5">
             <h2 class="text-white font-bold text-lg flex items-center gap-2 mb-1"><i data-lucide="megaphone" class="w-5 h-5 text-amber-400"></i> Trigger Broadcast</h2>
-            <p class="text-xs text-slate-400 mb-4">Queue expiry reminders to WhatsApp / SMS / Email. Requests are written to the <code class="text-brand-300">notificationQueue</code> collection.</p>
+            <p class="text-xs text-slate-400 mb-4">Queue expiry reminders to Email / Push / SMS. Requests are written to the <code class="text-brand-300">notificationQueue</code> collection.</p>
 
             <div class="space-y-3.5">
               <div>
@@ -525,9 +525,9 @@
               <div>
                 <label class="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Channel</label>
                 <div class="mt-1.5 grid grid-cols-3 gap-2" id="broadcastChannels">
-                  <button data-channel="whatsapp" class="channel-btn active flex flex-col items-center gap-1 rounded-xl border px-2 py-2.5 text-xs font-bold transition"><i data-lucide="message-circle" class="w-4 h-4"></i> WhatsApp</button>
+                  <button data-channel="email" class="channel-btn active flex flex-col items-center gap-1 rounded-xl border px-2 py-2.5 text-xs font-bold transition"><i data-lucide="mail" class="w-4 h-4"></i> Email</button>
+                  <button data-channel="push" class="channel-btn flex flex-col items-center gap-1 rounded-xl border px-2 py-2.5 text-xs font-bold transition"><i data-lucide="bell" class="w-4 h-4"></i> Push</button>
                   <button data-channel="sms" class="channel-btn flex flex-col items-center gap-1 rounded-xl border px-2 py-2.5 text-xs font-bold transition"><i data-lucide="message-square" class="w-4 h-4"></i> SMS</button>
-                  <button data-channel="email" class="channel-btn flex flex-col items-center gap-1 rounded-xl border px-2 py-2.5 text-xs font-bold transition"><i data-lucide="mail" class="w-4 h-4"></i> Email</button>
                 </div>
               </div>
               <div>
@@ -704,7 +704,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyAYpEIXCZz3VKFMza3jpUMGTSRbi37qk-c",
   authDomain: "assetdoctor-5fd25.firebaseapp.com",
   projectId: "assetdoctor-5fd25",
-  storageBucket: "assetdoctor-5fd25.firebasestorage.app",
+  storageBucket: "assetdoctor-5fd25-vault",
   messagingSenderId: "926559836985",
   appId: "1:926559836985:android:842e878c508df93d2b66e8"
 };
@@ -723,7 +723,7 @@ const state = {
   users: 0,
   broadcastLog: [],
   auditLog: [],
-  channel: 'whatsapp'
+  channel: 'email'
 };
 
 function $(id) { return document.getElementById(id); }
@@ -1046,7 +1046,7 @@ function renderBroadcastLog() {
     '<tr class="table-row transition">' +
       '<td class="px-4 py-3 text-slate-400 text-xs">' + b.time.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) + '</td>' +
       '<td class="px-4 py-3 text-slate-200">' + b.audienceLabel + '</td>' +
-      '<td class="px-4 py-3"><span class="inline-flex items-center gap-1.5 text-slate-300 capitalize"><i data-lucide="' + (b.channel === 'whatsapp' ? 'message-circle' : b.channel === 'sms' ? 'message-square' : 'mail') + '" class="w-3.5 h-3.5"></i>' + b.channel + '</span></td>' +
+      '<td class="px-4 py-3"><span class="inline-flex items-center gap-1.5 text-slate-300 capitalize"><i data-lucide="' + (b.channel === 'push' ? 'bell' : b.channel === 'sms' ? 'message-square' : 'mail') + '" class="w-3.5 h-3.5"></i>' + b.channel + '</span></td>' +
       '<td class="px-4 py-3 font-bold text-white tabular-nums">' + b.recipients + '</td>' +
       '<td class="px-4 py-3">' + '<span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold border bg-emerald-500/15 text-emerald-300 border-emerald-500/30">' + b.status + '</span>' + '</td>' +
     '</tr>'
@@ -1247,7 +1247,8 @@ async function reminderOne(id, kind) {
     if (!state.isDemo) {
       await db.collection('notificationQueue').add({
         type: 'expiry_reminder', kind, refId: id, ownerPhone: item.ownerPhone,
-        channel: 'whatsapp', createdAt: firebase.firestore.FieldValue.serverTimestamp(), status: 'queued'
+        ownerEmail: item.ownerEmail || item.email || '',
+        channel: 'email', createdAt: firebase.firestore.FieldValue.serverTimestamp(), status: 'queued'
       });
     }
     toast('Reminder queued for ' + label, 'success');

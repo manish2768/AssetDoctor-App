@@ -1,0 +1,176 @@
+rules_version = '2';
+
+/**
+ * Asset Doctor — production Firestore rules
+ * Principle: every path is owned by request.auth.uid
+ */
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.get('admin', false) == true;
+    }
+
+    function validEmail(email) {
+      return email is string && email.size() < 320;
+    }
+
+    function assetStatusOk() {
+      return !('status' in request.resource.data)
+        || request.resource.data.status in ['active', 'in_repair', 'retired', 'sold'];
+    }
+
+    function softDeleteOnlyOwner() {
+      return !('uid' in request.resource.data)
+        || request.resource.data.uid == request.auth.uid;
+    }
+
+    // Owner may create/update own profile without brittle field locks
+    function ownerProfileWrite(uid) {
+      return isOwner(uid)
+        && (!('uid' in request.resource.data) || request.resource.data.uid == uid)
+        && (!('email' in request.resource.data) || validEmail(request.resource.data.email));
+    }
+
+    // ---------- users (primary profile path) ----------
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create, update: if ownerProfileWrite(uid);
+      allow delete: if isOwner(uid);
+
+      match /{document=**} {
+        allow read, write: if isOwner(uid);
+        allow read: if isAdmin();
+      }
+    }
+
+    // ---------- Users (legacy + nested Assets / Vendors) ----------
+    match /Users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create, update: if ownerProfileWrite(uid);
+      allow delete: if isOwner(uid);
+
+      match /Vendors/{vendorId} {
+        allow read, delete: if isOwner(uid) || isAdmin();
+        allow create, update: if isOwner(uid)
+          && request.resource.data.keys().hasAny(['name'])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() < 120;
+      }
+
+      match /Assets/{assetId} {
+        allow read: if isOwner(uid) || isAdmin();
+        allow create, update: if isOwner(uid)
+          && assetStatusOk()
+          && softDeleteOnlyOwner()
+          && (!('uid' in request.resource.data) || request.resource.data.uid == uid)
+          && (!('ownerUid' in request.resource.data) || request.resource.data.ownerUid == uid)
+          && request.resource.data.assetName is string
+          && request.resource.data.assetName.size() > 0
+          && request.resource.data.assetName.size() < 160;
+        // Assets are soft-deleted so expiry history and audit data remain intact.
+        allow delete: if false;
+
+        match /Documents/{docId} {
+          allow read, delete: if isOwner(uid);
+          allow create, update: if isOwner(uid)
+            && request.resource.data.type in [
+              'rc', 'puc', 'bill', 'insurance', 'warranty', 'service_coupon',
+              'amc', 'property_papers', 'rent_agreement', 'policy', 'guarantee', 'other'
+            ]
+            && request.resource.data.fileUrl is string;
+        }
+
+        match /ServiceSchedules/{scheduleId} {
+          allow read, delete: if isOwner(uid);
+          allow create, update: if isOwner(uid)
+            && request.resource.data.dueDate is string
+            && (!('status' in request.resource.data)
+              || request.resource.data.status in ['upcoming', 'due', 'completed', 'skipped']);
+        }
+
+        match /RepairLogs/{repairId} {
+          allow read, delete: if isOwner(uid);
+          allow create, update: if isOwner(uid)
+            && request.resource.data.title is string
+            && (!('costInr' in request.resource.data)
+              || (request.resource.data.costInr is number && request.resource.data.costInr >= 0));
+        }
+      }
+
+      match /PowerLogs/{logId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.assetId is string
+          && request.resource.data.date is string;
+      }
+
+      match /NotificationPrefs/{prefId} {
+        allow read, write: if isOwner(uid);
+      }
+
+    }
+
+    // ---------- Mail queue ----------
+    match /mail_queue/{jobId} {
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasAll(['to', 'template', 'status'])
+        && request.resource.data.status == 'pending'
+        && validEmail(request.resource.data.to)
+        && request.auth.token.email is string
+        && request.resource.data.to == request.auth.token.email
+        && request.resource.data.template in ['welcome', 'email_verification', 'reminder'];
+
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /notification_logs/{logId} {
+      allow read: if isSignedIn()
+        && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create, update, delete: if false;
+    }
+
+    // Legacy WhatsApp OTP challenges — closed (Admin SDK only if any residual docs remain)
+    match /whatsapp_otp/{docId} {
+      allow read, write: if false;
+    }
+
+    // Customer feedback / crash reports from the app
+    match /feedback_reports/{reportId} {
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasAll(['category', 'message', 'status', 'createdAt', 'uid'])
+        && request.resource.data.keys().hasOnly([
+          'category', 'message', 'status', 'createdAt', 'uid',
+          'contact', 'device', 'source'
+        ])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'new'
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() < 4001
+        && request.resource.data.category is string;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Public remote config for Play Store update prompts (no secrets here)
+    match /app_config/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

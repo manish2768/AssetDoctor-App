@@ -1,5 +1,5 @@
 /**
- * Phase 1 — Auth screens (Email / Google / WhatsApp OTP)
+ * Phase 1 — Auth screens (Email / Google / Mobile SMS OTP)
  */
 
 import React, { useState } from 'react';
@@ -12,6 +12,7 @@ import {
   ScrollView,
   Pressable,
   Image,
+  Alert,
 } from 'react-native';
 
 import { useAuth } from '../../context/AuthProvider';
@@ -28,7 +29,9 @@ import { GoogleSignInButton } from '../../components/GoogleSignInButton';
 import { BRAND, COLORS, SPACING } from '../../theme/branding';
 import { Haptics } from '../../services/haptics';
 import { toErrorMessage } from '../../utils/errors';
-import { normalizeWhatsAppPhone } from '../../utils/profileSetup';
+import { normalizePhone } from '../../utils/profileSetup';
+import { goHomeDashboard } from '../../navigation/navActions';
+import { SMS_OTP_TEMPLATE } from '../../constants/smsOtp';
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
@@ -39,7 +42,7 @@ function AuthModeTabs({ mode, onChange }) {
     <View style={styles.tabRow}>
       {[
         { id: 'email', label: 'Email' },
-        { id: 'whatsapp', label: 'WhatsApp OTP' },
+        { id: 'phone', label: 'Mobile OTP' },
       ].map((tab) => {
         const active = mode === tab.id;
         return (
@@ -73,10 +76,19 @@ export function LoginScreen({ navigation }) {
   const [error, setError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
 
+  /** Close auth modal and land on Dashboard — never leave user on OTP UI after success. */
   const finish = () => {
     setShowSuccess(false);
-    if (navigation?.canGoBack?.()) navigation.goBack();
-    else navigation?.getParent?.()?.goBack?.();
+    goHomeDashboard();
+    const parent = navigation?.getParent?.();
+    if (parent?.canGoBack?.()) parent.goBack();
+    else if (navigation?.canGoBack?.()) navigation.goBack();
+  };
+
+  const showAuthError = (message, title = 'Sign in') => {
+    const msg = String(message || 'Something went wrong');
+    setError(msg);
+    Alert.alert(title, msg);
   };
 
   const resetOtpFlow = () => {
@@ -101,7 +113,7 @@ export function LoginScreen({ navigation }) {
       setShowSuccess(true);
     } catch (e) {
       Haptics.error();
-      setError(toErrorMessage(e, 'Login failed'));
+      showAuthError(toErrorMessage(e, 'Login failed'), 'Email login');
     } finally {
       setBusy(false);
     }
@@ -117,10 +129,26 @@ export function LoginScreen({ navigation }) {
       setShowSuccess(true);
     } catch (e) {
       Haptics.error();
-      setError(toErrorMessage(e, 'Google Sign-In failed'));
+      showAuthError(toErrorMessage(e, 'Google Sign-In failed'), 'Google Sign-In');
     } finally {
       setBusy(false);
     }
+  };
+
+  const beginSmsOtp = async (cleanPhone) => {
+    const result = await sendOTP(cleanPhone);
+    if (!result.success) throw new Error(result.error);
+    if (!result.confirmation?.confirm) {
+      throw new Error('SMS OTP session missing. Please try again.');
+    }
+    setOtpSession(result.confirmation);
+    setOtp('');
+    setOtpSent(true);
+    Haptics.success();
+    Alert.alert(
+      'SMS OTP sent',
+      `${SMS_OTP_TEMPLATE.userHint}\n\nIf an app-hash line appears at the bottom of the SMS, that is normal — ignore it when typing the code.`,
+    );
   };
 
   const onSendOtp = async () => {
@@ -128,22 +156,14 @@ export function LoginScreen({ navigation }) {
     setError('');
     setShowSuccess(false);
     try {
-      const cleanPhone = normalizeWhatsAppPhone(phone);
+      const cleanPhone = normalizePhone(phone);
       setPhone(cleanPhone);
-      // WhatsApp tab → Cloud Function sendWhatsAppOtp only (never Firebase SMS)
-      const result = await sendOTP(cleanPhone, { channel: 'whatsapp' });
-      if (!result.success) throw new Error(result.error);
-      setOtpSession(
-        result.confirmation || { channel: 'whatsapp', phone: result.phone || cleanPhone },
-      );
-      setOtp('');
-      setOtpSent(true);
-      Haptics.success();
+      await beginSmsOtp(cleanPhone);
     } catch (e) {
       Haptics.error();
       setOtpSent(false);
       setOtpSession(null);
-      setError(toErrorMessage(e, 'Could not send WhatsApp OTP'));
+      showAuthError(toErrorMessage(e, 'Could not send SMS OTP'), 'SMS OTP');
     } finally {
       setBusy(false);
     }
@@ -154,7 +174,7 @@ export function LoginScreen({ navigation }) {
     setError('');
     setShowSuccess(false);
     try {
-      if (!otpSession || otpSession.channel !== 'whatsapp' || !otpSession.phone) {
+      if (!otpSession) {
         throw new Error('OTP session expired. Please request a new code.');
       }
       const code = String(otp || '').trim();
@@ -162,7 +182,6 @@ export function LoginScreen({ navigation }) {
         throw new Error('Enter the 6-digit OTP');
       }
 
-      // Must succeed via verifyWhatsAppOtp before any login UI / navigation
       const result = await verifyOTP(otpSession, code, {
         name: String(fullName || '').trim(),
       });
@@ -171,12 +190,12 @@ export function LoginScreen({ navigation }) {
       }
 
       Haptics.success();
-      setShowSuccess(true);
+      finish();
     } catch (e) {
       Haptics.error();
       setShowSuccess(false);
       setOtp('');
-      setError(toErrorMessage(e, 'Invalid OTP — please try again'));
+      showAuthError(toErrorMessage(e, 'Invalid OTP — please try again'), 'SMS OTP');
     } finally {
       setBusy(false);
     }
@@ -240,11 +259,9 @@ export function LoginScreen({ navigation }) {
                 </>
               ) : (
                 <>
-                  <Text style={styles.waHint}>
-                    We&apos;ll send a 6-digit code to your WhatsApp via Meta Cloud API.
-                  </Text>
+                  <Text style={styles.waHint}>{SMS_OTP_TEMPLATE.userHint}</Text>
                   <GlassInput
-                    label="WhatsApp Mobile"
+                    label="Mobile number"
                     value={phone}
                     onChangeText={setPhone}
                     keyboardType="phone-pad"
@@ -252,7 +269,7 @@ export function LoginScreen({ navigation }) {
                     editable={!otpSent}
                   />
                   {!otpSent ? (
-                    <GlassButton title="Send WhatsApp OTP" onPress={onSendOtp} loading={busy} />
+                    <GlassButton title="Send SMS OTP" onPress={onSendOtp} loading={busy} />
                   ) : (
                     <>
                       <GlassInput
@@ -263,7 +280,7 @@ export function LoginScreen({ navigation }) {
                         autoCapitalize="words"
                       />
                       <Text style={styles.waHint}>
-                        Optional for returning users. New accounts use this name (or your phone if left blank) — never a fake default.
+                        Optional for returning users. New accounts use this name (or your phone if left blank).
                       </Text>
                       <GlassInput
                         label="6-digit OTP"

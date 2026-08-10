@@ -318,6 +318,56 @@ export class ExpiryAlertService {
     }
     return urgent.sort((a, b) => a.days - b.days);
   }
+
+  /** In-app welcome notification (replaces WhatsApp welcome template). */
+  static async notifyWelcome({ name } = {}) {
+    try {
+      await ensureAndroidChannel();
+      const perm = await Notifications.getPermissionsAsync();
+      if (perm.status !== 'granted') {
+        const asked = await Notifications.requestPermissionsAsync();
+        if (asked.status !== 'granted') {
+          return { success: false, error: 'permission' };
+        }
+      }
+      const display = String(name || 'Asset Owner').trim() || 'Asset Owner';
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'Welcome to Asset Doctor',
+          body: `Hi ${display} — your smart asset vault is ready. We'll remind you before insurance, PUC, and warranty expiry.`,
+          data: { screen: 'Home', type: 'welcome' },
+          sound: true,
+        },
+        trigger: null,
+      });
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error?.message || 'welcome notify failed' };
+    }
+  }
+
+  /** Immediate in-app / local reminder (email may also be queued separately). */
+  static async notifyReminder({ title, body, data } = {}) {
+    try {
+      await ensureAndroidChannel();
+      const perm = await Notifications.getPermissionsAsync();
+      if (perm.status !== 'granted') {
+        return { success: false, error: 'permission' };
+      }
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: String(title || 'Asset Doctor reminder').slice(0, 80),
+          body: String(body || '').slice(0, 240),
+          data: data || { screen: 'Home' },
+          sound: true,
+        },
+        trigger: null,
+      });
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error?.message || 'reminder notify failed' };
+    }
+  }
 }
 
 export default ExpiryAlertService;

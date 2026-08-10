@@ -21,7 +21,9 @@ export const PATHS = {
   documents: (uid, assetId) => `Users/${uid}/Assets/${assetId}/Documents`,
   serviceSchedules: (uid, assetId) => `Users/${uid}/Assets/${assetId}/ServiceSchedules`,
   repairLogs: (uid, assetId) => `Users/${uid}/Assets/${assetId}/RepairLogs`,
+  serviceHistory: (uid, assetId) => `Users/${uid}/Assets/${assetId}/serviceHistory`,
   powerLogs: (uid) => `Users/${uid}/PowerLogs`,
+  reminders: 'reminders',
   mailQueue: 'mail_queue',
   notificationLogs: 'notification_logs',
 };

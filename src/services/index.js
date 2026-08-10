@@ -1,5 +1,5 @@
 /**
- * Asset Doctor — Service barrel
+ * Asset Doctor — canonical React Native service exports.
  */
 
 export { AuthService } from './auth';
@@ -10,7 +10,36 @@ export {
   extractReceiptData,
   sanitizeOcrFields,
   emptyOcrResult,
+  parseInvoiceText,
+  CloudVisionOcrService,
+  InvoiceOfflineCache,
+  invoiceToAssetForm,
+  emptyInvoiceData,
 } from './ocr';
+export { SweetBillChecker, runSweetBillChecker } from './SweetBillChecker';
+export { EmailService } from './email/EmailService';
+export { DocumentVaultService } from './documents/DocumentVaultService';
+export { ShareService } from './share/ShareService';
+export { PdfExporter } from './pdfExporter';
+export { ExpiryAlertService } from './notifications/ExpiryAlertService';
+export { PowerLogService } from './power/PowerLogService';
+export { EnergyService, assignEnergyFieldsOnCreate, aggregateEnergyPortfolio } from './energy/EnergyService';
+export {
+  SMART_CATEGORIES,
+  SMART_CATEGORY_OPTIONS,
+  classifySmartCategory,
+  enrichItemWithCategory,
+} from './ocr/categoryClassifier';
+export {
+  ServiceScheduleService,
+  RepairLogService,
+  MaintenanceService,
+  summarizeMaintenanceCost,
+  pickNextServiceDue,
+} from './maintenance/MaintenanceService';
+export { VendorService } from './vendors/VendorService';
+export { OfflineQueue } from './offline/OfflineQueue';
+export { OfflineVaultCache } from './offline/OfflineVaultCache';
 export { triggerHaptic, Haptics } from './haptics';
 export {
   COLLECTIONS,

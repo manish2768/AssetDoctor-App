@@ -1,10 +1,10 @@
 /**
- * Profile setup gate — collect WhatsApp number / real name when missing.
+ * Profile setup gate — collect mobile number / real name when missing.
  */
 
 import { DEFAULT_DISPLAY_NAME } from '../services/constants';
 
-export function normalizeWhatsAppPhone(value) {
+export function normalizePhone(value) {
   const trimmed = String(value || '').replace(/[\s-]/g, '');
   if (!trimmed) return '';
   if (trimmed.startsWith('+')) return trimmed;
@@ -13,11 +13,17 @@ export function normalizeWhatsAppPhone(value) {
   return trimmed;
 }
 
-export function hasValidWhatsAppPhone(profile) {
+/** @deprecated alias — use normalizePhone */
+export const normalizeWhatsAppPhone = normalizePhone;
+
+export function hasValidPhone(profile) {
   const raw = profile?.phoneNumber || profile?.phone || '';
-  const e164 = normalizeWhatsAppPhone(raw);
+  const e164 = normalizePhone(raw);
   return /^\+[1-9]\d{9,14}$/.test(e164);
 }
+
+/** @deprecated alias — use hasValidPhone */
+export const hasValidWhatsAppPhone = hasValidPhone;
 
 function hasRealName(profile, user) {
   const name = String(profile?.name || user?.displayName || '').trim();
@@ -36,7 +42,7 @@ export function needsProfileSetup(profile, user) {
   if (
     profile.profileSetupComplete === true &&
     hasRealName(profile, user) &&
-    hasValidWhatsAppPhone(profile)
+    hasValidPhone(profile)
   ) {
     return false;
   }
@@ -53,15 +59,15 @@ export function needsProfileSetup(profile, user) {
     provider.includes('google') ||
     provider.includes('password');
 
-  const isWhatsApp = provider === 'whatsapp_otp' || provider.includes('phone');
+  const isPhone = provider === 'phone' || provider.includes('phone');
 
-  if (!isGoogleOrEmail && !isWhatsApp) return false;
+  if (!isGoogleOrEmail && !isPhone) return false;
 
   const missingName = !hasRealName(profile, user);
-  const missingPhone = !hasValidWhatsAppPhone(profile);
+  const missingPhone = !hasValidPhone(profile);
 
-  if (isWhatsApp) return missingName;
+  if (isPhone) return missingName;
   return missingName || missingPhone;
 }
 
-export default { needsProfileSetup, hasValidWhatsAppPhone, normalizeWhatsAppPhone };
+export default { needsProfileSetup, hasValidPhone, hasValidWhatsAppPhone, normalizePhone, normalizeWhatsAppPhone };

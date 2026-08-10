@@ -19,6 +19,9 @@ const KEY_DOC_TYPES = new Set([
   'rent_agreement',
   'policy',
   'guarantee',
+  'service_coupon',
+  'amc',
+  'other',
 ]);
 
 function safePart(value) {

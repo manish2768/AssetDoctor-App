@@ -9,11 +9,12 @@ export const BRAND = {
   tagline: 'Protect, Track & Save: The Smart Asset Vault',
   shortTagline: 'Protect, Track & Save',
   creator: 'Ashutosh Rai',
-  creatorCredit: 'Crafted by Ashutosh (14)',
-  footer: 'Crafted by Ashutosh (14)',
-  /** Customer support — update WhatsApp digits (country code, no +) if needed */
+  creatorCredit: 'Built by Ashutosh Rai',
+  footer: 'Built by Ashutosh Rai',
+  builtBy: 'Built by Ashutosh Rai',
+  /** Customer support email */
   supportEmail: 'hansgeetglobal@gmail.com',
-  /** Digits with country code, no +  e.g. 9198XXXXXXXX — leave '' to use Share sheet */
+  /** Optional share deep-link digits (country code, no +). Leave '' to use system Share sheet */
   supportWhatsApp: '',
 };
 

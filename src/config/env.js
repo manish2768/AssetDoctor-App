@@ -21,7 +21,10 @@ export const ENV = {
     apiKey: envOr('', 'EXPO_PUBLIC_FIREBASE_API_KEY'),
     authDomain: envOr('', 'EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN'),
     projectId: envOr('', 'EXPO_PUBLIC_FIREBASE_PROJECT_ID'),
-    storageBucket: envOr('', 'EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET'),
+    storageBucket: envOr(
+      'assetdoctor-5fd25-vault',
+      'EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET'
+    ),
     messagingSenderId: envOr('', 'EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID'),
     appId: envOr('', 'EXPO_PUBLIC_FIREBASE_APP_ID'),
     measurementId: envOr('', 'EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID'),
@@ -35,6 +38,8 @@ export const ENV = {
   ),
   /** Google Cloud Vision API key (client). Prefer Functions secret in production. */
   googleCloudVisionApiKey: envOr('', 'EXPO_PUBLIC_GOOGLE_CLOUD_VISION_API_KEY'),
+  /** Gemini 1.5 Flash — prefer Cloud Function proxy in production */
+  geminiApiKey: envOr('', 'EXPO_PUBLIC_GEMINI_API_KEY', 'GEMINI_API_KEY'),
   isDev: typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production',
 };
 

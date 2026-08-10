@@ -224,6 +224,10 @@ export class UserService {
       if (typeof updates.pincode === 'string') allowed.pincode = updates.pincode.trim();
       if (typeof updates.photoURL === 'string') allowed.photoURL = updates.photoURL.trim();
       if (typeof updates.email === 'string') allowed.email = updates.email.trim();
+      if (typeof updates.gender === 'string') {
+        const g = updates.gender.trim().toLowerCase();
+        if (['male', 'female', 'other', ''].includes(g)) allowed.gender = g;
+      }
       if (typeof updates.phoneNumber === 'string') {
         allowed.phoneNumber = updates.phoneNumber.trim();
         if (!allowed.phone) allowed.phone = allowed.phoneNumber;
@@ -231,12 +235,33 @@ export class UserService {
       if (typeof updates.profileSetupComplete === 'boolean') {
         allowed.profileSetupComplete = updates.profileSetupComplete;
       }
+      if (typeof updates.pushRemindersOptOut === 'boolean') {
+        allowed.pushRemindersOptOut = updates.pushRemindersOptOut;
+      }
       if (typeof updates.whatsappRemindersOptOut === 'boolean') {
+        // Legacy mirror — prefer pushRemindersOptOut going forward
         allowed.whatsappRemindersOptOut = updates.whatsappRemindersOptOut;
+        if (typeof updates.pushRemindersOptOut !== 'boolean') {
+          allowed.pushRemindersOptOut = updates.whatsappRemindersOptOut;
+        }
       }
 
       if (Object.keys(allowed).length === 0) {
         throw new Error('No valid profile fields to update');
+      }
+
+      if (allowed.phone || allowed.phoneNumber || allowed.email) {
+        const { IdentityService } = require('../auth/IdentityService');
+        const identity = await IdentityService.checkAvailable({
+          phone: allowed.phoneNumber || allowed.phone,
+          email: allowed.email,
+          excludeUid: uid,
+        });
+        if (!identity.available) {
+          throw new Error(
+            identity.message || 'Phone number / Email is already registered with another account.',
+          );
+        }
       }
 
       await Promise.all([
@@ -267,7 +292,7 @@ export class UserService {
 
   /**
    * First-time profile setup after Gmail / email sign-in.
-   * Marks profileSetupComplete so welcome WhatsApp can fire server-side.
+   * Phone is stored after uniqueness check; prefer Auth linkPhone OTP for verified phone.
    */
   static async completeProfileSetup(uid, { name, phone, phoneNumber, photoURL } = {}) {
     Haptics.tap();
@@ -276,7 +301,18 @@ export class UserService {
       const cleanName = String(name || '').trim();
       const cleanPhone = String(phoneNumber || phone || '').trim();
       if (!cleanName) throw new Error('Full name is required');
-      if (!cleanPhone) throw new Error('WhatsApp number is required');
+      if (!cleanPhone) throw new Error('Mobile number is required');
+
+      const { IdentityService } = require('../auth/IdentityService');
+      const identity = await IdentityService.checkAvailable({
+        phone: cleanPhone,
+        excludeUid: uid,
+      });
+      if (!identity.available) {
+        throw new Error(
+          identity.message || 'Phone number is already registered with another account.',
+        );
+      }
 
       const payload = {
         name: cleanName,
@@ -326,21 +362,42 @@ export class UserService {
       return () => {};
     }
 
-    return usersCollection()
+    let cancelled = false;
+
+    // Prefer primary users/{uid}; fall back to legacy Users/{uid} once if needed
+    const unsub = usersCollection()
       .doc(uid)
       .onSnapshot(
-        (snap) => {
-          if (!snap.exists) {
-            onChange(null);
+        async (snap) => {
+          if (cancelled) return;
+          if (snap.exists) {
+            onChange(/** @type {UserProfile} */ ({ uid, ...snap.data() }));
             return;
           }
-          onChange(/** @type {UserProfile} */ ({ uid, ...snap.data() }));
+          try {
+            const legacy = await legacyUsersCollection().doc(uid).get();
+            if (cancelled) return;
+            if (legacy.exists) {
+              onChange(/** @type {UserProfile} */ ({ uid, ...legacy.data() }));
+              return;
+            }
+          } catch {
+            /* ignore — keep prior profile */
+          }
+          // Do NOT emit null here — AuthProvider keeps auth fallback / last profile
+          onChange(undefined);
         },
-        () => {
-          Haptics.error();
-          onChange(null);
+        (error) => {
+          console.warn('[UserService] profile subscribe error:', error?.message || error);
+          // Never clear a signed-in session to "Guest" on a transient listener error
+          onChange(undefined);
         },
       );
+
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }
 }
 

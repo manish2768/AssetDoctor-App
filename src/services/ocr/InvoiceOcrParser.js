@@ -1,0 +1,1043 @@
+/**
+ * Indian retail / GST invoice parser (Cloud Vision / ML Kit text → schema).
+ * Never invents values — missing fields stay blank/null for user confirm.
+ */
+
+import { emptyInvoiceData, PURCHASE_CATEGORIES, addMonthsIso } from './invoiceSchema';
+import { extractBillLineItems, pickPrimaryItem } from '../../utils/billLineItems';
+import {
+  classifyInvoiceSmartCategory,
+  SMART_CATEGORIES,
+} from './categoryClassifier';
+import { classifyDocumentType } from './documentTypeClassifier';
+
+/** Official Indian GSTIN — e.g. 09AAKCC0172C1ZZ / 09AAMCR6805R1ZF */
+export const GSTIN_RE =
+  /\b([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z])\b/;
+
+/** Compact GSTIN after stripping spaces (OCR often inserts gaps) */
+const GSTIN_COMPACT_RE = /([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z])/;
+
+const GENERIC_HEADER =
+  /^(?:tax\s*invoice|invoice|retail\s*invoice|cash\s*memo|bill\s*of\s*supply|original\s*(?:for\s*)?recipient|duplicate|triplicate|e-?invoice|gst\s*invoice)$/i;
+
+const STOCK_ID =
+  /^(?:stin|sku|hsn|sac|item\s*code|product\s*code|part\s*no)\b|\b(?:stin|sku)\s*[A-Z0-9\-]+\b/i;
+
+const JUNK_PRODUCT =
+  /(?:invoice|bill\s*(?:no|number|date)|gstin|taxable|grand\s*total|sub\s*total|amount\s*payable|customer|warranty|^date$|^total$|number\s*#|cgst|sgst|igst|hsn|sac|stin\s*[a-z0-9]|includes?\s+hsrp|hsrp\s+and\s+fittings|welcome\s*kit|fittings?\s*(?:only)?|ex[\s\-]?showroom\s*price|on[\s\-]?road\s*price|toll[\s\-]?free|customer\s*care|helpline|particulars|description\s*of\s*goods|motor\s*company|(?:pvt|private)?\s*ltd|limited|dealer|policy\s*no|1800\s*\d|rupees\s+one)/i;
+
+/** Vehicle model tokens often present on TVS / Hero / Honda dealer invoices */
+const VEHICLE_MODEL_RE =
+  /\b((?:TVS|Hero|Honda|Bajaj|Yamaha|Suzuki|Royal\s*Enfield|KTM|Ather|Ola)\s+(?!MOTOR\b|COMPANY\b|LTD\b|LIMITED\b|DEALER\b)[A-Z][A-Za-z0-9\-]*(?:\s+[A-Z0-9][A-Za-z0-9\-]*){0,2})\b/;
+
+const COMPANY_HEADER =
+  /\b(?:motor\s*company|(?:pvt\.?|private)?\s*ltd\.?|limited|dealer|showroom|company)\b/i;
+/**
+ * @param {string|string[]} rawText
+ */
+export function parseInvoiceText(rawText) {
+  const lines = normalizeLines(rawText);
+  const blob = lines.join('\n');
+  const data = emptyInvoiceData();
+
+  if (!lines.length) {
+    return { success: true, data, confidence: 0 };
+  }
+
+  data.shopGstin = matchGstin(blob);
+  data.shopName =
+    matchLabeledValue(lines, [
+      /^(?:store|shop|dealer|sold\s*by|merchant|vendor|seller|firm|trade\s*name)\s*[:\-]\s*(.+)$/i,
+      /^(?:from)\s*[:\-]\s*(.+)$/i,
+    ]) || inferShopName(lines, data.shopGstin);
+
+  data.shopPhone =
+    matchLabeledValue(lines, [
+      /^(?:shop|store|dealer)?\s*(?:ph(?:one)?|tel|mobile|contact)\s*(?:no\.?)?\s*[:\-]\s*(.+)$/i,
+    ]) || matchPhoneNear(blob, /(?:ph(?:one)?|tel|mobile|contact)\s*(?:no\.?)?\s*[:\-]?\s*([+0-9()\-\s]{8,18})/i);
+
+  data.shopAddress =
+    matchLabeledValue(lines, [
+      /^(?:address|addr|location|shop\s*address)\s*[:\-]\s*(.+)$/i,
+    ]) || matchAddressBlock(lines);
+
+  data.customerName = matchLabeledValue(lines, [
+    /^(?:customer|buyer|bill\s*to|consignee|party)\s*(?:name)?\s*[:\-]\s*(.+)$/i,
+  ]);
+  data.customerPhone =
+    matchLabeledValue(lines, [
+      /^(?:customer|buyer)\s*(?:ph(?:one)?|mobile)\s*[:\-]\s*(.+)$/i,
+    ]) || '';
+  data.customerAddress = matchLabeledValue(lines, [
+    /^(?:customer|buyer|delivery)\s*address\s*[:\-]\s*(.+)$/i,
+  ]);
+
+  data.invoiceNumber = extractInvoiceNumber(lines, blob);
+  data.invoiceDate = extractInvoiceDate(lines, blob);
+
+  data.cgst = parseMoney(matchTaxAmount(blob, 'CGST'));
+  data.sgst = parseMoney(matchTaxAmount(blob, 'SGST'));
+  data.igst = parseMoney(matchTaxAmount(blob, 'IGST'));
+  data.taxAmount =
+    parseMoney(
+      matchLabeledValue(lines, [
+        /^(?:total\s*)?(?:tax|gst|vat)\s*(?:amount)?\s*[:\-]\s*(.+)$/i,
+      ]) ||
+        matchInline(
+          blob,
+          /(?:Total\s*)?(?:Tax|GST)\s*(?:Amount)?\s*[:\-]?\s*(?:Rs\.?|INR|₹)?\s*([0-9,]+\.?[0-9]*)/i,
+        ),
+    ) ?? sumNullable(data.cgst, data.sgst, data.igst);
+
+  // Never treat GST % rate (e.g. 9.0) as rupee tax if amounts look like rates
+  if (data.cgst != null && data.cgst <= 28 && data.sgst != null && data.sgst <= 28) {
+    data.cgst = null;
+    data.sgst = null;
+    data.taxAmount =
+      parseMoney(
+        matchInline(blob, /(?:Total\s*)?(?:Tax|GST)\s*(?:Amount)?\s*[:\-]?\s*(?:Rs\.?|INR|₹)?\s*([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]+)?|[0-9]{3,}(?:\.[0-9]+)?)/i),
+      ) || null;
+  }
+  if (data.taxAmount != null && data.taxAmount <= 28) data.taxAmount = null;
+
+  data.subtotal = parseMoney(
+    matchLabeledValue(lines, [
+      /^(?:sub\s*total|taxable\s*(?:value|amount)|taxable)\s*[:\-]\s*(.+)$/i,
+    ]) ||
+      matchInline(
+        blob,
+        /(?:Sub\s*Total|Taxable\s*(?:Value|Amount))\s*[:\-]?\s*(?:Rs\.?|INR|₹)?\s*([0-9,]+\.?[0-9]*)/i,
+      ),
+  );
+
+  // Grand Total ALWAYS preferred over taxable+tax repair
+  const labeledGrand = extractGrandTotal(lines, blob, data.invoiceNumber);
+  data.totalAmount = labeledGrand;
+  if (data.totalAmount == null || data.totalAmount <= 0) {
+    if (data.subtotal != null && data.subtotal > 0) {
+      const tax = data.taxAmount ?? sumNullable(data.cgst, data.sgst, data.igst);
+      if (tax != null && tax > 28) {
+        data.totalAmount = roundMoney(Number(data.subtotal) + Number(tax));
+      }
+    }
+  }
+
+  data.paymentMode = normalizePaymentMode(
+    matchLabeledValue(lines, [
+      /^(?:payment\s*(?:mode|method|type)|paid\s*by|mode\s*of\s*payment)\s*[:\-]\s*(.+)$/i,
+    ]) ||
+      matchInline(blob, /(?:Payment\s*(?:Mode|Method)|Paid\s*via|Paid\s*by)\s*[:\-]?\s*([A-Za-z /]+)/i) ||
+      blob,
+  );
+
+  const lineBlock = extractBillLineItems(lines, {
+    subtotal: data.subtotal,
+    totalAmount: data.totalAmount,
+  });
+  data.items = lineBlock.items;
+  data.itemCount = lineBlock.itemCount;
+  data.itemsSubtotal = lineBlock.itemsSubtotal;
+
+  if (data.subtotal == null && data.itemsSubtotal != null) {
+    data.subtotal = data.itemsSubtotal;
+  }
+  // Do NOT overwrite a labeled Grand Total with subtotal+tax
+  if ((data.totalAmount == null || data.totalAmount <= 0) && data.itemsSubtotal != null && data.itemsSubtotal > 0) {
+    const tax = data.taxAmount ?? sumNullable(data.cgst, data.sgst, data.igst);
+    if (tax != null && tax > 28) {
+      data.totalAmount = roundMoney(Number(data.itemsSubtotal) + Number(tax));
+    } else {
+      // Marketplace invoices: line "Total" column often equals grand total
+      const primary = pickPrimaryItem(data.items);
+      if (primary?.amount > 0) data.totalAmount = primary.amount;
+    }
+  }
+
+  data.productName = extractProductName(lines, data.items);
+  const primaryItem = pickPrimaryItem(data.items);
+  data.imei = extractImei(lines, blob) || primaryItem?.imei || '';
+  data.serialNumber =
+    extractSerial(lines, blob) || primaryItem?.serialNumber || '';
+  data.chassisNumber = extractChassis(lines, blob);
+  data.engineNumber = extractEngineNumber(lines, blob);
+  // If serial accidentally held an IMEI, move it
+  if (!data.imei && /^\d{15}$/.test(String(data.serialNumber || '').replace(/\D/g, ''))) {
+    data.imei = String(data.serialNumber).replace(/\D/g, '').slice(0, 15);
+    data.serialNumber = '';
+  }
+  data.registration = extractVehicleRegistration(lines, blob);
+
+  // Guard: never keep IMEI / toll-free / 10-digit IDs / invoice numbers as grand total
+  if (data.totalAmount != null && looksLikeIdentifierDigits(String(Math.round(data.totalAmount)))) {
+    data.totalAmount = null;
+  }
+  if (data.totalAmount != null && isTollFreeOrHelplineAmount(data.totalAmount)) {
+    data.totalAmount = null;
+  }
+  if (
+    data.totalAmount != null &&
+    data.invoiceNumber &&
+    String(Math.round(Number(data.totalAmount))) ===
+      String(data.invoiceNumber).replace(/\D/g, '')
+  ) {
+    data.totalAmount = null;
+  }
+  if (data.totalAmount != null && isImplausiblePurchaseTotal(data.totalAmount, data)) {
+    data.totalAmount = null;
+  }
+  // Prefer labeled grand total; else highest non-fee line (ignore Handling Fee ₹0)
+  if ((data.totalAmount == null || data.totalAmount <= 0) && data.items?.length) {
+    const primary = pickPrimaryItem(data.items);
+    if (
+      primary?.amount > 0 &&
+      !looksLikeIdentifierDigits(String(Math.round(primary.amount))) &&
+      !isTollFreeOrHelplineAmount(primary.amount) &&
+      !isImplausiblePurchaseTotal(primary.amount, data)
+    ) {
+      data.totalAmount = primary.amount;
+    }
+  }
+
+  // Vehicle invoices: rebuild from taxable + GST when Net Total OCR failed
+  if (
+    (data.totalAmount == null || data.totalAmount <= 0) &&
+    data.subtotal != null &&
+    data.subtotal > 1000
+  ) {
+    const tax = data.taxAmount ?? sumNullable(data.cgst, data.sgst, data.igst);
+    if (tax != null && tax > 28) {
+      data.totalAmount = roundMoney(Number(data.subtotal) + Number(tax));
+    } else if (data.subtotal >= 10000) {
+      // Sub Total on TVS dealer invoices often already equals Net Total
+      data.totalAmount = roundMoney(Number(data.subtotal));
+    }
+  }
+  if (
+    (data.taxAmount == null || data.taxAmount <= 0) &&
+    data.totalAmount != null &&
+    data.subtotal != null &&
+    data.totalAmount > data.subtotal + 1
+  ) {
+    data.taxAmount = roundMoney(Number(data.totalAmount) - Number(data.subtotal));
+  }
+
+  data.warrantyPeriodMonths = parseWarrantyMonths(blob, lines);
+  if (data.invoiceDate && data.warrantyPeriodMonths) {
+    data.warrantyExpiry = addMonthsIso(data.invoiceDate, data.warrantyPeriodMonths);
+  } else {
+    data.warrantyExpiry = parseDateFromMatch(
+      matchLabeledValue(lines, [
+        /^(?:warranty)\s*(?:expiry|exp(?:ires)?|till|until|end)?\s*[:\-]\s*(.+)$/i,
+      ]) ||
+        matchInline(
+          blob,
+          /Warranty\s*(?:Expiry|Exp(?:ires)?|Till|Until)?\s*[:\-]?\s*([0-9]{1,4}[\/\-.][0-9]{1,2}[\/\-.][0-9]{1,4})/i,
+        ),
+    );
+  }
+
+  data.purchaseCategory = inferPurchaseCategory(data, blob);
+
+  const docClass = classifyDocumentType(blob, {
+    productName: data.productName,
+    shopName: data.shopName,
+    registration: data.registration,
+    chassisNumber: data.chassisNumber,
+  });
+  data.documentType = docClass.vaultType;
+  data.documentKind = docClass.documentKind;
+  data.documentLabel = docClass.label;
+  data.isVehicleInvoice = Boolean(docClass.isVehicleInvoice);
+  data.requiresVehicleLink = Boolean(docClass.requiresVehicleLink);
+
+  if (
+    docClass.isVehicleInvoice ||
+    data.chassisNumber ||
+    data.engineNumber ||
+    docClass.requiresVehicleLink ||
+    docClass.categoryHint === 'Vehicles'
+  ) {
+    data.purchaseCategory = PURCHASE_CATEGORIES.VEHICLES;
+    data.smartCategory = SMART_CATEGORIES.VEHICLES;
+  }
+
+  // Insurance / PUC dates ONLY when the scanned doc is that type
+  if (docClass.vaultType === 'insurance' || docClass.documentKind === 'insurance') {
+    data.insuranceExpiry =
+      parseDateFromMatch(
+        matchLabeledValue(lines, [
+          /^(?:insurance|policy)\s*(?:expiry|exp(?:ires)?|till|until|end|valid\s*(?:till|until))?\s*[:\-]\s*(.+)$/i,
+          /^(?:valid\s*(?:till|until|to)|period\s*(?:to|upto|until))\s*[:\-]\s*(.+)$/i,
+        ]) ||
+          matchInline(
+            blob,
+            /(?:Insurance|Policy)\s*(?:Expiry|Exp(?:ires)?|Valid\s*(?:Till|Until))?\s*[:\-]?\s*([0-9]{1,4}[\/\-.][0-9]{1,2}[\/\-.][0-9]{1,4})/i,
+          ) ||
+          matchInline(
+            blob,
+            /(?:Valid\s*(?:Till|Until|To)|Period\s*(?:To|Upto|Until)|To\s*Date)\s*[:\-]?\s*([0-9]{1,4}[\/\-.][0-9]{1,2}[\/\-.][0-9]{1,4})/i,
+          ),
+      ) || null;
+  } else {
+    data.insuranceExpiry = null;
+  }
+
+  if (docClass.vaultType === 'puc') {
+    data.pucExpiry = parseDateFromMatch(
+      matchLabeledValue(lines, [
+        /^(?:puc)\s*(?:expiry|exp(?:ires)?|till|until|valid\s*(?:till|until))?\s*[:\-]\s*(.+)$/i,
+      ]) ||
+        matchInline(
+          blob,
+          /PUC\s*(?:Expiry|Exp(?:ires)?|Valid\s*(?:Till|Until))?\s*[:\-]?\s*([0-9]{1,4}[\/\-.][0-9]{1,2}[\/\-.][0-9]{1,4})/i,
+        ),
+    );
+  } else if (docClass.vaultType !== 'rc') {
+    // Purchase invoices must not invent PUC dates from random "valid till" lines
+    data.pucExpiry = null;
+  }
+
+  if (docClass.vaultType !== 'warranty' && docClass.vaultType !== 'bill') {
+    // Keep warranty only for warranty cards or purchase bills with warranty months
+    if (docClass.vaultType === 'insurance' || docClass.vaultType === 'puc') {
+      data.warrantyExpiry = null;
+      data.warrantyPeriodMonths = null;
+    }
+  }
+
+  // Keep registration for vehicle invoices AND attach-docs (insurance / PUC / RC)
+  if (
+    data.purchaseCategory !== PURCHASE_CATEGORIES.VEHICLES &&
+    !docClass.requiresVehicleLink
+  ) {
+    data.registration = '';
+  }
+
+  // Never keep helpline / policy junk as product name
+  if (!isGoodProductName(data.productName)) {
+    data.productName = '';
+  }
+  if (
+    docClass.requiresVehicleLink &&
+    (!data.productName || JUNK_PRODUCT.test(data.productName))
+  ) {
+    data.productName =
+      extractVehicleModelOnly(lines) ||
+      (data.registration ? `Vehicle ${data.registration}` : '');
+  }
+
+  return {
+    success: true,
+    data,
+    confidence: estimateConfidence(data),
+  };
+}
+
+function normalizeLines(input) {
+  if (Array.isArray(input)) {
+    return input.map((l) => String(l || '').trim()).filter(Boolean);
+  }
+  return String(input || '')
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+}
+
+function matchLabeledValue(lines, patterns) {
+  for (const line of lines) {
+    for (const re of patterns) {
+      const m = line.match(re);
+      if (m?.[1]) return cleanValue(m[1]);
+    }
+  }
+  return '';
+}
+
+function matchInline(text, re) {
+  const m = String(text || '').match(re);
+  return m?.[1] ? cleanValue(m[1]) : '';
+}
+
+function cleanValue(value) {
+  return String(value || '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/[,|;]+$/, '')
+    .trim();
+}
+
+export function matchGstin(text) {
+  const raw = String(text || '');
+  const upper = raw.toUpperCase();
+
+  // Dealer labels: "Dlr GST : 09AAMCR6805R1ZF", "GSTIN", "Dealer GST"
+  const labeled = upper.match(
+    /(?:DLR\.?\s*GST|DEALER\s*GST|GSTIN(?:\s*(?:NO|NUMBER|#))?|GST\s*(?:NO|NUMBER|#)?)\s*[:\-]?\s*([0-9]{2}\s*[A-Z]{5}\s*[0-9]{4}\s*[A-Z]\s*[1-9A-Z]\s*Z\s*[0-9A-Z])/i,
+  );
+  if (labeled?.[1]) {
+    const compact = labeled[1].replace(/\s+/g, '');
+    if (isValidGstinFormat(compact)) return compact;
+  }
+
+  // Prefer GSTIN near top of invoice (header / seller block)
+  const top = upper.slice(0, Math.min(1600, upper.length));
+  const topHit = top.match(GSTIN_RE);
+  if (topHit?.[1]) return topHit[1];
+
+  const m = upper.match(GSTIN_RE);
+  if (m?.[1]) return m[1];
+
+  // OCR sometimes inserts spaces inside GSTIN — try compacted text
+  const compacted = upper.replace(/[^A-Z0-9]/g, '');
+  const loose = compacted.match(GSTIN_COMPACT_RE);
+  return loose?.[1] || '';
+}
+
+export function isValidGstinFormat(gstin) {
+  return /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(
+    String(gstin || '').toUpperCase().trim(),
+  );
+}
+
+function matchPhoneNear(blob, re) {
+  const raw = matchInline(blob, re);
+  const digits = String(raw).replace(/[^\d+]/g, '');
+  if (digits.replace(/\D/g, '').length >= 10) return digits;
+  return '';
+}
+
+function matchAddressBlock(lines) {
+  const idx = lines.findIndex((l) => /address|road|street|nagar|colony|pin\s*code|dist/i.test(l));
+  if (idx < 0) return '';
+  return lines.slice(idx, idx + 2).join(', ').slice(0, 180);
+}
+
+/** Top 3–5 lines: company / shop name; skip "Tax Invoice" etc. */
+function inferShopName(lines, gstin) {
+  const skip =
+    /gstin|invoice|tax|total|customer|bill|date|cash|upi|card|page|original|duplicate|recipient|supply|e-?way|irn|ack\s*no/i;
+  for (const line of lines.slice(0, 6)) {
+    if (gstin && line.toUpperCase().includes(gstin)) continue;
+    if (GENERIC_HEADER.test(line) || skip.test(line)) continue;
+    if (line.length >= 3 && line.length <= 80 && /[A-Za-z]{3,}/.test(line)) {
+      // Prefer LIMITED / RETAIL / LLP / PVT style legal names
+      if (/limited|pvt|private|llp|retail|traders|electronics|digital|mart|store|mobiles?/i.test(line)) {
+        return line;
+      }
+    }
+  }
+  for (const line of lines.slice(0, 5)) {
+    if (gstin && line.toUpperCase().includes(gstin)) continue;
+    if (GENERIC_HEADER.test(line) || skip.test(line)) continue;
+    if (line.length >= 3 && line.length <= 60 && /[A-Za-z]{3,}/.test(line)) return line;
+  }
+  return '';
+}
+
+function extractInvoiceNumber(lines, blob) {
+  const labeled =
+    matchLabeledValue(lines, [
+      /^(?:invoice|bill|receipt|tax\s*invoice)\s*(?:no|number|#)\.?\s*[:\-]?\s*(.+)$/i,
+      /^(?:inv\.?\s*no\.?|bill\s*no\.?)\s*[:\-]?\s*(.+)$/i,
+    ]) ||
+    matchInline(
+      blob,
+      /(?:Invoice|Bill|Receipt|Tax\s*Invoice)\s*(?:No\.?|Number|#)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\-\/]{2,})/i,
+    ) ||
+    matchInline(blob, /Invoice\s*No\.?\s*[:\-]?\s*(\d{3,12})\b/i);
+
+  let value = cleanValue(labeled);
+  // Strip trailing date/time if OCR glued "63246 14/07/2025"
+  value = value.replace(/\s+\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}.*$/i, '').trim();
+  if (!value) return '';
+  if (/^(?:date|total|gstin|cash|upi|tax|amount|bill|invoice)$/i.test(value)) return '';
+  if (/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(value)) return ''; // date mistaken as inv#
+  return value.slice(0, 40);
+}
+
+function extractInvoiceDate(lines, blob) {
+  return parseDateFromMatch(
+    matchLabeledValue(lines, [
+      /^(?:invoice|bill|purchase|sale|txn|transaction)\s*date\s*[:\-]\s*(.+)$/i,
+      /^(?:date)\s*[:\-]\s*(.+)$/i,
+    ]) ||
+      matchInline(
+        blob,
+        /(?:Invoice|Bill|Purchase)\s*Date\s*[:\-]?\s*([0-9]{1,4}[\/\-.][0-9]{1,2}[\/\-.][0-9]{1,4})/i,
+      ) ||
+      matchInline(blob, /\b(\d{4}-\d{2}-\d{2})\b/) ||
+      matchInline(blob, /\b([0-9]{1,2}[\/\-.][0-9]{1,2}[\/\-.][0-9]{4})\b/),
+  );
+}
+
+/**
+ * Grand total — prefer Grand Total / Amount Payable / Amount Inclusive of Taxes.
+ * NEVER treat Taxable Value as the invoice purchase total.
+ */
+function extractGrandTotal(lines, blob, invoiceNumber = '') {
+  const invDigits = String(invoiceNumber || '').replace(/\D/g, '');
+  const rejectAmount = (n) => {
+    if (n == null || n <= 0) return true;
+    if (isTollFreeOrHelplineAmount(n)) return true;
+    if (looksLikeIdentifierDigits(String(Math.round(n)))) return true;
+    if (invDigits && String(Math.round(n)) === invDigits) return true;
+    // Mobile numbers (10 digits starting 6-9) must never be purchase price
+    const d = String(Math.round(n));
+    if (/^[6-9]\d{9}$/.test(d)) return true;
+    if (n >= 1e7) return true; // > ₹1 crore — almost never a bike/gadget invoice OCR hit
+    return false;
+  };
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i] || '';
+    if (/invoice\s*(?:no|number|#)|bill\s*(?:no|number)/i.test(line) && !/net\s*total|grand\s*total/i.test(line)) {
+      continue;
+    }
+    if (/taxable\s*(?:value|amount)/i.test(line) && !/grand\s*total|payable|inclusive|net\s*total/i.test(line)) {
+      continue;
+    }
+    if (/helpline|toll[\s\-]?free|customer\s*care|1800\s*\d/i.test(line)) {
+      continue;
+    }
+    if (
+      /(?:grand\s*total|net\s*total|amount\s*payable|net\s*payable|total\s*amount(?:\s*payable)?|amount\s*\(?\s*inclusive\s*of\s*taxes?\)?|total\s*price|invoice\s*total|ex[\s\-]?showroom\s*price)\b/i.test(
+        line,
+      )
+    ) {
+      const same = parseMoney(
+        line.replace(
+          /grand\s*total|net\s*total|amount\s*payable|net\s*payable|total\s*amount(?:\s*payable)?|amount\s*\(?\s*inclusive\s*of\s*taxes?\)?|total\s*price|invoice\s*total|ex[\s\-]?showroom\s*price/gi,
+          '',
+        ),
+      );
+      if (same != null && same >= 1 && !rejectAmount(same)) return same;
+      // Skip amount-in-words line
+      let look = 1;
+      while (look <= 3) {
+        const candidateLine = lines[i + look] || '';
+        if (/rupees|only|includes?\s+hsrp/i.test(candidateLine)) {
+          look += 1;
+          continue;
+        }
+        const next = parseMoney(candidateLine);
+        if (next != null && next >= 1 && !rejectAmount(next)) return next;
+        look += 1;
+      }
+    }
+  }
+
+  const patterns = [
+    /(?:grand\s*total|net\s*total|total\s*amount(?:\s*payable)?|amount\s*payable|net\s*(?:payable|amount|total)|total\s*price|amount\s*\(?\s*inclusive\s*of\s*taxes?\)?|invoice\s*total|ex[\s\-]?showroom\s*price)\s*[:\-]?\s*(?:Rs\.?|INR|₹)?\s*([0-9,]+\.?[0-9]*)/i,
+    /(?:^|\n)\s*(?:grand\s*total|net\s*total|amount\s*payable|net\s*payable|total\s*amount(?:\s*payable)?)\s*[:\-]?\s*(?:Rs\.?|INR|₹)?\s*([0-9,]+\.?[0-9]*)/im,
+  ];
+  for (const re of patterns) {
+    const hit = parseMoney(matchInline(blob, re));
+    if (hit != null && hit > 0 && !rejectAmount(hit)) return hit;
+  }
+
+  const labeled = parseMoney(
+    matchLabeledValue(lines, [
+      /^(?:grand\s*total|net\s*total|net\s*amount|net\s*payable|total\s*amount(?:\s*payable)?|amount\s*payable|total\s*price|invoice\s*total|ex[\s\-]?showroom\s*price)\s*[:\-]\s*(.+)$/i,
+    ]),
+  );
+  if (labeled != null && labeled > 0 && !rejectAmount(labeled)) return labeled;
+
+  // Soft bare Total — avoid Taxable / helpline / invoice no / tiny values
+  for (let i = 0; i < lines.length; i += 1) {
+    if (/taxable|helpline|toll[\s\-]?free|1800|invoice\s*(?:no|number)/i.test(lines[i])) continue;
+    if (/^\s*total\s*[:\-]?\s*(?:Rs\.?|INR|₹)?\s*([1-9][0-9,]{2,}(?:\.[0-9]+)?)/i.test(lines[i])) {
+      const soft = parseMoney(lines[i].replace(/^\s*total\s*[:\-]?/i, ''));
+      if (soft != null && soft >= 1000 && !rejectAmount(soft)) return soft;
+      const next = parseMoney(lines[i + 1] || '');
+      if (next != null && next >= 1000 && !rejectAmount(next)) return next;
+    }
+  }
+
+  // Last resort: largest money near bottom — skip taxable / helpline / invoice-no lines
+  const bottomLines = lines
+    .slice(-14)
+    .filter(
+      (l) =>
+        !/taxable\s*(?:value|amount)|helpline|toll[\s\-]?free|1800\s*\d|invoice\s*(?:no|number)|bill\s*(?:no|number)/i.test(
+          l,
+        ),
+    );
+  const bottom = bottomLines.join('\n');
+  const moneyHits = [
+    ...bottom.matchAll(/(?:Rs\.?|INR|₹)?\s*([1-9][0-9]{2,}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?)/g),
+  ]
+    .map((m) => parseMoney(m[1]))
+    .filter((n) => n != null && n >= 1000 && n < 1e7 && !rejectAmount(n));
+  if (moneyHits.length) return Math.max(...moneyHits);
+
+  return null;
+}
+
+function extractProductName(lines, items) {
+  const FEE =
+    /handling\s*fee|delivery\s*(?:fee|charge|charges)?|shipping|platform\s*fee|convenience\s*fee/i;
+
+  // Prefer explicit vehicle model (TVS RONIN, etc.) over accessory / company header lines
+  for (const line of lines) {
+    if (JUNK_PRODUCT.test(line) || GENERIC_HEADER.test(line) || FEE.test(line)) continue;
+    if (COMPANY_HEADER.test(line) && !/\b(?:ronin|apache|jupiter|ntorq|pulsar|activa|splendor)\b/i.test(line)) {
+      continue;
+    }
+    const model = String(line).match(VEHICLE_MODEL_RE);
+    if (model?.[1] && isGoodProductName(model[1])) {
+      return cleanValue(model[1]).slice(0, 100);
+    }
+  }
+  const blobModel = String(lines.join('\n')).match(VEHICLE_MODEL_RE);
+  if (blobModel?.[1] && isGoodProductName(blobModel[1])) {
+    return cleanValue(blobModel[1]).slice(0, 100);
+  }
+  const primary = pickPrimaryItem(items);
+  const labeled = matchLabeledValue(lines, [
+    /^(?:item|product|model|description|goods|particulars)\s*(?:name)?\s*[:\-]\s*(.+)$/i,
+    /^(?:vehicle|bike|car)\s*(?:model|name)?\s*[:\-]\s*(.+)$/i,
+  ]);
+
+  if (labeled && isGoodProductName(labeled) && !FEE.test(labeled)) return labeled;
+  if (primary?.name && isGoodProductName(primary.name) && !FEE.test(primary.name)) {
+    return primary.name;
+  }
+
+  // Highest-priced non-fee item name as fallback
+  const priced = (items || [])
+    .filter((i) => !i?.isFee && !FEE.test(String(i?.name || '')) && Number(i?.amount) > 0)
+    .sort((a, b) => Number(b.amount) - Number(a.amount));
+  if (priced[0]?.name && isGoodProductName(priced[0].name)) return priced[0].name;
+
+  // Flipkart / Amazon / retail: long description with storage/color
+  for (const line of lines) {
+    if (STOCK_ID.test(line) || JUNK_PRODUCT.test(line) || FEE.test(line)) continue;
+    if (GENERIC_HEADER.test(line)) continue;
+    if (
+      line.length >= 12 &&
+      line.length <= 120 &&
+      /[A-Za-z]{3,}/.test(line) &&
+      (/\(([^)]+)\)/.test(line) || /\b\d{2,4}\s*GB\b/i.test(line) || /\b(?:black|white|blue|silver)\b/i.test(line))
+    ) {
+      if (isGoodProductName(line)) return cleanValue(line).slice(0, 100);
+    }
+  }
+
+  for (const line of lines) {
+    if (STOCK_ID.test(line) || JUNK_PRODUCT.test(line) || FEE.test(line)) continue;
+    if (/^[A-Za-z0-9][A-Za-z0-9 &\-\/\(\),.]{6,80}$/.test(line) && /[A-Za-z]{4,}/.test(line)) {
+      if (isGoodProductName(line)) return cleanValue(line).slice(0, 100);
+    }
+  }
+
+  return '';
+}
+
+function isGoodProductName(name) {
+  const s = String(name || '').trim();
+  if (!s || s.length < 3 || s.length > 120) return false;
+  if (JUNK_PRODUCT.test(s) || STOCK_ID.test(s)) return false;
+  if (COMPANY_HEADER.test(s)) return false;
+  if (/policy\s*no|1800|toll\s*free|helpline|includes?\s+hsrp|welcome\s*kit/i.test(s)) {
+    return false;
+  }
+  if (/^(?:date|total|tax|gst|number|qty|rate|amount|hsn|sac|includes?)$/i.test(s)) return false;
+  if (/includes?\s+hsrp|hsrp\s+and\s+fittings|fittings\s+only/i.test(s)) return false;
+  if (!/[A-Za-z]{3,}/.test(s)) return false;
+  return true;
+}
+
+function extractVehicleModelOnly(lines) {
+  for (const line of lines || []) {
+    if (JUNK_PRODUCT.test(line) || COMPANY_HEADER.test(line)) continue;
+    const model = String(line).match(VEHICLE_MODEL_RE);
+    if (model?.[1] && isGoodProductName(model[1])) return cleanValue(model[1]).slice(0, 100);
+    if (/\bRONIN\b/i.test(line) && !/includes?\s+hsrp/i.test(line)) {
+      const m = String(line).match(/\b((?:TVS\s+)?RONIN(?:\s+[A-Z0-9][A-Za-z0-9\-]*){0,3})/i);
+      if (m?.[1]) return cleanValue(m[1]).slice(0, 100);
+    }
+  }
+  return '';
+}
+
+/** Reject phone fragments / invoice-no-sized noise / crore-level OCR junk. */
+function isImplausiblePurchaseTotal(amount, data = {}) {
+  const n = Number(amount);
+  if (!Number.isFinite(n) || n <= 0) return true;
+  const digits = String(Math.round(n));
+  if (/^[6-9]\d{9}$/.test(digits)) return true;
+  if (isTollFreeOrHelplineAmount(n)) return true;
+  if (n >= 1e7) return true;
+  const inv = String(data.invoiceNumber || '').replace(/\D/g, '');
+  if (inv && digits === inv) return true;
+  // Tiny leftovers from "1800 2666" → 2666 on vehicle invoices
+  if (
+    (data.isVehicleInvoice || data.chassisNumber || data.engineNumber) &&
+    n > 0 &&
+    n < 5000
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function isJunkVehicleId(value) {
+  const s = String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '');
+  if (!s) return true;
+  if (/^(?:NO|N\/A|NA|NIL|NONE|NULL|UNDEFINED|-|—)$/i.test(s)) return true;
+  if (s.length < 8) return true;
+  return false;
+}
+
+function normalizeVehicleId(value) {
+  const s = String(value || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
+  if (isJunkVehicleId(s)) return '';
+  if (!/^[A-HJ-NPR-Z0-9]{8,20}$/i.test(s)) return '';
+  return s.slice(0, 24);
+}
+
+function extractChassis(lines, blob) {
+  // India motorcycle WMI often starts with MD…
+  const md = String(blob || '')
+    .toUpperCase()
+    .match(/\b(MD[A-HJ-NPR-Z0-9]{14,16})\b/);
+  if (md?.[1]) return md[1];
+
+  const labeled =
+    matchLabeledValue(lines, [
+      /^(?:chassis(?:\s*no\.?)?|vin|frame\s*(?:no\.?|number)?)\s*[:\-#]?\s*(.+)$/i,
+    ]) ||
+    matchInline(
+      blob,
+      /(?:Chassis(?:\s*No\.?)?|VIN|Frame\s*(?:No\.?|Number)?)\s*[:\-#]?\s*([A-HJ-NPR-Z0-9]{8,20})/i,
+    );
+
+  const fromLabel = normalizeVehicleId(labeled);
+  if (fromLabel) return fromLabel;
+
+  // Table layout: header "Frame No … Engine No" then value line
+  for (let i = 0; i < lines.length - 1; i += 1) {
+    if (!/frame\s*no|chassis/i.test(lines[i])) continue;
+    if (/[A-HJ-NPR-Z0-9]{10,}/i.test(lines[i])) continue;
+    const nextTokens = String(lines[i + 1] || '').split(/\s+/);
+    for (const token of nextTokens) {
+      const id = normalizeVehicleId(token);
+      if (id && (/^MD/i.test(id) || id.length >= 11)) return id;
+    }
+  }
+
+  return '';
+}
+
+function extractEngineNumber(lines, blob) {
+  const labeled =
+    matchLabeledValue(lines, [/^(?:engine(?:\s*no\.?)?)\s*[:\-#]?\s*(.+)$/i]) ||
+    matchInline(blob, /Engine\s*(?:No\.?|Number)?\s*[:\-#]?\s*([A-Z0-9\-]{8,20})/i);
+
+  const fromLabel = normalizeVehicleId(labeled);
+  if (fromLabel) return fromLabel;
+
+  // Table: Engine No column — value often looks like BN1FS2302943
+  const nearEngine = String(blob || '').match(
+    /Engine\s*(?:No\.?|Number)?[\s:\-#]*([A-Z]{2,4}[0-9][A-Z0-9]{5,14})/i,
+  );
+  if (nearEngine?.[1]) {
+    const id = normalizeVehicleId(nearEngine[1]);
+    if (id) return id;
+  }
+
+  for (let i = 0; i < lines.length - 1; i += 1) {
+    if (!/engine\s*no/i.test(lines[i])) continue;
+    if (/[A-Z0-9]{10,}/i.test(lines[i])) continue;
+    const nextTokens = String(lines[i + 1] || '').split(/\s+/);
+    for (const token of nextTokens) {
+      const id = normalizeVehicleId(token);
+      if (id && !/^MD/i.test(id)) return id;
+    }
+  }
+
+  return '';
+}
+
+function extractImei(lines, blob) {
+  const labeled =
+    matchLabeledValue(lines, [/^(?:imei(?:\s*[12])?)\s*[:\-#]?\s*(.+)$/i]) ||
+    matchInline(blob, /IMEI\s*\/?\s*Serial\s*No\.?\s*[:\-]?\s*\[?\s*([0-9\s]{14,20})\s*\]?/i) ||
+    matchInline(blob, /\[?\s*IMEI(?:\s*\/\s*Serial\s*No\.?)?\s*[:\-]?\s*([0-9\s]{14,20})\s*\]?/i) ||
+    matchInline(blob, /IMEI(?:\s*[12])?\s*[:\-#]?\s*([0-9\s]{14,20})/i);
+  const fromLabel = normalizeImeiDigits(labeled);
+  if (fromLabel) return fromLabel;
+
+  // Any standalone 15-digit run near phone/IMEI context → IMEI only (never price)
+  if (/\b(?:imei|mobile|phone|handset|serial)\b/i.test(blob)) {
+    const m = String(blob).replace(/(\d)\s+(?=\d)/g, '$1').match(/\b([0-9]{15})\b/);
+    if (m) return m[1];
+  }
+  return '';
+}
+
+function normalizeImeiDigits(raw) {
+  const digits = String(raw || '').replace(/\D/g, '');
+  if (digits.length >= 14 && digits.length <= 17) return digits.slice(0, 15);
+  return '';
+}
+
+function extractSerial(lines, blob) {
+  const labeled =
+    matchLabeledValue(lines, [
+      /^(?:s(?:r|erial)?\.?\s*no\.?|serial(?:\s*(?:number|no\.?))?|s\/n)\s*[:\-#]?\s*(.+)$/i,
+    ]) ||
+    matchInline(
+      blob,
+      /(?:S(?:r|erial)?\.?\s*No\.?|Serial(?:\s*(?:Number|No\.?))?|S\/N)\s*[:\-#]?\s*([A-Z0-9\-\/]{5,})/i,
+    );
+  const value = cleanValue(labeled);
+  if (!value) return '';
+  if (/^(?:date|total|n\/a|na|nil)$/i.test(value)) return '';
+  const digits = value.replace(/\D/g, '');
+  // 15-digit → IMEI only, never serial_number as price either
+  if (digits.length === 15) return '';
+  if (digits.length === 10 && /^\d+$/.test(value.replace(/\s/g, ''))) return value.slice(0, 40);
+  return value.slice(0, 40);
+}
+
+/** Only when labeled or clear Indian plate — never invent MH12AB1234-style dummies */
+function extractVehicleRegistration(lines, blob) {
+  const labeled =
+    matchLabeledValue(lines, [
+      /^(?:reg(?:istration)?(?:\s*(?:no|number|plate))?|vehicle\s*(?:no|number)|regn\.?\s*no\.?)\s*[:\-#]?\s*(.+)$/i,
+    ]) ||
+    matchInline(
+      blob,
+      /(?:Reg(?:istration)?(?:\s*(?:No\.?|Number|Plate))?|Vehicle\s*(?:No\.?|Number)|Regn\.?\s*No\.?)\s*[:\-#]?\s*([A-Z0-9\-\s]{6,14})/i,
+    );
+
+  const candidate = cleanValue(labeled).toUpperCase().replace(/\s+/g, '');
+  if (candidate && isIndianPlate(candidate)) return formatPlate(candidate);
+
+  // Only scan free text if this looks like a vehicle invoice
+  if (!/\b(?:vehicle|chassis|vin|rc\b|motor|bike|car|scooter|regn)\b/i.test(blob)) {
+    return '';
+  }
+  const m = String(blob)
+    .toUpperCase()
+    .match(/\b([A-Z]{2}\s?-?\s?[0-9]{1,2}\s?-?\s?[A-Z]{1,3}\s?-?\s?[0-9]{4})\b/);
+  if (!m) return '';
+  const plate = m[1].replace(/[\s-]/g, '');
+  return isIndianPlate(plate) ? formatPlate(plate) : '';
+}
+
+function isIndianPlate(plate) {
+  const p = String(plate || '').toUpperCase().replace(/[\s-]/g, '');
+  return /^[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}$/.test(p);
+}
+
+function formatPlate(plate) {
+  return String(plate || '').toUpperCase().replace(/[\s-]/g, '');
+}
+
+/** Prefer rupee amounts; skip GST rate lines like "CGST: 9.0%". */
+function matchTaxAmount(blob, label) {
+  const text = String(blob || '');
+  const skipRate = new RegExp(`${label}\\s*[:\\-]?\\s*[0-9.]+\\s*%`, 'i');
+  // Amount patterns that are not percentages
+  const amountRe = new RegExp(
+    `${label}(?:\\/UTGST)?\\s*(?:@\\s*[0-9.]+%\\s*)?[:\\-]?\\s*(?:Rs\\.?|INR|₹)?\\s*([0-9]{1,3}(?:,[0-9]{2,3})+(?:\\.[0-9]+)?|[0-9]{3,}(?:\\.[0-9]+)?)`,
+    'i',
+  );
+  const m = text.match(amountRe);
+  if (!m?.[1]) return '';
+  // If the only nearby hit is a tiny rate-like number and a % appears on same snippet, ignore
+  const nearby = text.slice(Math.max(0, (m.index || 0) - 8), (m.index || 0) + 40);
+  if (/%/.test(nearby) && Number(String(m[1]).replace(/,/g, '')) <= 28) return '';
+  if (skipRate.test(nearby) && Number(String(m[1]).replace(/,/g, '')) <= 28) return '';
+  return cleanValue(m[1]);
+}
+
+function matchTax(blob, labelRe) {
+  return matchTaxAmount(blob, labelRe.source.replace(/\\/g, '').replace(/\(\?\:|\)/g, '') || 'CGST');
+}
+
+function parseMoney(raw) {
+  if (raw == null || raw === '') return null;
+  const cleaned = String(raw).replace(/[^0-9.]/g, '');
+  // Strict: IMEI / phone / toll-free digit runs are NEVER money
+  if (looksLikeIdentifierDigits(cleaned)) return null;
+  if (isTollFreeOrHelplineAmount(cleaned)) return null;
+  const n = Number(cleaned);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.round(n * 100) / 100;
+}
+
+/** IMEI (15) / phone-like (10) / toll-free (1800…) digit runs must not become totals. */
+function looksLikeIdentifierDigits(raw) {
+  const digits = String(raw || '').replace(/\D/g, '');
+  if (!digits) return false;
+  if (digits.length === 15) return true;
+  if (digits.length === 10 && !String(raw || '').includes('.')) return true;
+  if (/^180[0-9]/.test(digits) && digits.length >= 8 && digits.length <= 12) return true;
+  if (/^1860|^186[\s\-]?0/.test(digits) && digits.length >= 8) return true;
+  return false;
+}
+
+/** Helpline amounts like 1800 / 18002666 must never be purchase price. */
+function isTollFreeOrHelplineAmount(value) {
+  const digits = String(value ?? '').replace(/\D/g, '');
+  if (!digits) return false;
+  if (/^180[0-9]/.test(digits) && digits.length >= 4 && digits.length <= 12) return true;
+  if (/^1860/.test(digits) && digits.length >= 4 && digits.length <= 12) return true;
+  // Bare 1800 often appears as customer-care fragment
+  if (digits === '1800' || digits === '18000') return true;
+  // Trailing fragment of "1800 2666"
+  if (digits === '2666' || digits === '18002666') return true;
+  return false;
+}
+
+function roundMoney(n) {
+  return Math.round(Number(n) * 100) / 100;
+}
+
+function sumNullable(...vals) {
+  const nums = vals.filter((v) => v != null && Number.isFinite(Number(v)));
+  if (!nums.length) return null;
+  return Math.round(nums.reduce((a, b) => a + Number(b), 0) * 100) / 100;
+}
+
+function normalizePaymentMode(raw) {
+  const s = String(raw || '').toLowerCase();
+  if (/\bupi\b|gpay|phonepe|paytm|bhim/.test(s)) return 'UPI';
+  if (/\bcard\b|visa|master|rupay|debit|credit\s*card/.test(s)) return 'Card';
+  if (/\bcredit\b|emi|bnpl/.test(s)) return 'Credit';
+  if (/\bcash\b|cod/.test(s)) return 'Cash';
+  return '';
+}
+
+function parseWarrantyMonths(blob, lines) {
+  const labeled = matchLabeledValue(lines, [
+    /^(?:warranty)\s*(?:period|duration)?\s*[:\-]\s*(.+)$/i,
+  ]);
+  const fromLabel = monthsFromText(labeled);
+  if (fromLabel) return fromLabel;
+  const years = matchInline(blob, /warranty\s*(?:of|for|:)?\s*([0-9]+)\s*(?:years?|yrs?)/i);
+  if (years) {
+    const y = Number(years);
+    return Number.isFinite(y) ? y * 12 : null;
+  }
+  const months = matchInline(blob, /warranty\s*(?:of|for|:)?\s*([0-9]+)\s*(?:months?|mos?)/i);
+  return monthsFromText(months ? `${months} months` : '');
+}
+
+function monthsFromText(text) {
+  if (!text) return null;
+  const years = String(text).match(/([0-9]+)\s*(?:years?|yrs?)/i);
+  if (years) return Number(years[1]) * 12;
+  const months = String(text).match(/([0-9]+)\s*(?:months?|mos?)/i);
+  if (months) return Number(months[1]);
+  const bare = String(text).match(/^([0-9]+)$/);
+  if (bare) return Number(bare[1]);
+  return null;
+}
+
+function inferPurchaseCategory(data, blob) {
+  const smart = classifyInvoiceSmartCategory({
+    productName: data.productName,
+    items: data.items,
+    blob: `${data.shopName || ''} ${data.registration || ''} ${data.imei || ''} ${data.chassisNumber || ''} ${blob}`,
+    documentKind: data.documentKind,
+    isVehicleInvoice: data.isVehicleInvoice,
+    chassisNumber: data.chassisNumber,
+    engineNumber: data.engineNumber,
+    registration: data.registration,
+  });
+  data.smartCategory = smart;
+
+  if (
+    smart === SMART_CATEGORIES.VEHICLES ||
+    data.registration ||
+    data.chassisNumber ||
+    data.engineNumber ||
+    data.isVehicleInvoice ||
+    /\b(?:frame\s*no|engine\s*no|ex[\s\-]?showroom|hsrp)\b/i.test(blob)
+  ) {
+    return PURCHASE_CATEGORIES.VEHICLES;
+  }
+  if (
+    smart === SMART_CATEGORIES.GADGETS ||
+    smart === SMART_CATEGORIES.HOME_APPLIANCES ||
+    smart === SMART_CATEGORIES.ACCESSORIES ||
+    data.imei
+  ) {
+    return PURCHASE_CATEGORIES.ELECTRONICS;
+  }
+  if (/property|deed|rent|flat|apartment|home\s*loan|society|plot/.test(String(blob || '').toLowerCase())) {
+    return PURCHASE_CATEGORIES.PROPERTY;
+  }
+  return PURCHASE_CATEGORIES.PERSONAL;
+}
+
+function estimateConfidence(data) {
+  const keys = [
+    'shopName',
+    'shopGstin',
+    'invoiceNumber',
+    'invoiceDate',
+    'totalAmount',
+    'productName',
+    'serialNumber',
+  ];
+  let hit = keys.filter((k) => data[k] != null && data[k] !== '').length;
+  if (data.itemCount > 0) hit += 1;
+  if (data.imei) hit += 1;
+  const denom = keys.length + 2;
+  return Math.round((hit / denom) * 100);
+}
+
+function parseDateFromMatch(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/(\d{1,4})[\/\-.](\d{1,2})[\/\-.](\d{1,4})/);
+  if (!m) return null;
+  let a = parseInt(m[1], 10);
+  let b = parseInt(m[2], 10);
+  let c = parseInt(m[3], 10);
+  let year;
+  let month;
+  let day;
+  if (String(m[1]).length === 4) {
+    year = a;
+    month = b;
+    day = c;
+  } else if (String(m[3]).length === 4) {
+    year = c;
+    if (a > 12) {
+      day = a;
+      month = b;
+    } else if (b > 12) {
+      month = a;
+      day = b;
+    } else {
+      day = a;
+      month = b;
+    }
+  } else {
+    return null;
+  }
+  if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1990 || year > 2100) return null;
+  const candidate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    candidate.getUTCFullYear() !== year ||
+    candidate.getUTCMonth() !== month - 1 ||
+    candidate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+export default { parseInvoiceText, matchGstin, isValidGstinFormat };
