@@ -34,26 +34,93 @@ export function AssetProvider({ children }) {
   const { user, isAuthenticated } = useAuth();
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [sessionUid, setSessionUid] = useState(null);
+
+  // Warm persisted auth session so Edit/Delete work while Firebase restores
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { loadAuthSession } = require('../services/authService');
+        const session = await loadAuthSession();
+        if (!cancelled && session?.uid) setSessionUid(session.uid);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid, isAuthenticated]);
+
+  const effectiveUid = user?.uid || sessionUid || null;
 
   useEffect(() => {
-    if (!isAuthenticated || !user?.uid) {
-      setAssets(DEMO_ASSETS);
+    const uid = effectiveUid;
+    if (!uid) {
+      try {
+        const { normalizeAssetList } = require('../services/storageService');
+        setAssets(normalizeAssetList(DEMO_ASSETS));
+      } catch {
+        setAssets(DEMO_ASSETS);
+      }
       setLoading(false);
       return undefined;
     }
 
     setLoading(true);
-    const unsub = AssetService.listenToUserAssets(
-      user.uid,
-      (list) => {
-        setAssets(list);
+    // Prefer live Firestore only when Firebase user is confirmed
+    if (user?.uid) {
+      let settled = false;
+      const finish = (list) => {
+        if (settled) return;
+        settled = true;
+        if (Array.isArray(list)) setAssets(list);
         setLoading(false);
-      },
-      () => setLoading(false),
-    );
+      };
 
-    return unsub;
-  }, [isAuthenticated, user?.uid]);
+      // Warm local encrypted cache immediately
+      OfflineVaultCache.getAssets(user.uid)
+        .then((list) => {
+          if (!settled && Array.isArray(list) && list.length) setAssets(list);
+        })
+        .catch(() => {});
+
+      const unsub = AssetService.listenToUserAssets(
+        user.uid,
+        (list) => finish(list),
+        () => finish(undefined),
+      );
+      // Strict 5s: never leave Dashboard on "Loading vault…" forever
+      const timer = setTimeout(() => finish(undefined), 5000);
+      return () => {
+        settled = true;
+        clearTimeout(timer);
+        try {
+          unsub?.();
+        } catch {
+          /* ignore */
+        }
+      };
+    }
+
+    // Session-only: load encrypted offline cache for this uid
+    OfflineVaultCache.getAssets(uid)
+      .then((list) => {
+        if (Array.isArray(list) && list.length) setAssets(list);
+        else {
+          try {
+            const { normalizeAssetList } = require('../services/storageService');
+            setAssets(normalizeAssetList(DEMO_ASSETS));
+          } catch {
+            setAssets(DEMO_ASSETS);
+          }
+        }
+      })
+      .catch(() => setAssets(DEMO_ASSETS))
+      .finally(() => setLoading(false));
+    return undefined;
+  }, [effectiveUid, user?.uid]);
 
   useEffect(() => {
     if (!isAuthenticated || !assets.length) return;
@@ -63,7 +130,11 @@ export function AssetProvider({ children }) {
 
   const createAsset = useCallback(
     async (form, localImagePath) => {
-      if (!user?.uid) return { success: false, error: 'Not signed in' };
+      const uid = user?.uid || sessionUid;
+      if (!uid) {
+        return { success: false, error: 'Please sign in to save assets to your vault.' };
+      }
+      const effectiveUid = uid;
 
       const attachDoc = isVehicleAttachDocument(form);
       const linkedById = form.linkAssetId
@@ -89,7 +160,7 @@ export function AssetProvider({ children }) {
         }
         const assetId = existing.assetId || existing.id;
         const renewed = await renewVehicleDocument({
-          userId: user.uid,
+          userId: effectiveUid,
           assetId,
           form,
           localImagePath: localImagePath || null,
@@ -136,7 +207,7 @@ export function AssetProvider({ children }) {
           ...(form.odometerKm != null ? { odometerKm: form.odometerKm } : {}),
           registration: existing.registration || form.registration || '',
         };
-        const updated = await AssetService.updateAsset(user.uid, assetId, updates, null);
+        const updated = await AssetService.updateAsset(effectiveUid, assetId, updates, null);
         if (!updated?.success) {
           return {
             success: false,
@@ -144,7 +215,7 @@ export function AssetProvider({ children }) {
           };
         }
         if (localImagePath) {
-          await DocumentVaultService.uploadDocument(user.uid, assetId, {
+          await DocumentVaultService.uploadDocument(effectiveUid, assetId, {
             localPath: localImagePath,
             type: vaultMeta.type,
             label: vaultMeta.label,
@@ -169,7 +240,7 @@ export function AssetProvider({ children }) {
       };
       if (localImagePath) {
         const vaultMeta = resolveVaultDocumentMeta(formWithId);
-        await OfflineVaultCache.cacheDocument(user.uid, id, {
+        await OfflineVaultCache.cacheDocument(effectiveUid, id, {
           docId: `scan_${id}`,
           type: vaultMeta.type,
           label: vaultMeta.label,
@@ -178,7 +249,7 @@ export function AssetProvider({ children }) {
           pendingSync: true,
         }).catch(() => {});
       }
-      const result = await AssetService.createFromForm(user.uid, formWithId, localImagePath);
+      const result = await AssetService.createFromForm(effectiveUid, formWithId, localImagePath);
       if (!result.success && result.queuedOffline) {
         setAssets((current) => [
           {
@@ -194,18 +265,19 @@ export function AssetProvider({ children }) {
       }
       return result;
     },
-    [user?.uid, user?.phoneNumber, assets],
+    [user?.uid, sessionUid, user?.phoneNumber, assets],
   );
 
   const updateAsset = useCallback(
     async (assetId, updates, localImagePath) => {
-      if (!user?.uid) return { success: false, error: 'Not signed in' };
+      const uid = user?.uid || sessionUid;
+      if (!uid) return { success: false, error: 'Please sign in to edit assets.' };
       if (!assetId) return { success: false, error: 'assetId required' };
       if (isDemoAssetId(assetId)) {
         return { success: false, error: 'Demo asset — sign in to save your own.' };
       }
       const result = await AssetService.updateAsset(
-        user.uid,
+        uid,
         assetId,
         updates,
         localImagePath,
@@ -222,19 +294,20 @@ export function AssetProvider({ children }) {
       }
       return result;
     },
-    [user?.uid],
+    [user?.uid, sessionUid],
   );
 
   const removeAsset = useCallback(
     async (assetId) => {
-      if (!user?.uid) return { success: false, error: 'Not signed in' };
+      const uid = user?.uid || sessionUid;
+      if (!uid) return { success: false, error: 'Please sign in to delete assets.' };
       if (isDemoAssetId(assetId)) {
         return { success: false, error: 'Demo asset — sign in to manage your vault.' };
       }
       Haptics.tap();
-      return AssetService.softDeleteAsset(user.uid, assetId);
+      return AssetService.softDeleteAsset(uid, assetId);
     },
-    [user?.uid],
+    [user?.uid, sessionUid],
   );
 
   const portfolioHealth = useMemo(() => calculatePortfolioHealth(assets), [assets]);

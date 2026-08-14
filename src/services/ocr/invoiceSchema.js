@@ -133,6 +133,12 @@ export function invoiceToAssetForm(invoice = {}, extras = {}) {
     supportPhone: invoice.shopPhone || helpline?.phone || '',
     brandName: guessBrand(safeName || productName),
     registration: isVehicle || isAttachDoc ? String(invoice.registration || '').trim() : '',
+    // Buyer / owner — never leave blank when OCR found a name
+    customerName: String(invoice.customerName || '').trim(),
+    buyerName: String(invoice.customerName || '').trim(),
+    ownerName: String(invoice.customerName || '').trim(),
+    nickname: String(invoice.nickname || invoice.locationLabel || '').trim(),
+    locationLabel: String(invoice.locationLabel || invoice.nickname || '').trim(),
     // OCR already nulls wrong types; Review may confirm dates manually
     pucExpiry: invoice.pucExpiry || null,
     insuranceExpiry: invoice.insuranceExpiry || null,

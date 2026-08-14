@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Switch } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -24,6 +24,9 @@ import { ONBOARDING_KEY } from '../../constants/storageKeys';
 import { openLogin } from '../../navigation/authGate';
 import { useTabSafeBottomPadding } from '../../utils/tabSafePadding';
 import { AboutUsScreen } from './AboutUsScreen';
+import { PrivacyVaultTag } from '../../components/PrivacyVaultTag';
+import { clearAuthSession } from '../../services/authService';
+import { OfflineVaultCache } from '../../services/offline/OfflineVaultCache';
 
 export function SettingsScreen({ navigation }) {
   const { profile, signOut, user, updateProfile, isAuthenticated, displayName: authDisplayName } =
@@ -54,9 +57,19 @@ export function SettingsScreen({ navigation }) {
 
   const onSignOut = async () => {
     setBusy(true);
-    await signOut();
-    setBusy(false);
-    setConfirmOut(false);
+    try {
+      await Promise.race([
+        signOut(),
+        new Promise((resolve) => setTimeout(resolve, 6000)),
+      ]);
+      Haptics.success();
+    } catch {
+      Haptics.error();
+    } finally {
+      setBusy(false);
+      setConfirmOut(false);
+      // NavigationContainer remounts Auth Login via AuthSwitch + resetToLogin()
+    }
   };
 
   const onSaveProfile = async () => {
@@ -129,42 +142,44 @@ export function SettingsScreen({ navigation }) {
     );
   };
 
-  const onToggleAppLock = () => {
-    const turningOff = appLockOn;
-    Alert.alert(
-      'App Lock',
-      turningOff
-        ? 'Turn off App Lock? Anyone who opens this phone can browse your vault without PIN/pattern.'
-        : `Enable App Lock? Unlock with ${securityLabel.toLowerCase()} every time you open Asset Doctor.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: turningOff ? 'Turn off' : 'Enable',
-          style: turningOff ? 'destructive' : 'default',
-          onPress: async () => {
-            setBusy(true);
-            const result = await setAppLockEnabled(!turningOff);
-            setBusy(false);
-            if (!result.success) {
-              Alert.alert(
-                'App Lock',
-                result.error ||
-                  (result.missingEnrollment
-                    ? 'Set a PIN or pattern in phone Settings first.'
-                    : 'Could not update App Lock'),
-              );
-              return;
-            }
-            Alert.alert(
-              'Saved',
-              turningOff
-                ? 'App Lock is off.'
-                : 'App Lock is on. Phone PIN / pattern / biometrics protect the vault.',
-            );
+  const onToggleAppLock = async (nextValue) => {
+    const turningOn = nextValue === true;
+    if (!turningOn && appLockOn) {
+      Alert.alert(
+        'Turn off App Lock?',
+        'Anyone who opens this phone can browse your vault without PIN/pattern.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Turn off',
+            style: 'destructive',
+            onPress: async () => {
+              setBusy(true);
+              const result = await setAppLockEnabled(false);
+              setBusy(false);
+              if (!result.success) {
+                Alert.alert('App Lock', result.error || 'Could not update App Lock');
+              }
+            },
           },
-        },
-      ],
-    );
+        ],
+      );
+      return;
+    }
+    setBusy(true);
+    const result = await setAppLockEnabled(true);
+    setBusy(false);
+    if (!result.success) {
+      Alert.alert(
+        'App Lock',
+        result.error ||
+          (result.missingEnrollment
+            ? 'Set a PIN, pattern, or biometrics in phone Settings first.'
+            : 'Could not update App Lock'),
+      );
+      return;
+    }
+    Haptics.success();
   };
 
   const onSyncNow = async () => {
@@ -295,7 +310,7 @@ export function SettingsScreen({ navigation }) {
                 style={{ marginTop: 12 }}
                 onPress={() => {
                   setName(profile?.name || '');
-                  setPhone(profile?.phone || '');
+                  setPhone(profile?.phone || profile?.phoneNumber || user?.phoneNumber || '');
                   setEmail(profile?.email || user?.email || '');
                   setAddress(profile?.address || '');
                   setPincode(profile?.pincode || '');
@@ -350,18 +365,28 @@ export function SettingsScreen({ navigation }) {
         </GlassCard>
 
         <Text style={styles.sectionHeader}>Security & Privacy</Text>
+        <PrivacyVaultTag style={{ marginBottom: 10 }} />
         <GlassCard style={styles.sectionCard}>
-          <Row
-            title="App Lock"
-            subtitle={
-              appLockOn
-                ? canUseDeviceLock
-                  ? `On · ${securityLabel}`
-                  : 'On · set phone PIN/pattern first'
-                : 'Off · tap to protect vault with phone lock'
-            }
-            onPress={onToggleAppLock}
-          />
+          <View style={[styles.row, styles.switchRow]}>
+            <View style={{ flex: 1, paddingRight: 12 }}>
+              <Text style={styles.rowTitle}>Biometric Unlock</Text>
+              <Text style={styles.muted}>
+                {appLockOn
+                  ? canUseDeviceLock
+                    ? `On · unlock with ${securityLabel}`
+                    : 'On · set phone PIN/pattern/biometrics first'
+                  : 'Off · protect vault with fingerprint, Face ID, or phone PIN'}
+              </Text>
+            </View>
+            <Switch
+              value={appLockOn}
+              onValueChange={onToggleAppLock}
+              disabled={busy}
+              trackColor={{ false: 'rgba(148,163,184,0.35)', true: 'rgba(16,185,129,0.45)' }}
+              thumbColor={appLockOn ? COLORS.emerald : '#E2E8F0'}
+              ios_backgroundColor="rgba(148,163,184,0.35)"
+            />
+          </View>
           <Row
             title="Firestore security"
             subtitle={isAuthenticated ? 'Encrypted cloud backup active' : 'Sign in for cloud backup'}
@@ -385,7 +410,7 @@ export function SettingsScreen({ navigation }) {
           />
           <Row
             title="Privacy Policy"
-            subtitle="Data, permissions & your controls"
+            subtitle="Simple bullet summary of your data rights"
             onPress={() => navigation?.navigate?.('PrivacyPolicy')}
             isLast
           />
@@ -425,6 +450,11 @@ export function SettingsScreen({ navigation }) {
             onPress={() => navigation?.navigate?.('About')}
           />
           <Row
+            title="Contact Us"
+            subtitle="support@assetdoctor.in"
+            onPress={() => navigation?.navigate?.('ContactUs')}
+          />
+          <Row
             title="Play Store listing"
             subtitle="Title, description & privacy URL notes"
             onPress={() => navigation?.navigate?.('PlayStoreListing')}
@@ -442,12 +472,24 @@ export function SettingsScreen({ navigation }) {
           />
         </GlassCard>
 
-        {isAuthenticated ? (
+        <PrivacyVaultTag style={{ marginBottom: 8 }} />
+        <GlassButton
+          title="Sign Out"
+          variant="danger"
+          style={styles.signOutBtn}
+          onPress={() => {
+            Haptics.tap();
+            setConfirmOut(true);
+          }}
+        />
+        {!isAuthenticated ? (
           <GlassButton
-            title="Sign out"
-            variant="danger"
-            style={{ marginTop: SPACING.lg }}
-            onPress={() => setConfirmOut(true)}
+            title="Sign in"
+            style={{ marginTop: 10 }}
+            onPress={() => {
+              Haptics.tap();
+              openLogin(navigation);
+            }}
           />
         ) : null}
 
@@ -485,8 +527,8 @@ export function SettingsScreen({ navigation }) {
   );
 }
 
-export function AboutScreen() {
-  return <AboutUsScreen />;
+export function AboutScreen({ navigation }) {
+  return <AboutUsScreen navigation={navigation} />;
 }
 
 function Row({ title, subtitle, onPress, isLast = false }) {

@@ -1,5 +1,6 @@
 /**
- * Profile & Address — view/update identity + vaulted asset stats
+ * Profile & Address — edit/update identity + vaulted asset stats.
+ * Persists to AsyncStorage key `user_profile_data` so Home greeting updates instantly.
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -11,6 +12,7 @@ import {
   Alert,
   Pressable,
   Image,
+  Modal,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -22,6 +24,27 @@ import { openLogin } from '../../navigation/authGate';
 import { Haptics } from '../../services/haptics';
 import { uploadProfilePhoto } from '../../services/user/ProfilePhotoService';
 import { normalizePhone } from '../../utils/profileSetup';
+import {
+  DEFAULT_PROFILE,
+  loadLocalProfile,
+  saveLocalProfile,
+} from '../../utils/userProfileStorage';
+
+
+const DEFAULT_AVATARS = [
+  { id: 'default:teal', color: '#0D9488', label: 'Teal' },
+  { id: 'default:blue', color: '#2563EB', label: 'Blue' },
+  { id: 'default:amber', color: '#D97706', label: 'Amber' },
+  { id: 'default:rose', color: '#E11D48', label: 'Rose' },
+];
+
+function isDefaultAvatar(uri) {
+  return typeof uri === 'string' && uri.startsWith('default:');
+}
+
+function avatarColor(uri) {
+  return DEFAULT_AVATARS.find((a) => a.id === uri)?.color || COLORS.emerald;
+}
 
 function initials(name) {
   return (
@@ -50,97 +73,165 @@ export function ProfileScreen({ navigation }) {
     isAuthenticated,
     signOut,
     displayName: authDisplayName,
-    loading: authLoading,
+    refreshLocalProfile,
   } = useAuth();
   const { assets, isGuestDemo } = useAssets();
-  const [name, setName] = useState(profile?.name || '');
-  const [mobile, setMobile] = useState(profile?.phone || '');
-  const [email, setEmail] = useState(profile?.email || user?.email || '');
-  const [address, setAddress] = useState(profile?.address || '');
-  const [pincode, setPincode] = useState(profile?.pincode || '');
-  const [photoURL, setPhotoURL] = useState(profile?.photoURL || '');
-  const [gender, setGender] = useState(String(profile?.gender || '').toLowerCase());
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(DEFAULT_PROFILE.name);
+  const [mobile, setMobile] = useState('');
+  const [email, setEmail] = useState('');
+  const [city, setCity] = useState('');
+  const [address, setAddress] = useState('');
+  const [pincode, setPincode] = useState('');
+  const [photoURL, setPhotoURL] = useState('');
+  const [gender, setGender] = useState('');
   const [busy, setBusy] = useState(false);
+  const [photoSheet, setPhotoSheet] = useState(false);
 
   const vaultedCount = useMemo(
     () => assets.filter((a) => !a.isDemo && !a.deletedAt).length,
     [assets],
   );
 
-  useEffect(() => {
-    setName(profile?.name || '');
-    setMobile(profile?.phone || profile?.phoneNumber || '');
-    setEmail(profile?.email || user?.email || '');
-    setAddress(profile?.address || '');
-    setPincode(profile?.pincode || '');
-    setPhotoURL(profile?.photoURL || user?.photoURL || '');
-    setGender(String(profile?.gender || '').toLowerCase());
-  }, [profile, user?.photoURL, user?.email]);
+  const hydrateFromSources = async () => {
+    const local = await loadLocalProfile();
+    const authPhone = user?.phoneNumber || '';
+    const authEmail = user?.email || '';
+    setName(profile?.name || local.name || user?.displayName || DEFAULT_PROFILE.name);
+    setMobile(
+      profile?.phone ||
+        profile?.phoneNumber ||
+        authPhone ||
+        local.phone ||
+        local.phoneNumber ||
+        '',
+    );
+    setEmail(profile?.email || authEmail || local.email || '');
+    setCity(profile?.city || local.city || '');
+    setAddress(profile?.address || local.address || '');
+    setPincode(profile?.pincode || local.pincode || '');
+    setPhotoURL(user?.photoURL || profile?.photoURL || local.photoURL || '');
+    setGender(String(profile?.gender || local.gender || '').toLowerCase());
+  };
 
-  const onPickPhoto = async () => {
-    if (!isAuthenticated) {
-      openLogin(navigation);
-      return;
+  useEffect(() => {
+    hydrateFromSources().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile, user?.uid, user?.photoURL, user?.email, user?.phoneNumber, isAuthenticated]);
+
+  const applyPickedUri = async (uri) => {
+    if (!uri) return;
+    setBusy(true);
+    try {
+      let nextPhoto = uri;
+      if (isAuthenticated && user?.uid) {
+        const uploaded = await uploadProfilePhoto(user.uid, uri);
+        if (uploaded.success && uploaded.downloadUrl) {
+          nextPhoto = uploaded.downloadUrl;
+          await updateProfile({ photoURL: nextPhoto });
+        } else if (!uploaded.success) {
+          // Keep local file URI so avatar still updates offline
+          console.warn('[Profile] upload failed, using local uri:', uploaded.error);
+        }
+      }
+      setPhotoURL(nextPhoto);
+      await saveLocalProfile({ photoURL: nextPhoto, name, email, phone: mobile, city, address, pincode, gender });
+      refreshLocalProfile?.();
+      Haptics.success();
+    } catch (error) {
+      Alert.alert('Photo', error?.message || 'Could not update photo');
+    } finally {
+      setBusy(false);
+      setPhotoSheet(false);
     }
+  };
+
+  const onPickFromGallery = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
       Alert.alert('Permission needed', 'Allow photo access to set a profile picture.');
       return;
     }
     const picked = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaTypeOptions?.Images || ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.85,
     });
     if (picked.canceled || !picked.assets?.[0]?.uri) return;
+    await applyPickedUri(picked.assets[0].uri);
+  };
 
-    setBusy(true);
-    const uploaded = await uploadProfilePhoto(user.uid, picked.assets[0].uri);
-    if (!uploaded.success) {
-      setBusy(false);
-      Alert.alert('Upload failed', uploaded.error);
+  const onPickFromCamera = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Allow camera access to take a profile photo.');
       return;
     }
-    const result = await updateProfile({ photoURL: uploaded.downloadUrl });
-    setBusy(false);
-    if (result.success) {
-      setPhotoURL(uploaded.downloadUrl);
-      Haptics.success();
-    } else {
-      Alert.alert('Profile', result.error || 'Could not save photo');
-    }
+    const shot = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions?.Images || ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.85,
+    });
+    if (shot.canceled || !shot.assets?.[0]?.uri) return;
+    await applyPickedUri(shot.assets[0].uri);
   };
 
   const onSave = async () => {
-    if (!isAuthenticated) {
-      openLogin(navigation);
-      return;
-    }
     if (!name.trim()) {
       Alert.alert('Profile', 'Full name is required.');
       return;
     }
     const cleanPhone = normalizePhone(mobile);
-    setBusy(true);
-    const result = await updateProfile({
-      name: name.trim(),
+    const payload = {
+      name: name.trim() || DEFAULT_PROFILE.name,
       phone: cleanPhone,
       phoneNumber: cleanPhone,
       email: email.trim(),
+      city: city.trim(),
       address: address.trim(),
       pincode: pincode.trim(),
       gender: gender || '',
+      photoURL: photoURL || '',
       profileSetupComplete: true,
-    });
-    setBusy(false);
-    if (!result?.success) {
-      Alert.alert('Profile', result?.error || 'Could not save');
+    };
+
+    setBusy(true);
+    const local = await saveLocalProfile(payload);
+    if (!local.success) {
+      setBusy(false);
+      Alert.alert('Profile', local.error || 'Could not save locally');
       return;
     }
+
+    if (isAuthenticated) {
+      const result = await updateProfile(payload);
+      setBusy(false);
+      if (!result?.success) {
+        // Local save already succeeded — still refresh greeting
+        refreshLocalProfile?.();
+        Alert.alert(
+          'Saved on device',
+          result?.error
+            ? `Cloud sync failed (${result.error}). Local profile still updated.`
+            : 'Local profile updated.',
+        );
+        setEditing(false);
+        return;
+      }
+    } else {
+      setBusy(false);
+    }
+
+    refreshLocalProfile?.();
     Haptics.success();
+    setEditing(false);
     Alert.alert('Saved', 'Profile details updated.');
   };
+
+  const shownName =
+    name || authDisplayName || profile?.name || DEFAULT_PROFILE.name || 'Asset Owner';
 
   return (
     <Screen>
@@ -149,33 +240,41 @@ export function ProfileScreen({ navigation }) {
 
         <GlassCard glow style={{ marginTop: 10 }}>
           <View style={styles.avatarRow}>
-            <Pressable onPress={onPickPhoto} style={styles.avatarFrame}>
-              {photoURL ? (
+            <Pressable
+              onPress={() => {
+                Haptics.tap();
+                setPhotoSheet(true);
+              }}
+              style={styles.avatarFrame}
+            >
+              {photoURL && !isDefaultAvatar(photoURL) ? (
                 <Image source={{ uri: photoURL }} style={styles.avatarImg} />
+              ) : photoURL && isDefaultAvatar(photoURL) ? (
+                <View style={[styles.avatarImg, { backgroundColor: avatarColor(photoURL), alignItems: 'center', justifyContent: 'center' }]}>
+                  <Text style={[styles.avatarText, { color: '#fff' }]}>{initials(shownName)}</Text>
+                </View>
               ) : (
-                <Text style={styles.avatarText}>
-                  {initials(isAuthenticated ? name || profile?.name : 'Guest')}
-                </Text>
+                <Text style={styles.avatarText}>{initials(shownName)}</Text>
               )}
             </Pressable>
             <View style={{ flex: 1 }}>
               <Text style={styles.welcome}>{greeting()}</Text>
-              <Text style={styles.name}>
-                {authLoading
-                  ? 'Loading…'
-                  : isAuthenticated
-                    ? name || authDisplayName || 'Asset Owner'
-                    : 'Guest'}
-              </Text>
+              <Text style={styles.name}>{shownName}</Text>
               <Text style={styles.sub} numberOfLines={1}>
-                {authLoading
-                  ? 'Fetching your profile…'
-                  : isAuthenticated
-                    ? user?.email || mobile || '—'
-                    : 'Sign in to sync profile'}
+                {email || mobile || city || 'Tap Edit Profile to update'}
               </Text>
             </View>
           </View>
+
+          <GlassButton
+            title={editing ? 'Close editor' : 'Edit Profile'}
+            variant={editing ? 'ghost' : undefined}
+            style={{ marginTop: 14 }}
+            onPress={() => {
+              Haptics.select();
+              setEditing((v) => !v);
+            }}
+          />
 
           {isAuthenticated && !isGuestDemo ? (
             <View style={styles.statRow}>
@@ -191,16 +290,17 @@ export function ProfileScreen({ navigation }) {
           ) : null}
         </GlassCard>
 
-        {!isAuthenticated ? (
+        {editing ? (
           <GlassCard style={{ marginTop: 12 }}>
-            <Text style={styles.sub}>Browsing as guest. Sign in to edit and sync your profile.</Text>
-            <GlassButton title="Sign in" style={{ marginTop: 12 }} onPress={() => openLogin(navigation)} />
-          </GlassCard>
-        ) : (
-          <GlassCard style={{ marginTop: 12 }}>
-            <GlassInput label="Full Name" value={name} onChangeText={setName} placeholder="Your name" />
+            <Text style={styles.editTitle}>Edit your details</Text>
             <GlassInput
-              label="Email ID"
+              label="Full Name"
+              value={name}
+              onChangeText={setName}
+              placeholder={DEFAULT_PROFILE.name}
+            />
+            <GlassInput
+              label="Email Address"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
@@ -208,11 +308,17 @@ export function ProfileScreen({ navigation }) {
               placeholder="you@email.com"
             />
             <GlassInput
-              label="Primary Mobile Number"
+              label="Phone Number"
               value={mobile}
               onChangeText={setMobile}
               keyboardType="phone-pad"
               placeholder="+91 …"
+            />
+            <GlassInput
+              label="City"
+              value={city}
+              onChangeText={setCity}
+              placeholder="e.g. Lucknow"
             />
             <Text style={styles.genderLabel}>Gender (optional)</Text>
             <View style={styles.genderRow}>
@@ -239,7 +345,7 @@ export function ProfileScreen({ navigation }) {
               label="Home Address"
               value={address}
               onChangeText={setAddress}
-              placeholder="House / street / city"
+              placeholder="House / street / landmark"
               multiline
             />
             <GlassInput
@@ -250,20 +356,81 @@ export function ProfileScreen({ navigation }) {
               placeholder="e.g. 226010"
               maxLength={10}
             />
-            <GlassButton title="Save Profile Details" loading={busy} onPress={onSave} />
-
-            <View style={styles.scoreWrap}>
-              <Text style={styles.scoreLabel}>Vault Protection Score</Text>
-              <Text style={styles.scoreValue}>
-                {Math.min(100, Math.round(vaultedCount * 12 + (pincode ? 8 : 0) + (address ? 8 : 0) + (mobile ? 10 : 0) + (name ? 10 : 0)))}
-                <Text style={styles.scoreUnit}> / 100</Text>
-              </Text>
-              <Text style={styles.scoreHint}>
-                Completing profile + vaulting assets raises your protection score.
-              </Text>
+            
+            <Text style={styles.genderLabel}>Choose avatar</Text>
+            <View style={styles.avatarPickRow}>
+              {DEFAULT_AVATARS.map((av) => (
+                <Pressable
+                  key={av.id}
+                  onPress={() => {
+                    Haptics.select();
+                    setPhotoURL(av.id);
+                  }}
+                  style={[
+                    styles.avatarPick,
+                    { backgroundColor: av.color },
+                    photoURL === av.id && styles.avatarPickOn,
+                  ]}
+                  accessibilityLabel={`Avatar ${av.label}`}
+                >
+                  <Text style={styles.avatarPickText}>{av.label[0]}</Text>
+                </Pressable>
+              ))}
             </View>
+            <GlassButton
+              title="Upload custom photo"
+              variant="ghost"
+              style={{ marginBottom: 8 }}
+              onPress={() => {
+                Haptics.tap();
+                setPhotoSheet(true);
+              }}
+            />
+
+            <GlassButton title="Save Profile" loading={busy} onPress={onSave} />
+            {!isAuthenticated ? (
+              <Pressable
+                onPress={() => openLogin(navigation)}
+                style={{ marginTop: 10 }}
+              >
+                <Text style={styles.sub}>
+                  Signed out — changes save on this device. Sign in to sync to cloud →
+                </Text>
+              </Pressable>
+            ) : null}
+          </GlassCard>
+        ) : (
+          <GlassCard style={{ marginTop: 12 }}>
+            <Text style={styles.rowLabel}>Name</Text>
+            <Text style={styles.rowValue}>{shownName}</Text>
+            <Text style={styles.rowLabel}>Email</Text>
+            <Text style={styles.rowValue}>{email || '—'}</Text>
+            <Text style={styles.rowLabel}>Phone</Text>
+            <Text style={styles.rowValue}>{mobile || 'Add phone'}</Text>
+            <Text style={styles.rowLabel}>City</Text>
+            <Text style={styles.rowValue}>{city || '—'}</Text>
           </GlassCard>
         )}
+
+        <View style={styles.scoreWrap}>
+          <Text style={styles.scoreLabel}>Vault Protection Score</Text>
+          <Text style={styles.scoreValue}>
+            {Math.min(
+              100,
+              Math.round(
+                vaultedCount * 12 +
+                  (pincode ? 8 : 0) +
+                  (address || city ? 8 : 0) +
+                  (mobile ? 10 : 0) +
+                  (name ? 10 : 0),
+              ),
+            )}
+            <Text style={styles.scoreUnit}> / 100</Text>
+          </Text>
+          <Text style={styles.scoreHint}>
+            Completing profile + vaulting assets raises your protection score.
+          </Text>
+        </View>
 
         <Pressable
           style={styles.aboutLink}
@@ -289,18 +456,92 @@ export function ProfileScreen({ navigation }) {
 
         {isAuthenticated ? (
           <GlassButton
-            title="Sign out"
+            title="Logout"
             variant="danger"
             style={{ marginTop: 16 }}
-            onPress={async () => {
+            onPress={() => {
               Haptics.tap();
-              await signOut();
+              Alert.alert(
+                'Logout',
+                'Sign out so you can switch accounts?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Logout',
+                    style: 'destructive',
+                    onPress: async () => {
+                      const result = await Promise.race([
+                        signOut(),
+                        new Promise((resolve) => setTimeout(() => resolve({ success: true }), 6000)),
+                      ]);
+                      if (result?.success === false) {
+                        Alert.alert('Logout', result.error || 'Could not sign out');
+                        return;
+                      }
+                      Haptics.success();
+                      // RootNavigator remounts AuthWelcome (Google / Mobile / Guest)
+                    },
+                  },
+                ],
+              );
             }}
           />
-        ) : null}
+        ) : (
+          <GlassButton
+            title="Sign in / Switch account"
+            style={{ marginTop: 16 }}
+            onPress={() => {
+              Haptics.tap();
+              openLogin(navigation);
+            }}
+          />
+        )}
 
         <BrandFooter />
       </ScrollView>
+
+      <Modal visible={photoSheet} transparent animationType="fade" onRequestClose={() => setPhotoSheet(false)}>
+        <Pressable style={styles.sheetBackdrop} onPress={() => setPhotoSheet(false)}>
+          <View style={styles.sheetCard}>
+            <Text style={styles.editTitle}>Update profile photo</Text>
+            <GlassButton title="Take photo" onPress={onPickFromCamera} loading={busy} />
+            <GlassButton
+              title="Choose from gallery"
+              variant="ghost"
+              style={{ marginTop: 10 }}
+              onPress={onPickFromGallery}
+              loading={busy}
+            />
+
+            <Text style={[styles.genderLabel, { marginTop: 8 }]}>Or pick a default</Text>
+            <View style={styles.avatarPickRow}>
+              {DEFAULT_AVATARS.map((av) => (
+                <Pressable
+                  key={av.id}
+                  onPress={async () => {
+                    Haptics.select();
+                    setPhotoURL(av.id);
+                    await saveLocalProfile({ photoURL: av.id, name, email, phone: mobile });
+                    refreshLocalProfile?.();
+                    setPhotoSheet(false);
+                    Haptics.success();
+                  }}
+                  style={[styles.avatarPick, { backgroundColor: av.color }, photoURL === av.id && styles.avatarPickOn]}
+                >
+                  <Text style={styles.avatarPickText}>{av.label[0]}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <GlassButton
+              title="Cancel"
+              variant="ghost"
+              style={{ marginTop: 10 }}
+              onPress={() => setPhotoSheet(false)}
+            />
+          </View>
+        </Pressable>
+      </Modal>
     </Screen>
   );
 }
@@ -311,6 +552,7 @@ const styles = StyleSheet.create({
   content: { padding: SPACING.lg, paddingBottom: 48 },
   title: { color: COLORS.text, fontSize: 22, fontWeight: '900' },
   sub: { color: COLORS.muted, fontSize: 12, marginTop: 4 },
+  editTitle: { color: COLORS.text, fontWeight: '800', fontSize: 15, marginBottom: 8 },
   avatarRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatarFrame: {
     width: 64,
@@ -338,6 +580,8 @@ const styles = StyleSheet.create({
   },
   statNum: { color: COLORS.emerald, fontWeight: '900', fontSize: 20 },
   statLabel: { color: COLORS.muted, fontSize: 11, marginTop: 2, fontWeight: '600' },
+  rowLabel: { color: COLORS.muted, fontSize: 11, fontWeight: '700', marginTop: 10 },
+  rowValue: { color: COLORS.text, fontSize: 15, fontWeight: '700', marginTop: 2 },
   aboutLink: {
     marginTop: 10,
     padding: 14,
@@ -377,4 +621,30 @@ const styles = StyleSheet.create({
   scoreValue: { color: COLORS.emerald, fontSize: 28, fontWeight: '900', marginTop: 4 },
   scoreUnit: { color: COLORS.muted, fontSize: 14, fontWeight: '700' },
   scoreHint: { color: COLORS.muted, fontSize: 12, marginTop: 6, lineHeight: 17 },
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.55)',
+    justifyContent: 'flex-end',
+  },
+  sheetCard: {
+    backgroundColor: COLORS.bg,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: 32,
+    borderWidth: 1,
+    borderColor: COLORS.borderGlow,
+  },
+  avatarPickRow: { flexDirection: 'row', gap: 10, marginBottom: 12, marginTop: 6 },
+  avatarPick: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  avatarPickOn: { borderColor: COLORS.text },
+  avatarPickText: { color: '#fff', fontWeight: '900', fontSize: 16 },
 });

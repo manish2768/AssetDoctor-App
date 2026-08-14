@@ -1,20 +1,71 @@
 /**
- * Document capture helper — camera/gallery only after permission is granted.
- * Never opens a null camera view; returns null or a user-facing Error.
+ * Document capture via expo-image-picker only.
+ * Never uses Google ML Kit / react-native-document-scanner-plugin
+ * (those destroy the Activity on Android and bounce users to Home).
  */
 
-import { Linking, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { Linking, Platform } from 'react-native';
 
-import { compressScanImage } from '../../utils/compressScanImage';
+import {
+  compressScanImage,
+  SCAN_IMAGE_COMPRESS,
+  SCAN_IMAGE_MAX_WIDTH,
+} from '../../utils/compressScanImage';
+import { getImageManipulator } from '../../utils/safeNativeModules';
 
-const GALLERY_PICKER_OPTIONS = {
-  mediaTypes: ImagePicker.MediaTypeOptions.Images,
-  quality: 0.85,
-  exif: false,
-  allowsEditing: true,
-  aspect: [3, 4],
-};
+/** Prefer MediaTypeOptions when present; else modern string array. */
+function resolveMediaTypes() {
+  return ImagePicker.MediaTypeOptions?.Images || ['images'];
+}
+
+/** Camera options — Expo ImagePicker (no ML Kit document scanner). */
+function cameraOptions() {
+  return {
+    mediaTypes: resolveMediaTypes(),
+    allowsEditing: true,
+    quality: 0.5,
+    base64: false,
+    exif: false,
+  };
+}
+
+/** Gallery options — same picker stack, slightly leaner. */
+function galleryOptions() {
+  return {
+    mediaTypes: resolveMediaTypes(),
+    allowsEditing: true,
+    quality: 0.5,
+    base64: false,
+    exif: false,
+  };
+}
+
+/** Resize to min 1200px + JPEG 0.6 (EXIF-upright) immediately after capture/pick. */
+async function compressCapturedUri(uri) {
+  if (!uri) return uri;
+  try {
+    const ImageManipulator = getImageManipulator();
+    if (ImageManipulator?.manipulateAsync) {
+      const manipulated = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: SCAN_IMAGE_MAX_WIDTH } }],
+        {
+          compress: SCAN_IMAGE_COMPRESS,
+          format: ImageManipulator.SaveFormat?.JPEG || 'jpeg',
+          base64: false,
+        },
+      );
+      if (manipulated?.uri) return manipulated.uri;
+    }
+  } catch (error) {
+    console.warn('[DocumentScanner] manipulator failed:', error?.message || error);
+  }
+  return compressScanImage(uri, {
+    maxWidth: SCAN_IMAGE_MAX_WIDTH,
+    compress: SCAN_IMAGE_COMPRESS,
+  });
+}
 
 export async function getCameraPermissionStatus() {
   try {
@@ -38,7 +89,7 @@ export async function ensureCameraPermission() {
 
     return {
       granted: false,
-      status: asked?.canAskAgain === false ? 'denied' : 'denied',
+      status: 'denied',
       canAskAgain: asked?.canAskAgain !== false,
     };
   } catch (error) {
@@ -60,113 +111,71 @@ export async function ensureLibraryPermission() {
   }
 }
 
-async function tryNativeDocumentScan() {
-  try {
-    // Only attempt native scanner when camera permission is already granted
-    const perm = await ensureCameraPermission();
-    if (!perm.granted) return null;
-
-    // Optional native module (present after a custom-dev-client / EAS build with the plugin)
-    // eslint-disable-next-line global-require, import/no-extraneous-dependencies
-    const DocumentScanner = require('react-native-document-scanner-plugin').default;
-    if (!DocumentScanner?.scanDocument) return null;
-
-    const { scannedImages } = await DocumentScanner.scanDocument({
-      maxNumDocuments: 1,
-      croppedImageQuality: 80,
-    });
-    const uri = scannedImages?.[0];
-    if (!uri) return null;
-    return await compressScanImage(uri);
-  } catch (error) {
-    console.warn('[DocumentScanner] native unavailable:', error?.message || error);
-    return null;
-  }
-}
-
 /**
+ * Capture / pick with expo-image-picker only.
+ * Cancel → returns null (caller must stay on ScanBillScreen — never Home).
+ *
  * @param {'camera'|'gallery'|'auto'} mode
  * @returns {Promise<string|null>} compressed image uri
  */
 export async function captureDocumentImage(mode = 'auto') {
   try {
     if (mode === 'gallery') {
-      const perm = await ensureLibraryPermission();
-      if (!perm.granted) {
-        throw new Error(
-          'Photo library permission denied. Enable Photos access in Settings to import invoices.',
-        );
-      }
-      const pick = await ImagePicker.launchImageLibraryAsync(GALLERY_PICKER_OPTIONS);
-      if (pick.canceled || !pick.assets?.[0]?.uri) return null;
-      return await compressScanImage(pick.assets[0].uri);
+      return await pickGalleryImage();
     }
 
-    // camera / auto
-    const perm = await ensureCameraPermission();
-    if (!perm.granted) {
+    const cam = await ensureCameraPermission();
+    if (!cam.granted) {
       throw new Error(
-        'Camera permission denied. Enable Camera access in Settings to scan invoices.',
+        'Camera permission denied. Enable Camera in Settings to scan invoices.',
       );
     }
 
-    if (mode === 'auto' || mode === 'camera') {
-      const nativeUri = await tryNativeDocumentScan();
-      if (nativeUri) return nativeUri;
+    const result = await ImagePicker.launchCameraAsync(cameraOptions());
+    if (result.canceled || !result.assets?.[0]?.uri) {
+      // User cancelled — stay on ScanBill; do not navigate Home
+      return null;
     }
-
-    const shot = await ImagePicker.launchCameraAsync({
-      quality: 0.85,
-      exif: false,
-      allowsEditing: Platform.OS !== 'web',
-      aspect: [3, 4],
-    });
-    if (shot.canceled || !shot.assets?.[0]?.uri) return null;
-    if (!shot.assets?.[0]?.uri) {
-      throw new Error('Could not capture image. Please try again.');
-    }
-    return await compressScanImage(shot.assets[0].uri);
+    return await compressCapturedUri(result.assets[0].uri);
   } catch (error) {
-    console.error('[DocumentScanner] capture failed:', error?.message || error);
-    const msg = String(error?.message || '');
-    if (/permission/i.test(msg)) {
-      throw error instanceof Error ? error : new Error(msg);
-    }
-    throw new Error(
-      msg && msg.length < 160 ? msg : 'Could not capture image. Please try again.',
-    );
+    console.error('[ScanBillScreen Error]:', error);
+    console.warn('[DocumentScanner] captureDocumentImage:', error?.message || error);
+    throw error;
   }
 }
 
-/**
- * Pick a bill image from the device gallery (Images only).
- * Returns a local URI or null if cancelled.
- */
 export async function pickGalleryImage() {
-  try {
-    const perm = await ensureLibraryPermission();
-    if (!perm.granted) {
-      throw new Error(
-        'Photo library permission denied. Enable Photos access in Settings to import invoices.',
-      );
-    }
-    const pick = await ImagePicker.launchImageLibraryAsync(GALLERY_PICKER_OPTIONS);
-    if (pick.canceled || !pick.assets?.[0]?.uri) return null;
-    return pick.assets[0].uri;
-  } catch (error) {
-    console.error('[DocumentScanner] gallery pick failed:', error?.message || error);
-    const msg = String(error?.message || '');
-    if (/permission/i.test(msg)) {
-      throw error instanceof Error ? error : new Error(msg);
-    }
+  const perm = await ensureLibraryPermission();
+  if (!perm.granted) {
     throw new Error(
-      msg && msg.length < 160 ? msg : 'Could not open gallery. Please try again.',
+      'Photo library permission denied. Enable Photos access in Settings to import invoices.',
     );
+  }
+  const result = await ImagePicker.launchImageLibraryAsync(galleryOptions());
+  if (result.canceled || !result.assets?.[0]?.uri) {
+    // User cancelled — stay on ScanBill; do not navigate Home
+    return null;
+  }
+  return compressCapturedUri(result.assets[0].uri);
+}
+
+export async function openAppSettings() {
+  try {
+    if (Platform.OS === 'ios') {
+      await Linking.openURL('app-settings:');
+    } else {
+      await Linking.openSettings();
+    }
+  } catch (error) {
+    console.warn('[DocumentScanner] openAppSettings:', error?.message || error);
   }
 }
 
-export function openAppSettings() {
-  return Linking.openSettings().catch(() => null);
-}
-
-export default captureDocumentImage;
+export default {
+  getCameraPermissionStatus,
+  ensureCameraPermission,
+  ensureLibraryPermission,
+  captureDocumentImage,
+  pickGalleryImage,
+  openAppSettings,
+};

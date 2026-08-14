@@ -1,4 +1,4 @@
-package com.anonymous.assetdoctor
+package com.assetdoctor.app
 
 import android.os.Build
 import android.os.Bundle

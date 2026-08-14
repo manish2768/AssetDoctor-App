@@ -22,9 +22,12 @@ import { Haptics } from '../services/haptics';
 import { useAssets } from '../context/AssetProvider';
 import { useAuth } from '../context/AuthProvider';
 import { invoiceToAssetForm, PURCHASE_CATEGORIES } from '../services/ocr/invoiceSchema';
+import { mapScanToExistingAsset, buildServiceHistoryEntry } from '../services/ocr/SmartAssetMapper';
 import {
   buildCategoryMetadata,
   SMART_CATEGORIES,
+  classifySmartCategory,
+  enrichItemWithCategory,
 } from '../services/ocr/categoryClassifier';
 import { assignEnergyFieldsOnCreate } from '../services/energy/EnergyService';
 import {
@@ -35,17 +38,18 @@ import {
 import { rememberBillFingerprint } from '../utils/billParser';
 import { ItemDetailCard } from '../components/ItemDetailCard';
 import { InvoicePostcard } from '../components/InvoicePostcard';
+import { ShareAssetModal } from '../components/ShareAssetModal';
 import { pickPrimaryItem } from '../utils/billLineItems';
 import { InvoiceOfflineCache } from '../services/ocr/InvoiceOfflineCache';
 import { goHomeDashboard, openRescanInvoice } from '../navigation/navActions';
 import { formatINRExact } from '../utils/format';
 import { ASSET_CATEGORY_OPTIONS } from '../theme/branding';
-import { enrichItemWithCategory } from '../services/ocr/categoryClassifier';
 import {
   isVehicleAttachDocument,
   listVehicleAssets,
   findAssetByChassis,
 } from '../utils/vehicleFolder';
+import { matchVehicleForDocument } from '../services/vehicles/VehicleMatchService';
 import { getExpiryTone } from '../utils/warrantyStatus';
 import { formatDateIN } from '../utils/dates';
 import {
@@ -111,19 +115,80 @@ function blank(value) {
   return value == null ? '' : String(value);
 }
 
+/** Defensive route params — never crash if navigation payload is missing/partial. */
+function readSafeReviewParams(route) {
+  try {
+    const params = route?.params && typeof route.params === 'object' ? route.params : {};
+    const invoiceCandidate =
+      (params.assetData && typeof params.assetData === 'object' ? params.assetData : null) ||
+      (params.parsedData && typeof params.parsedData === 'object' ? params.parsedData : null) ||
+      (params.invoice && typeof params.invoice === 'object' ? params.invoice : null) ||
+      (params.extractedData && typeof params.extractedData === 'object'
+        ? params.extractedData
+        : null) ||
+      {};
+    return {
+      imageUri: typeof params.imageUri === 'string' ? params.imageUri : '',
+      scanId: typeof params.scanId === 'string' ? params.scanId : '',
+      engine: typeof params.engine === 'string' ? params.engine : '',
+      invoice: invoiceCandidate,
+      assetData: invoiceCandidate,
+      parsedData: invoiceCandidate,
+      extractedData:
+        params.extractedData && typeof params.extractedData === 'object'
+          ? params.extractedData
+          : invoiceCandidate,
+      audit: params.audit && typeof params.audit === 'object' ? params.audit : null,
+      energyHints:
+        params.energyHints && typeof params.energyHints === 'object' ? params.energyHints : {},
+      sweetBill:
+        params.sweetBill && typeof params.sweetBill === 'object' ? params.sweetBill : {},
+      ocrFailed: Boolean(
+        params.ocrFailed || params.hasOcrError || params.audit?.manualEntry,
+      ),
+      hasOcrError: Boolean(params.hasOcrError || params.ocrFailed),
+    };
+  } catch (error) {
+    console.error('[ReviewAssetScreen Error]:', error);
+    return {
+      imageUri: '',
+      scanId: '',
+      engine: '',
+      invoice: {},
+      assetData: {},
+      parsedData: {},
+      extractedData: {},
+      audit: null,
+      energyHints: {},
+      sweetBill: {},
+      ocrFailed: true,
+      hasOcrError: true,
+    };
+  }
+}
+
 export function ReviewAssetScreen({ navigation, route }) {
   const { createAsset, assets } = useAssets();
   const { user } = useAuth();
-  const initialInvoice = route?.params?.invoice || {};
-  const initialAudit = route?.params?.audit || null;
-  const imageUri = route?.params?.imageUri || '';
-  const scanId = route?.params?.scanId || '';
-  const energyHints = route?.params?.energyHints || {};
+  const safeParams = useMemo(() => readSafeReviewParams(route), [route]);
+  const initialInvoice = safeParams.assetData || safeParams.invoice || safeParams.parsedData || {};
+  const initialAudit = safeParams.audit || null;
+  const imageUri = safeParams.imageUri || '';
+  const scanId = safeParams.scanId || '';
+  const energyHints = safeParams.energyHints || {};
+  const ocrFailed = Boolean(safeParams.ocrFailed || safeParams.hasOcrError);
 
-  const items = Array.isArray(initialInvoice.items) ? initialInvoice.items : [];
+  const items = Array.isArray(initialInvoice?.items) ? initialInvoice.items : [];
   const defaultSelected = pickPrimaryItem(items)?.index || items[0]?.index || 1;
 
-  const [invoice, setInvoice] = useState(() => sanitizeInvoice(initialInvoice));
+  const [invoice, setInvoice] = useState(() => {
+    try {
+      return sanitizeInvoice(initialInvoice);
+    } catch (error) {
+      console.error('[ReviewAssetScreen Error]:', error);
+      return sanitizeInvoice({});
+    }
+  });
   const [audit, setAudit] = useState(initialAudit);
   const [saving, setSaving] = useState(false);
   const [selectedItemIndex, setSelectedItemIndex] = useState(defaultSelected);
@@ -132,13 +197,77 @@ export function ReviewAssetScreen({ navigation, route }) {
   const [openItems, setOpenItems] = useState(items.length > 0);
   const [openMore, setOpenMore] = useState(false);
   const [linkAssetId, setLinkAssetId] = useState(null);
-  const auditTimer = useRef(null);
-
-  // Re-hydrate when a new scan payload arrives (owner/vendor/expiry must fill inputs)
+  const [smartMapHint, setSmartMapHint] = useState(null);
+  // Smart auto-map: registration / IMEI / serial / nickname → existing vault asset
   useEffect(() => {
-    setInvoice(sanitizeInvoice(initialInvoice));
-    setAudit(initialAudit);
-  }, [initialInvoice, initialAudit]);
+    try {
+      if (!invoice || linkAssetId) return;
+      const mapped = mapScanToExistingAsset(
+        {
+          ...invoice,
+          assetName: invoice.productName,
+          registration: invoice.registration,
+          imei: invoice.imei,
+          serialNumber: invoice.serialNumber,
+        },
+        assets,
+      );
+      if (mapped?.asset && (mapped.match?.confidence || 0) >= 0.88) {
+        const id = mapped.asset.assetId || mapped.asset.id;
+        if (id) {
+          setLinkAssetId(id);
+          setSmartMapHint(mapped.reason || 'Linked to existing asset');
+        }
+      } else {
+        setSmartMapHint(mapped?.reason || null);
+      }
+    } catch (e) {
+      console.warn('[Review] smart map failed:', e?.message || e);
+    }
+  }, [invoice?.registration, invoice?.imei, invoice?.serialNumber, invoice?.productName, assets, linkAssetId]);
+
+  const [shareCard, setShareCard] = useState(null);
+  const auditTimer = useRef(null);
+  const manualToastShown = useRef(false);
+
+  // Re-hydrate when a new scan payload arrives — auto-fill from scannedData / OCR aliases
+  useEffect(() => {
+    try {
+      const scanned =
+        route?.params?.scannedData ||
+        route?.params?.parsedData ||
+        route?.params?.assetData ||
+        route?.params?.invoice ||
+        initialInvoice ||
+        {};
+      setInvoice(
+        sanitizeInvoice({
+          ...initialInvoice,
+          scannedData: scanned,
+          parsedData: scanned,
+        }),
+      );
+      setAudit(initialAudit);
+    } catch (error) {
+      console.error('[ReviewAssetScreen Error]:', error);
+      setInvoice(sanitizeInvoice({}));
+      setAudit(null);
+    }
+  }, [initialInvoice, initialAudit, route?.params]);
+
+  // Toast once when OCR could not auto-fill — stay on Review, never Home
+  useEffect(() => {
+    if (!ocrFailed || manualToastShown.current) return undefined;
+    manualToastShown.current = true;
+    const t = setTimeout(() => {
+      Alert.alert(
+        'Manual entry',
+        'Could not auto-fill details, please enter manually',
+        [{ text: 'OK' }],
+      );
+    }, 400);
+    return () => clearTimeout(t);
+  }, [ocrFailed]);
 
   const docKind = String(
     invoice.documentKind || invoice.documentType || invoice.scanDocumentType || 'bill',
@@ -161,6 +290,15 @@ export function ReviewAssetScreen({ navigation, route }) {
     isAttachDoc ||
     itemList.some((i) => i.smartCategory === SMART_CATEGORIES.VEHICLES);
   const vehicleOptions = useMemo(() => listVehicleAssets(assets), [assets]);
+
+  useEffect(() => {
+    if (!isAttachDoc) return;
+    if (linkAssetId) return;
+    const match = matchVehicleForDocument(assets, invoice);
+    if (match.matched) {
+      setLinkAssetId(match.matched.assetId || match.matched.id || null);
+    }
+  }, [assets, invoice, isAttachDoc, linkAssetId]);
   const insuranceTone = getExpiryTone(invoice.insuranceExpiry, { urgentDays: 30 });
   const pucTone = getExpiryTone(invoice.pucExpiry, { urgentDays: 15 });
   const classifiedType = normalizeDocumentType(
@@ -171,7 +309,9 @@ export function ReviewAssetScreen({ navigation, route }) {
         ? DOC_CLASS.INSURANCE_POLICY
         : isAttachDoc && docKind === 'rc'
           ? DOC_CLASS.REGISTRATION_CERTIFICATE
-          : DOC_CLASS.TAX_INVOICE),
+          : isAttachDoc && docKind === 'puc'
+            ? DOC_CLASS.PUC_CERTIFICATE
+            : DOC_CLASS.TAX_INVOICE),
   );
   const documentTypeBadge =
     DOC_TYPE_LABELS[classifiedType] || invoice.documentLabel || 'Document';
@@ -409,7 +549,8 @@ export function ReviewAssetScreen({ navigation, route }) {
       let durableImageUri = null;
       let billThumbDataUrl = null;
       // OCR path: micro-thumb only — never upload full-res scan to Storage
-      if (imageUri && user?.uid) {
+      // TODO: RE-ENABLE AUTH REQUIREMENT BEFORE PRODUCTION (was: imageUri && user?.uid)
+      if (imageUri) {
         try {
           const thumb = await makeMicroThumbnail(imageUri);
           billThumbDataUrl = thumb?.dataUrl || null;
@@ -547,22 +688,20 @@ export function ReviewAssetScreen({ navigation, route }) {
       });
 
       Haptics.success();
-      Alert.alert(
-        'Saved to Vault',
-        isAttachDoc
-          ? 'Document vehicle passport mein add ho gaya. Net Worth Home pe update hoga.'
-          : existingMatch || chosenLink
-            ? 'Passport updated. Redirecting to Home…'
-            : finalTargets.length > 1
-              ? `${finalTargets.length} items saved. Redirecting to Home…`
-              : 'Asset saved. Redirecting to Home with updated Net Worth…',
-        [
-          {
-            text: 'OK',
-            onPress: () => goHomeDashboard(),
-          },
-        ],
-      );
+      const shareName =
+        invoice.productName?.trim() ||
+        finalTargets?.[0]?.name ||
+        pickPrimaryItem(itemList)?.name ||
+        'Vaulted asset';
+      const sharePrice =
+        Number(invoice.totalAmount) > 0
+          ? Number(invoice.totalAmount)
+          : Number(finalTargets?.[0]?.amount || finalTargets?.[0]?.price) || null;
+      setShareCard({
+        assetName: shareName,
+        price: sharePrice,
+        imageUri: imageUri || '',
+      });
     } catch (error) {
       Haptics.error();
       Alert.alert('Save failed', error?.message || 'Could not save');
@@ -633,6 +772,14 @@ export function ReviewAssetScreen({ navigation, route }) {
           <View style={{ flex: 1 }}>
             <Text style={styles.eyebrow}>REVIEW & CONFIRM</Text>
             <Text style={styles.title}>Confirm extracted document</Text>
+            {ocrFailed ? (
+              <Text style={styles.manualBanner}>
+                Could not auto-fill details, please enter manually
+              </Text>
+            ) : null}
+            {smartMapHint ? (
+              <Text style={styles.mapBanner}>{smartMapHint}</Text>
+            ) : null}
             <View style={styles.docBadge}>
               <Text style={styles.docBadgeText}>{documentTypeBadge}</Text>
             </View>
@@ -747,7 +894,7 @@ export function ReviewAssetScreen({ navigation, route }) {
             <View style={styles.linkBlock}>
               <Text style={styles.linkLabel}>Link to vehicle *</Text>
               <View style={styles.linkRow}>
-                {vehicleOptions.slice(0, 6).map((v) => {
+                {vehicleOptions.slice(0, 12).map((v) => {
                   const id = v.assetId || v.id;
                   const on = linkAssetId === id;
                   return (
@@ -1012,46 +1159,206 @@ export function ReviewAssetScreen({ navigation, route }) {
           </Text>
         ) : null}
       </ScrollView>
+
+      <ShareAssetModal
+        visible={Boolean(shareCard)}
+        assetName={shareCard?.assetName || ''}
+        price={shareCard?.price}
+        imageUri={shareCard?.imageUri || ''}
+        onClose={() => setShareCard(null)}
+        onDone={() => {
+          setShareCard(null);
+          goHomeDashboard();
+        }}
+      />
+
     </Screen>
   );
 }
 
-/** Ensure no dummy strings leak into controlled inputs */
+/** Ensure no dummy strings leak into controlled inputs; map clean Gemini OCR JSON. */
 function sanitizeInvoice(raw = {}) {
-  const next = { ...raw };
-  const extract = raw.ocrExtract || {};
+  const next = raw && typeof raw === 'object' && !Array.isArray(raw) ? { ...raw } : {};
+  const extract =
+    next.ocrExtract && typeof next.ocrExtract === 'object' ? next.ocrExtract : {};
 
-  // Hydrate controlled inputs from structured OCR extract (non-null strings)
-  if (!next.shopName && extract.vendor_dealer_name) next.shopName = extract.vendor_dealer_name;
-  if (!next.customerName && extract.owner_buyer_name) next.customerName = extract.owner_buyer_name;
-  if (!next.invoiceNumber && extract.invoice_or_policy_no) {
-    next.invoiceNumber = extract.invoice_or_policy_no;
+  // Prefer scannedData / clean schema aliases from Gemini
+  const scanned =
+    (next.scannedData && typeof next.scannedData === 'object' ? next.scannedData : null) ||
+    (next.parsedData && typeof next.parsedData === 'object' ? next.parsedData : null) ||
+    {};
+
+  const pickStr = (...vals) => {
+    for (const v of vals) {
+      if (v == null) continue;
+      const s = String(v).trim();
+      if (s) return s;
+    }
+    return '';
+  };
+  const pickNum = (...vals) => {
+    for (const v of vals) {
+      if (v == null || v === '') continue;
+      const n = Number(String(v).replace(/,/g, ''));
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return null;
+  };
+
+  // Auto-fill Review fields from OCR / scannedData
+  next.productName = pickStr(
+    next.productName,
+    next.itemName,
+    next.item_name,
+    next.title,
+    next.assetName,
+    scanned.item_name,
+    scanned.asset_name,
+    scanned.itemName,
+    extract.asset_name,
+    extract.item_name,
+  );
+  next.shopName = pickStr(
+    next.shopName,
+    next.vendor,
+    next.vendor_name,
+    next.vendorName,
+    next.vendor_dealer_name,
+    scanned.vendor_name,
+    scanned.vendor,
+    scanned.vendor_dealer_name,
+    extract.vendor_dealer_name,
+    extract.vendor_name,
+    extract.vendor,
+  );
+  next.customerName = pickStr(
+    next.customerName,
+    next.buyerName,
+    next.buyer_name,
+    next.owner_buyer_name,
+    scanned.buyer_name,
+    scanned.owner_buyer_name,
+    scanned.buyerName,
+    extract.owner_buyer_name,
+    extract.buyer_name,
+  );
+  next.invoiceNumber = pickStr(
+    next.invoiceNumber,
+    next.invoice_number,
+    next.invoice_or_policy_no,
+    scanned.invoice_number,
+    scanned.invoice_or_policy_no,
+    extract.invoice_or_policy_no,
+    extract.invoice_number,
+  );
+  next.invoiceDate = pickStr(
+    next.invoiceDate,
+    next.purchaseDate,
+    next.purchase_date,
+    next.purchase_or_issue_date,
+    next.date,
+    scanned.purchase_date,
+    scanned.purchase_or_issue_date,
+    extract.purchase_or_issue_date,
+    extract.purchase_date,
+  );
+  const total = pickNum(
+    next.totalAmount,
+    next.amount,
+    next.price,
+    next.total_amount,
+    scanned.total_amount,
+    scanned.totalAmount,
+    extract.total_amount,
+  );
+  if (total != null) next.totalAmount = total;
+
+  const category = pickStr(
+    next.category,
+    next.smartCategory,
+    next.purchaseCategory,
+    scanned.category,
+    extract.category,
+  );
+  if (category) {
+    next.category = category;
+    // Map "Vehicles" → purchaseCategory Vehicles for vault folders
+    if (/^vehicles?$/i.test(category)) next.purchaseCategory = 'Vehicles';
+    else if (/^gadgets?$/i.test(category)) next.purchaseCategory = 'Gadgets';
+    else if (/^home/i.test(category)) next.purchaseCategory = 'Home Appliances';
   }
-  if (!next.invoiceDate && extract.purchase_or_issue_date) {
-    next.invoiceDate = extract.purchase_or_issue_date;
+
+  // Force Vehicles for bike/car dealer keywords (TVS, Ronin, Bike, Car, …)
+  const vehicleHay = [
+    next.productName,
+    next.shopName,
+    next.customerName,
+    next.invoiceNumber,
+    scanned.item_name,
+    scanned.vendor_name,
+    extract.asset_name,
+    extract.vendor_dealer_name,
+    Array.isArray(next.items)
+      ? next.items.map((it) => it?.name || it?.item_name || '').join(' ')
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const vehicleForced =
+    /\b(?:tvs|ronin|bike|car|motorcycle|scooter|pulsar|activa|apache)\b/i.test(vehicleHay) ||
+    classifySmartCategory(vehicleHay, {
+      chassisNumber: next.chassisNumber,
+      engineNumber: next.engineNumber,
+      registration: next.registration,
+      documentKind: next.documentKind || next.classifiedDocumentType,
+    }) === SMART_CATEGORIES.VEHICLES;
+  if (vehicleForced) {
+    next.category = 'Vehicles';
+    next.purchaseCategory = 'Vehicles';
+    next.smartCategory = SMART_CATEGORIES.VEHICLES;
   }
-  if (!next.productName && extract.asset_name) next.productName = extract.asset_name;
-  if (!next.chassisNumber && extract.chassis_or_frame_no) {
-    next.chassisNumber = extract.chassis_or_frame_no;
+
+  if (!next.chassisNumber) {
+    next.chassisNumber = pickStr(
+      next.chassisNumber,
+      scanned.chassis_or_frame_no,
+      extract.chassis_or_frame_no,
+    );
   }
-  if (!next.registration && extract.vehicle_registration_number) {
-    next.registration = extract.vehicle_registration_number;
+  if (!next.engineNumber) {
+    next.engineNumber = pickStr(next.engineNumber, scanned.engine_number, extract.engine_number);
+  }
+  if (!next.registration) {
+    next.registration = pickStr(
+      next.registration,
+      scanned.vehicle_registration_number,
+      scanned.registration_number,
+      extract.vehicle_registration_number,
+    );
   }
   if (!next.insuranceExpiry && extract.expiry_date) {
     const doc = String(
-      raw.classifiedDocumentType || extract.document_type || raw.documentKind || '',
+      next.classifiedDocumentType || extract.document_type || next.documentKind || '',
     ).toUpperCase();
     if (doc.includes('INSURANCE')) next.insuranceExpiry = extract.expiry_date;
     else if (doc.includes('PUC')) next.pucExpiry = extract.expiry_date;
     else if (!next.warrantyExpiry) next.warrantyExpiry = extract.expiry_date;
   }
-  if (extract.total_amount != null && !(Number(next.totalAmount) > 0)) {
-    next.totalAmount = Number(extract.total_amount);
-  }
   if (extract.document_type && !next.classifiedDocumentType) {
     next.classifiedDocumentType = extract.document_type;
     next.geminiDocumentType = extract.document_type;
   }
+
+  // Mirror clean aliases for any UI reading itemName / vendor / buyerName
+  next.itemName = next.productName;
+  next.item_name = next.productName;
+  next.vendor = next.shopName;
+  next.vendor_name = next.shopName;
+  next.buyerName = next.customerName;
+  next.buyer_name = next.customerName;
+  next.purchaseDate = next.invoiceDate;
+  next.purchase_date = next.invoiceDate;
+  next.price = next.totalAmount;
 
   const stringKeys = [
     'shopName',
@@ -1073,13 +1380,19 @@ function sanitizeInvoice(raw = {}) {
     'insuranceExpiry',
     'warrantyExpiry',
     'invoiceDate',
+    'itemName',
+    'vendor',
+    'buyerName',
+    'purchaseDate',
   ];
   for (const key of stringKeys) {
     if (next[key] == null) next[key] = '';
     else next[key] = String(next[key]).trim();
   }
   if (/^(?:\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|\d{4}-\d{2}-\d{2}|\d{1,2}:\d{2})/.test(next.shopName || '')) {
-    next.shopName = extract.vendor_dealer_name || '';
+    next.shopName = extract.vendor_dealer_name || extract.vendor_name || '';
+    next.vendor = next.shopName;
+    next.vendor_name = next.shopName;
   }
   // Strip classic dummy / OCR-ghost plates if they somehow appear
   if (/^MH12AB1234$/i.test(next.registration)) next.registration = '';
@@ -1120,6 +1433,22 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   title: { color: COLORS.text, fontSize: 20, fontWeight: '800', marginTop: 2 },
+  manualBanner: {
+    marginTop: 8,
+    marginBottom: 4,
+    color: '#B45309',
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
+  mapBanner: {
+    marginTop: 8,
+    marginBottom: 4,
+    color: COLORS.emerald,
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
   section: { marginBottom: 10, paddingVertical: 4 },
   sectionHeader: {
     flexDirection: 'row',

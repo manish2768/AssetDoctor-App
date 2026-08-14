@@ -1,9 +1,10 @@
 /**
- * Post–sign-in profile setup — Full Name + verified Mobile (linkWithCredential).
+ * Optional post–sign-in profile polish — NEVER blocks Home.
+ * Phone linking is skippable; already-in-use phones sign into that account.
  */
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Modal, Image, Alert } from 'react-native';
+import { View, Text, StyleSheet, Modal, Image, Alert, Pressable } from 'react-native';
 
 import { useAuth } from '../../context/AuthProvider';
 import { GlassCard, GlassInput, GlassButton } from '../ui/Glass';
@@ -14,6 +15,8 @@ import { toErrorMessage } from '../../utils/errors';
 import { SMS_OTP_TEMPLATE } from '../../constants/smsOtp';
 
 export function ProfileSetupModal() {
+  // Forced gate disabled via needsProfileSetup() === false.
+  // Keep component mounted for optional future soft prompts.
   const { user, profile, completeProfileSetup, needsProfileSetup, sendOTP, verifyOTP } = useAuth();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -33,6 +36,25 @@ export function ProfileSetupModal() {
     setOtpSession(null);
     setError('');
   }, [visible, profile?.name, profile?.phone, profile?.phoneNumber, user?.displayName]);
+
+  const onSkip = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const cleanName = String(name || profile?.name || user?.displayName || 'Asset Owner').trim();
+      await completeProfileSetup({
+        name: cleanName,
+        skipPhone: true,
+      });
+      Haptics.select();
+    } catch (e) {
+      // Even if cloud write fails, dismiss — never trap user
+      console.warn('[ProfileSetup] skip failed:', e?.message || e);
+      Haptics.select();
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const onSendPhoneOtp = async () => {
     setBusy(true);
@@ -59,7 +81,8 @@ export function ProfileSetupModal() {
         return;
       }
 
-      const otpResult = await sendOTP(cleanPhone, { mode: 'link' });
+      // Prefer sign-in OTP so existing phone accounts merge instead of blocking
+      const otpResult = await sendOTP(cleanPhone, { mode: 'signIn' });
       if (!otpResult.success) throw new Error(otpResult.error);
       if (!otpResult.confirmation) throw new Error('OTP session missing');
       setOtpSession(otpResult.confirmation);
@@ -80,15 +103,20 @@ export function ProfileSetupModal() {
       const cleanName = String(name || '').trim();
       const cleanPhone = normalizePhone(phone);
       if (!otpSession) throw new Error('Request OTP first');
-      const verified = await verifyOTP(otpSession, otp, { name: cleanName, mode: 'link' });
+      // signIn mode: existing phone users log in; new users get an account
+      const verified = await verifyOTP(otpSession, otp, { name: cleanName, mode: 'signIn' });
       if (!verified.success) throw new Error(verified.error);
 
       const result = await completeProfileSetup({
         name: cleanName,
         phone: cleanPhone,
         phoneNumber: cleanPhone,
+        skipPhoneCheck: true,
       });
-      if (!result.success) throw new Error(result.error);
+      if (!result.success) {
+        // Auth already succeeded — don't trap on profile write
+        console.warn('[ProfileSetup] profile write:', result.error);
+      }
       Haptics.success();
     } catch (e) {
       Haptics.error();
@@ -108,9 +136,9 @@ export function ProfileSetupModal() {
           style={styles.logo}
           resizeMode="contain"
         />
-        <Text style={styles.title}>Complete your profile</Text>
+        <Text style={styles.title}>Add a few details</Text>
         <Text style={styles.sub}>
-          {BRAND.name} links Email + Mobile to one account. {SMS_OTP_TEMPLATE.userHint}
+          Optional — you can skip and use {BRAND.name} now. Link a mobile later in Settings.
         </Text>
 
         <GlassCard glow style={styles.card}>
@@ -123,7 +151,7 @@ export function ProfileSetupModal() {
             editable={!otpSession}
           />
           <GlassInput
-            label="Primary Mobile Number"
+            label="Mobile Number (optional)"
             value={phone}
             onChangeText={setPhone}
             keyboardType="phone-pad"
@@ -144,12 +172,15 @@ export function ProfileSetupModal() {
             </>
           ) : (
             <GlassButton
-              title={needsPhoneOtp ? 'Send SMS OTP & Continue' : 'Save & Continue'}
-              onPress={onSendPhoneOtp}
+              title={phone.trim() ? 'Send SMS OTP & Continue' : 'Save name & Continue'}
+              onPress={phone.trim() ? onSendPhoneOtp : onSkip}
               loading={busy}
             />
           )}
           {error ? <Text style={styles.error}>{error}</Text> : null}
+          <Pressable onPress={onSkip} disabled={busy} style={styles.skipWrap}>
+            <Text style={styles.skip}>Skip for now → Go to Home</Text>
+          </Pressable>
         </GlassCard>
 
         <Text style={styles.footer}>{BRAND.creatorCredit}</Text>
@@ -182,6 +213,8 @@ const styles = StyleSheet.create({
   },
   card: { marginTop: 8 },
   error: { color: COLORS.rose, marginTop: 10, fontWeight: '700', fontSize: 12 },
+  skipWrap: { marginTop: 16, alignItems: 'center', paddingVertical: 8 },
+  skip: { color: COLORS.neonBlue, fontWeight: '800', fontSize: 14 },
   footer: {
     color: COLORS.muted,
     fontSize: 11,

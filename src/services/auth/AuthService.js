@@ -7,6 +7,7 @@
 
 import auth from '@react-native-firebase/auth';
 
+import { ensureFirebaseApp, waitForFirebaseApp } from '../../config/firebaseApp';
 import { Haptics, triggerHaptic } from '../haptics/triggerHaptic';
 import { UserService } from '../user/UserService';
 import { EmailService } from '../email/EmailService';
@@ -19,6 +20,53 @@ import {
   googleSignOut,
 } from './googleSignIn';
 import { IdentityService } from './IdentityService';
+
+function isFirebaseDefaultMissing(error) {
+  const msg = String(error?.message || error || '');
+  const code = String(error?.code || '');
+  return /no firebase app|\[DEFAULT\]|not been created|firebase.*initializ/i.test(
+    `${msg} ${code}`,
+  );
+}
+
+/**
+ * Sync auth() when native app is already up (no throw on race — returns null).
+ * @returns {import('@react-native-firebase/auth').FirebaseAuthTypes.Module | null}
+ */
+function getAuthSafe() {
+  if (!ensureFirebaseApp()) return null;
+  try {
+    return auth();
+  } catch (error) {
+    if (isFirebaseDefaultMissing(error)) return null;
+    throw error;
+  }
+}
+
+/**
+ * Resolve Firebase Auth with automatic retries so button taps don't fail on boot race.
+ * @param {{ timeoutMs?: number }} [opts]
+ * @returns {Promise<import('@react-native-firebase/auth').FirebaseAuthTypes.Module>}
+ */
+async function resolveFirebaseAuth(opts = {}) {
+  const timeoutMs = opts.timeoutMs ?? 8000;
+  const ready = await waitForFirebaseApp({ timeoutMs, intervalMs: 75 });
+  if (ready) {
+    const instance = getAuthSafe();
+    if (instance) return instance;
+  }
+
+  // Final sync attempts after wait
+  for (let i = 0; i < 8; i += 1) {
+    const instance = getAuthSafe();
+    if (instance) return instance;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+
+  throw new Error(
+    'Firebase Auth is unavailable. Please restart the app and try again.',
+  );
+}
 
 /**
  * Normalize phone to E.164 (basic). Expects country code, e.g. +919876543210.
@@ -54,39 +102,44 @@ function sendLinkPhoneOtp(e164) {
     };
 
     let unsubscribe = () => {};
-    try {
-      const phoneAuth = auth().verifyPhoneNumber(e164);
-      unsubscribe = phoneAuth.on(
-        'state_changed',
-        (snapshot) => {
-          const state = snapshot?.state;
-          const codeSent =
-            state === auth.PhoneAuthState.CODE_SENT ||
-            state === 'sent' ||
-            state === auth.PhoneAuthState.AUTO_VERIFY_TIMEOUT ||
-            state === 'timeout';
-          if (codeSent && snapshot.verificationId) {
-            const verificationId = snapshot.verificationId;
-            finish(null, {
-              mode: 'link',
-              phone: e164,
-              verificationId,
-              confirm: async (code) => {
-                const credential = auth.PhoneAuthProvider.credential(verificationId, code);
-                return auth().currentUser.linkWithCredential(credential);
-              },
-            });
-            return;
-          }
-          if (state === auth.PhoneAuthState.ERROR || state === 'error' || snapshot?.error) {
-            finish(snapshot.error || new Error('Failed to send OTP'));
-          }
-        },
-        (error) => finish(error || new Error('Failed to send OTP')),
-      );
-    } catch (error) {
-      finish(error);
-    }
+    (async () => {
+      try {
+        const firebaseAuth = await resolveFirebaseAuth();
+        const phoneAuth = firebaseAuth.verifyPhoneNumber(e164);
+        unsubscribe = phoneAuth.on(
+          'state_changed',
+          (snapshot) => {
+            const state = snapshot?.state;
+            const codeSent =
+              state === auth.PhoneAuthState.CODE_SENT ||
+              state === 'sent' ||
+              state === auth.PhoneAuthState.AUTO_VERIFY_TIMEOUT ||
+              state === 'timeout';
+            if (codeSent && snapshot.verificationId) {
+              const verificationId = snapshot.verificationId;
+              finish(null, {
+                mode: 'link',
+                phone: e164,
+                verificationId,
+                confirm: async (code) => {
+                  const credential = auth.PhoneAuthProvider.credential(verificationId, code);
+                  const current = getAuthSafe()?.currentUser;
+                  if (!current) throw new Error('Not signed in');
+                  return current.linkWithCredential(credential);
+                },
+              });
+              return;
+            }
+            if (state === auth.PhoneAuthState.ERROR || state === 'error' || snapshot?.error) {
+              finish(snapshot.error || new Error('Failed to send OTP'));
+            }
+          },
+          (error) => finish(error || new Error('Failed to send OTP')),
+        );
+      } catch (error) {
+        finish(error);
+      }
+    })();
   });
 }
 
@@ -106,6 +159,7 @@ export class AuthService {
     Haptics.tap();
 
     try {
+      const firebaseAuth = await resolveFirebaseAuth();
       const cleanEmail = String(email || '').trim().toLowerCase();
       const cleanName = String(name || '').trim() || 'Asset Owner';
       if (!cleanEmail || !password || password.length < 6) {
@@ -117,7 +171,7 @@ export class AuthService {
         throw new Error(identity.message || 'Email is already registered with another account.');
       }
 
-      const userCredential = await auth().createUserWithEmailAndPassword(cleanEmail, password);
+      const userCredential = await firebaseAuth.createUserWithEmailAndPassword(cleanEmail, password);
       await userCredential.user.updateProfile({ displayName: cleanName });
       // Refresh token so mail_queue rules see auth.token.email
       await userCredential.user.getIdToken(true);
@@ -184,6 +238,7 @@ export class AuthService {
     Haptics.tap();
 
     try {
+      const firebaseAuth = await resolveFirebaseAuth();
       const cleanEmail = String(email || '').trim().toLowerCase();
       const cleanPassword = String(password || '').trim();
       if (!cleanEmail || !cleanEmail.includes('@')) {
@@ -193,7 +248,7 @@ export class AuthService {
         throw new Error('Enter your password');
       }
 
-      const userCredential = await auth().signInWithEmailAndPassword(cleanEmail, cleanPassword);
+      const userCredential = await firebaseAuth.signInWithEmailAndPassword(cleanEmail, cleanPassword);
       let profile = null;
       try {
         profile = await UserService.syncUserToFirestore(userCredential.user, {
@@ -263,6 +318,7 @@ export class AuthService {
     Haptics.tap();
 
     try {
+      const firebaseAuth = await resolveFirebaseAuth();
       // Always (re)configure with the Firebase Web OAuth client before sign-in
       configureGoogleSignIn();
 
@@ -277,7 +333,7 @@ export class AuthService {
       }
 
       const googleCredential = auth.GoogleAuthProvider.credential(token);
-      const userCredential = await auth().signInWithCredential(googleCredential);
+      const userCredential = await firebaseAuth.signInWithCredential(googleCredential);
       const { user } = userCredential;
       const isNewUser = Boolean(userCredential.additionalUserInfo?.isNewUser);
 
@@ -340,48 +396,48 @@ export class AuthService {
     Haptics.tap();
 
     try {
+      const firebaseAuth = await resolveFirebaseAuth();
       const e164 = normalizePhone(phoneNumber);
       if (!/^\+[1-9]\d{7,14}$/.test(e164)) {
         throw new Error('Enter a valid mobile number with country code (e.g. +919876543210)');
       }
 
-      const current = auth().currentUser;
-      const wantsLink =
-        options.mode === 'link' ||
-        (options.mode !== 'signIn' &&
-          Boolean(current) &&
-          !current.phoneNumber &&
-          (current.email || current.providerData?.some((p) => p.providerId !== 'phone')));
-
-      const identity = await IdentityService.checkAvailable({
-        phone: e164,
-        excludeUid: current?.uid,
-      });
-      if (!identity.available) {
-        throw new Error(
-          identity.message || 'Phone number is already registered with another account.',
-        );
-      }
+      const current = firebaseAuth.currentUser;
+      // Only link when explicitly requested — Login/Signup always cold sign-in (new or existing).
+      const wantsLink = options.mode === 'link' && Boolean(current);
 
       if (wantsLink && current) {
-        const confirmation = await sendLinkPhoneOtp(e164);
-        Haptics.success();
-        return {
-          success: true,
-          channel: 'sms',
-          mode: 'link',
+        const identity = await IdentityService.checkAvailable({
           phone: e164,
-          confirmation,
-        };
+          excludeUid: current?.uid,
+        });
+        if (identity.available) {
+          const confirmation = await sendLinkPhoneOtp(e164);
+          Haptics.success();
+          return {
+            success: true,
+            channel: 'sms',
+            mode: 'link',
+            phone: e164,
+            confirmation,
+          };
+        }
+        // Already registered elsewhere → sign into that account (never block).
       }
 
-      const confirmation = await auth().signInWithPhoneNumber(e164);
+      const confirmation = await firebaseAuth.signInWithPhoneNumber(e164);
       Haptics.success();
       return {
         success: true,
         channel: 'sms',
         mode: 'signIn',
-        confirmation: { ...confirmation, mode: 'signIn', phone: e164, confirm: confirmation.confirm.bind(confirmation), verificationId: confirmation.verificationId },
+        confirmation: {
+          ...confirmation,
+          mode: 'signIn',
+          phone: e164,
+          confirm: confirmation.confirm.bind(confirmation),
+          verificationId: confirmation.verificationId,
+        },
         phone: e164,
       };
     } catch (error) {
@@ -422,13 +478,16 @@ export class AuthService {
         try {
           userCredential = await current.linkWithCredential(credential);
         } catch (linkErr) {
+          const linkCode = String(linkErr?.code || '');
+          // Phone already belongs to another Firebase user → sign in as that account instead
           if (
-            String(linkErr?.code || '').includes('credential-already-in-use') ||
-            String(linkErr?.code || '').includes('account-exists-with-different-credential')
+            linkCode.includes('credential-already-in-use') ||
+            linkCode.includes('account-exists-with-different-credential')
           ) {
-            throw new Error('Phone number is already registered with another account.');
+            userCredential = await auth().signInWithCredential(credential);
+          } else {
+            throw linkErr;
           }
-          throw linkErr;
         }
       } else {
         if (typeof confirmation.confirm !== 'function') {
@@ -443,24 +502,8 @@ export class AuthService {
         String(options.name || '').trim() || user.displayName || undefined;
 
       const phone = user.phoneNumber || confirmation.phone || undefined;
-      if (phone) {
-        const identity = await IdentityService.checkAvailable({
-          phone,
-          excludeUid: user.uid,
-        });
-        if (!identity.available) {
-          if (isNewUser && mode !== 'link') {
-            try {
-              await auth().signOut();
-            } catch {
-              /* ignore */
-            }
-          }
-          throw new Error(
-            identity.message || 'Phone number is already registered with another account.',
-          );
-        }
-      }
+      // Sign-in path: Firebase already authenticated this phone — never block with
+      // "already registered". Link path uniqueness was handled above / at sendOTP.
 
       if (displayName && displayName !== user.displayName) {
         try {
@@ -524,15 +567,24 @@ export class AuthService {
 
     try {
       const userId = auth().currentUser?.uid;
-      if (userId) {
-        await Promise.allSettled([
-          ExpiryAlertService.unregisterPushToken(userId),
-          OfflineVaultCache.clearUser(userId),
-          OfflineQueue.removeUser(userId),
-        ]);
+      // Always clear Firebase session first so UI can leave the spinner / remount AuthWelcome.
+      // Push-token / offline cleanup must never block sign-out (can hang on getExpoPushTokenAsync).
+      try {
+        await googleSignOut();
+      } catch {
+        /* ignore */
       }
-      await googleSignOut();
       await auth().signOut();
+      if (userId) {
+        Promise.race([
+          Promise.allSettled([
+            ExpiryAlertService.unregisterPushToken(userId),
+            OfflineVaultCache.clearUser(userId),
+            OfflineQueue.removeUser(userId),
+          ]),
+          new Promise((resolve) => setTimeout(resolve, 2500)),
+        ]).catch(() => {});
+      }
       Haptics.success();
       return { success: true };
     } catch (error) {
@@ -543,26 +595,43 @@ export class AuthService {
 
   /** @returns {import('@react-native-firebase/auth').FirebaseAuthTypes.User | null} */
   static getCurrentUser() {
-    return auth().currentUser;
+    try {
+      return getAuthSafe()?.currentUser ?? null;
+    } catch {
+      return null;
+    }
   }
 
   /**
    * Subscribe to Firebase Auth state changes.
+   * Waits briefly for native Firebase so cold start does not treat auth as signed-out.
    * @param {(user: import('@react-native-firebase/auth').FirebaseAuthTypes.User | null) => void} callback
    * @returns {() => void} unsubscribe
    */
   static onAuthStateChanged(callback) {
-    try {
-      return auth().onAuthStateChanged(callback);
-    } catch (error) {
-      console.warn('[AssetDoctor] Firebase Auth unavailable:', error?.message || error);
+    let cancelled = false;
+    let unsub = () => {};
+
+    (async () => {
+      await waitForFirebaseApp({ timeoutMs: 10000, intervalMs: 75 });
+      if (cancelled) return;
       try {
-        callback(null);
-      } catch {
-        /* ignore */
+        const firebaseAuth = getAuthSafe();
+        if (!firebaseAuth) {
+          try { callback(null); } catch { /* ignore */ }
+          return;
+        }
+        unsub = firebaseAuth.onAuthStateChanged(callback);
+      } catch (error) {
+        console.warn('[AssetDoctor] Firebase Auth unavailable:', error?.message || error);
+        try { callback(null); } catch { /* ignore */ }
       }
-      return () => {};
-    }
+    })();
+
+    return () => {
+      cancelled = true;
+      try { unsub(); } catch { /* ignore */ }
+    };
   }
 
   /**
@@ -587,11 +656,25 @@ export class AuthService {
 }
 
 function mapAuthError(error) {
+  try {
+    const { toFriendlyError } = require('../../utils/friendlyErrors');
+    const friendly = toFriendlyError(error, '');
+    if (friendly) return friendly;
+  } catch {
+    /* fall through */
+  }
   const code = String(error?.code || '');
   const message = String(error?.message || error?.nativeMessage || '');
+  if (
+    /no firebase app|\[DEFAULT\]|not been created|firebase.*initializ|Auth is unavailable/i.test(message) ||
+    /no firebase app|\[DEFAULT\]/i.test(code)
+  ) {
+    return 'Signing services are warming up — tap again in a moment.';
+  }
   if (code.includes('email-already-in-use')) return 'Email is already registered with another account.';
+  // Phone credential conflicts are recovered via signInWithCredential in verifyOTP
   if (code.includes('credential-already-in-use') || code.includes('account-exists-with-different-credential')) {
-    return 'Phone number / Email is already registered with another account.';
+    return 'Signing you into the account for this phone number…';
   }
   if (code.includes('invalid-email')) return 'Enter a valid email address';
   if (code.includes('weak-password')) return 'Password must be at least 6 characters';
@@ -602,6 +685,9 @@ function mapAuthError(error) {
   if (code.includes('invalid-phone-number')) return 'Enter a valid mobile number';
   if (code.includes('too-many-requests') || code.includes('quota')) return 'Too many OTP attempts. Try again later.';
   if (message.includes('already registered')) return message;
+  if (message.includes('Firebase Auth is unavailable') || message.includes('Firebase is still starting')) {
+    return message;
+  }
   if (message.includes('cancelled') || message.includes('canceled') || code === 'SIGN_IN_CANCELLED') {
     return 'Google Sign-In was cancelled';
   }

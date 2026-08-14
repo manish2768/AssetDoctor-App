@@ -6,8 +6,8 @@
  * Home tab always shows Dashboard (vault overview).
  */
 
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View, Text, Pressable } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, View, Text, Pressable, AppState } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -16,11 +16,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useAuth } from '../context/AuthProvider';
 import { SplashScreen } from '../screens/auth/SplashScreen';
-import { LoginScreen, SignUpScreen } from '../screens/auth/AuthScreens';
+import { LoginScreen } from '../screens/LoginScreen';
+import { SignUpScreen } from '../screens/auth/AuthScreens';
 import { EmailVerificationScreen } from '../screens/auth/EmailVerificationScreen';
 import { OnboardingScreen } from '../screens/onboarding/OnboardingScreen';
 import { DashboardScreen } from '../screens/dashboard/DashboardScreen';
 import { AssetEnergyScreen } from '../screens/dashboard/AssetEnergyScreen';
+import { EnergyScreen } from '../screens/dashboard/EnergyScreen';
 import { AddAssetScreen } from '../screens/assets/AddAssetScreen';
 import { DocumentsVaultScreen } from '../screens/assets/DocumentsVaultScreen';
 import { AssetPassportScreen } from '../screens/assets/AssetPassportScreen';
@@ -32,6 +34,7 @@ import { SettingsScreen, AboutScreen } from '../screens/settings/SettingsScreens
 import { ProfileScreen } from '../screens/settings/ProfileScreen';
 import { ReportIssueScreen } from '../screens/settings/ReportIssueScreen';
 import { PrivacyPolicyScreen } from '../screens/settings/PrivacyPolicyScreen';
+import { ContactUsScreen } from '../screens/settings/ContactUsScreen';
 import { PlayStoreListingScreen } from '../screens/settings/PlayStoreListingScreen';
 import { OfflineSyncService } from '../services/offline/OfflineSyncService';
 import { PlayStoreUpdateService } from '../services/updates/PlayStoreUpdateService';
@@ -39,7 +42,16 @@ import { Haptics } from '../services/haptics';
 import { COLORS, NAV_THEME } from '../theme/branding';
 import { ONBOARDING_KEY } from '../constants/storageKeys';
 import { CustomBottomTabBar } from '../components/CustomBottomTabBar';
+import {
+  WelcomeGreetingModal,
+  shouldShowWelcomeGreeting,
+} from '../components/WelcomeGreetingModal';
 import { navigationRef, goHomeDashboard } from './navActions';
+import { AuthBootGate } from './AuthBootGate';
+import {
+  clearScanSession,
+  restoreScanSessionIfNeeded,
+} from '../utils/scanNavGuard';
 
 // Lazy-load scanner / review so OCR deps cannot blank the Home boot path.
 // ScanBillScreen already wraps itself in ScanErrorBoundary.
@@ -134,6 +146,12 @@ function HomeStackNav() {
       <HomeStack.Screen name="AddAsset" component={AddAssetScreen} options={addAssetOptions} />
       <HomeStack.Screen name="Maintenance" component={MaintenanceScreen} options={{ title: 'Service & Maintenance' }} />
       <HomeStack.Screen name="DocumentsVault" component={DocumentsVaultScreen} options={{ title: 'Documents' }} />
+      <HomeStack.Screen name="VaultHome" component={VaultHomeScreen} options={{ title: 'Document Vault' }} />
+      <HomeStack.Screen
+        name="CategoryFolders"
+        component={CategoryFoldersScreen}
+        options={{ title: 'Category Folders' }}
+      />
     </HomeStack.Navigator>
   );
 }
@@ -178,9 +196,15 @@ function SettingsStackNav() {
       <Stack.Screen name="SettingsHome" component={SettingsScreen} options={{ title: 'Settings' }} />
       <Stack.Screen name="ProfileHome" component={ProfileScreen} options={{ title: 'Profile' }} />
       <Stack.Screen name="About" component={AboutScreen} options={{ title: 'About Us' }} />
+      <Stack.Screen name="ContactUs" component={ContactUsScreen} options={{ title: 'Contact Us' }} />
       <Stack.Screen name="ReportIssue" component={ReportIssueScreen} options={{ title: 'Report Issue' }} />
       <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ title: 'Privacy Policy' }} />
       <Stack.Screen name="PlayStoreListing" component={PlayStoreListingScreen} options={{ title: 'Play Store' }} />
+      <Stack.Screen
+        name="ApplianceEnergyDetail"
+        component={AssetEnergyScreen}
+        options={{ title: 'Appliance Energy' }}
+      />
     </Stack.Navigator>
   );
 }
@@ -188,6 +212,7 @@ function SettingsStackNav() {
 /** When user taps Home tab, always show Dashboard — never stuck Scan Invoice. */
 function homeTabPress(navigation) {
   Haptics.select();
+  clearScanSession().catch(() => {});
   navigation.navigate('Home', {
     screen: 'Dashboard',
   });
@@ -224,11 +249,10 @@ function MainTabs() {
     >
       <Tab.Screen name="Home" component={HomeStackNav} options={{ title: 'Home', tabBarLabel: 'Home' }} />
       <Tab.Screen name="Assets" component={AssetsStackNav} options={{ title: 'Assets' }} />
-      <Tab.Screen name="Vault" component={VaultStackNav} options={{ title: 'Vault' }} />
       <Tab.Screen
         name="Power"
-        component={AssetEnergyScreen}
-        options={{ headerShown: true, title: 'Appliance Energy', tabBarLabel: 'Energy' }}
+        component={EnergyScreen}
+        options={{ headerShown: false, title: 'Energy', tabBarLabel: 'Energy' }}
       />
       <Tab.Screen name="Settings" component={SettingsStackNav} options={{ title: 'Settings' }} />
     </Tab.Navigator>
@@ -269,8 +293,18 @@ function ScanCloseButton({ navigation }) {
     <Pressable
       onPress={() => {
         Haptics.tap();
-        if (navigation.canGoBack()) navigation.goBack();
-        else goHomeDashboard();
+        // Explicit user Close — clear scan restore guard, then leave scanner
+        clearScanSession().finally(() => {
+          try {
+            if (navigation?.canGoBack?.()) {
+              navigation.goBack();
+              return;
+            }
+            goHomeDashboard();
+          } catch {
+            /* ignore */
+          }
+        });
       }}
       hitSlop={12}
       style={{ paddingHorizontal: 12 }}
@@ -280,17 +314,112 @@ function ScanCloseButton({ navigation }) {
   );
 }
 
+function AuthStackNavigator() {
+  return (
+    <AuthStack.Navigator
+      initialRouteName="Login"
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: COLORS.bg },
+      }}
+    >
+      <AuthStack.Screen name="Login" component={LoginScreen} />
+      <AuthStack.Screen
+        name="SignUp"
+        component={SignUpScreen}
+        options={{ headerShown: true, title: 'Create account', ...stackOptions }}
+      />
+      <AuthStack.Screen
+        name="EmailVerification"
+        component={EmailVerificationScreen}
+        options={{ headerShown: true, title: 'Verify Email', ...stackOptions }}
+      />
+    </AuthStack.Navigator>
+  );
+}
+
+function MainAppStackNavigator() {
+  return (
+    <RootStack.Navigator
+      initialRouteName="MainTabs"
+      screenOptions={{ headerShown: false, contentStyle: { backgroundColor: COLORS.bg } }}
+    >
+      <RootStack.Screen name="MainTabs" component={MainTabs} />
+      <RootStack.Screen
+        name="ScanBill"
+        component={ScanBillScreen}
+        options={({ navigation }) => ({
+          headerShown: true,
+          title: 'Scan Invoice',
+          presentation: 'fullScreenModal',
+          ...stackOptions,
+          headerLeft: () => <ScanCloseButton navigation={navigation} />,
+        })}
+      />
+      <RootStack.Screen
+        name="ReviewAsset"
+        component={ReviewAssetScreen}
+        options={({ navigation }) => ({
+          headerShown: true,
+          title: 'Review Invoice',
+          presentation: 'fullScreenModal',
+          ...stackOptions,
+          headerLeft: () => <ScanCloseButton navigation={navigation} />,
+        })}
+      />
+      <RootStack.Screen
+        name="AuthModal"
+        component={AuthModalNavigator}
+        options={{
+          presentation: 'modal',
+          headerShown: false,
+        }}
+      />
+    </RootStack.Navigator>
+  );
+}
+
+/**
+ * AuthSwitchNavigator — user null → AuthStack (Login), else → MainAppStack.
+ * NavigationContainer remount key forces a hard tree reset on logout/login.
+ */
 export function RootNavigator() {
-  const { isAuthenticated, loading, profileReady, emailVerified, user } = useAuth();
+  const {
+    isAuthenticated: authIsAuthenticated,
+    loading,
+    profileReady,
+    emailVerified,
+    user,
+    displayName,
+    allowGuestBrowse,
+    retryProfileHydrate,
+  } = useAuth();
+  const AUTH_BYPASS_FOR_SCAN_TESTING = false;
+  const isAuthenticated = AUTH_BYPASS_FOR_SCAN_TESTING ? true : authIsAuthenticated;
+  /** Auth stack when logged out (unless guest Skip). */
+  const showAuthStack =
+    !AUTH_BYPASS_FOR_SCAN_TESTING && !isAuthenticated && !allowGuestBrowse;
+
   const [bootDone, setBootDone] = useState(false);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
+  /** User opted to continue past boot gate with cached data */
+  const [bootBypass, setBootBypass] = useState(false);
 
   useEffect(() => {
     return OfflineSyncService.startAutoFlush();
   }, []);
 
-  // Sideloaded APK → future Play Store update dialog (no-op until app_config/android.promptEnabled)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') {
+        restoreScanSessionIfNeeded().catch(() => {});
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
   useEffect(() => {
     if (!bootDone || showOnboarding || !onboardingChecked) return undefined;
     const timer = setTimeout(() => {
@@ -338,8 +467,41 @@ export function RootNavigator() {
     setShowOnboarding(false);
   };
 
+  useEffect(() => {
+    if (!bootDone || showOnboarding || !onboardingChecked || showAuthStack) return undefined;
+    if (!bootBypass && (loading || (authIsAuthenticated && !profileReady))) {
+      return undefined;
+    }
+    let cancelled = false;
+    (async () => {
+      const show = await shouldShowWelcomeGreeting();
+      if (!cancelled && show) setShowWelcome(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    bootDone,
+    showOnboarding,
+    onboardingChecked,
+    showAuthStack,
+    loading,
+    authIsAuthenticated,
+    profileReady,
+    bootBypass,
+  ]);
+
+  // Reset boot bypass when auth user changes
+  useEffect(() => {
+    setBootBypass(false);
+  }, [user?.uid, allowGuestBrowse]);
+
+  const finishSplash = useCallback(() => {
+    setBootDone(true);
+  }, []);
+
   if (!bootDone) {
-    return <SplashScreen onFinish={() => setBootDone(true)} />;
+    return <SplashScreen onFinish={finishSplash} holdMs={1500} />;
   }
 
   if (!onboardingChecked) {
@@ -354,74 +516,70 @@ export function RootNavigator() {
     return <OnboardingScreen onDone={finishOnboarding} />;
   }
 
-  // Wait for auth + Firestore profile hydrate so signed-in users never flash "Guest"
-  if (loading || (isAuthenticated && !profileReady)) {
+  const bootBlocking =
+    !AUTH_BYPASS_FOR_SCAN_TESTING &&
+    !showAuthStack &&
+    !bootBypass &&
+    (loading || (authIsAuthenticated && !profileReady));
+
+  if (bootBlocking) {
     return (
-      <View style={{ flex: 1, backgroundColor: COLORS.bg, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator color={COLORS.emerald} />
-        <Text style={{ color: COLORS.muted, marginTop: 12, fontWeight: '600' }}>Loading your vault…</Text>
-      </View>
+      <AuthBootGate
+        loading
+        onRetry={() => {
+          retryProfileHydrate?.();
+        }}
+        onContinueAnyway={() => setBootBypass(true)}
+      />
     );
   }
 
   const needsVerify =
+    !AUTH_BYPASS_FOR_SCAN_TESTING &&
     isAuthenticated &&
     user?.providerData?.some((p) => p.providerId === 'password') &&
     !emailVerified;
 
+  const switchKey = needsVerify
+    ? `verify-${user?.uid || 'x'}`
+    : showAuthStack
+      ? 'auth'
+      : isAuthenticated
+        ? `app-${user?.uid || 'x'}`
+        : 'guest';
+
   return (
-    <NavigationContainer
-      ref={navigationRef}
-      theme={NAV_THEME}
-      onReady={() => {
-        if (pendingNotificationResponse) {
-          openNotificationTarget(pendingNotificationResponse);
-        }
-      }}
-    >
-      <RootStack.Navigator
-        initialRouteName={needsVerify ? 'EmailVerification' : 'MainTabs'}
-        screenOptions={{ headerShown: false, contentStyle: { backgroundColor: COLORS.bg } }}
+    <>
+      <NavigationContainer
+        key={switchKey}
+        ref={navigationRef}
+        theme={NAV_THEME}
+        onReady={() => {
+          if (pendingNotificationResponse) {
+            openNotificationTarget(pendingNotificationResponse);
+          }
+          restoreScanSessionIfNeeded().catch(() => {});
+          setTimeout(() => {
+            restoreScanSessionIfNeeded().catch(() => {});
+          }, 400);
+        }}
       >
         {needsVerify ? (
-          <RootStack.Screen name="EmailVerification" component={EmailVerificationScreen} />
+          <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+            <AuthStack.Screen name="EmailVerification" component={EmailVerificationScreen} />
+          </AuthStack.Navigator>
+        ) : showAuthStack ? (
+          <AuthStackNavigator />
         ) : (
-          <>
-            <RootStack.Screen name="MainTabs" component={MainTabs} />
-            <RootStack.Screen
-              name="ScanBill"
-              component={ScanBillScreen}
-              options={({ navigation }) => ({
-                headerShown: true,
-                title: 'Scan Invoice',
-                presentation: 'fullScreenModal',
-                ...stackOptions,
-                headerLeft: () => <ScanCloseButton navigation={navigation} />,
-              })}
-            />
-            <RootStack.Screen
-              name="ReviewAsset"
-              component={ReviewAssetScreen}
-              options={({ navigation }) => ({
-                headerShown: true,
-                title: 'Review Invoice',
-                presentation: 'fullScreenModal',
-                ...stackOptions,
-                headerLeft: () => <ScanCloseButton navigation={navigation} />,
-              })}
-            />
-            <RootStack.Screen
-              name="AuthModal"
-              component={AuthModalNavigator}
-              options={{
-                presentation: 'modal',
-                headerShown: false,
-              }}
-            />
-          </>
+          <MainAppStackNavigator />
         )}
-      </RootStack.Navigator>
-    </NavigationContainer>
+      </NavigationContainer>
+      <WelcomeGreetingModal
+        visible={showWelcome && !showAuthStack}
+        displayName={displayName || user?.displayName || 'Guest'}
+        onDismiss={() => setShowWelcome(false)}
+      />
+    </>
   );
 }
 

@@ -1,0 +1,50 @@
+# EAS upload ignore — prefer Expo CNG (prebuild) over committed native projects.
+# android/ and ios/ are excluded so cloud builds regenerate native code from app.json plugins.
+
+**/node_modules/**
+node_modules
+.expo
+dist
+dist-play
+dist-*
+dist/**
+dist-bundle-check
+dist-build-debug
+dist-web-check
+**/*.aab
+**/*.apk
+eas-*.json
+agent-tools
+web-build
+android
+ios
+.git
+*.log
+.DS_Store
+Thumbs.db
+.idea
+.vscode
+.env
+.env.*
+!.env.example
+*-firebase-adminsdk-*.json
+GoogleService-Info.plist
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+index.html
+docs
+scripts
+.cursor
+agent-transcripts
+New Text Document.txt
+google-services (1).json
+credentials.json
+credentials/
+android/keystore.properties
+
+# Keep these for EAS prebuild / Firebase / Crashlytics (do not ignore):
+# - google-services.json  (app.json → android.googleServicesFile)
+# - firebase.json         (RNFirebase Crashlytics flags)
+# - app.json / eas.json / package.json

@@ -1,8 +1,9 @@
 /**
  * Full-screen gate — unlock with phone PIN / pattern / biometrics.
+ * Biometric prompt runs at most once per lock session (no vibration loops).
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,6 +12,7 @@ import {
   Linking,
   Platform,
   AppState,
+  Vibration,
 } from 'react-native';
 
 import { GlassButton } from '../../components/ui/Glass';
@@ -22,67 +24,124 @@ export function AppLockScreen({ onUnlocked, missingEnrollment }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [label, setLabel] = useState('Phone PIN / pattern');
+  const isAuthenticatingRef = useRef(false);
+  const hasTriggeredBiometrics = useRef(false);
+  const onUnlockedRef = useRef(onUnlocked);
+  onUnlockedRef.current = onUnlocked;
 
   useEffect(() => {
     AppLockService.getSecurityLabel().then(setLabel).catch(() => {});
   }, []);
 
-  // Auto-prompt once when screen mounts / app returns to foreground while locked
   useEffect(() => {
     let cancelled = false;
-    const tryUnlock = async () => {
-      if (missingEnrollment || cancelled) return;
+    const backgroundAt = { current: null };
+
+    const tryUnlock = async ({ force = false } = {}) => {
+      if (cancelled || missingEnrollment) return;
+      if (isAuthenticatingRef.current) return;
+      if (!force && hasTriggeredBiometrics.current) return;
+
+      isAuthenticatingRef.current = true;
+      hasTriggeredBiometrics.current = true;
       setBusy(true);
       setError('');
+
+      try {
+        const result = await AppLockService.authenticate({
+          reason: 'Unlock Asset Doctor vault',
+        });
+        if (cancelled) return;
+        setBusy(false);
+        if (result.success) {
+          Haptics.success();
+          onUnlockedRef.current?.();
+          return;
+        }
+        if (result.missingEnrollment) {
+          setError(result.error);
+          return;
+        }
+        if (result.error && result.error !== 'Authentication cancelled') {
+          Haptics.error();
+          setError(result.error);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setBusy(false);
+          setError(e?.message || 'Unlock failed');
+        }
+      } finally {
+        isAuthenticatingRef.current = false;
+        try {
+          Vibration.cancel();
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+
+    // Single auto-prompt on mount only — never re-fire from biometric UI AppState churn
+    tryUnlock({ force: false });
+
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background' || state === 'inactive') {
+        // Ignore brief inactive from system biometric sheet
+        if (!backgroundAt.current) backgroundAt.current = Date.now();
+        return;
+      }
+      if (state !== 'active') return;
+      const leftAt = backgroundAt.current;
+      backgroundAt.current = null;
+      if (!leftAt || isAuthenticatingRef.current) return;
+      // Only re-prompt after a real background (≥3s), not biometric dialog flicker
+      if (Date.now() - leftAt < 3000) return;
+      hasTriggeredBiometrics.current = false;
+      tryUnlock({ force: true });
+    });
+
+    return () => {
+      cancelled = true;
+      isAuthenticatingRef.current = false;
+      sub.remove();
+      try {
+        Vibration.cancel();
+      } catch {
+        /* ignore */
+      }
+    };
+  }, [missingEnrollment]);
+
+  const onUnlockPress = async () => {
+    if (isAuthenticatingRef.current) return;
+    Haptics.tap();
+    isAuthenticatingRef.current = true;
+    setBusy(true);
+    setError('');
+    try {
       const result = await AppLockService.authenticate({
         reason: 'Unlock Asset Doctor vault',
       });
-      if (cancelled) return;
       setBusy(false);
       if (result.success) {
         Haptics.success();
-        onUnlocked?.();
+        onUnlockedRef.current?.();
         return;
       }
       if (result.missingEnrollment) {
         setError(result.error);
         return;
       }
-      if (result.error && result.error !== 'Authentication cancelled') {
-        Haptics.error();
-        setError(result.error);
+      Haptics.error();
+      setError(result.error || 'Unlock failed');
+    } finally {
+      isAuthenticatingRef.current = false;
+      try {
+        Vibration.cancel();
+      } catch {
+        /* ignore */
       }
-    };
-
-    tryUnlock();
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') tryUnlock();
-    });
-    return () => {
-      cancelled = true;
-      sub.remove();
-    };
-  }, [missingEnrollment, onUnlocked]);
-
-  const onUnlockPress = async () => {
-    Haptics.tap();
-    setBusy(true);
-    setError('');
-    const result = await AppLockService.authenticate({
-      reason: 'Unlock Asset Doctor vault',
-    });
-    setBusy(false);
-    if (result.success) {
-      Haptics.success();
-      onUnlocked?.();
-      return;
     }
-    if (result.missingEnrollment) {
-      setError(result.error);
-      return;
-    }
-    Haptics.error();
-    setError(result.error || 'Unlock failed');
   };
 
   const openSecuritySettings = () => {
@@ -131,6 +190,8 @@ export function AppLockScreen({ onUnlocked, missingEnrollment }) {
   );
 }
 
+export default AppLockScreen;
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -168,5 +229,3 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 });
-
-export default AppLockScreen;

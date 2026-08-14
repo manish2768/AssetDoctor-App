@@ -291,36 +291,40 @@ export class UserService {
   }
 
   /**
-   * First-time profile setup after Gmail / email sign-in.
-   * Phone is stored after uniqueness check; prefer Auth linkPhone OTP for verified phone.
+   * Optional profile polish after sign-in. Phone is NOT required.
+   * Already-registered phones never block — caller should use Phone OTP sign-in instead.
    */
-  static async completeProfileSetup(uid, { name, phone, phoneNumber, photoURL } = {}) {
+  static async completeProfileSetup(uid, { name, phone, phoneNumber, photoURL, skipPhone, skipPhoneCheck } = {}) {
     Haptics.tap();
     try {
       if (!uid) throw new Error('Missing user id');
-      const cleanName = String(name || '').trim();
+      const cleanName = String(name || '').trim() || 'Asset Owner';
       const cleanPhone = String(phoneNumber || phone || '').trim();
-      if (!cleanName) throw new Error('Full name is required');
-      if (!cleanPhone) throw new Error('Mobile number is required');
-
-      const { IdentityService } = require('../auth/IdentityService');
-      const identity = await IdentityService.checkAvailable({
-        phone: cleanPhone,
-        excludeUid: uid,
-      });
-      if (!identity.available) {
-        throw new Error(
-          identity.message || 'Phone number is already registered with another account.',
-        );
-      }
 
       const payload = {
         name: cleanName,
-        phone: cleanPhone,
-        phoneNumber: cleanPhone,
         profileSetupComplete: true,
         updatedAt: firestore.FieldValue.serverTimestamp(),
       };
+
+      if (cleanPhone && !skipPhone) {
+        if (!skipPhoneCheck) {
+          const { IdentityService } = require('../auth/IdentityService');
+          const identity = await IdentityService.checkAvailable({
+            phone: cleanPhone,
+            excludeUid: uid,
+          });
+          // Do not throw — optional phone; skip storing if owned by another account
+          if (identity.available) {
+            payload.phone = cleanPhone;
+            payload.phoneNumber = cleanPhone;
+          }
+        } else {
+          payload.phone = cleanPhone;
+          payload.phoneNumber = cleanPhone;
+        }
+      }
+
       if (typeof photoURL === 'string' && photoURL.trim()) {
         payload.photoURL = photoURL.trim();
       }

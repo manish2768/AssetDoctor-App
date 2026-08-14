@@ -138,6 +138,9 @@ function seedFromInvoice(invoice = {}) {
     chassisNumber: blank(
       extract.chassis_or_frame_no || invoice.chassisNumber,
     ),
+    engineNumber: blank(
+      extract.engine_number || invoice.engineNumber,
+    ),
     expiryDate: expiry,
     registration: blank(
       extract.vehicle_registration_number ||
@@ -168,12 +171,11 @@ export function ReviewAssetModal({
   useEffect(() => {
     if (visible) {
       const seeded = seedFromInvoice(initialInvoice);
-      setForm(seeded);
-      setPreviewUri(imageUri);
       const probe = {
         ...initialInvoice,
         registration: seeded.registration,
         chassisNumber: seeded.chassisNumber,
+        engineNumber: seeded.engineNumber,
         documentType:
           seeded.documentType === DOC_CLASS.INSURANCE_POLICY
             ? 'insurance'
@@ -186,9 +188,16 @@ export function ReviewAssetModal({
           ...(initialInvoice.ocrExtract || {}),
           vehicle_registration_number: seeded.registration,
           chassis_or_frame_no: seeded.chassisNumber,
+          engine_number: seeded.engineNumber,
         },
       };
-      setMatchInfo(matchVehicleForDocument(assets, probe));
+      const match = matchVehicleForDocument(assets, probe);
+      if (match.matched) {
+        seeded.linkAssetId = match.matched.assetId || match.matched.id || null;
+      }
+      setForm(seeded);
+      setPreviewUri(imageUri);
+      setMatchInfo(match);
       if (imageUri) {
         makeMicroThumbnail(imageUri)
           .then((thumb) => {
@@ -226,11 +235,13 @@ export function ReviewAssetModal({
     const probe = {
       registration: nextForm.registration,
       chassisNumber: nextForm.chassisNumber,
+      engineNumber: nextForm.engineNumber,
       linkAssetId: nextForm.linkAssetId,
       documentType: isInsurance ? 'insurance' : isRc ? 'rc' : isPuc ? 'puc' : 'bill',
       ocrExtract: {
         vehicle_registration_number: nextForm.registration,
         chassis_or_frame_no: nextForm.chassisNumber,
+        engine_number: nextForm.engineNumber,
       },
     };
     setMatchInfo(matchVehicleForDocument(assets, probe));
@@ -332,6 +343,7 @@ export function ReviewAssetModal({
             ? Number(form.totalAmount)
             : null,
         chassis_or_frame_no: String(form.chassisNumber || '').trim(),
+        engine_number: String(form.engineNumber || '').trim(),
         vehicle_registration_number: String(form.registration || '').trim(),
         expiry_date: form.expiryDate?.trim() || null,
       };
@@ -365,6 +377,7 @@ export function ReviewAssetModal({
             smartCategory: SMART_CATEGORIES.VEHICLES,
             registration: ocrExtract.vehicle_registration_number,
             chassisNumber: ocrExtract.chassis_or_frame_no,
+            engineNumber: ocrExtract.engine_number,
             storeName: ocrExtract.vendor_dealer_name,
             purchaseDate: ocrExtract.purchase_or_issue_date,
             value: 0,
@@ -392,6 +405,7 @@ export function ReviewAssetModal({
         shopName: ocrExtract.vendor_dealer_name,
         customerName: ocrExtract.owner_buyer_name,
         chassisNumber: ocrExtract.chassis_or_frame_no,
+        engineNumber: ocrExtract.engine_number,
         registration: ocrExtract.vehicle_registration_number,
         insuranceExpiry: isInsurance ? ocrExtract.expiry_date : null,
         pucExpiry: isPuc ? ocrExtract.expiry_date : null,
@@ -447,6 +461,7 @@ export function ReviewAssetModal({
         purchaseDate: mergedInvoice.invoiceDate,
         storeName: mergedInvoice.shopName,
         chassisNumber: mergedInvoice.chassisNumber,
+        engineNumber: mergedInvoice.engineNumber || '',
         registration: mergedInvoice.registration,
         insuranceExpiry: mergedInvoice.insuranceExpiry || null,
         pucExpiry: mergedInvoice.pucExpiry || null,
@@ -626,7 +641,18 @@ export function ReviewAssetModal({
               autoCapitalize="characters"
               placeholder="Used to match existing vehicle"
             />
+
             <GlassInput
+              label="Engine Number"
+              value={form.engineNumber}
+              onChangeText={(t) => {
+                const next = { ...form, engineNumber: t };
+                patch('engineNumber', t);
+                rebuildMatch(next);
+              }}
+              autoCapitalize="characters"
+              placeholder="Engine no. (optional match key)"
+            />            <GlassInput
               label="Registration Number"
               value={form.registration}
               onChangeText={(t) => {
@@ -644,15 +670,15 @@ export function ReviewAssetModal({
                 <Text style={styles.matchTitle}>
                   {matchInfo.matched
                     ? `Matched: ${vehicleMatchLabel(matchInfo.matched)}`
-                    : 'No automatic vehicle match'}
+                    : 'Select vehicle to attach'}
                 </Text>
                 <Text style={styles.matchSub}>
                   {matchInfo.matched
-                    ? 'Saving will archive the previous document and set this one ACTIVE_CURRENT.'
-                    : 'Pick a vehicle below or create a new passport on Save.'}
+                    ? `Matched by ${matchInfo.matchBy || 'link'}. Saving archives the previous document, updates expiry, and clears EXPIRED Home alerts.`
+                    : 'No registration/chassis match. Pick an existing vehicle below, or create a new vehicle passport on Save.'}
                 </Text>
                 <View style={styles.chipRow}>
-                  {(matchInfo.vehicles || []).slice(0, 8).map((v) => {
+                  {(matchInfo.vehicles || []).slice(0, 12).map((v) => {
                     const id = v.assetId || v.id;
                     const on = form.linkAssetId === id || matchInfo.matched?.assetId === id || matchInfo.matched?.id === id;
                     return (

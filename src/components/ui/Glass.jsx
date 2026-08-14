@@ -78,7 +78,18 @@ export function GlassButton({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={COLORS.onPrimary} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <ActivityIndicator color={isGhost || isDanger ? COLORS.emerald : COLORS.onPrimary} />
+          <Text
+            style={[
+              styles.btnText,
+              (isGhost || isDanger) && { color: COLORS.text },
+              isDanger && { color: COLORS.rose },
+            ]}
+          >
+            {title || 'Please wait…'}
+          </Text>
+        </View>
       ) : (
         <Text
           style={[

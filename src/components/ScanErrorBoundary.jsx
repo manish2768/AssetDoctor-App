@@ -1,13 +1,12 @@
 /**
  * Screen-level Error Boundary for Scan Invoice.
- * On crash → show recovery UI, then return to previous screen / Home.
+ * On crash → show recovery UI; never auto-redirect to Home / MainTabs.
  */
 
 import React, { Component } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 
 import { BRAND, COLORS, SPACING } from '../theme/branding';
-import { goHomeDashboard } from '../navigation/navActions';
 import { Haptics } from '../services/haptics';
 
 export class ScanErrorBoundary extends Component {
@@ -33,10 +32,11 @@ export class ScanErrorBoundary extends Component {
         this.props.navigation.goBack();
         return;
       }
+      // Stay in scan flow — never MainTabs / Home / popToTop / reset
+      this.props.navigation?.navigate?.('ScanBill');
     } catch {
-      /* ignore */
+      /* stay on recovery UI — no automatic Home redirect */
     }
-    goHomeDashboard();
   };
 
   retry = () => {

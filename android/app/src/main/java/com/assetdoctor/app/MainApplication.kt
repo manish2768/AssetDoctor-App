@@ -1,4 +1,4 @@
-package com.anonymous.assetdoctor
+package com.assetdoctor.app
 
 import android.app.Application
 import android.content.res.Configuration

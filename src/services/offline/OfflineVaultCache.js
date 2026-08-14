@@ -1,11 +1,12 @@
 /**
  * Offline CACHE only — not the primary store for vault data.
  * Source of truth: Firestore Users/{uid}/Assets (+ Storage for files).
- * AsyncStorage / local files are wiped on uninstall; sign-in restores from cloud.
+ * Local JSON is AES-encrypted via EncryptedVaultStorage (SecureStore key).
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
+
+import { EncryptedVaultStorage } from '../security/EncryptedVaultStorage';
 
 const ASSET_KEY = (userId) => `@asset_doctor/assets_v2/${userId}`;
 const DOC_KEY = (userId, assetId) => `@asset_doctor/docs_v2/${userId}/${assetId}`;
@@ -36,8 +37,7 @@ function extensionFor(doc) {
 
 async function readList(key) {
   try {
-    const raw = await AsyncStorage.getItem(key);
-    const parsed = raw ? JSON.parse(raw) : [];
+    const parsed = await EncryptedVaultStorage.getJSON(key, []);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
@@ -47,13 +47,15 @@ async function readList(key) {
 export class OfflineVaultCache {
   static async clearUser(userId) {
     if (!userId) return;
+    // eslint-disable-next-line global-require
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
     const keys = await AsyncStorage.getAllKeys();
     const ownedKeys = keys.filter(
       (key) =>
         key === ASSET_KEY(userId) ||
         key.startsWith(`@asset_doctor/docs_v2/${userId}/`),
     );
-    if (ownedKeys.length) await AsyncStorage.multiRemove(ownedKeys);
+    if (ownedKeys.length) await EncryptedVaultStorage.multiRemove(ownedKeys);
     if (FileSystem.documentDirectory) {
       const directory = `${FileSystem.documentDirectory}asset-doctor/${safePart(userId)}/`;
       await FileSystem.deleteAsync(directory, { idempotent: true }).catch(() => {});
@@ -71,7 +73,10 @@ export class OfflineVaultCache {
 
   static async cacheAssets(userId, assets = []) {
     if (!userId) return;
-    const serializable = assets.map((asset) => {
+    // Lazy require avoids circular import with storageService
+    const { normalizeAssetList } = require('../storageService');
+    const normalized = normalizeAssetList(assets);
+    const serializable = normalized.map((asset) => {
       const clean = {};
       for (const [key, value] of Object.entries(asset)) {
         if (
@@ -84,11 +89,17 @@ export class OfflineVaultCache {
       }
       return clean;
     });
-    await AsyncStorage.setItem(ASSET_KEY(userId), JSON.stringify(serializable));
+    await EncryptedVaultStorage.setJSON(ASSET_KEY(userId), serializable);
   }
 
   static async getAssets(userId) {
-    return readList(ASSET_KEY(userId));
+    const list = await readList(ASSET_KEY(userId));
+    try {
+      const { normalizeAssetList } = require('../storageService');
+      return normalizeAssetList(list);
+    } catch {
+      return list;
+    }
   }
 
   static async listDocuments(userId, assetId) {
@@ -130,7 +141,7 @@ export class OfflineVaultCache {
       cachedAt: new Date().toISOString(),
     };
     const next = [record, ...existing.filter((item) => (item.docId || item.id) !== docId)];
-    await AsyncStorage.setItem(DOC_KEY(userId, assetId), JSON.stringify(next));
+    await EncryptedVaultStorage.setJSON(DOC_KEY(userId, assetId), next);
     return record;
   }
 
@@ -154,7 +165,7 @@ export class OfflineVaultCache {
       await FileSystem.deleteAsync(target.localCachePath, { idempotent: true }).catch(() => {});
     }
     const next = existing.filter((item) => (item.docId || item.id) !== docId);
-    await AsyncStorage.setItem(DOC_KEY(userId, assetId), JSON.stringify(next));
+    await EncryptedVaultStorage.setJSON(DOC_KEY(userId, assetId), next);
   }
 
   static mergeDocuments(remote = [], cached = []) {

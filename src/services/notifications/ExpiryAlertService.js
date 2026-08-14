@@ -138,9 +138,10 @@ export class ExpiryAlertService {
   static async unregisterPushToken(userId) {
     try {
       if (userId) {
-        const tokenData = await Notifications.getExpoPushTokenAsync({
-          projectId: EAS_PROJECT_ID,
-        }).catch(() => null);
+        const tokenData = await Promise.race([
+          Notifications.getExpoPushTokenAsync({ projectId: EAS_PROJECT_ID }).catch(() => null),
+          new Promise((resolve) => setTimeout(() => resolve(null), 2000)),
+        ]);
         const token = tokenData?.data;
         if (token) {
           await firestore()
@@ -168,6 +169,30 @@ export class ExpiryAlertService {
     } catch (error) {
       return { success: false, error: error?.message || 'Notification cleanup failed' };
     }
+  }
+
+  /**
+   * Cancel EXPIRED one-shot alerts for fields that were just renewed
+   * (Home "EXPIRED" banners clear once asset dates + portfolio sync).
+   */
+  static async clearResolvedExpiryAlerts(assetId, fields = []) {
+    if (!assetId || !fields?.length) return { success: true, cleared: 0 };
+    const registry = await readRegistry();
+    let cleared = 0;
+    for (const field of fields) {
+      const key = notificationKey(assetId, field, 'expired');
+      const item = registry[key];
+      if (!item) continue;
+      if (item.notificationId) {
+        await Notifications.cancelScheduledNotificationAsync(item.notificationId).catch(
+          () => {},
+        );
+      }
+      delete registry[key];
+      cleared += 1;
+    }
+    if (cleared > 0) await writeRegistry(registry);
+    return { success: true, cleared };
   }
 
   static async scheduleForAsset(asset, registry = null) {

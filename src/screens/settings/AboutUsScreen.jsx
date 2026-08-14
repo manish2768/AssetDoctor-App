@@ -24,9 +24,9 @@ export function AboutUsScreen({ navigation }) {
             </View>
           </View>
           <Text style={styles.story}>
-            Asset Doctor was created by Ashutosh to replace messy paperwork with an AI-powered,
-            zero-typing digital vault — so families never lose an RC, warranty, or insurance
-            renewal again.
+            Created with passion and technical excellence by 14-year-old developer, Ashutosh.
+            Asset Doctor replaces messy paperwork with an AI-powered, zero-typing digital vault —
+            so families never lose an RC, warranty, or insurance renewal again.
           </Text>
         </GlassCard>
 

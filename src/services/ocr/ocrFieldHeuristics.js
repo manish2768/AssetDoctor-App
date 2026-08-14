@@ -28,6 +28,33 @@ function isJunkName(value) {
   if (/^\d{6,}$/.test(v)) return true;
   if (/^(?:n\/a|na|nil|null|undefined|dummy|test|date|time|page)$/i.test(v)) return true;
   if (/\b(?:am|pm)\b/i.test(v) && /\d/.test(v) && v.length < 16) return true;
+  // Labels / legal / contact noise — never a vendor or asset name
+  if (
+    /^(?:mrp|gstin|tax\s*invoice|invoice|retail\s*invoice|cash\s*memo|complaints?(?:\s+contact)?|customer\s*care|helpline|toll[\s\-]?free|handling\s*fee)\b/i.test(
+      v,
+    )
+  ) {
+    return true;
+  }
+  if (
+    /\bgstin\b|\bmrp\s*[:\-]?|\bcomplaints?\s+contact\b|\btax\s*invoice\b|\bhandling\s*fee\b/i.test(
+      v,
+    )
+  ) {
+    return true;
+  }
+  // Footer / watermark / disclaimer OCR noise
+  if (
+    /original\s+for\s+recipient|computer\s+generated|subject\s+to\s+jurisdiction|disclaimer|watermark|qr\s*code|e-?invoice\s*qr/i.test(
+      v,
+    )
+  ) {
+    return true;
+  }
+  // CamelCase single-token garbage (e.g. "CautavArota")
+  if (/^[A-Za-z]{10,}$/.test(v) && /[a-z][A-Z]/.test(v) && !/\s/.test(v)) {
+    return true;
+  }
   return false;
 }
 
@@ -166,6 +193,18 @@ export function extractFieldsFromOcrText(rawText = '', forcedType = '') {
     if (header?.[1] && !isJunkName(header[1])) vendor = cleanLine(header[1]);
   }
 
+  const vehicle_registration_number = captureAfterLabel(text, [
+    /(?:reg(?:istration)?(?:\s*(?:no|number|n[o°]|#))?|vehicle\s*(?:no|number)|rto\s*(?:no)?)\s*[:\-]?\s*([A-Z]{2}\s*\d{1,2}\s*[A-Z]{0,3}\s*\d{3,4})/i,
+  ]) || (text.match(/\b([A-Z]{2}\s*\d{1,2}\s*[A-Z]{1,3}\s*\d{4})\b/i)?.[1] || '');
+
+  const chassis_or_frame_no = captureAfterLabel(text, [
+    /(?:chassis|frame|vin)\s*(?:no|number|n[o°]|#)?\s*[:\-]?\s*([A-Z0-9]{8,25})/i,
+  ]);
+
+  const engine_number = captureAfterLabel(text, [
+    /(?:engine)\s*(?:no|number|n[o°]|#)?\s*[:\-]?\s*([A-Z0-9]{6,25})/i,
+  ]);
+
   return {
     document_type: docType || '',
     vendor_dealer_name: isJunkName(vendor) ? '' : vendor,
@@ -173,6 +212,9 @@ export function extractFieldsFromOcrText(rawText = '', forcedType = '') {
     invoice_or_policy_no: invoice_or_policy_no || '',
     purchase_or_issue_date: purchase_or_issue_date || '',
     expiry_date: expiry_date || '',
+    vehicle_registration_number: cleanLine(vehicle_registration_number).replace(/\s+/g, ''),
+    chassis_or_frame_no: cleanLine(chassis_or_frame_no),
+    engine_number: cleanLine(engine_number),
   };
 }
 
@@ -190,6 +232,7 @@ export function mergeExtractPreferFilled(base = {}, fallback = {}) {
     'asset_name',
     'chassis_or_frame_no',
     'vehicle_registration_number',
+    'engine_number',
   ];
   for (const key of keys) {
     const cur = cleanLine(out[key]);

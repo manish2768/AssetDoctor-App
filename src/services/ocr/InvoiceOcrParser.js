@@ -19,7 +19,7 @@ export const GSTIN_RE =
 const GSTIN_COMPACT_RE = /([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z])/;
 
 const GENERIC_HEADER =
-  /^(?:tax\s*invoice|invoice|retail\s*invoice|cash\s*memo|bill\s*of\s*supply|original\s*(?:for\s*)?recipient|duplicate|triplicate|e-?invoice|gst\s*invoice)$/i;
+  /^(?:tax\s*invoice|invoice|retail\s*invoice|cash\s*memo|bill\s*of\s*supply|original\s*(?:for\s*)?recipient|duplicate|triplicate|e-?invoice|gst\s*invoice|mrp\s*:?|gstin\s*:?|complaints?(?:\s+contact)?(?:\s*:)?|customer\s*care|helpline|toll[\s\-]?free)$/i;
 
 const STOCK_ID =
   /^(?:stin|sku|hsn|sac|item\s*code|product\s*code|part\s*no)\b|\b(?:stin|sku)\s*[A-Z0-9\-]+\b/i;
@@ -27,9 +27,9 @@ const STOCK_ID =
 const JUNK_PRODUCT =
   /(?:invoice|bill\s*(?:no|number|date)|gstin|taxable|grand\s*total|sub\s*total|amount\s*payable|customer|warranty|^date$|^total$|number\s*#|cgst|sgst|igst|hsn|sac|stin\s*[a-z0-9]|includes?\s+hsrp|hsrp\s+and\s+fittings|welcome\s*kit|fittings?\s*(?:only)?|ex[\s\-]?showroom\s*price|on[\s\-]?road\s*price|toll[\s\-]?free|customer\s*care|helpline|particulars|description\s*of\s*goods|motor\s*company|(?:pvt|private)?\s*ltd|limited|dealer|policy\s*no|1800\s*\d|rupees\s+one)/i;
 
-/** Vehicle model tokens often present on TVS / Hero / Honda dealer invoices */
+/** Vehicle / gadget model tokens often present on dealer invoices */
 const VEHICLE_MODEL_RE =
-  /\b((?:TVS|Hero|Honda|Bajaj|Yamaha|Suzuki|Royal\s*Enfield|KTM|Ather|Ola)\s+(?!MOTOR\b|COMPANY\b|LTD\b|LIMITED\b|DEALER\b)[A-Z][A-Za-z0-9\-]*(?:\s+[A-Z0-9][A-Za-z0-9\-]*){0,2})\b/;
+  /\b((?:TVS|Hero|Honda|Bajaj|Yamaha|Suzuki|Royal\s*Enfield|KTM|Ather|Ola|Nothing)\s+(?!MOTOR\b|COMPANY\b|LTD\b|LIMITED\b|DEALER\b)[A-Z][A-Za-z0-9\-]*(?:\s+[A-Z0-9][A-Za-z0-9\-]*){0,3})\b/;
 
 const COMPANY_HEADER =
   /\b(?:motor\s*company|(?:pvt\.?|private)?\s*ltd\.?|limited|dealer|showroom|company)\b/i;
@@ -51,6 +51,7 @@ export function parseInvoiceText(rawText) {
       /^(?:store|shop|dealer|sold\s*by|merchant|vendor|seller|firm|trade\s*name)\s*[:\-]\s*(.+)$/i,
       /^(?:from)\s*[:\-]\s*(.+)$/i,
     ]) || inferShopName(lines, data.shopGstin);
+  if (isJunkVendorLabel(data.shopName)) data.shopName = '';
 
   data.shopPhone =
     matchLabeledValue(lines, [
@@ -62,9 +63,15 @@ export function parseInvoiceText(rawText) {
       /^(?:address|addr|location|shop\s*address)\s*[:\-]\s*(.+)$/i,
     ]) || matchAddressBlock(lines);
 
-  data.customerName = matchLabeledValue(lines, [
-    /^(?:customer|buyer|bill\s*to|consignee|party)\s*(?:name)?\s*[:\-]\s*(.+)$/i,
-  ]);
+  data.customerName =
+    matchLabeledValue(lines, [
+      /^(?:customer|buyer|bill\s*to|consignee|party|buyer'?s?\s*name|customer\s*name|sold\s*to|ship\s*to)\s*(?:name)?\s*[:\-]\s*(.+)$/i,
+      /^(?:name\s*of\s*(?:the\s*)?(?:buyer|customer|purchaser))\s*[:\-]\s*(.+)$/i,
+    ]) || inferBuyerName(lines);
+  if (isJunkVendorLabel(data.customerName) || /^(?:cash|walk[\s\-]?in|customer)$/i.test(String(data.customerName||'').trim())) {
+    data.customerName = '';
+  }
+  if (!data.customerName) data.customerName = inferBuyerName(lines);
   data.customerPhone =
     matchLabeledValue(lines, [
       /^(?:customer|buyer)\s*(?:ph(?:one)?|mobile)\s*[:\-]\s*(.+)$/i,
@@ -415,7 +422,7 @@ function matchAddressBlock(lines) {
 /** Top 3–5 lines: company / shop name; skip "Tax Invoice" etc. */
 function inferShopName(lines, gstin) {
   const skip =
-    /gstin|invoice|tax|total|customer|bill|date|cash|upi|card|page|original|duplicate|recipient|supply|e-?way|irn|ack\s*no/i;
+    /gstin|invoice|tax|total|customer|bill|date|cash|upi|card|page|original|duplicate|recipient|supply|e-?way|irn|ack\s*no|\bmrp\b|complaints?|helpline|toll[\s\-]?free|customer\s*care/i;
   for (const line of lines.slice(0, 6)) {
     if (gstin && line.toUpperCase().includes(gstin)) continue;
     if (GENERIC_HEADER.test(line) || skip.test(line)) continue;
@@ -471,11 +478,19 @@ function extractInvoiceDate(lines, blob) {
 }
 
 /**
- * Grand total — prefer Grand Total / Amount Payable / Amount Inclusive of Taxes.
- * NEVER treat Taxable Value as the invoice purchase total.
+ * Grand / Net Total — prefer "Net Total" / "Grand Total" / Amount Payable.
+ * NEVER treat Taxable Value, CGST/SGST/IGST, or tax-table partials as purchase total
+ * (e.g. prefer 135500 Net Total over 63246 tax-table noise).
  */
 function extractGrandTotal(lines, blob, invoiceNumber = '') {
   const invDigits = String(invoiceNumber || '').replace(/\D/g, '');
+  const TAX_TABLE_LINE =
+    /(?:^|\b)(?:cgst|sgst|igst|cess|tax\s*amount|taxable\s*(?:value|amount)|hsn|sac|gst\s*amount|handling\s*fee|convenience\s*fee|platform\s*fee)(?:\b|:)/i;
+  const GRAND_LABEL =
+    /(?:grand\s*total|net\s*total|amount\s*payable|net\s*payable|total\s*amount(?:\s*payable)?|amount\s*\(?\s*inclusive\s*of\s*taxes?\)?|total\s*price|invoice\s*total|ex[\s\-]?showroom\s*price)\b/i;
+  const GRAND_LABEL_STRIP =
+    /grand\s*total|net\s*total|amount\s*payable|net\s*payable|total\s*amount(?:\s*payable)?|amount\s*\(?\s*inclusive\s*of\s*taxes?\)?|total\s*price|invoice\s*total|ex[\s\-]?showroom\s*price/gi;
+
   const rejectAmount = (n) => {
     if (n == null || n <= 0) return true;
     if (isTollFreeOrHelplineAmount(n)) return true;
@@ -488,52 +503,59 @@ function extractGrandTotal(lines, blob, invoiceNumber = '') {
     return false;
   };
 
+  const pickBest = (hits) => {
+    const ok = (hits || []).filter((n) => n != null && !rejectAmount(n));
+    if (!ok.length) return null;
+    // Prefer the largest labeled Net/Grand Total (purchase price, not tax fragment)
+    return Math.max(...ok);
+  };
+
+  // Pass 1: collect every Net Total / Grand Total labeled amount (prefer max)
+  const labeledHits = [];
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i] || '';
-    if (/invoice\s*(?:no|number|#)|bill\s*(?:no|number)/i.test(line) && !/net\s*total|grand\s*total/i.test(line)) {
+    if (TAX_TABLE_LINE.test(line) && !GRAND_LABEL.test(line)) continue;
+    if (/invoice\s*(?:no|number|#)|bill\s*(?:no|number)/i.test(line) && !GRAND_LABEL.test(line)) {
       continue;
     }
-    if (/taxable\s*(?:value|amount)/i.test(line) && !/grand\s*total|payable|inclusive|net\s*total/i.test(line)) {
-      continue;
-    }
-    if (/helpline|toll[\s\-]?free|customer\s*care|1800\s*\d/i.test(line)) {
-      continue;
-    }
-    if (
-      /(?:grand\s*total|net\s*total|amount\s*payable|net\s*payable|total\s*amount(?:\s*payable)?|amount\s*\(?\s*inclusive\s*of\s*taxes?\)?|total\s*price|invoice\s*total|ex[\s\-]?showroom\s*price)\b/i.test(
-        line,
-      )
-    ) {
-      const same = parseMoney(
-        line.replace(
-          /grand\s*total|net\s*total|amount\s*payable|net\s*payable|total\s*amount(?:\s*payable)?|amount\s*\(?\s*inclusive\s*of\s*taxes?\)?|total\s*price|invoice\s*total|ex[\s\-]?showroom\s*price/gi,
-          '',
-        ),
-      );
-      if (same != null && same >= 1 && !rejectAmount(same)) return same;
-      // Skip amount-in-words line
-      let look = 1;
-      while (look <= 3) {
-        const candidateLine = lines[i + look] || '';
-        if (/rupees|only|includes?\s+hsrp/i.test(candidateLine)) {
-          look += 1;
-          continue;
-        }
-        const next = parseMoney(candidateLine);
-        if (next != null && next >= 1 && !rejectAmount(next)) return next;
+    if (/helpline|toll[\s\-]?free|customer\s*care|1800\s*\d/i.test(line)) continue;
+    if (!GRAND_LABEL.test(line)) continue;
+
+    const same = parseMoney(line.replace(GRAND_LABEL_STRIP, ''));
+    if (same != null && same >= 1 && !rejectAmount(same)) labeledHits.push(same);
+
+    let look = 1;
+    while (look <= 3) {
+      const candidateLine = lines[i + look] || '';
+      if (TAX_TABLE_LINE.test(candidateLine)) {
         look += 1;
+        continue;
       }
+      if (/rupees|only|includes?\s+hsrp/i.test(candidateLine)) {
+        look += 1;
+        continue;
+      }
+      const next = parseMoney(candidateLine);
+      if (next != null && next >= 1 && !rejectAmount(next)) labeledHits.push(next);
+      look += 1;
     }
   }
+  const fromLabels = pickBest(labeledHits);
+  if (fromLabels != null) return fromLabels;
 
   const patterns = [
-    /(?:grand\s*total|net\s*total|total\s*amount(?:\s*payable)?|amount\s*payable|net\s*(?:payable|amount|total)|total\s*price|amount\s*\(?\s*inclusive\s*of\s*taxes?\)?|invoice\s*total|ex[\s\-]?showroom\s*price)\s*[:\-]?\s*(?:Rs\.?|INR|₹)?\s*([0-9,]+\.?[0-9]*)/i,
-    /(?:^|\n)\s*(?:grand\s*total|net\s*total|amount\s*payable|net\s*payable|total\s*amount(?:\s*payable)?)\s*[:\-]?\s*(?:Rs\.?|INR|₹)?\s*([0-9,]+\.?[0-9]*)/im,
+    /(?:grand\s*total|net\s*total|total\s*amount(?:\s*payable)?|amount\s*payable|net\s*(?:payable|amount|total)|total\s*price|amount\s*\(?\s*inclusive\s*of\s*taxes?\)?|invoice\s*total|ex[\s\-]?showroom\s*price)\s*[:\-]?\s*(?:Rs\.?|INR|₹)?\s*([0-9,]+\.?[0-9]*)/gi,
+    /(?:^|\n)\s*(?:grand\s*total|net\s*total|amount\s*payable|net\s*payable|total\s*amount(?:\s*payable)?)\s*[:\-]?\s*(?:Rs\.?|INR|₹)?\s*([0-9,]+\.?[0-9]*)/gim,
   ];
+  const patternHits = [];
   for (const re of patterns) {
-    const hit = parseMoney(matchInline(blob, re));
-    if (hit != null && hit > 0 && !rejectAmount(hit)) return hit;
+    for (const m of String(blob || '').matchAll(re)) {
+      const hit = parseMoney(m[1]);
+      if (hit != null && hit > 0 && !rejectAmount(hit)) patternHits.push(hit);
+    }
   }
+  const fromPatterns = pickBest(patternHits);
+  if (fromPatterns != null) return fromPatterns;
 
   const labeled = parseMoney(
     matchLabeledValue(lines, [
@@ -542,22 +564,31 @@ function extractGrandTotal(lines, blob, invoiceNumber = '') {
   );
   if (labeled != null && labeled > 0 && !rejectAmount(labeled)) return labeled;
 
-  // Soft bare Total — avoid Taxable / helpline / invoice no / tiny values
+  // Soft bare Total — skip tax-table / taxable / helpline / invoice-no lines
+  const softHits = [];
   for (let i = 0; i < lines.length; i += 1) {
-    if (/taxable|helpline|toll[\s\-]?free|1800|invoice\s*(?:no|number)/i.test(lines[i])) continue;
-    if (/^\s*total\s*[:\-]?\s*(?:Rs\.?|INR|₹)?\s*([1-9][0-9,]{2,}(?:\.[0-9]+)?)/i.test(lines[i])) {
-      const soft = parseMoney(lines[i].replace(/^\s*total\s*[:\-]?/i, ''));
-      if (soft != null && soft >= 1000 && !rejectAmount(soft)) return soft;
-      const next = parseMoney(lines[i + 1] || '');
-      if (next != null && next >= 1000 && !rejectAmount(next)) return next;
+    const line = lines[i] || '';
+    if (TAX_TABLE_LINE.test(line)) continue;
+    if (/taxable|helpline|toll[\s\-]?free|1800|invoice\s*(?:no|number)|\bmrp\b|handling\s*fee|convenience\s*fee|cgst|sgst|igst/i.test(line)) continue;
+    if (/^\s*total\s*[:\-]?\s*(?:Rs\.?|INR|₹)?\s*([1-9][0-9,]{2,}(?:\.[0-9]+)?)/i.test(line)) {
+      const soft = parseMoney(line.replace(/^\s*total\s*[:\-]?/i, ''));
+      if (soft != null && soft >= 1000 && !rejectAmount(soft)) softHits.push(soft);
+      const nextLine = lines[i + 1] || '';
+      if (!TAX_TABLE_LINE.test(nextLine)) {
+        const next = parseMoney(nextLine);
+        if (next != null && next >= 1000 && !rejectAmount(next)) softHits.push(next);
+      }
     }
   }
+  const fromSoft = pickBest(softHits);
+  if (fromSoft != null) return fromSoft;
 
-  // Last resort: largest money near bottom — skip taxable / helpline / invoice-no lines
+  // Last resort: largest money near bottom — skip tax table / taxable / helpline / invoice-no
   const bottomLines = lines
     .slice(-14)
     .filter(
       (l) =>
+        !TAX_TABLE_LINE.test(l) &&
         !/taxable\s*(?:value|amount)|helpline|toll[\s\-]?free|1800\s*\d|invoice\s*(?:no|number)|bill\s*(?:no|number)/i.test(
           l,
         ),
@@ -573,11 +604,41 @@ function extractGrandTotal(lines, blob, invoiceNumber = '') {
   return null;
 }
 
+function isJunkVendorLabel(value) {
+  const v = String(value || '').trim();
+  if (!v) return true;
+  if (GENERIC_HEADER.test(v)) return true;
+  if (/^(?:mrp|gstin)\s*[:\-]?/i.test(v)) return true;
+  if (/\b(?:mrp|gstin)\b/i.test(v) && v.length < 28) return true;
+  if (
+    /complaints?\s*contact|tax\s*invoice|customer\s*care|helpline|toll[\s\-]?free|handling\s*fee/i.test(
+      v,
+    )
+  ) {
+    return true;
+  }
+  if (/^gstin\s*[:\-]?/i.test(v)) return true;
+  if (/^mrp\s*[:\-]?/i.test(v)) return true;
+  return false;
+}
+
 function extractProductName(lines, items) {
   const FEE =
-    /handling\s*fee|delivery\s*(?:fee|charge|charges)?|shipping|platform\s*fee|convenience\s*fee/i;
+    /handling\s*fee|delivery\s*(?:fee|charge|charges)?|shipping|platform\s*fee|convenience\s*fee|\bmrp\b/i;
 
-  // Prefer explicit vehicle model (TVS RONIN, etc.) over accessory / company header lines
+  // Prefer real line-item names (Nothing Phone, TVS Ronin) before header scan
+  const primaryEarly = pickPrimaryItem(items);
+  if (primaryEarly?.name && isGoodProductName(primaryEarly.name) && !FEE.test(primaryEarly.name)) {
+    return primaryEarly.name;
+  }
+  const pricedEarly = (items || [])
+    .filter((i) => !i?.isFee && !FEE.test(String(i?.name || '')) && Number(i?.amount) > 0)
+    .sort((a, b) => Number(b.amount) - Number(a.amount));
+  if (pricedEarly[0]?.name && isGoodProductName(pricedEarly[0].name)) {
+    return pricedEarly[0].name;
+  }
+
+  // Prefer explicit vehicle / gadget model over accessory / company header lines
   for (const line of lines) {
     if (JUNK_PRODUCT.test(line) || GENERIC_HEADER.test(line) || FEE.test(line)) continue;
     if (COMPANY_HEADER.test(line) && !/\b(?:ronin|apache|jupiter|ntorq|pulsar|activa|splendor)\b/i.test(line)) {
@@ -765,18 +826,34 @@ function extractEngineNumber(lines, blob) {
 }
 
 function extractImei(lines, blob) {
+  // Never treat GST / tax table numbers as IMEI
+  const TAX_NEAR = /(?:cgst|sgst|igst|utgst|cess|gstin|taxable|hsn|sac)\b/i;
   const labeled =
     matchLabeledValue(lines, [/^(?:imei(?:\s*[12])?)\s*[:\-#]?\s*(.+)$/i]) ||
     matchInline(blob, /IMEI\s*\/?\s*Serial\s*No\.?\s*[:\-]?\s*\[?\s*([0-9\s]{14,20})\s*\]?/i) ||
     matchInline(blob, /\[?\s*IMEI(?:\s*\/\s*Serial\s*No\.?)?\s*[:\-]?\s*([0-9\s]{14,20})\s*\]?/i) ||
     matchInline(blob, /IMEI(?:\s*[12])?\s*[:\-#]?\s*([0-9\s]{14,20})/i);
   const fromLabel = normalizeImeiDigits(labeled);
-  if (fromLabel) return fromLabel;
+  if (fromLabel && !TAX_NEAR.test(String(labeled || ''))) return fromLabel;
 
-  // Any standalone 15-digit run near phone/IMEI context → IMEI only (never price)
-  if (/\b(?:imei|mobile|phone|handset|serial)\b/i.test(blob)) {
-    const m = String(blob).replace(/(\d)\s+(?=\d)/g, '$1').match(/\b([0-9]{15})\b/);
-    if (m) return m[1];
+  // Prefer lines that explicitly mention IMEI
+  for (const line of lines || []) {
+    if (!/\bimei\b/i.test(line)) continue;
+    if (TAX_NEAR.test(line)) continue;
+    const hit = normalizeImeiDigits(line);
+    if (hit) return hit;
+  }
+
+  // Standalone 15-digit only near phone/IMEI context — never near GST lines
+  if (/\b(?:imei|mobile|phone|handset)\b/i.test(blob)) {
+    const compact = String(blob).replace(/(\d)\s+(?=\d)/g, '$1');
+    for (const m of compact.matchAll(/\b([0-9]{15})\b/g)) {
+      const idx = m.index || 0;
+      const near = compact.slice(Math.max(0, idx - 40), idx + 40);
+      if (TAX_NEAR.test(near)) continue;
+      if (/\b(?:cgst|sgst|igst|gstin)\b/i.test(near)) continue;
+      return m[1];
+    }
   }
   return '';
 }
@@ -788,6 +865,7 @@ function normalizeImeiDigits(raw) {
 }
 
 function extractSerial(lines, blob) {
+  const TAX_NEAR = /(?:cgst|sgst|igst|utgst|cess|gstin|taxable|hsn|sac|tax\s*invoice)\b/i;
   const labeled =
     matchLabeledValue(lines, [
       /^(?:s(?:r|erial)?\.?\s*no\.?|serial(?:\s*(?:number|no\.?))?|s\/n)\s*[:\-#]?\s*(.+)$/i,
@@ -798,12 +876,35 @@ function extractSerial(lines, blob) {
     );
   const value = cleanValue(labeled);
   if (!value) return '';
-  if (/^(?:date|total|n\/a|na|nil)$/i.test(value)) return '';
+  if (/^(?:date|total|n\/a|na|nil|cgst|sgst|igst|gstin|mrp)$/i.test(value)) return '';
+  if (TAX_NEAR.test(value)) return '';
+  // Reject GSTIN-shaped tokens (15 alphanumeric Indian GSTIN)
+  if (/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/i.test(value.replace(/\s/g, ''))) return '';
   const digits = value.replace(/\D/g, '');
-  // 15-digit → IMEI only, never serial_number as price either
+  // 15-digit → IMEI only
   if (digits.length === 15) return '';
+  // Pure tax-looking short numbers
+  if (/^\d{1,5}$/.test(digits) && Number(digits) <= 28) return '';
   if (digits.length === 10 && /^\d+$/.test(value.replace(/\s/g, ''))) return value.slice(0, 40);
   return value.slice(0, 40);
+}
+
+function inferBuyerName(lines) {
+  const skip = /gstin|invoice|tax|total|seller|vendor|dealer|store|shop|address|phone|mobile|email|mrp|hsn|sac|cgst|sgst|igst|particulars|description|qty|rate|amount|cash|upi/i;
+  // Prefer lines under a Bill To / Buyer header
+  for (let i = 0; i < (lines || []).length; i += 1) {
+    const line = lines[i] || '';
+    if (!/^(?:bill\s*to|buyer|customer|sold\s*to|ship\s*to|consignee)\b/i.test(line)) continue;
+    const inline = cleanValue(line.replace(/^(?:bill\s*to|buyer|customer|sold\s*to|ship\s*to|consignee)\s*(?:name)?\s*[:\-]?\s*/i, ''));
+    if (inline && inline.length >= 3 && /[A-Za-z]{3,}/.test(inline) && !skip.test(inline) && !isJunkVendorLabel(inline)) {
+      return inline.slice(0, 80);
+    }
+    const next = cleanValue(lines[i + 1] || '');
+    if (next && next.length >= 3 && next.length <= 60 && /[A-Za-z]{3,}/.test(next) && !skip.test(next) && !isJunkVendorLabel(next)) {
+      return next.slice(0, 80);
+    }
+  }
+  return '';
 }
 
 /** Only when labeled or clear Indian plate — never invent MH12AB1234-style dummies */

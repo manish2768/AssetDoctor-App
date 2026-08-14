@@ -82,6 +82,13 @@ export const Haptics = {
   error: () => triggerHaptic('error'),
   warning: () => triggerHaptic('warning'),
   impactMedium: () => triggerHaptic('impactMedium'),
+  cancel: () => {
+    try {
+      Vibration.cancel();
+    } catch {
+      /* ignore */
+    }
+  },
 };
 
 export default triggerHaptic;

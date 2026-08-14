@@ -2,25 +2,27 @@
   "expo": {
     "name": "Asset Doctor",
     "slug": "asset-doctor",
-    "version": "2.0.2",
+    "version": "1.0.44",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "scheme": "assetdoctor",
     "icon": "./assets/icon.png",
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/d599e887-1729-4cdf-966c-f0f75b9541b8",
+      "url": "https://u.expo.dev/d15d0121-3ec1-409a-a511-d90360543b14",
+      "enabled": true,
       "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0
     },
     "android": {
       "package": "com.assetdoctor.app",
+      "versionCode": 45,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#FFFFFF"
+        "backgroundColor": "#020617"
       },
       "permissions": [
         "android.permission.CAMERA",
@@ -28,12 +30,15 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.RECEIVE_BOOT_COMPLETED",
-        "android.permission.VIBRATE"
+        "android.permission.VIBRATE",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
       ]
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.assetdoctor.app",
+      "icon": "./assets/icon.png",
       "infoPlist": {
         "NSCameraUsageDescription": "Asset Doctor needs the camera to scan household bills and vehicle documents.",
         "NSPhotoLibraryUsageDescription": "Asset Doctor needs photo access for invoices, RC, PUC, insurance and warranty documents.",
@@ -41,7 +46,6 @@
       }
     },
     "plugins": [
-      "expo-updates",
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
       "@react-native-firebase/crashlytics",
@@ -60,7 +64,8 @@
           "android": {
             "minSdkVersion": 24,
             "enableProguardInReleaseBuilds": true,
-            "enableShrinkResourcesInReleaseBuilds": true
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "enableMinifyInReleaseBuilds": true
           }
         }
       ],
@@ -73,6 +78,7 @@
           "resizeMode": "contain"
         }
       ],
+      "expo-updates",
       [
         "expo-notifications",
         {
@@ -94,19 +100,22 @@
         {
           "faceIDPermission": "Asset Doctor uses Face ID to unlock your vault with the same security as your phone lock."
         }
-      ]
+      ],
+      "expo-font",
+      "expo-secure-store"
     ],
     "extra": {
-      "eas": {
-        "projectId": "d599e887-1729-4cdf-966c-f0f75b9541b8"
-      },
       "tagline": "Protect, Track & Save: The Smart Asset Vault",
       "creator": "Crafted by Ashutosh (14)",
       "emailProvider": "resend",
       "googleWebClientId": "926559836985-1jschm7e172vqo2rav99oif3uoq93ftq.apps.googleusercontent.com",
       "androidPackage": "com.assetdoctor.app",
       "iosBundleIdentifier": "com.assetdoctor.app",
-      "playStoreUrl": "https://play.google.com/store/apps/details?id=com.assetdoctor.app"
-    }
+      "playStoreUrl": "https://play.google.com/store/apps/details?id=com.assetdoctor.app",
+      "eas": {
+        "projectId": "d15d0121-3ec1-409a-a511-d90360543b14"
+      }
+    },
+    "owner": "hansgeetglobals-team"
   }
 }

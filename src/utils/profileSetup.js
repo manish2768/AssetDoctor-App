@@ -1,5 +1,6 @@
 /**
- * Profile setup gate — collect mobile number / real name when missing.
+ * Profile setup gate — never force phone linking after Google / email.
+ * Phone is optional; collect later from Settings / Profile.
  */
 
 import { DEFAULT_DISPLAY_NAME } from '../services/constants';
@@ -34,40 +35,21 @@ function hasRealName(profile, user) {
 }
 
 /**
- * @param {object | null} profile
- * @param {import('@react-native-firebase/auth').FirebaseAuthTypes.User | null} user
+ * Forced "Complete your profile" is DISABLED.
+ * Google / email users go straight to Home; phone link is optional in Settings.
+ * @param {object | null} _profile
+ * @param {import('@react-native-firebase/auth').FirebaseAuthTypes.User | null} _user
  */
-export function needsProfileSetup(profile, user) {
-  if (!user?.uid || !profile) return false;
-  if (
-    profile.profileSetupComplete === true &&
-    hasRealName(profile, user) &&
-    hasValidPhone(profile)
-  ) {
-    return false;
-  }
-  if (profile.profileSetupComplete === true) return false;
-
-  const provider =
-    profile.authProvider ||
-    user.providerData?.[0]?.providerId ||
-    '';
-
-  const isGoogleOrEmail =
-    provider === 'google' ||
-    provider === 'email' ||
-    provider.includes('google') ||
-    provider.includes('password');
-
-  const isPhone = provider === 'phone' || provider.includes('phone');
-
-  if (!isGoogleOrEmail && !isPhone) return false;
-
-  const missingName = !hasRealName(profile, user);
-  const missingPhone = !hasValidPhone(profile);
-
-  if (isPhone) return missingName;
-  return missingName || missingPhone;
+export function needsProfileSetup(_profile, _user) {
+  return false;
 }
 
-export default { needsProfileSetup, hasValidPhone, hasValidWhatsAppPhone, normalizePhone, normalizeWhatsAppPhone };
+export { hasRealName };
+
+export default {
+  needsProfileSetup,
+  hasValidPhone,
+  hasValidWhatsAppPhone,
+  normalizePhone,
+  normalizeWhatsAppPhone,
+};

@@ -1,8 +1,10 @@
-/**
+﻿/**
  * Asset Doctor — Design System
- * Light Slate / Off-White canvas · deep navy ink · teal / cyan accents
- * Tagline: Protect, Track & Save: The Smart Asset Vault
+ * Original dark neon vault · deep ink canvas · emerald / cyan accents
+ * Typography: Inter / system sans
  */
+
+import { Platform } from 'react-native';
 
 export const BRAND = {
   name: 'Asset Doctor',
@@ -12,80 +14,70 @@ export const BRAND = {
   creatorCredit: 'Built by Ashutosh Rai',
   footer: 'Built by Ashutosh Rai',
   builtBy: 'Built by Ashutosh Rai',
-  /** Customer support email */
-  supportEmail: 'hansgeetglobal@gmail.com',
-  /** Optional share deep-link digits (country code, no +). Leave '' to use system Share sheet */
+  supportEmail: 'support@assetdoctor.in',
   supportWhatsApp: '',
 };
 
-/** Crisp light slate + deep navy text + teal/cyan primary */
+/** Original dark fintech palette (website / vault neon) */
 export const COLORS = {
-  bg: '#F8FAFC',
-  bgDeep: '#F1F5F9',
-  bgElevated: '#FFFFFF',
-  card: '#FFFFFF',
-  cardStrong: '#F8FAFC',
-  border: 'rgba(15, 23, 42, 0.10)',
-  borderGlow: 'rgba(13, 148, 136, 0.32)',
-  /** Primary teal (legacy key `emerald` kept for call-sites) */
-  emerald: '#0D9488',
-  neonBlue: '#0891B2',
-  indigo: '#0E7490',
-  violet: '#6366F1',
-  rose: '#DC2626',
-  amber: '#D97706',
-  success: '#10B981',
-  gold: '#D4A017',
-  goldSoft: 'rgba(212, 160, 23, 0.16)',
-  text: '#0A1628',
-  muted: '#64748B',
-  successSoft: 'rgba(13, 148, 136, 0.12)',
-  warnSoft: 'rgba(217, 119, 6, 0.12)',
-  dangerSoft: 'rgba(220, 38, 38, 0.08)',
-  glassGlow: ['rgba(13, 148, 136, 0.10)', 'rgba(8, 145, 178, 0.08)'],
-  onPrimary: '#FFFFFF',
-  /** Soft neutral urgent surfaces (no heavy red borders) */
-  urgentBg: '#F8FAFC',
-  urgentBorder: 'rgba(15, 23, 42, 0.08)',
+  bg: '#020617',
+  bgDeep: '#01040C',
+  bgElevated: '#0F172A',
+  card: '#0F172A',
+  cardStrong: '#1E293B',
+  border: 'rgba(148, 163, 184, 0.16)',
+  borderGlow: 'rgba(16, 185, 129, 0.35)',
+  emerald: '#10B981',
+  neonBlue: '#22D3EE',
+  indigo: '#6366F1',
+  violet: '#8B5CF6',
+  rose: '#F43F5E',
+  amber: '#F59E0B',
+  success: '#34D399',
+  gold: '#EAB308',
+  goldSoft: 'rgba(234, 179, 8, 0.14)',
+  text: '#F1F5F9',
+  muted: '#94A3B8',
+  successSoft: 'rgba(16, 185, 129, 0.14)',
+  warnSoft: 'rgba(245, 158, 11, 0.14)',
+  dangerSoft: 'rgba(244, 63, 94, 0.14)',
+  glassGlow: ['rgba(16, 185, 129, 0.12)', 'rgba(34, 211, 238, 0.08)'],
+  onPrimary: '#04110A',
+  urgentBg: 'rgba(245, 158, 11, 0.12)',
+  urgentBorder: 'rgba(245, 158, 11, 0.35)',
+};
+
+export const FONTS = {
+  regular: Platform.select({ ios: 'Inter_400Regular', android: 'Inter_400Regular', default: 'System' }),
+  medium: Platform.select({ ios: 'Inter_500Medium', android: 'Inter_500Medium', default: 'System' }),
+  semibold: Platform.select({ ios: 'Inter_600SemiBold', android: 'Inter_600SemiBold', default: 'System' }),
+  bold: Platform.select({ ios: 'Inter_700Bold', android: 'Inter_700Bold', default: 'System' }),
+  system: Platform.select({ ios: 'System', android: 'sans-serif', default: 'System' }),
 };
 
 export const SPACING = { xs: 6, sm: 10, md: 16, lg: 24, xl: 32 };
 export const RADIUS = { sm: 12, md: 16, lg: 22, xl: 28, full: 999 };
 
-/** Chart palette for energy donut slices */
 export const CHART_PALETTE = [
-  '#0D9488',
-  '#0891B2',
-  '#6366F1',
-  '#D97706',
   '#10B981',
+  '#22D3EE',
   '#8B5CF6',
-  '#F43F5E',
+  '#F59E0B',
+  '#34D399',
   '#0EA5E9',
+  '#F43F5E',
+  '#6366F1',
 ];
 
-/** React Navigation 7+ requires theme.fonts.{regular,medium,bold,heavy} */
 const NAV_FONTS = {
-  regular: {
-    fontFamily: 'System',
-    fontWeight: '400',
-  },
-  medium: {
-    fontFamily: 'System',
-    fontWeight: '500',
-  },
-  bold: {
-    fontFamily: 'System',
-    fontWeight: '700',
-  },
-  heavy: {
-    fontFamily: 'System',
-    fontWeight: '800',
-  },
+  regular: { fontFamily: FONTS.regular, fontWeight: '400' },
+  medium: { fontFamily: FONTS.medium, fontWeight: '500' },
+  bold: { fontFamily: FONTS.bold, fontWeight: '700' },
+  heavy: { fontFamily: FONTS.bold, fontWeight: '800' },
 };
 
 export const NAV_THEME = {
-  dark: false,
+  dark: true,
   colors: {
     primary: COLORS.emerald,
     background: COLORS.bg,
@@ -151,10 +143,8 @@ export {
   isAlertableStatus,
 } from '../constants/assetStatus';
 
-/** ₹/kWh default for power meter / Energy tab */
 export const DEFAULT_TARIFF_PER_KWH = 7.5;
 
-/** Per-document fine and warranty protection windows. */
 export const EXPIRY_ALERT_PROFILES = Object.freeze({
   pucExpiry: Object.freeze({
     days: Object.freeze([15, 7, 1]),

@@ -45,6 +45,8 @@ function mergeParsedFields(invoiceData, sweetBill) {
     next.itemsSubtotal = sweetBill.itemsSubtotal;
   }
 
+  // Prefer Net/Grand Total already on invoice; never let a smaller tax-table /
+  // itemsSubtotal (e.g. 63246) overwrite a larger purchase total (e.g. 135500).
   if (next.totalAmount == null || next.totalAmount <= 0) {
     if (next.subtotal != null && next.subtotal > 0) {
       const tax = next.taxAmount != null ? Number(next.taxAmount) : 0;
@@ -52,6 +54,13 @@ function mergeParsedFields(invoiceData, sweetBill) {
     } else if (next.itemsSubtotal != null && next.itemsSubtotal > 0) {
       next.totalAmount = next.itemsSubtotal;
     }
+  } else if (
+    next.itemsSubtotal != null &&
+    Number(next.itemsSubtotal) > 0 &&
+    Number(next.totalAmount) > 0 &&
+    Number(next.itemsSubtotal) < Number(next.totalAmount) * 0.85
+  ) {
+    // Keep labeled Net/Grand Total; itemsSubtotal is likely a tax-table fragment
   }
 
   if (/invoice|bill\s*(?:no|number)|number\s*#|^date$/i.test(String(next.productName || ''))) {
@@ -67,7 +76,7 @@ function mergeParsedFields(invoiceData, sweetBill) {
 }
 
 export class CloudVisionOcrService {
-  static async recognizeInvoice(imageUri) {
+  static async recognizeInvoice(imageUri, options = {}) {
     Haptics.tap();
     if (!imageUri) {
       return {
@@ -78,12 +87,17 @@ export class CloudVisionOcrService {
       };
     }
 
+    const precomputedBase64 =
+      typeof options?.base64 === 'string' && options.base64.length > 0
+        ? options.base64
+        : null;
+
     let rawText = '';
     let engine = 'none';
     let cloudError = null;
 
     try {
-      const direct = await this.recognizeTextViaApiKey(imageUri);
+      const direct = await this.recognizeTextViaApiKey(imageUri, precomputedBase64);
       if (direct.success && direct.text) {
         rawText = direct.text;
         engine = 'cloud-vision-api-key';
@@ -96,7 +110,7 @@ export class CloudVisionOcrService {
 
     if (!rawText) {
       try {
-        const proxy = await this.recognizeTextViaCloudFunction(imageUri);
+        const proxy = await this.recognizeTextViaCloudFunction(imageUri, precomputedBase64);
         if (proxy.success && proxy.text) {
           rawText = proxy.text;
           engine = 'cloud-vision-function';
@@ -168,39 +182,93 @@ export class CloudVisionOcrService {
           data.documentLabel;
         data.classifiedDocumentType = docType;
 
-        if (gemini.asset_name || gemini.assetName) {
-          data.productName = String(gemini.asset_name || gemini.assetName).trim();
+        if (gemini.asset_name || gemini.item_name || gemini.assetName || gemini.itemName) {
+          data.productName = String(
+            gemini.asset_name || gemini.item_name || gemini.assetName || gemini.itemName,
+          ).trim();
         }
-        if (gemini.vendor_dealer_name || gemini.vendorDealerName || gemini.shopName) {
+        if (
+          gemini.vendor_dealer_name ||
+          gemini.vendor_name ||
+          gemini.vendorName ||
+          gemini.vendor ||
+          gemini.vendorDealerName ||
+          gemini.shopName
+        ) {
           data.shopName = String(
-            gemini.vendor_dealer_name || gemini.vendorDealerName || gemini.shopName,
+            gemini.vendor_dealer_name ||
+              gemini.vendor_name ||
+              gemini.vendorName ||
+              gemini.vendor ||
+              gemini.vendorDealerName ||
+              gemini.shopName,
           ).trim();
         }
-        if (gemini.owner_buyer_name || gemini.ownerName || gemini.customerName) {
+        if (
+          gemini.owner_buyer_name ||
+          gemini.buyer_name ||
+          gemini.buyerName ||
+          gemini.ownerName ||
+          gemini.customerName
+        ) {
           data.customerName = String(
-            gemini.owner_buyer_name || gemini.ownerName || gemini.customerName,
+            gemini.owner_buyer_name ||
+              gemini.buyer_name ||
+              gemini.buyerName ||
+              gemini.ownerName ||
+              gemini.customerName,
           ).trim();
         }
-        if (gemini.invoice_or_policy_no || gemini.invoiceNumber) {
+        if (
+          gemini.invoice_or_policy_no ||
+          gemini.invoice_number ||
+          gemini.invoiceNumber
+        ) {
           data.invoiceNumber = String(
-            gemini.invoice_or_policy_no || gemini.invoiceNumber,
+            gemini.invoice_or_policy_no || gemini.invoice_number || gemini.invoiceNumber,
           ).trim();
         }
-        if (gemini.purchase_or_issue_date || gemini.invoiceDate) {
+        if (
+          gemini.purchase_or_issue_date ||
+          gemini.purchase_date ||
+          gemini.invoiceDate
+        ) {
           data.invoiceDate = String(
-            gemini.purchase_or_issue_date || gemini.invoiceDate,
+            gemini.purchase_or_issue_date || gemini.purchase_date || gemini.invoiceDate,
           ).trim();
         }
+        data.scannedData = {
+          item_name: data.productName || '',
+          total_amount:
+            gemini.total_amount != null && Number(gemini.total_amount) > 0
+              ? Number(gemini.total_amount)
+              : data.totalAmount ?? null,
+          vendor_name: data.shopName || '',
+          buyer_name: data.customerName || '',
+          purchase_date: data.invoiceDate || '',
+          invoice_number: data.invoiceNumber || '',
+          category: gemini.category || data.purchaseCategory || '',
+        };
+        data.itemName = data.productName || '';
+        data.vendor = data.shopName || '';
+        data.buyerName = data.customerName || '';
+        data.purchaseDate = data.invoiceDate || '';
+        data.price = data.scannedData.total_amount;
         if (gemini.registration) data.registration = String(gemini.registration).trim();
         if (gemini.vehicle_registration_number && !data.registration) {
           data.registration = String(gemini.vehicle_registration_number).trim();
+        }
+        if (gemini.registration_number && !data.registration) {
+          data.registration = String(gemini.registration_number).trim();
         }
         if (gemini.chassis_or_frame_no || gemini.chassisNumber) {
           data.chassisNumber = String(
             gemini.chassis_or_frame_no || gemini.chassisNumber,
           ).trim();
         }
-        if (gemini.engineNumber) data.engineNumber = String(gemini.engineNumber).trim();
+        if (gemini.engine_number || gemini.engineNumber) {
+          data.engineNumber = String(gemini.engine_number || gemini.engineNumber).trim();
+        }
         if (gemini.serialNumber) data.serialNumber = String(gemini.serialNumber).trim();
         if (gemini.category) data.geminiCategory = gemini.category;
         if (gemini.reminderText || gemini.whatsappReminderText) {
@@ -219,6 +287,7 @@ export class CloudVisionOcrService {
           purchase_or_issue_date: data.invoiceDate || '',
           total_amount: null,
           chassis_or_frame_no: data.chassisNumber || '',
+          engine_number: data.engineNumber || '',
           vehicle_registration_number: data.registration || '',
           expiry_date: '',
         };
@@ -322,17 +391,21 @@ export class CloudVisionOcrService {
     };
   }
 
-  static async recognizeTextViaApiKey(imageUri) {
-    const base64 = await FileSystem.readAsStringAsync(imageUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
+  static async recognizeTextViaApiKey(imageUri, precomputedBase64 = null) {
+    const base64 =
+      precomputedBase64 ||
+      (await FileSystem.readAsStringAsync(imageUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      }));
     return scanInvoiceImage(base64);
   }
 
-  static async recognizeTextViaCloudFunction(imageUri) {
-    const base64 = await FileSystem.readAsStringAsync(imageUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
+  static async recognizeTextViaCloudFunction(imageUri, precomputedBase64 = null) {
+    const base64 =
+      precomputedBase64 ||
+      (await FileSystem.readAsStringAsync(imageUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      }));
     const trimmed = base64.length > 4_500_000 ? base64.slice(0, 4_500_000) : base64;
 
     const user = auth().currentUser;

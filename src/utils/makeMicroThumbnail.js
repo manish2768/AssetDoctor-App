@@ -1,10 +1,10 @@
 /**
  * Tiny preview thumbnails for OCR scans — never store full-res bills in Storage.
+ * Soft-loads FileSystem so Expo Go / missing native bits cannot fatal at import.
  */
 
-import * as FileSystem from 'expo-file-system/legacy';
-
 import { compressScanImage } from './compressScanImage';
+import { getFileSystem } from './safeNativeModules';
 
 /**
  * Build a micro JPEG thumbnail (local URI + optional base64 data URL).
@@ -17,12 +17,13 @@ export async function makeMicroThumbnail(uri) {
     const thumbUri = await compressScanImage(uri, { maxWidth: 240, compress: 0.35 });
     let dataUrl = null;
     try {
-      const b64 = await FileSystem.readAsStringAsync(thumbUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      // Cap ~80KB of base64 to keep Firestore docs light
-      if (b64 && b64.length < 90_000) {
-        dataUrl = `data:image/jpeg;base64,${b64}`;
+      const FileSystem = getFileSystem();
+      if (FileSystem?.readAsStringAsync) {
+        const encoding = FileSystem.EncodingType?.Base64 || 'base64';
+        const b64 = await FileSystem.readAsStringAsync(thumbUri, { encoding });
+        if (b64 && b64.length < 90_000) {
+          dataUrl = `data:image/jpeg;base64,${b64}`;
+        }
       }
     } catch {
       dataUrl = null;

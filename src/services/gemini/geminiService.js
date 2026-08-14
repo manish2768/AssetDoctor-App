@@ -44,6 +44,7 @@ export const GEMINI_TO_VAULT_TYPE = Object.freeze({
   INSURANCE_POLICY: 'insurance',
   REGISTRATION_CERTIFICATE: 'rc',
   PUC_CERTIFICATE: 'puc',
+  PUC: 'puc',
   OTHER_RECEIPT: 'other',
   PURCHASE_INVOICE: 'bill',
   VEHICLE_RC: 'rc',
@@ -57,88 +58,120 @@ export const DOC_TYPE_LABELS = Object.freeze({
   INSURANCE_POLICY: 'Insurance Policy',
   REGISTRATION_CERTIFICATE: 'Registration Certificate',
   PUC_CERTIFICATE: 'PUC Certificate',
+  PUC: 'PUC Certificate',
   OTHER_RECEIPT: 'Other Receipt',
 });
 
-const SYSTEM_PROMPT = `You are Asset Doctor's document intelligence for Indian papers.
+const SYSTEM_PROMPT = `You are a strict Invoice OCR parser for Indian documents (Asset Doctor).
 
 STEP 1 — CLASSIFY the document BEFORE extracting fields.
 document_type MUST be exactly one of:
-["TAX_INVOICE", "INSURANCE_POLICY", "REGISTRATION_CERTIFICATE", "PUC_CERTIFICATE", "OTHER_RECEIPT"]
+["TAX_INVOICE", "INSURANCE_POLICY", "REGISTRATION_CERTIFICATE", "PUC", "OTHER_RECEIPT"]
 
 STRICT KEYWORD PRIORITY (apply in this order):
 1) If OCR contains POLICY / INSURANCE / "POLICY NO" / "PERIOD OF INSURANCE" / "CERTIFICATE OF INSURANCE" → document_type = INSURANCE_POLICY (even if the word Invoice also appears).
 2) Else if OCR contains "TAX INVOICE" / INVOICE / BILL (with GSTIN) → document_type = TAX_INVOICE.
 3) Else if Registration Certificate / Form 23 / RC book → REGISTRATION_CERTIFICATE.
-4) Else if PUC / Pollution Under Control → PUC_CERTIFICATE.
+4) Else if PUC / Pollution Under Control → PUC.
 5) Else OTHER_RECEIPT.
 
-STEP 2 — EXTRACT fields. Return ONLY valid JSON (no markdown):
+STEP 2 — EXTRACT fields. Return ONLY valid JSON (no markdown). Prefer this clean invoice shape:
 {
-  "document_type": "TAX_INVOICE" | "INSURANCE_POLICY" | "REGISTRATION_CERTIFICATE" | "PUC_CERTIFICATE" | "OTHER_RECEIPT",
-  "asset_name": string,
-  "category": "Vehicle" | "Gadget" | "Home" | "Insurance",
-  "vendor_dealer_name": string,
-  "owner_buyer_name": string,
-  "invoice_or_policy_no": string,
-  "purchase_or_issue_date": "YYYY-MM-DD" | "",
-  "total_amount": number | null,
-  "chassis_or_frame_no": string,
-  "vehicle_registration_number": string,
-  "expiry_date": "YYYY-MM-DD" | "",
-  "engine_number": string,
-  "registration_number": string
+  "document_type": "TAX_INVOICE",
+  "item_name": "TVS Ronin",
+  "asset_name": "TVS Ronin",
+  "total_amount": 135500,
+  "vendor_name": "Raftaar Moto Legends Pvt Ltd",
+  "vendor_dealer_name": "Raftaar Moto Legends Pvt Ltd",
+  "vendor": "Raftaar Moto Legends Pvt Ltd",
+  "buyer_name": "Manish Kumar Rai",
+  "owner_buyer_name": "Manish Kumar Rai",
+  "purchase_date": "YYYY-MM-DD",
+  "purchase_or_issue_date": "YYYY-MM-DD",
+  "invoice_number": "INV-XXXX",
+  "invoice_or_policy_no": "INV-XXXX",
+  "category": "Vehicles",
+  "chassis_or_frame_no": "",
+  "vehicle_registration_number": "",
+  "engine_number": "",
+  "expiry_date": "",
+  "registration_number": ""
 }
 
-FIELD EXTRACTION (label-near matching — do not leave blank when digits/text exist after labels):
+STRICT INVOICE EXTRACTION RULES (TAX_INVOICE / bills):
 
-a) vendor_dealer_name:
-   - Look for Company Header, Insurer, Authorized Signatory / Issuer Name.
-   - Examples: "ICICI LOMBARD", "RAFTAAR MOTO LEGENDS PVT LTD".
-   - NEVER put timestamps, clock times, or calendar dates into vendor_dealer_name.
+- asset_name / item_name:
+  Look at the item table / vehicle description / product title
+  (e.g. "TVS RONIN", "TVS RONIN 225", "TVS RONIN 1CH BASE LIGHTNING").
+  DO NOT extract small footer text, disclaimers, watermarks, stamps, or OCR garbage
+  like "CautavArota", "Original for Recipient", page numbers, or QR captions.
 
-b) owner_buyer_name:
-   - Search near: "Insured Name", "Name of the Insured", "Mr.", "Mrs.", "Customer Name", "Purchaser", "Buyer", "S/O", "W/O", "D/O".
-   - Example: "NIKLESH KUMAR".
+- total_amount:
+  Look STRICTLY for "Net Total", "Grand Total", "Total Amount", "Amount Payable",
+  or "Net Amount Payable" (e.g. 135500).
+  IGNORE tax calculation sub-totals, Taxable Value, CGST/SGST/IGST amounts,
+  and invoice numbers that look like amounts (e.g. ignore 63246 when it is Invoice No).
 
-c) expiry_date:
-   - Look for: "To:", "Expiry Date", "Policy End Date", "Valid Till", "Period of Insurance ... To".
-   - Always output YYYY-MM-DD when a date is found.
+- vendor / vendor_dealer_name:
+  Look at the header or dealership / company name
+  (e.g. "RAFTAAR MOTO LEGENDS PVT. LTD." or "TVS").
+  NEVER use footer disclaimers, dates, times, or invoice numbers.
 
-d) invoice_or_policy_no:
-   - Extract exact "Policy No" / "Policy Number" OR "Invoice No" / "Bill No".
-   - If digits (or alphanumeric) appear after these labels, you MUST fill this field — never leave blank.
+- buyer_name / owner_buyer_name:
+  Look for "Customer Name", "Buyer Name", "Purchaser", "Insured Name",
+  or a name next to "S/O", "W/O", "D/O" (e.g. "NIKLESH KUMAR").
+  Do not leave blank if clearly present.
+
+- invoice_number / invoice_or_policy_no:
+  Extract Invoice No / Bill No at the top (e.g. "63246").
+  For insurance, extract Policy No / Certificate No instead.
+
+- purchase_date / purchase_or_issue_date:
+  Extract invoice / issue date in YYYY-MM-DD format only.
+
+FALLBACK CLEANUP (mandatory):
+- If a field is not clearly found, return null for numbers and "" for strings.
+- NEVER invent, guess, or copy random footer / watermark / stamp text.
+- Never put invoice numbers into total_amount.
+- Never put dates/times into vendor or buyer fields.
 
 STRICT RULES BY document_type:
 
 IF TAX_INVOICE:
-- asset_name = product / vehicle model (e.g. "TVS RONIN 1CH BASE LIGHTNING").
-- vendor_dealer_name = shop / dealer.
+- asset_name = product / vehicle model from item table.
+- vendor_dealer_name = shop / dealer header.
 - owner_buyer_name = buyer / customer if printed.
 - invoice_or_policy_no = exact invoice number.
 - purchase_or_issue_date = invoice date YYYY-MM-DD.
-- total_amount = Grand Total / Net Amount Payable.
+- total_amount = Net Total / Grand Total ONLY.
 - category = Vehicle | Gadget | Home.
 
 IF INSURANCE_POLICY:
 - category = "Insurance".
 - vendor_dealer_name = insurer (e.g. "ICICI LOMBARD") — NOT a date/time.
-- owner_buyer_name = insured / policy holder (e.g. "NIKLESH KUMAR").
+- owner_buyer_name = insured / policy holder.
 - invoice_or_policy_no = Policy No / Certificate No (REQUIRED when "Policy No" appears).
 - purchase_or_issue_date = policy start / From date.
 - expiry_date = policy end / To / Valid Till (REQUIRED when printed).
 - total_amount = premium ONLY if clearly labelled; else null.
-- asset_name = insured vehicle / product if printed; else insurer + " Policy".
+- asset_name = insured vehicle / product if printed; else "".
 
 IF REGISTRATION_CERTIFICATE:
 - category = "Vehicle"; total_amount MUST be null.
-- owner_buyer_name = registered owner; registration_number + chassis_or_frame_no when printed.
+- owner_buyer_name = registered owner; ALWAYS fill vehicle_registration_number + chassis_or_frame_no + engine_number when printed.
 
-IF PUC_CERTIFICATE:
+IF PUC (or PUC_CERTIFICATE):
 - category = "Vehicle"; total_amount MUST be null; expiry_date = PUC validity end.
+- ALWAYS fill vehicle_registration_number when printed; chassis_or_frame_no / engine_number when present.
 
 IF OTHER_RECEIPT:
-- Fill only confident fields.
+- Fill only confident fields; leave unknown fields "" / null.
+
+VEHICLE IDENTIFIERS (when printed):
+- vehicle_registration_number / registration_number = Indian plate (e.g. UP32AB1234).
+- chassis_or_frame_no = Chassis / Frame / VIN.
+- engine_number = Engine No / Engine Number.
+Never invent these.
 
 General:
 - Never invent missing values; use "" or null.
@@ -187,7 +220,7 @@ export function normalizeDocumentType(raw) {
   ) {
     return DOC_CLASS.REGISTRATION_CERTIFICATE;
   }
-  if (t === 'PUC_CERTIFICATE' || t === 'VEHICLE_PUC' || /PUC|POLLUTION/.test(t)) {
+  if (t === 'PUC_CERTIFICATE' || t === 'VEHICLE_PUC' || t === 'PUC' || /PUC|POLLUTION/.test(t)) {
     return DOC_CLASS.PUC_CERTIFICATE;
   }
   if (t === 'OTHER_RECEIPT' || t === 'OTHER') return DOC_CLASS.OTHER_RECEIPT;
@@ -266,20 +299,39 @@ export function applyDocumentTypeGuards(payload) {
  */
 export function normalizeGeminiPayload(data = {}) {
   const documentType = normalizeDocumentType(data.document_type || data.documentType);
-  const assetName = str(
+  let assetName = str(
     data.asset_name ||
+      data.item_name ||
       data.assetName ||
+      data.itemName ||
       [data.brand, data.model].filter(Boolean).join(' '),
   );
+  if (isJunkAssetName(assetName)) assetName = '';
+
   const vendorRaw = str(
-    data.vendor_dealer_name || data.vendorDealerName || data.shopName || data.dealerName,
+    data.vendor_dealer_name ||
+      data.vendor_name ||
+      data.vendorName ||
+      data.vendor ||
+      data.vendorDealerName ||
+      data.shopName ||
+      data.dealerName,
   );
   const vendor = isJunkVendorOrName(vendorRaw) ? '' : vendorRaw;
-  const owner = str(
-    data.owner_buyer_name || data.ownerBuyerName || data.ownerName || data.customerName,
+
+  let owner = str(
+    data.owner_buyer_name ||
+      data.buyer_name ||
+      data.ownerBuyerName ||
+      data.ownerName ||
+      data.customerName ||
+      data.buyerName,
   );
+  if (isJunkVendorOrName(owner)) owner = '';
+
   const invoiceOrPolicy = str(
     data.invoice_or_policy_no ||
+      data.invoice_number ||
       data.invoiceOrPolicyNo ||
       data.invoiceNumber ||
       data.policyNumber ||
@@ -287,14 +339,23 @@ export function normalizeGeminiPayload(data = {}) {
   );
   const purchaseOrIssue = str(
     data.purchase_or_issue_date ||
+      data.purchase_date ||
       data.purchaseOrIssueDate ||
       data.invoiceDate ||
       data.issueDate ||
       data.registrationDate,
   );
-  const totalAmount = numOrNull(
+  let totalAmount = numOrNull(
     data.total_amount ?? data.totalAmount ?? data.purchaseAmount,
   );
+  // Guard: invoice number must never become purchase total
+  if (
+    totalAmount != null &&
+    invoiceOrPolicy &&
+    String(Math.round(Number(totalAmount))) === String(invoiceOrPolicy).replace(/\D/g, '')
+  ) {
+    totalAmount = null;
+  }
   const chassis = str(
     data.chassis_or_frame_no || data.chassisOrFrameNo || data.chassisNumber || data.frameNumber,
   );
@@ -316,23 +377,28 @@ export function normalizeGeminiPayload(data = {}) {
     vaultType: GEMINI_TO_VAULT_TYPE[documentType] || 'other',
     documentLabel: DOC_TYPE_LABELS[documentType] || 'Document',
     asset_name: assetName,
+    item_name: assetName,
     assetName,
-    brand: str(data.brand) || assetName.split(/\s+/)[0] || '',
+    brand: str(data.brand) || (assetName ? assetName.split(/\s+/)[0] : '') || '',
     model: str(data.model) || assetName,
     category,
     vendor_dealer_name: vendor,
+    vendor,
     vendorDealerName: vendor,
     shopName: vendor,
     owner_buyer_name: owner,
+    buyer_name: owner,
     ownerBuyerName: owner,
     ownerName: owner,
     customerName: owner,
     invoice_or_policy_no: invoiceOrPolicy,
+    invoice_number: invoiceOrPolicy,
     invoiceOrPolicyNo: invoiceOrPolicy,
     invoiceNumber: invoiceOrPolicy,
     policyNumber:
       documentType === DOC_CLASS.INSURANCE_POLICY ? invoiceOrPolicy : str(data.policyNumber),
     purchase_or_issue_date: purchaseOrIssue,
+    purchase_date: purchaseOrIssue,
     purchaseOrIssueDate: purchaseOrIssue,
     invoiceDate: purchaseOrIssue,
     issueDate: purchaseOrIssue,
@@ -373,6 +439,22 @@ export function normalizeGeminiPayload(data = {}) {
   };
 
   return applyDocumentTypeGuards(base);
+}
+
+/** Reject watermark / footer OCR junk that is not a real product name. */
+function isJunkAssetName(value) {
+  const v = str(value);
+  if (!v) return true;
+  if (isJunkVendorOrName(v)) return true;
+  if (/original\s+for\s+recipient|computer\s+generated|subject\s+to|disclaimer|watermark|qr\s*code/i.test(v)) {
+    return true;
+  }
+  // Odd camel-case OCR garbage like "CautavArota" / single nonsense tokens
+  if (/^[A-Za-z]{10,}$/.test(v) && /[a-z][A-Z]/.test(v) && !/\s/.test(v)) {
+    return true;
+  }
+  if (/^(?:page|copy|duplicate|triplicate|e-?invoice|ack\.?|irn)$/i.test(v)) return true;
+  return false;
 }
 
 /**
@@ -417,8 +499,10 @@ keywordClassification=${keywordClass?.document_type || ''}
 
 Remember:
 - If POLICY / INSURANCE / PERIOD OF INSURANCE appear → INSURANCE_POLICY.
-- Fill vendor_dealer_name, owner_buyer_name, invoice_or_policy_no, expiry_date from labels.
-- Never put dates/times into vendor_dealer_name.
+- asset_name / item_name = product table only (e.g. TVS RONIN) — NEVER footer/watermark junk.
+- total_amount = Net Total / Grand Total ONLY (e.g. 135500) — NEVER tax sub-totals or invoice nos.
+- vendor = dealership header; buyer_name from Customer/Buyer/S/W/D; invoice_number from Invoice No.
+- purchase_date = YYYY-MM-DD. Missing fields → "" or null (never invent).
 `;
 
     const result = await model.generateContent(prompt);

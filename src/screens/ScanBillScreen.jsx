@@ -16,9 +16,9 @@ import {
   ScrollView,
   Dimensions,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as ImagePicker from 'expo-image-picker';
-
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { PrivacyVaultTag } from '../components/PrivacyVaultTag';
 import { COLORS, RADIUS, SPACING } from '../theme/branding';
 import { GlassButton, Screen } from '../components/ui/Glass';
 import { Haptics } from '../services/haptics';
@@ -32,6 +32,7 @@ import {
   pickGalleryImage,
 } from '../services/ocr/DocumentScannerService';
 import { compressScanImage } from '../utils/compressScanImage';
+import { getImagePicker } from '../utils/safeNativeModules';
 import { runSweetBillChecker } from '../services/SweetBillChecker';
 import { InvoiceOfflineCache } from '../services/ocr/InvoiceOfflineCache';
 import {
@@ -39,27 +40,356 @@ import {
   saveParsedBillDraft,
 } from '../utils/billParser';
 import { useAuth } from '../context/AuthProvider';
-import { requireAuth } from '../navigation/authGate';
 import { ScanErrorBoundary } from '../components/ScanErrorBoundary';
 import { ReviewAssetModal } from '../components/ReviewAssetModal';
-import { goHomeDashboard } from '../navigation/navActions';
+import { openReviewInvoice, navigationRef, safeNavigate } from '../navigation/navActions';
+import { markScanSession } from '../utils/scanNavGuard';
 
 const AUTO_FOCUS_MS = 2000;
 const SCREEN_H = Dimensions.get('window').height;
 const FRAME_HEIGHT = Math.round(SCREEN_H * 0.46);
+/** Compress before OCR / base64 — keep memory low but readable for Gemini. */
+const SCAN_MAX_WIDTH = 1200;
+const SCAN_COMPRESS = 0.6;
+/** Expo ImagePicker only — no ML Kit document scanner (avoids Activity destroy). */
+const PICKER_OPTIONS = {
+  mediaTypes: ['images'],
+  quality: 0.5,
+  allowsEditing: true,
+  base64: false,
+  exif: false,
+};
 
 function friendlyCaptureMessage(error) {
-  const raw = String(error?.message || error || '').trim();
-  if (!raw) return 'Could not capture image. Please try again.';
-  if (/permission/i.test(raw)) return raw;
-  if (/cancel/i.test(raw)) return 'Capture cancelled. Tap Scan document to try again.';
-  if (raw.length > 160) return 'Could not capture image. Please try again.';
-  return raw;
+  try {
+    const { toFriendlyError } = require('../utils/friendlyErrors');
+    return toFriendlyError(error, "Couldn't scan clearly, please try again");
+  } catch {
+    const raw = String(error?.message || error || '').trim();
+    if (!raw) return "Couldn't scan clearly, please try again";
+    if (/permission/i.test(raw)) return raw;
+    if (/cancel/i.test(raw)) return 'Capture cancelled. Tap Scan document to try again.';
+    if (/network|timeout|offline/i.test(raw)) return 'Network taking time, saved locally';
+    if (raw.length > 160) return "Couldn't scan clearly, please try again";
+    return raw;
+  }
+}
+
+/** Log + optional Alert — never rethrow (keeps ScanBillScreen alive). */
+function reportScanError(error, { alertTitle = 'Scan failed', showAlert = true } = {}) {
+  console.error('[ScanBillScreen Error]:', error);
+  const msg = friendlyCaptureMessage(error);
+  if (showAlert) {
+    try {
+      Alert.alert(alertTitle, msg, [{ text: 'OK' }]);
+    } catch (alertErr) {
+      console.error('[ScanBillScreen Error]:', alertErr);
+    }
+  }
+  return msg;
+}
+
+/**
+ * Compress BEFORE OCR — min width 1200 @ 0.6 JPEG (sharp for Gemini/Vision).
+ * manipulateAsync also applies EXIF orientation so the image is upright.
+ * Returns { uri, base64 } (uri for Review nav; base64 for OCR API).
+ */
+async function prepareScanImage(capturedUri) {
+  if (!capturedUri) return { uri: '', base64: null };
+  try {
+    // Empty rotate-noop + resize: forces EXIF orientation bake-in for upright OCR
+    const compressedImage = await manipulateAsync(
+      capturedUri,
+      [{ resize: { width: SCAN_MAX_WIDTH } }],
+      { compress: SCAN_COMPRESS, format: SaveFormat.JPEG, base64: true },
+    );
+    return {
+      uri: compressedImage?.uri || capturedUri,
+      base64: compressedImage?.base64 || null,
+    };
+  } catch (error) {
+    console.error('[ScanBillScreen Error]:', error);
+    console.warn('[ScanBill] ImageManipulator failed, fallback compress:', error?.message);
+  }
+  try {
+    const fallbackUri = await compressScanImage(capturedUri, {
+      maxWidth: SCAN_MAX_WIDTH,
+      compress: SCAN_COMPRESS,
+    });
+    return { uri: fallbackUri || capturedUri, base64: null };
+  } catch (fallbackErr) {
+    console.error('[ScanBillScreen Error]:', fallbackErr);
+    return { uri: capturedUri, base64: null };
+  }
+}
+
+/** Map OCR payload → review fields with null-safe defaults (never crash). */
+function mapOcrToInvoiceFields(parsedData = {}) {
+  const src = parsedData && typeof parsedData === 'object' ? parsedData : {};
+  const extract =
+    src.ocrExtract && typeof src.ocrExtract === 'object' ? src.ocrExtract : {};
+  return {
+    ...src,
+    productName:
+      src.productName ||
+      src.title ||
+      src.assetName ||
+      src.item_name ||
+      src.itemName ||
+      extract.asset_name ||
+      extract.item_name ||
+      '',
+    totalAmount:
+      src.totalAmount ??
+      src.amount ??
+      extract.total_amount ??
+      null,
+    invoiceDate:
+      src.invoiceDate ||
+      src.date ||
+      src.purchaseDate ||
+      src.purchase_date ||
+      extract.purchase_or_issue_date ||
+      extract.purchase_date ||
+      '',
+    shopName:
+      src.shopName ||
+      src.vendor ||
+      src.vendor_dealer_name ||
+      extract.vendor_dealer_name ||
+      extract.vendor ||
+      '',
+    customerName:
+      src.customerName ||
+      src.buyer_name ||
+      src.owner_buyer_name ||
+      extract.owner_buyer_name ||
+      extract.buyer_name ||
+      '',
+    invoiceNumber:
+      src.invoiceNumber ||
+      src.invoice_number ||
+      extract.invoice_or_policy_no ||
+      extract.invoice_number ||
+      '',
+    category: src.category || src.smartCategory || extract.category || '',
+    smartCategory: src.smartCategory || '',
+    purchaseCategory: src.purchaseCategory || '',
+    items: Array.isArray(src.items) ? src.items : [],
+    ocrExtract: extract,
+  };
+}
+
+/** Empty manual-entry invoice when OCR fails — still open Review. */
+function emptyFallbackInvoice() {
+  return {
+    productName: '',
+    title: '',
+    totalAmount: null,
+    amount: '',
+    invoiceDate: '',
+    date: '',
+    shopName: '',
+    customerName: '',
+    invoiceNumber: '',
+    category: '',
+    smartCategory: '',
+    purchaseCategory: '',
+    items: [],
+    ocrExtract: {},
+  };
+}
+
+/**
+ * FORCE navigate to ReviewAsset — never Home / Dashboard / MainTabs / popToTop.
+ * Safe after camera Activity recreate (navigator may not be ready yet).
+ */
+function goToReviewAsset(navigation, payload = {}) {
+  const assetData =
+    payload.assetData ||
+    payload.invoice ||
+    payload.extractedData ||
+    payload.parsedData ||
+    emptyFallbackInvoice();
+  const params = buildSafeReviewParams({
+    ...payload,
+    invoice: assetData,
+    extractedData: assetData,
+    assetData,
+    parsedData: assetData,
+    hasOcrError: Boolean(payload.hasOcrError || payload.ocrFailed),
+    ocrFailed: Boolean(payload.hasOcrError || payload.ocrFailed),
+  });
+
+  // Always include aliases expected by ReviewAssetScreen
+  params.assetData = params.invoice || emptyFallbackInvoice();
+  params.parsedData = params.assetData;
+  params.hasOcrError = Boolean(payload.hasOcrError || payload.ocrFailed);
+
+  // Persist Review so Activity recreation does not dump to Home
+  markScanSession('ReviewAsset', params).catch(() => {});
+
+  const tryLocal = () => {
+    try {
+      if (typeof navigation?.navigate === 'function') {
+        navigation.navigate('ReviewAsset', params);
+        return true;
+      }
+    } catch (error) {
+      console.error('OCR Error / nav:', error?.message || error);
+    }
+    return false;
+  };
+
+  try {
+    if (tryLocal()) return true;
+  } catch (error) {
+    console.error('OCR Error / nav:', error?.message || error);
+  }
+
+  try {
+    if (navigationRef.isReady()) {
+      const opened = openReviewInvoice(params);
+      if (opened) return true;
+    }
+  } catch (error) {
+    console.error('OCR Error / nav fallback:', error?.message || error);
+  }
+
+  // Navigator not initialized yet after Activity recreate — wait, never crash
+  setTimeout(() => {
+    try {
+      if (tryLocal()) return;
+      if (navigationRef.isReady()) {
+        openReviewInvoice(params);
+        return;
+      }
+      safeNavigate('ReviewAsset', params).catch((err) => {
+        console.error('OCR Error / delayed nav:', err?.message || err);
+      });
+    } catch (error) {
+      console.error('OCR Error / delayed nav:', error?.message || error);
+    }
+  }, 500);
+
+  return false;
+}
+
+/** Strip base64 / giant blobs — navigation params must stay file-path only. */
+function stripHeavyFields(obj) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {};
+  const next = { ...obj };
+  const ban = [
+    'base64',
+    'billThumbDataUrl',
+    'rawText',
+    'rawOcrText',
+    'imageBase64',
+    'dataUrl',
+    'thumbnailBase64',
+  ];
+  for (const key of ban) {
+    if (key in next) delete next[key];
+  }
+  if (next.ocrExtract && typeof next.ocrExtract === 'object') {
+    const extract = { ...next.ocrExtract };
+    for (const key of ban) {
+      if (key in extract) delete extract[key];
+    }
+    next.ocrExtract = extract;
+  }
+  return next;
+}
+
+/** Build a lean review payload — file URI only, no base64 / giant image objects. */
+function buildSafeReviewParams({
+  scanId,
+  imageUri,
+  invoice,
+  audit,
+  engine,
+  energyHints,
+  sweetBill,
+  extractedData,
+  ocrFailed,
+}) {
+  const uriOnly = typeof imageUri === 'string' && !imageUri.startsWith('data:') ? imageUri : '';
+  const safeInvoice = stripHeavyFields(invoice);
+  const safeExtracted = stripHeavyFields(extractedData || safeInvoice);
+  return {
+    scanId: scanId || `local_${Date.now()}`,
+    imageUri: uriOnly,
+    invoice: safeInvoice,
+    extractedData: safeExtracted,
+    assetData: safeInvoice,
+    parsedData: safeInvoice,
+    audit: audit && typeof audit === 'object' ? stripHeavyFields(audit) : { flags: [], canSave: true },
+    engine: engine || 'unknown',
+    energyHints: energyHints && typeof energyHints === 'object' ? energyHints : null,
+    sweetBill: sweetBill && typeof sweetBill === 'object' ? stripHeavyFields(sweetBill) : {},
+    ocrFailed: Boolean(ocrFailed),
+    hasOcrError: Boolean(ocrFailed),
+  };
+}
+
+/** Safe camera pick via ImagePicker — never throws to crash the screen. */
+async function safeLaunchCameraAsync() {
+  try {
+    const ImagePicker = getImagePicker();
+    if (!ImagePicker?.launchCameraAsync) {
+      return { uri: null, canceled: true, error: new Error('Camera picker unavailable') };
+    }
+    const camPerm = await ImagePicker.requestCameraPermissionsAsync?.();
+    if (camPerm && camPerm.granted === false) {
+      return {
+        uri: null,
+        canceled: true,
+        error: new Error('Camera permission denied. Enable Camera in Settings.'),
+      };
+    }
+    const result = await ImagePicker.launchCameraAsync({ ...PICKER_OPTIONS });
+    if (result?.canceled || !result?.assets?.[0]?.uri) {
+      return { uri: null, canceled: true };
+    }
+    // Never keep asset.base64 from picker — compress ourselves next
+    const compressed = await prepareScanImage(result.assets[0].uri);
+    return { uri: compressed.uri, base64: compressed.base64, canceled: false };
+  } catch (error) {
+    console.error('[ScanBillScreen Error]:', error);
+    return { uri: null, canceled: false, error };
+  }
+}
+
+/** Safe gallery pick via ImagePicker — never throws to crash the screen. */
+async function safeLaunchLibraryAsync() {
+  try {
+    const ImagePicker = getImagePicker();
+    if (!ImagePicker?.launchImageLibraryAsync) {
+      return { uri: null, canceled: true, error: new Error('Photo picker unavailable') };
+    }
+    const libPerm = await ImagePicker.requestMediaLibraryPermissionsAsync?.();
+    if (libPerm && libPerm.granted === false) {
+      return {
+        uri: null,
+        canceled: true,
+        error: new Error('Photo library permission denied. Enable Photos in Settings.'),
+      };
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ ...PICKER_OPTIONS });
+    if (result?.canceled || !result?.assets?.[0]?.uri) {
+      return { uri: null, canceled: true };
+    }
+    const compressed = await prepareScanImage(result.assets[0].uri);
+    return { uri: compressed.uri, base64: compressed.base64, canceled: false };
+  } catch (error) {
+    console.error('[ScanBillScreen Error]:', error);
+    return { uri: null, canceled: false, error };
+  }
 }
 
 function ScanBillScreenInner({ navigation }) {
-  const insets = useSafeAreaInsets();
-  const { user, isAuthenticated } = useAuth();
+  const { user } = useAuth();
+  // TODO: RE-ENABLE AUTH REQUIREMENT BEFORE PRODUCTION — isAuthenticated gate removed for scan testing
   const [cameraPermission, setCameraPermission] = useState('loading'); // loading|granted|denied|undetermined
   const [processing, setProcessing] = useState(false);
   const [processLabel, setProcessLabel] = useState('Reading invoice…');
@@ -67,10 +397,13 @@ function ScanBillScreenInner({ navigation }) {
   const [autoArmed, setAutoArmed] = useState(false);
   const [countdownMs, setCountdownMs] = useState(AUTO_FOCUS_MS);
   const [reviewPayload, setReviewPayload] = useState(null);
+  /** Low-res file path only — set first so UI can paint before OCR. */
+  const [pendingImageUri, setPendingImageUri] = useState('');
   const pulse = useRef(new Animated.Value(0.35)).current;
   const progress = useRef(new Animated.Value(0)).current;
   const autoTimer = useRef(null);
   const tickTimer = useRef(null);
+  const ocrTimer = useRef(null);
   const capturing = useRef(false);
   const startedRef = useRef(false);
 
@@ -98,8 +431,10 @@ function ScanBillScreenInner({ navigation }) {
   const clearAutoTimers = useCallback(() => {
     if (autoTimer.current) clearTimeout(autoTimer.current);
     if (tickTimer.current) clearInterval(tickTimer.current);
+    if (ocrTimer.current) clearTimeout(ocrTimer.current);
     autoTimer.current = null;
     tickTimer.current = null;
+    ocrTimer.current = null;
     progress.stopAnimation();
     progress.setValue(0);
     setCountdownMs(AUTO_FOCUS_MS);
@@ -158,71 +493,75 @@ function ScanBillScreenInner({ navigation }) {
       setLastError('');
       setProcessLabel('Optimizing image…');
       Haptics.tap();
+
+      let optimizedUri = uri;
+      let optimizedBase64 = null;
       try {
-        let optimizedUri = uri;
+        // Compress BEFORE OCR — width 1000 @ 0.5 JPEG (+ base64 for Vision/Gemini)
         try {
           setProcessLabel('Optimizing image…');
-          optimizedUri = await compressScanImage(uri, { maxWidth: 1600, compress: 0.7 });
+          const compressedImage = await prepareScanImage(uri);
+          optimizedUri = compressedImage?.uri || uri;
+          optimizedBase64 = compressedImage?.base64 || null;
         } catch (compressErr) {
-          console.warn('[ScanBill] compress failed, using original:', compressErr?.message);
+          console.error('[ScanBillScreen Error]:', compressErr);
           optimizedUri = uri;
+          optimizedBase64 = null;
         }
 
-        setProcessLabel('Running OCR + Gemini…');
-        let ocr;
+        setProcessLabel('Analyzing document with Gemini AI...');
+        let ocr = null;
+        let ocrFailed = false;
+        let ocrFailMessage = '';
+
+        // Pass compressed uri + base64 (prefer base64 so OCR skips re-reading full file)
         try {
-          ocr = await CloudVisionOcrService.recognizeInvoice(optimizedUri);
-        } catch (ocrErr) {
-          console.error('[ScanBill] OCR/Gemini threw:', ocrErr?.message || ocrErr);
-          throw new Error(
-            ocrErr?.message || 'Could not read this invoice. Please try again.',
-          );
-        }
-
-        if (!ocr?.success) {
-          Haptics.error();
-          const msg = ocr?.error || 'Could not read this invoice. Please try again.';
-          setLastError(msg);
-          Alert.alert('Scan failed', msg, [
-            { text: 'Try again' },
-            {
-              text: 'Go back',
-              style: 'cancel',
-              onPress: () => {
-                if (navigation?.canGoBack?.()) navigation.goBack();
-                else goHomeDashboard();
-              },
-            },
-          ]);
-          return;
-        }
-
-        setProcessLabel('Checking bill & preparing review…');
-        const sweetBill = ocr.sweetBill || {};
-        let dup = { isDuplicate: false };
-        let audit = { flags: [], canSave: true };
-        try {
-          dup = await isDuplicateBill(sweetBill);
-          audit = await runSweetBillChecker(ocr.data);
-        } catch (auditErr) {
-          console.warn('[ScanBill] audit skipped:', auditErr?.message);
-        }
-        if (dup.isDuplicate) {
-          audit.isDuplicate = true;
-          audit.canSave = false;
-          audit.duplicateMessage =
-            'Duplicate bill detected (GSTIN + Total + Date already scanned).';
-          audit.flags = [...(audit.flags || []), 'duplicate_bill_fingerprint'];
-        }
-
-        try {
-          await saveParsedBillDraft(sweetBill, {
-            engine: ocr.engine,
-            imageUri: optimizedUri,
-            invoice: ocr.data,
+          ocr = await CloudVisionOcrService.recognizeInvoice(optimizedUri, {
+            base64: optimizedBase64,
           });
-        } catch (draftErr) {
-          console.warn('[ScanBill] draft save skipped:', draftErr?.message);
+          if (!ocr?.success) {
+            ocrFailed = true;
+            ocrFailMessage =
+              ocr?.error || 'Could not auto-fill details, please enter manually';
+          }
+        } catch (ocrErr) {
+          console.error('[ScanBillScreen Error]:', ocrErr);
+          ocrFailed = true;
+          ocrFailMessage =
+            ocrErr?.message || 'Could not auto-fill details, please enter manually';
+        }
+
+        const mappedInvoice = ocrFailed
+          ? emptyFallbackInvoice()
+          : mapOcrToInvoiceFields(ocr?.data || {});
+
+        let audit = { flags: [], canSave: true, manualEntry: ocrFailed };
+        let sweetBill = ocrFailed ? {} : ocr?.sweetBill || {};
+
+        if (!ocrFailed) {
+          try {
+            const dup = await isDuplicateBill(sweetBill);
+            audit = await runSweetBillChecker(ocr?.data || mappedInvoice);
+            if (dup?.isDuplicate) {
+              audit.isDuplicate = true;
+              audit.canSave = false;
+              audit.duplicateMessage =
+                'Duplicate bill detected (GSTIN + Total + Date already scanned).';
+              audit.flags = [...(audit.flags || []), 'duplicate_bill_fingerprint'];
+            }
+          } catch (auditErr) {
+            console.warn('[ScanBill] audit skipped:', auditErr?.message);
+          }
+
+          try {
+            await saveParsedBillDraft(sweetBill, {
+              engine: ocr?.engine,
+              imageUri: optimizedUri,
+              invoice: mappedInvoice,
+            });
+          } catch (draftErr) {
+            console.warn('[ScanBill] draft save skipped:', draftErr?.message);
+          }
         }
 
         let cached = { scanId: `local_${Date.now()}`, localImageUri: optimizedUri };
@@ -230,43 +569,66 @@ function ScanBillScreenInner({ navigation }) {
           cached = await InvoiceOfflineCache.saveScan({
             userId: user?.uid,
             imageUri: optimizedUri,
-            invoice: ocr.data,
+            invoice: stripHeavyFields(mappedInvoice),
             audit,
-            rawText: ocr.rawText,
-            engine: ocr.engine,
+            rawText: String(ocr?.rawText || '').slice(0, 4000),
+            engine: ocr?.engine || (ocrFailed ? 'manual' : 'unknown'),
           });
         } catch (cacheErr) {
           console.warn('[ScanBill] cache save skipped:', cacheErr?.message);
         }
 
+        // 3) ALWAYS open ReviewAsset — success OR OCR failure. NEVER Home.
         Haptics.success();
-        // Same Review modal for Camera + Gallery — never jump to Home.
-        setReviewPayload({
+        goToReviewAsset(navigation, {
           scanId: cached.scanId,
           imageUri: cached.localImageUri || optimizedUri,
-          invoice: ocr.data || {},
+          assetData: mappedInvoice,
+          invoice: mappedInvoice,
+          extractedData: mappedInvoice,
+          parsedData: mappedInvoice,
           audit,
-          engine: ocr.engine,
-          energyHints: ocr.energyHints,
+          engine: ocr?.engine || (ocrFailed ? 'manual' : 'unknown'),
+          energyHints: ocrFailed ? null : ocr?.energyHints || null,
           sweetBill,
+          ocrFailed: Boolean(ocrFailed),
+          hasOcrError: Boolean(ocrFailed),
         });
+
+        if (ocrFailed) {
+          setLastError(ocrFailMessage);
+          Alert.alert(
+            'Manual entry',
+            'Could not auto-fill details, please enter manually',
+            [{ text: 'OK' }],
+          );
+        }
       } catch (error) {
+        // Last-resort: STILL navigate to Review with empty fields — NEVER Home
+        console.error('OCR Error:', error);
         Haptics.error();
-        const msg = friendlyCaptureMessage(error);
-        console.error('[ScanBill] processImageWithGemini:', msg);
-        setLastError(msg);
-        Alert.alert('Scan failed', msg, [
-          { text: 'Stay & retry' },
-          {
-            text: 'Go back',
-            onPress: () => {
-              if (navigation?.canGoBack?.()) navigation.goBack();
-              else goHomeDashboard();
-            },
-          },
-        ]);
+        goToReviewAsset(navigation, {
+          scanId: `local_${Date.now()}`,
+          imageUri: optimizedUri || uri,
+          assetData: emptyFallbackInvoice(),
+          invoice: emptyFallbackInvoice(),
+          extractedData: emptyFallbackInvoice(),
+          parsedData: emptyFallbackInvoice(),
+          audit: { flags: ['ocr_failed'], canSave: true, manualEntry: true },
+          engine: 'manual',
+          energyHints: null,
+          sweetBill: {},
+          ocrFailed: true,
+          hasOcrError: true,
+        });
+        Alert.alert(
+          'Manual entry',
+          'Could not auto-fill details, please enter manually',
+          [{ text: 'OK' }],
+        );
       } finally {
         setProcessing(false);
+        setPendingImageUri('');
         capturing.current = false;
         setAutoArmed(false);
         clearAutoTimers();
@@ -276,12 +638,69 @@ function ScanBillScreenInner({ navigation }) {
     [navigation, user?.uid, clearAutoTimers],
   );
 
+  /**
+   * Save low-res URI to state + show loading FIRST, then run OCR on next frame.
+   * Avoids native OOM from sync heavy work right after ImagePicker returns.
+   */
+  const scheduleOcrAfterPaint = useCallback(
+    (uri) => {
+      if (!uri) {
+        capturing.current = false;
+        setLastError('Could not capture image. Please try again.');
+        Alert.alert('Scan failed', 'Could not capture image. Please try again.');
+        return;
+      }
+      setPendingImageUri(uri);
+      setProcessing(true);
+      setProcessLabel('Preparing image…');
+      setLastError('');
+      Haptics.tap();
+
+      if (ocrTimer.current) clearTimeout(ocrTimer.current);
+      ocrTimer.current = setTimeout(() => {
+        const run = () => {
+          processImageWithGemini(uri).catch((error) => {
+            console.error('OCR Error:', error);
+            // DO NOT NAVIGATE TO HOME — always ReviewAsset with empty fields
+            goToReviewAsset(navigation, {
+              scanId: `local_${Date.now()}`,
+              imageUri: uri,
+              assetData: emptyFallbackInvoice(),
+              invoice: emptyFallbackInvoice(),
+              parsedData: emptyFallbackInvoice(),
+              audit: { flags: ['ocr_failed'], canSave: true, manualEntry: true },
+              engine: 'manual',
+              ocrFailed: true,
+              hasOcrError: true,
+            });
+            Alert.alert(
+              'Manual entry',
+              'Could not auto-fill details, please enter manually',
+              [{ text: 'OK' }],
+            );
+            setProcessing(false);
+            setPendingImageUri('');
+            capturing.current = false;
+          });
+        };
+        if (typeof requestAnimationFrame === 'function') {
+          requestAnimationFrame(() => run());
+        } else {
+          run();
+        }
+      }, 80);
+    },
+    [processImageWithGemini, navigation],
+  );
+
   const launchCameraCapture = useCallback(async () => {
     if (capturing.current || processing) return;
     capturing.current = true;
     clearAutoTimers();
     setAutoArmed(false);
     setLastError('');
+    // Mark before camera so Activity kill restores ScanBill (not Home)
+    markScanSession('ScanBill').catch(() => {});
 
     try {
       const ok = cameraPermission === 'granted' ? true : await requestCameraAccess();
@@ -289,42 +708,72 @@ function ScanBillScreenInner({ navigation }) {
         capturing.current = false;
         startedRef.current = false;
         setLastError('Camera permission is required to scan invoices.');
+        Alert.alert(
+          'Camera permission needed',
+          'Enable Camera in Settings to scan invoices.',
+          [
+            { text: 'Not now', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => openAppSettings() },
+          ],
+        );
         return;
       }
 
-      const uri = await captureDocumentImage('camera');
+      let uri = null;
+      try {
+        uri = await captureDocumentImage('camera');
+      } catch (captureErr) {
+        console.error('[ScanBillScreen Error]:', captureErr);
+        // Fallback to direct ImagePicker.launchCameraAsync (still no ML Kit)
+        const fallback = await safeLaunchCameraAsync();
+        if (fallback.error && !fallback.canceled) {
+          const msg = reportScanError(fallback.error, { alertTitle: 'Could not capture image' });
+          capturing.current = false;
+          startedRef.current = false;
+          setLastError(msg);
+          return;
+        }
+        if (fallback.canceled) {
+          capturing.current = false;
+          startedRef.current = false;
+          setLastError('Capture cancelled. Tap Camera to try again.');
+          return;
+        }
+        uri = fallback.uri;
+      }
+
+      // Cancelled camera — stay on ScanBillScreen (never Home / MainTabs)
       if (!uri) {
         capturing.current = false;
         startedRef.current = false;
         setLastError('Capture cancelled. Tap Camera to try again.');
         return;
       }
-      await processImageWithGemini(uri);
+
+      let compressedUri = uri;
+      try {
+        const compressedImage = await prepareScanImage(uri);
+        compressedUri = compressedImage?.uri || uri;
+      } catch (compressErr) {
+        console.error('[ScanBillScreen Error]:', compressErr);
+        compressedUri = uri;
+      }
+
+      // Defer OCR — let loading UI paint first (prevents Android OOM)
+      scheduleOcrAfterPaint(compressedUri);
     } catch (error) {
       capturing.current = false;
       startedRef.current = false;
-      const msg = friendlyCaptureMessage(error);
-      console.error('[ScanBill] launchCameraCapture:', msg);
+      const msg = reportScanError(error, { alertTitle: 'Could not capture image' });
       setLastError(msg);
       Haptics.error();
-      Alert.alert('Could not capture image', msg, [
-        { text: 'OK' },
-        {
-          text: 'Go back',
-          onPress: () => {
-            if (navigation?.canGoBack?.()) navigation.goBack();
-            else goHomeDashboard();
-          },
-        },
-      ]);
     }
   }, [
     clearAutoTimers,
-    processImageWithGemini,
+    scheduleOcrAfterPaint,
     processing,
     cameraPermission,
     requestCameraAccess,
-    navigation,
   ]);
 
   const launchGalleryPicker = useCallback(async () => {
@@ -333,6 +782,8 @@ function ScanBillScreenInner({ navigation }) {
     clearAutoTimers();
     setAutoArmed(false);
     setLastError('');
+    // Mark before gallery so Activity kill restores ScanBill (not Home)
+    markScanSession('ScanBill').catch(() => {});
 
     try {
       const lib = await ensureLibraryPermission();
@@ -351,24 +802,32 @@ function ScanBillScreenInner({ navigation }) {
         return;
       }
 
-      // Direct expo-image-picker (Images only + crop) — same as Camera path next step
       let uri = null;
       try {
         uri = await pickGalleryImage();
       } catch (pickErr) {
-        console.warn('[ScanBill] pickGalleryImage:', pickErr?.message);
-        const pick = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
-          quality: 0.85,
-          exif: false,
-          aspect: [3, 4],
-        });
-        if (!pick.canceled && pick.assets?.[0]?.uri) {
-          uri = pick.assets[0].uri;
-        } else if (/permission/i.test(String(pickErr?.message || ''))) {
-          throw pickErr;
+        console.error('[ScanBillScreen Error]:', pickErr);
+        const fallback = await safeLaunchLibraryAsync();
+        if (fallback.error && !fallback.canceled) {
+          const msg = reportScanError(fallback.error, { alertTitle: 'Could not open gallery' });
+          capturing.current = false;
+          startedRef.current = false;
+          setLastError(msg);
+          return;
         }
+        uri = fallback.uri;
+      }
+
+      if (!uri) {
+        const direct = await safeLaunchLibraryAsync();
+        if (direct.error && !direct.canceled) {
+          const msg = reportScanError(direct.error, { alertTitle: 'Could not open gallery' });
+          capturing.current = false;
+          startedRef.current = false;
+          setLastError(msg);
+          return;
+        }
+        uri = direct.uri;
       }
 
       if (!uri) {
@@ -378,65 +837,62 @@ function ScanBillScreenInner({ navigation }) {
         return;
       }
 
-      // Exact same Gemini OCR → ReviewAssetModal pipeline as Camera
-      await processImageWithGemini(uri);
+      let compressedUri = uri;
+      try {
+        const compressedImage = await prepareScanImage(uri);
+        compressedUri = compressedImage?.uri || uri;
+      } catch (compressErr) {
+        console.error('[ScanBillScreen Error]:', compressErr);
+        Alert.alert(
+          'Image processing failed',
+          'Could not compress this photo. Trying original image…',
+        );
+        compressedUri = uri;
+      }
+
+      // Defer OCR — let loading UI paint first (prevents Android OOM)
+      scheduleOcrAfterPaint(compressedUri);
     } catch (error) {
       capturing.current = false;
       startedRef.current = false;
-      const msg = friendlyCaptureMessage(error);
-      console.error('[ScanBill] launchGalleryPicker:', msg);
+      const msg = reportScanError(error, { alertTitle: 'Could not open gallery' });
       setLastError(msg);
       Haptics.error();
-      Alert.alert('Could not open gallery', msg, [
-        { text: 'OK' },
-        {
-          text: 'Go back',
-          onPress: () => {
-            if (navigation?.canGoBack?.()) navigation.goBack();
-            else goHomeDashboard();
-          },
-        },
-      ]);
     }
-  }, [clearAutoTimers, processImageWithGemini, processing, navigation]);
+  }, [clearAutoTimers, scheduleOcrAfterPaint, processing]);
 
   const startAutoFocusCapture = useCallback(() => {
-    requireAuth({
-      isAuthenticated,
-      navigation,
-      message: 'Sign in to scan invoices into your vault.',
-      onAuthed: async () => {
-        if (capturing.current || processing) return;
-        const ok =
-          cameraPermission === 'granted' ? true : await requestCameraAccess();
-        if (!ok) return;
+    // TODO: RE-ENABLE AUTH REQUIREMENT BEFORE PRODUCTION
+    // Was: requireAuth({ isAuthenticated, navigation, ... })
+    (async () => {
+      if (capturing.current || processing) return;
+      const ok =
+        cameraPermission === 'granted' ? true : await requestCameraAccess();
+      if (!ok) return;
 
-        Haptics.select();
-        clearAutoTimers();
-        setAutoArmed(true);
-        setCountdownMs(AUTO_FOCUS_MS);
-        progress.setValue(0);
-        Animated.timing(progress, {
-          toValue: 1,
-          duration: AUTO_FOCUS_MS,
-          easing: Easing.linear,
-          useNativeDriver: false,
-        }).start();
+      Haptics.select();
+      clearAutoTimers();
+      setAutoArmed(true);
+      setCountdownMs(AUTO_FOCUS_MS);
+      progress.setValue(0);
+      Animated.timing(progress, {
+        toValue: 1,
+        duration: AUTO_FOCUS_MS,
+        easing: Easing.linear,
+        useNativeDriver: false,
+      }).start();
 
-        const started = Date.now();
-        tickTimer.current = setInterval(() => {
-          const left = Math.max(0, AUTO_FOCUS_MS - (Date.now() - started));
-          setCountdownMs(left);
-        }, 80);
+      const started = Date.now();
+      tickTimer.current = setInterval(() => {
+        const left = Math.max(0, AUTO_FOCUS_MS - (Date.now() - started));
+        setCountdownMs(left);
+      }, 80);
 
-        autoTimer.current = setTimeout(() => {
-          launchCameraCapture();
-        }, AUTO_FOCUS_MS);
-      },
-    });
+      autoTimer.current = setTimeout(() => {
+        launchCameraCapture();
+      }, AUTO_FOCUS_MS);
+    })();
   }, [
-    isAuthenticated,
-    navigation,
     clearAutoTimers,
     progress,
     launchCameraCapture,
@@ -457,31 +913,21 @@ function ScanBillScreenInner({ navigation }) {
   }, [cameraPermission]);
 
   const openCamera = useCallback(() => {
-    requireAuth({
-      isAuthenticated,
-      navigation,
-      message: 'Sign in to scan invoices into your vault.',
-      onAuthed: () => {
-        clearAutoTimers();
-        setAutoArmed(false);
-        launchCameraCapture();
-      },
-    });
-  }, [isAuthenticated, navigation, launchCameraCapture, clearAutoTimers]);
+    // TODO: RE-ENABLE AUTH REQUIREMENT BEFORE PRODUCTION
+    // Was: requireAuth({ isAuthenticated, navigation, ... })
+    clearAutoTimers();
+    setAutoArmed(false);
+    launchCameraCapture();
+  }, [launchCameraCapture, clearAutoTimers]);
 
   const openGallery = useCallback(() => {
-    requireAuth({
-      isAuthenticated,
-      navigation,
-      message: 'Sign in to import an invoice photo.',
-      onAuthed: () => {
-        Haptics.tap();
-        clearAutoTimers();
-        setAutoArmed(false);
-        launchGalleryPicker();
-      },
-    });
-  }, [isAuthenticated, navigation, launchGalleryPicker, clearAutoTimers]);
+    // TODO: RE-ENABLE AUTH REQUIREMENT BEFORE PRODUCTION
+    // Was: requireAuth({ isAuthenticated, navigation, ... })
+    Haptics.tap();
+    clearAutoTimers();
+    setAutoArmed(false);
+    launchGalleryPicker();
+  }, [launchGalleryPicker, clearAutoTimers]);
 
   const secondsLeft = Math.max(1, Math.ceil(countdownMs / 1000));
   const progressWidth = progress.interpolate({
@@ -522,11 +968,12 @@ function ScanBillScreenInner({ navigation }) {
   if (cameraPermission === 'denied' || cameraPermission === 'undetermined') {
     return (
       <>
-        <Screen style={styles.root}>
+        <SafeAreaView style={styles.root} edges={['bottom']}>
+          <Screen style={{ flex: 1, backgroundColor: 'transparent' }}>
           <ScrollView
             contentContainerStyle={[
               styles.scrollContent,
-              { paddingBottom: Math.max(insets.bottom, 16) + 24, flexGrow: 1, justifyContent: 'center' },
+              { paddingBottom: 40, flexGrow: 1, justifyContent: 'center' },
             ]}
           >
             <Text style={styles.eyebrow}>SCAN INVOICE</Text>
@@ -565,7 +1012,6 @@ function ScanBillScreenInner({ navigation }) {
                 onPress={() => {
                   Haptics.select();
                   if (navigation?.canGoBack?.()) navigation.goBack();
-                  else goHomeDashboard();
                 }}
                 style={styles.manualWrap}
               >
@@ -576,10 +1022,15 @@ function ScanBillScreenInner({ navigation }) {
           {processing ? (
             <View style={styles.blockingOverlay} pointerEvents="auto">
               <ActivityIndicator size="large" color={COLORS.emerald} />
-              <Text style={styles.processingTitle}>{processLabel}</Text>
+              <Text style={styles.overlayTitle}>{processLabel}</Text>
+              {pendingImageUri ? (
+                <Text style={styles.overlaySub}>Low-res scan ready — reading fields…</Text>
+              ) : null}
+              <Text style={styles.overlaySub}>Please wait — do not close the app.</Text>
             </View>
           ) : null}
         </Screen>
+        </SafeAreaView>
         {reviewModal}
       </>
     );
@@ -587,11 +1038,12 @@ function ScanBillScreenInner({ navigation }) {
 
   return (
     <>
-    <Screen style={styles.root}>
+    <SafeAreaView style={styles.root} edges={['bottom']}>
+    <Screen style={{ flex: 1, backgroundColor: 'transparent' }}>
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom, 16) + 24 },
+          { paddingBottom: 40 },
         ]}
         keyboardShouldPersistTaps="handled"
         bounces={false}
@@ -603,6 +1055,7 @@ function ScanBillScreenInner({ navigation }) {
           <Text style={styles.sub}>
             Use Camera or Browse Gallery — both run the same Gemini OCR and open Review & Confirm.
           </Text>
+          <PrivacyVaultTag style={{ marginTop: 10, alignSelf: 'flex-start' }} />
 
           {autoArmed && !processing ? (
             <View style={styles.countdownStrip}>
@@ -688,7 +1141,6 @@ function ScanBillScreenInner({ navigation }) {
                 Haptics.select();
                 clearAutoTimers();
                 if (navigation?.canGoBack?.()) navigation.goBack();
-                else goHomeDashboard();
               }}
               style={styles.manualWrap}
             >
@@ -703,10 +1155,12 @@ function ScanBillScreenInner({ navigation }) {
       {processing ? (
         <View style={styles.blockingOverlay} pointerEvents="auto">
           <ActivityIndicator size="large" color={COLORS.emerald} />
-          <Text style={styles.processingTitle}>{processLabel}</Text>
+          <Text style={styles.overlayTitle}>{processLabel}</Text>
+          <Text style={styles.overlaySub}>Please wait — do not close the app.</Text>
         </View>
       ) : null}
     </Screen>
+    </SafeAreaView>
     {reviewModal}
     </>
   );
@@ -838,11 +1292,25 @@ const styles = StyleSheet.create({
   processingSub: { color: COLORS.muted, marginTop: 4, fontSize: 12, textAlign: 'center' },
   blockingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(248,250,252,0.86)',
+    backgroundColor: 'rgba(15,23,42,0.78)',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 28,
     zIndex: 20,
+  },
+  overlayTitle: {
+    color: '#F8FAFC',
+    fontWeight: '800',
+    marginTop: 16,
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  overlaySub: {
+    color: 'rgba(248,250,252,0.72)',
+    marginTop: 8,
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
   },
   actions: {
     marginTop: 18,

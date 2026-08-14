@@ -29,8 +29,9 @@ import { daysUntil } from '../../utils/dates';
 import { getAssetFolderType } from '../../utils/assetFolders';
 import { isAlertableStatus } from '../../constants/assetStatus';
 import { OTA_BUNDLE_LABEL } from '../../services/updates/OtaUpdateService';
-import { WarrantyBadge } from '../../components/WarrantyBadge';
 import { getCurrentValuation } from '../../components/ValuationBlock';
+import { AssetHealthBadge } from '../../components/AssetHealthBadge';
+import { getAssetHealthStatus } from '../../utils/assetHealthStatus';
 import { resolveSupportContact } from '../../constants/brandDirectory';
 import { CategoryIcon } from '../../components/icons/CategoryIcon';
 import { HealthScoreGauge } from '../../components/HealthScoreGauge';
@@ -47,6 +48,14 @@ import {
   needsAttention,
   attentionSummary,
 } from '../../utils/assetExpiry';
+import { normalizeAssetRecord } from '../../services/storageService';
+import { summarizePortfolioCost, calculateCostToUse } from '../../utils/costToUse';
+import { calculateResaleValue } from '../../utils/resaleCalculator';
+
+function formatRupee(amount) {
+  const n = Number(amount) || 0;
+  return `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+}
 
 function initialsFromName(name = '') {
   const parts = String(name).trim().split(/\s+/).filter(Boolean);
@@ -93,29 +102,37 @@ function urgentLabel(task) {
 
 export function DashboardScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { profile, isAuthenticated, user, displayName: authDisplayName, loading: authLoading } =
-    useAuth();
+  const { profile, isAuthenticated, user, displayName: authDisplayName } = useAuth();
   const { assets, urgent, loading, removeAsset, portfolioHealth } = useAssets();
   const [exporting, setExporting] = useState(false);
   const [listFilter, setListFilter] = useState('all'); // all | expired | attention
   const [reminderTask, setReminderTask] = useState(null);
   const swipeRefs = useRef({});
 
-  // Never show "Guest" while auth/profile is still hydrating
-  const displayName = authLoading
-    ? '…'
-    : isAuthenticated
-      ? authDisplayName || 'Asset Owner'
-      : 'Guest';
-  const avatarUri = String(profile?.photoURL || user?.photoURL || '').trim();
-  // Bust Image cache when the same Storage path is overwritten
-  const avatarSource = avatarUri
-    ? {
-        uri: avatarUri.includes('?')
-          ? `${avatarUri}&v=${encodeURIComponent(String(profile?.updatedAt?.seconds || profile?.updatedAt || Date.now()))}`
-          : `${avatarUri}?v=${encodeURIComponent(String(profile?.updatedAt?.seconds || profile?.updatedAt || Date.now()))}`,
-      }
-    : null;
+  // Never blank the greeting on auth hydrate flicker — use cached name immediately
+  const displayName =
+    authDisplayName ||
+    profile?.name ||
+    user?.displayName ||
+    (isAuthenticated ? 'Asset Owner' : 'Guest');
+  const avatarUri = String(user?.photoURL || profile?.photoURL || '').trim();
+  const defaultAvatarColors = {
+    'default:teal': '#0D9488',
+    'default:blue': '#2563EB',
+    'default:amber': '#D97706',
+    'default:rose': '#E11D48',
+  };
+  const isDefaultAvatar = avatarUri.startsWith('default:');
+  // Bust Image cache when the same Storage path is overwritten (skip preset avatars)
+  const avatarSource =
+    avatarUri && !isDefaultAvatar
+      ? {
+          uri: avatarUri.includes('?')
+            ? `${avatarUri}&v=${encodeURIComponent(String(profile?.updatedAt?.seconds || profile?.updatedAt || Date.now()))}`
+            : `${avatarUri}?v=${encodeURIComponent(String(profile?.updatedAt?.seconds || profile?.updatedAt || Date.now()))}`,
+        }
+      : null;
+  const defaultAvatarColor = defaultAvatarColors[avatarUri] || null;
   const familyCount = Number(profile?.familyMemberCount || profile?.familyCount || 0);
   const showGoldenShield = (portfolioHealth?.score ?? 0) >= 100 && (portfolioHealth?.count ?? 0) > 0;
 
@@ -147,6 +164,35 @@ export function DashboardScreen({ navigation }) {
         .reduce((sum, a) => sum + (Number(a.value) || 0), 0),
     [activeAssets],
   );
+  const portfolioCost = useMemo(() => summarizePortfolioCost(activeAssets), [activeAssets]);
+  const topResaleAsset = useMemo(() => {
+    let best = null;
+    let bestVal = 0;
+    for (const asset of activeAssets) {
+      const row = calculateResaleValue({
+        purchaseValue: asset.value,
+        purchaseDate: asset.purchaseDate,
+        categoryId: asset.categoryId,
+        category: asset.category,
+        condition: asset.condition || 'good',
+      });
+      if ((row.estimatedResale || 0) > bestVal) {
+        bestVal = row.estimatedResale || 0;
+        best = { asset, ...row };
+      }
+    }
+    return best;
+  }, [activeAssets]);
+  const warrantyHealthy = useMemo(() => {
+    const withWarranty = activeAssets.filter((a) => a.warrantyExpiry);
+    if (!withWarranty.length) return { active: 0, total: 0 };
+    const active = withWarranty.filter((a) => {
+      const d = daysUntil(a.warrantyExpiry);
+      return d != null && d >= 0;
+    }).length;
+    return { active, total: withWarranty.length };
+  }, [activeAssets]);
+
 
   const countdownTasks = useMemo(
     () => buildCountdownTasks(assets, { withinDays: 45, maxItems: 8 }),
@@ -222,6 +268,7 @@ export function DashboardScreen({ navigation }) {
   };
 
   const goScan = () => {
+    // TODO: RE-ENABLE AUTH REQUIREMENT BEFORE PRODUCTION
     requireAuth({
       isAuthenticated,
       navigation,
@@ -244,7 +291,8 @@ export function DashboardScreen({ navigation }) {
   };
 
   const goVault = () => {
-    navigation?.getParent()?.navigate?.('Vault');
+    Haptics.tap();
+    navigation?.navigate?.('VaultHome');
   };
 
   const goAssets = () => {
@@ -252,7 +300,8 @@ export function DashboardScreen({ navigation }) {
   };
 
   const goFolders = () => {
-    navigation?.getParent()?.navigate?.('Vault', { screen: 'CategoryFolders' });
+    Haptics.tap();
+    navigation?.navigate?.('CategoryFolders');
   };
 
   const exportPdf = async () => {
@@ -323,8 +372,20 @@ export function DashboardScreen({ navigation }) {
               {avatarSource ? (
                 <Image source={avatarSource} style={styles.avatarImage} />
               ) : (
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{initialsFromName(displayName)}</Text>
+                <View
+                  style={[
+                    styles.avatar,
+                    defaultAvatarColor ? { backgroundColor: defaultAvatarColor } : null,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.avatarText,
+                      defaultAvatarColor ? { color: '#FFFFFF' } : null,
+                    ]}
+                  >
+                    {initialsFromName(displayName)}
+                  </Text>
                 </View>
               )}
               {showGoldenShield ? (
@@ -332,7 +393,14 @@ export function DashboardScreen({ navigation }) {
               ) : null}
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.welcomeEyebrow}>{BRAND.name.toUpperCase()}</Text>
+              <Text style={styles.welcomeEyebrow}>
+                {(() => {
+                  const h = new Date().getHours();
+                  if (h < 12) return 'Good Morning';
+                  if (h < 17) return 'Good Afternoon';
+                  return 'Good Evening';
+                })()}
+              </Text>
               <Text style={styles.welcomeName} numberOfLines={1}>
                 {displayName} ›
               </Text>
@@ -385,6 +453,89 @@ export function DashboardScreen({ navigation }) {
           </View>
         </View>
 
+
+        {/* Master feature modules */}
+        <Text style={styles.sectionLabel}>SMART TOOLS</Text>
+        <View style={styles.featureGrid}>
+          <Pressable
+            style={styles.featureCard}
+            onPress={() => {
+              Haptics.tap();
+              const sample = activeAssets[0];
+              const row = sample
+                ? calculateCostToUse(sample)
+                : { dailyCost: portfolioCost.dailyCost, monthlyCost: portfolioCost.monthlyCost, assetName: 'your vault' };
+              Alert.alert(
+                'AI Cost-to-Use',
+                sample
+                  ? `${row.assetName}\n\n~₹${row.dailyCost}/day · ₹${row.monthlyCost}/month\nOwnership cost so far: ₹${row.ownershipCost?.toLocaleString?.('en-IN') || row.ownershipCost}`
+                  : `Vault average usage\n\n~₹${portfolioCost.dailyCost}/day · ₹${portfolioCost.monthlyCost}/month across ${portfolioCost.count} assets.`,
+              );
+            }}
+          >
+            <Text style={styles.featureIcon}>📉</Text>
+            <Text style={styles.featureTitle}>Cost-to-Use</Text>
+            <Text style={styles.featureValue}>₹{portfolioCost.dailyCost}/day</Text>
+            <Text style={styles.featureSub}>₹{portfolioCost.monthlyCost}/mo ownership</Text>
+          </Pressable>
+          <Pressable
+            style={styles.featureCard}
+            onPress={() => {
+              Haptics.tap();
+              if (!topResaleAsset) {
+                Alert.alert('Resale estimate', 'Add an asset with purchase price to see market value.');
+                return;
+              }
+              Alert.alert(
+                'One-Click Resale',
+                `${cleanAssetDisplayName(topResaleAsset.asset?.assetName, { registration: topResaleAsset.asset?.registration }) || 'Asset'}\n\nEst. market value: ${formatINR(topResaleAsset.estimatedResale)}\nRetained: ${topResaleAsset.breakdown?.retainedPercent || 0}%`,
+              );
+            }}
+          >
+            <Text style={styles.featureIcon}>💰</Text>
+            <Text style={styles.featureTitle}>Resale Value</Text>
+            <Text style={styles.featureValue}>
+              {topResaleAsset ? formatINR(topResaleAsset.estimatedResale) : '—'}
+            </Text>
+            <Text style={styles.featureSub}>Tap for estimate</Text>
+          </Pressable>
+          <Pressable
+            style={styles.featureCard}
+            onPress={() => {
+              Haptics.tap();
+              Alert.alert(
+                'Warranty health',
+                warrantyHealthy.total
+                  ? `${warrantyHealthy.active} of ${warrantyHealthy.total} warranties still active.`
+                  : 'Scan warranty cards to track coverage windows.',
+              );
+            }}
+          >
+            <Text style={styles.featureIcon}>🛡️</Text>
+            <Text style={styles.featureTitle}>Warranty</Text>
+            <Text style={styles.featureValue}>
+              {warrantyHealthy.total ? `${warrantyHealthy.active}/${warrantyHealthy.total}` : '—'}
+            </Text>
+            <Text style={styles.featureSub}>Active cover</Text>
+          </Pressable>
+          <Pressable
+            style={styles.featureCard}
+            onPress={() => {
+              Haptics.tap();
+              Alert.alert(
+                'Insurance & PUC',
+                urgentBanners.length
+                  ? `${urgentBanners.length} reminder(s) need attention — scroll to Urgent Reminders.`
+                  : 'No PUC / insurance alerts in the next 15 days.',
+              );
+            }}
+          >
+            <Text style={styles.featureIcon}>🔔</Text>
+            <Text style={styles.featureTitle}>Expiry Alerts</Text>
+            <Text style={styles.featureValue}>{urgentBanners.length || 0}</Text>
+            <Text style={styles.featureSub}>PUC · Insurance</Text>
+          </Pressable>
+        </View>
         {/* Action row */}
         <View style={styles.actionRow}>
           <Pressable
@@ -480,7 +631,7 @@ export function DashboardScreen({ navigation }) {
 
         {/* Assets */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionLabelTight}>ALL MANAGED ASSETS</Text>
+          <Text style={styles.sectionLabelTight}>ACTIVE ASSETS</Text>
           <Pressable onPress={goAssets}>
             <Text style={styles.viewAll}>View All →</Text>
           </Pressable>
@@ -518,16 +669,18 @@ export function DashboardScreen({ navigation }) {
           </Pressable>
         ) : null}
 
-        {listedAssets.map((item) => {
+        {listedAssets.map((rawItem) => {
+          const item = normalizeAssetRecord(rawItem);
           const id = item.assetId || item.id;
           const valuation = getCurrentValuation(item);
+          const health = getAssetHealthStatus(item);
           const support = resolveSupportContact(item);
           const displayName = cleanAssetDisplayName(item.assetName, {
             registration: item.registration,
           });
           const plate = formatRegistrationDisplay(item.registration);
           const gadget = computeGadgetSmartMetrics(item);
-          const expired = hasExpiredDocuments(item);
+          const expired = hasExpiredDocuments(item) || health.id === 'critical';
           return (
             <Swipeable
               key={id}
@@ -554,7 +707,7 @@ export function DashboardScreen({ navigation }) {
                 }}
                 onLongPress={() => confirmDelete(item)}
               >
-                <View style={[styles.statusBar, expired ? styles.statusBarRed : styles.statusBarGreen]} />
+                <View style={[styles.statusBar, { backgroundColor: health.bar }]} />
                 <View style={styles.assetIconWrap}>
                   <CategoryIcon
                     name={item.categoryId || item.icon || 'other'}
@@ -562,7 +715,7 @@ export function DashboardScreen({ navigation }) {
                     color={COLORS.emerald}
                   />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.assetName} numberOfLines={1}>
                     {displayName || item.assetName}
                   </Text>
@@ -572,14 +725,23 @@ export function DashboardScreen({ navigation }) {
                     </Text>
                   ) : null}
                   <Text style={styles.assetMeta} numberOfLines={1}>
-                    {expired ? attentionSummary(item) : assetStatusLine(item)}
+                    {health.detail || (expired ? attentionSummary(item) : assetStatusLine(item))}
                   </Text>
-                  <WarrantyBadge warrantyExpiry={item.warrantyExpiry} style={{ marginTop: 6 }} />
+                  <View style={styles.valuationRow}>
+                    <Text style={styles.purPrice} numberOfLines={1}>
+                      Pur: {formatRupee(valuation.purchase)}
+                    </Text>
+                    <Text style={styles.nowPrice} numberOfLines={1}>
+                      Now: {formatRupee(valuation.current)}
+                    </Text>
+                  </View>
+                  <AssetHealthBadge status={health} style={{ marginTop: 8 }} />
                   {gadget ? (
                     <View style={styles.gadgetRow}>
                       <Text style={styles.gadgetChip}>🔋 {gadget.batteryHealthPercent}%</Text>
-                      <Text style={styles.gadgetChip}>₹{Math.round(gadget.liveResaleValue / 1000)}k</Text>
-                      <Text style={styles.gadgetChip}>Batt ₹{gadget.batteryReplacementCost}</Text>
+                      <Text style={styles.gadgetChip}>
+                        ₹{Math.round(gadget.liveResaleValue / 1000)}k
+                      </Text>
                     </View>
                   ) : null}
                   {support?.phone ? (
@@ -587,10 +749,6 @@ export function DashboardScreen({ navigation }) {
                       ☎ {support.label}
                     </Text>
                   ) : null}
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={styles.assetValue}>{formatINR(valuation.purchase)}</Text>
-                  <Text style={styles.assetCurrent}>~{formatINR(valuation.current)} *</Text>
                 </View>
               </Pressable>
             </Swipeable>
@@ -823,6 +981,27 @@ const styles = StyleSheet.create({
   },
   actionSecondaryText: { color: COLORS.text, fontWeight: '800', fontSize: 13 },
 
+
+  featureGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 18,
+  },
+  featureCard: {
+    width: '47%',
+    flexGrow: 1,
+    minWidth: '42%',
+    backgroundColor: COLORS.card,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 14,
+  },
+  featureIcon: { fontSize: 18, marginBottom: 6 },
+  featureTitle: { color: COLORS.muted, fontSize: 11, fontWeight: '800', letterSpacing: 0.3 },
+  featureValue: { color: COLORS.text, fontSize: 18, fontWeight: '900', marginTop: 4 },
+  featureSub: { color: COLORS.muted, fontSize: 11, marginTop: 2, fontWeight: '600' },
   familyCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -980,6 +1159,14 @@ const styles = StyleSheet.create({
   },
   assetName: { color: COLORS.text, fontWeight: '800', fontSize: 14 },
   assetMeta: { color: COLORS.muted, fontSize: 11, marginTop: 3 },
+  valuationRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 6,
+  },
+  purPrice: { color: COLORS.text, fontWeight: '800', fontSize: 12 },
+  nowPrice: { color: COLORS.emerald, fontWeight: '800', fontSize: 12 },
   assetValue: { color: COLORS.text, fontWeight: '800', fontSize: 12 },
   assetCurrent: { color: COLORS.emerald, fontWeight: '700', fontSize: 11, marginTop: 3 },
   helplineHint: { color: COLORS.neonBlue, fontSize: 10, fontWeight: '700', marginTop: 4 },

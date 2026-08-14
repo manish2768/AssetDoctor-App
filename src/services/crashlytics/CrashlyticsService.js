@@ -1,19 +1,39 @@
 /**
  * Firebase Crashlytics — graceful when native module missing (Expo Go / old APK).
+ * Never throw at boot; all native calls are try/catch wrapped.
  */
+
+import { ensureFirebaseApp } from '../../config/firebaseApp';
 
 let crashlyticsModule = null;
 let globalHandlerInstalled = false;
 
+/**
+ * Soft-load Crashlytics factory. Returns null if Firebase / native module unavailable.
+ * @returns {null | (() => import('@react-native-firebase/crashlytics').FirebaseCrashlyticsTypes.Module)}
+ */
 function getCrashlytics() {
   if (crashlyticsModule === false) return null;
   if (crashlyticsModule) return crashlyticsModule;
+
   try {
+    if (!ensureFirebaseApp()) {
+      crashlyticsModule = false;
+      return null;
+    }
     // eslint-disable-next-line global-require
-    crashlyticsModule = require('@react-native-firebase/crashlytics').default;
+    const factory = require('@react-native-firebase/crashlytics').default;
+    if (typeof factory !== 'function') {
+      crashlyticsModule = false;
+      return null;
+    }
+    // Probe native instance once — catch mid-init white-screen crashes as JS errors
+    factory();
+    crashlyticsModule = factory;
     return crashlyticsModule;
-  } catch {
+  } catch (error) {
     crashlyticsModule = false;
+    console.warn('[Crashlytics] getCrashlytics failed:', error?.message || error);
     return null;
   }
 }
@@ -22,7 +42,16 @@ function safeRun(fn) {
   try {
     const crashlytics = getCrashlytics();
     if (!crashlytics) return false;
-    fn(crashlytics());
+    let instance;
+    try {
+      instance = crashlytics();
+    } catch (error) {
+      console.warn('[Crashlytics] instance failed:', error?.message || error);
+      crashlyticsModule = false;
+      return false;
+    }
+    if (!instance) return false;
+    fn(instance);
     return true;
   } catch (error) {
     console.warn('[Crashlytics]', error?.message || error);
@@ -53,11 +82,25 @@ function installGlobalHandler(c) {
 
 export const CrashlyticsService = {
   init() {
-    return safeRun((c) => {
-      c.setCrashlyticsCollectionEnabled(true);
-      c.log('Asset Doctor Crashlytics ready');
-      installGlobalHandler(c);
-    });
+    try {
+      if (!ensureFirebaseApp()) return false;
+      // Soft-init only — never throw / never block boot if Build ID / native is missing
+      return safeRun((c) => {
+        try {
+          // Collection stays on for release; missing native Build ID is handled by Gradle plugin
+          if (typeof c.setCrashlyticsCollectionEnabled === 'function') {
+            c.setCrashlyticsCollectionEnabled(true);
+          }
+          c.log?.('Asset Doctor Crashlytics ready');
+          installGlobalHandler(c);
+        } catch (error) {
+          console.warn('[Crashlytics] init body failed:', error?.message || error);
+        }
+      });
+    } catch (error) {
+      console.warn('[Crashlytics] init failed:', error?.message || error);
+      return false;
+    }
   },
 
   /** Identify session for decoded crash reports */
@@ -103,6 +146,7 @@ export const CrashlyticsService = {
     // Best-effort alert email for fatal / support triage
     if (context?.alertEmail !== false && (context?.fatal || context?.notifySupport)) {
       try {
+        if (!ensureFirebaseApp()) return recorded;
         // eslint-disable-next-line global-require
         const firestore = require('@react-native-firebase/firestore').default;
         const message =

@@ -44,6 +44,20 @@ export function findAssetByChassis(assets = [], chassis) {
 }
 
 /**
+ * Find vehicle by engine number.
+ */
+export function findAssetByEngine(assets = [], engine) {
+  const needle = normalizeChassis(engine);
+  if (!needle || needle.length < 6) return null;
+  return (
+    assets.find((a) => {
+      const en = normalizeChassis(a.engineNumber);
+      return en && en === needle;
+    }) || null
+  );
+}
+
+/**
  * Docs that belong on a vehicle passport — never create a standalone "Other" asset.
  */
 export function isVehicleAttachDocument(formOrType = {}) {
@@ -65,7 +79,7 @@ export function findVehicleAsset(assets = [], form = {}) {
   return (
     findAssetByRegistration(assets, form.registration) ||
     findAssetByChassis(assets, form.chassisNumber) ||
-    findAssetByChassis(assets, form.engineNumber) ||
+    findAssetByEngine(assets, form.engineNumber) ||
     null
   );
 }
@@ -100,6 +114,7 @@ export default {
   normalizeChassis,
   findAssetByRegistration,
   findAssetByChassis,
+  findAssetByEngine,
   findVehicleAsset,
   isVehicleAttachDocument,
   isVehicleCategory,

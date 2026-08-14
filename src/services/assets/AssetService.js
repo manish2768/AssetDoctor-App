@@ -23,6 +23,7 @@ import { ASSET_STATUS } from '../../constants/assetStatus';
 import { ExpiryAlertService } from '../notifications/ExpiryAlertService';
 import { OfflineQueue } from '../offline/OfflineQueue';
 import { OfflineVaultCache } from '../offline/OfflineVaultCache';
+import { normalizeAssetList } from '../storageService';
 import { resolveVaultDocumentMeta } from '../ocr/documentTypeClassifier';
 import { toErrorMessage, runDetached } from '../../utils/errors';
 import {
@@ -94,6 +95,10 @@ function isTransientError(error) {
   );
 }
 
+function offlineFriendlyMessage() {
+  return 'Network taking time, saved locally';
+}
+
 function enrichMetrics(partial, repairs = [], powerLogs = []) {
   const health = calculateHealthScore(partial);
   const resale = calculateResaleValue({
@@ -158,13 +163,15 @@ export class AssetService {
   static async createFromForm(userId, form = {}, localImagePath, options = {}) {
     triggerHaptic('impactMedium');
 
+    const effectiveUserId = userId || null;
+
     try {
-      if (!userId) throw new Error('userId is required');
+      if (!effectiveUserId) throw new Error('Please sign in to save assets to your vault.');
       if (!form.assetName?.trim()) throw new Error('Asset name is required');
 
       const cat = resolveCategoryMeta(form.categoryId, form.category);
       const stableAssetId = form.assetId || createAssetId();
-      const docRef = assetsRef(userId).doc(stableAssetId);
+      const docRef = assetsRef(effectiveUserId).doc(stableAssetId);
       let billImageUrl = '';
       let billStoragePath = '';
       let pendingImageLocalPath = '';
@@ -178,14 +185,14 @@ export class AssetService {
         (Boolean(form.ocrExtract || form.billThumbDataUrl) && options.storeBillImage !== true);
 
       if (localImagePath && !skipHeavyImageUpload) {
-        const uploaded = await uploadVaultInvoiceImage(userId, localImagePath);
+        const uploaded = await uploadVaultInvoiceImage(effectiveUserId, localImagePath);
         if (uploaded.success) {
           billImageUrl = uploaded.downloadUrl;
           billStoragePath = uploaded.storagePath;
           pendingImageLocalPath = uploaded.localPath || '';
         } else {
           try {
-            pendingImageLocalPath = await persistScannedImage(localImagePath, userId);
+            pendingImageLocalPath = await persistScannedImage(localImagePath, effectiveUserId);
           } catch {
             pendingImageLocalPath = localImagePath;
           }
@@ -194,8 +201,8 @@ export class AssetService {
 
       const base = {
         // Cloud ownership — never treat device AsyncStorage as source of truth
-        uid: userId,
-        ownerUid: userId,
+        uid: effectiveUserId,
+        ownerUid: effectiveUserId,
         ownerPhoneNumber: form.ownerPhoneNumber || form.phoneNumber || '',
         assetId: docRef.id,
         assetName: cleanAssetDisplayName(form.assetName, {
@@ -226,6 +233,7 @@ export class AssetService {
         pucExpiry: form.pucExpiry || null,
         nextServiceDue: form.nextServiceDue || null,
         value: toVaultValue(form.value, 0),
+        purchasePrice: toVaultValue(form.purchasePrice ?? form.value, 0),
         registration: form.registration || '',
         condition: form.condition || 'good',
         annualInsurancePremium: Number(form.annualInsurancePremium) || 0,
@@ -291,7 +299,7 @@ export class AssetService {
         const trigger = assetPayload.warrantyExpiry || assetPayload.pucExpiry || assetPayload.insuranceExpiry;
         if (trigger) {
           runDetached(
-            enqueueReminder(userId, {
+            enqueueReminder(effectiveUserId, {
               assetId: docRef.id,
               email: form.ownerEmail || form.email || '',
               message: assetPayload.reminderText,
@@ -305,12 +313,12 @@ export class AssetService {
 
       if (pendingImageLocalPath && !billImageUrl) {
         await enqueueInvoiceImageRetry({
-          userId,
+          userId: effectiveUserId,
           assetId: docRef.id,
           localPath: pendingImageLocalPath,
         });
         runDetached(
-          this.retryPendingBillUpload(userId, docRef.id, pendingImageLocalPath),
+          this.retryPendingBillUpload(effectiveUserId, docRef.id, pendingImageLocalPath),
           'retry-bill-upload',
         );
       }
@@ -344,11 +352,11 @@ export class AssetService {
       if (shouldQueue) {
         try {
           const queuedImagePath = localImagePath
-            ? await OfflineVaultCache.persistPendingFile(userId, localImagePath)
+            ? await OfflineVaultCache.persistPendingFile(effectiveUserId, localImagePath)
             : null;
           await OfflineQueue.enqueue({
             type: 'createAsset',
-            payload: { userId, form, localImagePath: queuedImagePath },
+            payload: { userId: effectiveUserId, form, localImagePath: queuedImagePath },
           });
         } catch {
           /* ignore queue errors */
@@ -356,7 +364,7 @@ export class AssetService {
       }
       return {
         success: false,
-        error: toErrorMessage(error, 'Failed to create asset'),
+        error: shouldQueue ? offlineFriendlyMessage() : toErrorMessage(error, 'Failed to create asset'),
         queuedOffline: shouldQueue,
       };
     }
@@ -564,7 +572,7 @@ export class AssetService {
       }
       return {
         success: false,
-        error: error?.message || 'Failed to update asset',
+        error: shouldQueue ? offlineFriendlyMessage() : (error?.message || 'Failed to update asset'),
         queuedOffline: shouldQueue,
       };
     }
@@ -611,16 +619,18 @@ export class AssetService {
       .orderBy('createdAt', 'desc')
       .onSnapshot(
         (snapshot) => {
-          const assets = snapshot.docs
-            .map((doc) => ({ id: doc.id, ...doc.data() }))
-            .filter((a) => !a.deletedAt);
+          const assets = normalizeAssetList(
+            snapshot.docs
+              .map((doc) => ({ id: doc.id, ...doc.data() }))
+              .filter((a) => !a.deletedAt),
+          );
           OfflineVaultCache.cacheAssets(userId, assets).catch(() => {});
           onUpdate(assets);
         },
         async (error) => {
           Haptics.error();
           const cached = await OfflineVaultCache.getAssets(userId);
-          if (cached.length) onUpdate(cached);
+          if (cached.length) onUpdate(normalizeAssetList(cached));
           else if (onError) onError(error);
           else onUpdate([]);
         },

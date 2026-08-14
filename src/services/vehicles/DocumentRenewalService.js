@@ -186,11 +186,18 @@ export async function renewVehicleDocument({
       return { success: false, error: 'Could not activate renewed document' };
     }
 
-    // 3) Update main vehicle expiry + identifiers
+    // 3) Update main vehicle expiry + identifiers (camel + snake aliases)
     const expiryField = activated.expiryField;
+    const expiryValue = activated.expiryValue || null;
     const updates = {
-      ...(expiryField && activated.expiryValue
-        ? { [expiryField]: activated.expiryValue }
+      ...(expiryField && expiryValue
+        ? {
+            [expiryField]: expiryValue,
+            ...(expiryField === 'insuranceExpiry'
+              ? { insurance_expiry_date: expiryValue }
+              : {}),
+            ...(expiryField === 'pucExpiry' ? { puc_expiry_date: expiryValue } : {}),
+          }
         : {}),
       ...(form.chassisNumber ? { chassisNumber: form.chassisNumber } : {}),
       ...(form.engineNumber ? { engineNumber: form.engineNumber } : {}),
@@ -210,7 +217,7 @@ export async function renewVehicleDocument({
       };
     }
 
-    // 4) Clear stale EXPIRED/URGENT schedules and reschedule from new dates
+    // 4) Clear EXPIRED alerts for renewed field(s), then reschedule from new dates
     const mergedAsset = {
       ...(existingAsset || {}),
       ...(updated.asset || {}),
@@ -219,9 +226,14 @@ export async function renewVehicleDocument({
       id: assetId,
     };
     try {
+      const clearFields = [];
+      if (expiryField === 'insuranceExpiry') clearFields.push('insuranceExpiry');
+      if (expiryField === 'pucExpiry') clearFields.push('pucExpiry');
+      if (clearFields.length) {
+        await ExpiryAlertService.clearResolvedExpiryAlerts(assetId, clearFields);
+      }
       await ExpiryAlertService.scheduleForAsset(mergedAsset);
-      // Portfolio sync cancels fingerprints that no longer match
-      await ExpiryAlertService.syncPortfolioAlerts([mergedAsset]).catch(() => {});
+      // Full portfolio sync happens via AssetProvider when assets update.
     } catch (alertErr) {
       console.warn('[DocumentRenewal] alert refresh skipped:', alertErr?.message);
     }

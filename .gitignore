@@ -12,6 +12,10 @@ GoogleService-Info.plist
 *-firebase-adminsdk-*.json
 functions/serviceAccount.json
 credentials.json
+credentials/
+*.jks
+*.keystore
+android/keystore.properties
 google-services (1).json
 
 # Logs / OS
@@ -23,3 +27,5 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+.vercel
+.env*

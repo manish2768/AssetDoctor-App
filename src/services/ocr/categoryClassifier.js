@@ -29,7 +29,7 @@ const RULES = [
   {
     id: SMART_CATEGORIES.VEHICLES,
     // Vehicles before gadgets so "TVS RONIN" / dealer invoices never fall to Other
-    re: /\b(?:bike|motorcycle|scooter|activa|helmet|tyre|tire|engine\s*oil|chassis|frame\s*no|engine\s*no|vin|service|puc|rc\b|two[\s\-]?wheeler|four[\s\-]?wheeler|\bcar\b|suv|sedan|pulsar|ronin|splendor|apache|jupiter|ntorq|unicorn|shine|passion|avenger|tvs|hero\s*moto|bajaj|yamaha|suzuki|royal\s*enfield|ktm|ather|ola\s*s1|ex[\s\-]?showroom|hsrp|motor\s*vehicle|vehicle\s*invoice|dealer\s*invoice|insurance\s*polic|motor\s*insurance|certificate\s*of\s*insurance)\b/i,
+    re: /\b(?:bike|motorcycle|scooter|activa|helmet|tyre|tire|engine\s*oil|chassis|frame\s*no|engine\s*no|vin|service|puc|rc\b|two[\s\-]?wheeler|four[\s\-]?wheeler|\bcar\b|suv|sedan|pulsar|ronin|splendor|apache|jupiter|ntorq|unicorn|shine|passion|avenger|\btvs\b|hero\s*moto|bajaj|yamaha|honda|suzuki|royal\s*enfield|ktm|ather|ola\s*s1|ex[\s\-]?showroom|hsrp|motor\s*vehicle|vehicle\s*invoice|dealer\s*invoice|insurance\s*polic|motor\s*insurance|certificate\s*of\s*insurance|raftaar|moto\s*legends)\b/i,
   },
   {
     id: SMART_CATEGORIES.GADGETS,
