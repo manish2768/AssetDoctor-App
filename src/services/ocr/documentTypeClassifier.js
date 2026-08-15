@@ -5,6 +5,8 @@
 
 export const DOC_TYPES = Object.freeze({
   BILL: 'bill',
+  SALES_INVOICE: 'sales_invoice',
+  SERVICE_INVOICE: 'service_invoice',
   VEHICLE_INVOICE: 'vehicle_invoice',
   INSURANCE: 'insurance',
   PUC: 'puc',
@@ -84,6 +86,27 @@ export function classifyDocumentType(blob = '', hints = {}) {
       /\bmotor\s*vehicle\b/,
     ]) + (hints.registration ? 2 : 0) + (hints.chassisNumber ? 3 : 0);
 
+  const serviceInvoiceScore = score(text, [
+    /\bservice\s*invoice\b/,
+    /\bjob\s*card\b/,
+    /\bworkshop\b/,
+    /\blabou?r\s*(?:charges|cost)?\b/,
+    /\bodometer\b/,
+    /\bkm\s*(?:reading|run|covered)?\b/,
+    /\bperiodic\s*service\b/,
+    /\bparts\s*(?:replaced|used)\b/,
+    /\bservice\s*(?:centre|center|advisor)\b/,
+  ]);
+
+  const salesInvoiceScore = score(text, [
+    /\btax\s*invoice\b/,
+    /\bsales\s*invoice\b/,
+    /\bbill\s*of\s*supply\b/,
+    /\bpurchase\s*invoice\b/,
+    /\bcash\s*memo\b/,
+    /\bretail\s*invoice\b/,
+  ]);
+
   const scores = [
     { type: DOC_TYPES.INSURANCE, score: insuranceScore, label: 'Insurance Policy' },
     { type: DOC_TYPES.PUC, score: pucScore, label: 'PUC Certificate' },
@@ -94,26 +117,47 @@ export function classifyDocumentType(blob = '', hints = {}) {
       score: vehicleInvoiceScore,
       label: 'Vehicle Invoice',
     },
+    {
+      type: DOC_TYPES.SERVICE_INVOICE,
+      score: serviceInvoiceScore,
+      label: 'Service Invoice',
+    },
+    {
+      type: DOC_TYPES.SALES_INVOICE,
+      score: salesInvoiceScore,
+      label: 'Sales Invoice',
+    },
   ].sort((a, b) => b.score - a.score);
 
   const best = scores[0];
   if (best && best.score >= 2) {
-    const isVehicleInvoice = best.type === DOC_TYPES.VEHICLE_INVOICE || vehicleInvoiceScore >= 2;
+    const isVehicleInvoice =
+      best.type === DOC_TYPES.VEHICLE_INVOICE || vehicleInvoiceScore >= 2;
     const documentKind = best.type;
     const requiresVehicleLink = [
       DOC_TYPES.INSURANCE,
       DOC_TYPES.PUC,
       DOC_TYPES.RC,
       DOC_TYPES.WARRANTY,
+      DOC_TYPES.SERVICE_INVOICE,
     ].includes(documentKind);
+
+    let vaultType = best.type;
+    let type = best.type;
+    if (
+      best.type === DOC_TYPES.VEHICLE_INVOICE ||
+      best.type === DOC_TYPES.SALES_INVOICE ||
+      best.type === DOC_TYPES.SERVICE_INVOICE
+    ) {
+      vaultType = DOC_TYPES.BILL;
+      type = DOC_TYPES.BILL;
+    } else if (best.type === DOC_TYPES.WARRANTY) {
+      vaultType = 'warranty';
+    }
+
     return {
-      type: best.type === DOC_TYPES.VEHICLE_INVOICE ? DOC_TYPES.BILL : best.type,
-      vaultType:
-        best.type === DOC_TYPES.VEHICLE_INVOICE
-          ? DOC_TYPES.BILL
-          : best.type === DOC_TYPES.WARRANTY
-            ? 'warranty'
-            : best.type,
+      type,
+      vaultType,
       label: best.label,
       isVehicleInvoice,
       categoryHint:
@@ -122,17 +166,22 @@ export function classifyDocumentType(blob = '', hints = {}) {
           : null,
       documentKind,
       requiresVehicleLink,
+      isServiceInvoice: best.type === DOC_TYPES.SERVICE_INVOICE,
+      isSalesInvoice:
+        best.type === DOC_TYPES.SALES_INVOICE || best.type === DOC_TYPES.VEHICLE_INVOICE,
     };
   }
 
   return {
     type: DOC_TYPES.BILL,
     vaultType: DOC_TYPES.BILL,
-    label: 'Purchase Bill / Invoice',
+    label: 'Sales Invoice',
     isVehicleInvoice: false,
     categoryHint: null,
-    documentKind: DOC_TYPES.BILL,
+    documentKind: DOC_TYPES.SALES_INVOICE,
     requiresVehicleLink: false,
+    isServiceInvoice: false,
+    isSalesInvoice: true,
   };
 }
 
@@ -197,7 +246,9 @@ export function vaultTypeFromGeminiDocumentType(geminiDocumentType) {
   if (t === 'VEHICLE_RC' || t === 'REGISTRATION_CERTIFICATE') return DOC_TYPES.RC;
   if (t === 'VEHICLE_INSURANCE' || t === 'INSURANCE_POLICY') return DOC_TYPES.INSURANCE;
   if (t === 'VEHICLE_PUC' || t === 'PUC_CERTIFICATE') return DOC_TYPES.PUC;
-  if (t === 'PURCHASE_INVOICE' || t === 'TAX_INVOICE') return DOC_TYPES.BILL;
+  if (t === 'SERVICE_INVOICE' || t === 'JOB_CARD') return DOC_TYPES.SERVICE_INVOICE;
+  if (t === 'SALES_INVOICE') return DOC_TYPES.SALES_INVOICE;
+  if (t === 'PURCHASE_INVOICE' || t === 'TAX_INVOICE') return DOC_TYPES.SALES_INVOICE;
   if (t === 'OTHER' || t === 'OTHER_RECEIPT') return DOC_TYPES.OTHER;
   return null;
 }
@@ -214,20 +265,36 @@ export function resolveDocumentClassification(blob = '', hints = {}) {
       [DOC_TYPES.RC]: 'RC Book',
       [DOC_TYPES.INSURANCE]: 'Insurance Policy',
       [DOC_TYPES.PUC]: 'PUC Certificate',
-      [DOC_TYPES.BILL]: 'Purchase Bill / Invoice',
+      [DOC_TYPES.BILL]: 'Sales Invoice',
+      [DOC_TYPES.SALES_INVOICE]: 'Sales Invoice',
+      [DOC_TYPES.SERVICE_INVOICE]: 'Service Invoice',
       [DOC_TYPES.OTHER]: 'Other Document',
     };
-    const requiresVehicleLink = [DOC_TYPES.RC, DOC_TYPES.INSURANCE, DOC_TYPES.PUC].includes(
-      geminiVault,
-    );
+    const requiresVehicleLink = [
+      DOC_TYPES.RC,
+      DOC_TYPES.INSURANCE,
+      DOC_TYPES.PUC,
+      DOC_TYPES.SERVICE_INVOICE,
+    ].includes(geminiVault);
+    const vaultAsBill = [
+      DOC_TYPES.SALES_INVOICE,
+      DOC_TYPES.SERVICE_INVOICE,
+      DOC_TYPES.OTHER,
+    ].includes(geminiVault);
     return {
-      type: geminiVault === DOC_TYPES.OTHER ? DOC_TYPES.BILL : geminiVault,
-      vaultType: geminiVault === DOC_TYPES.OTHER ? DOC_TYPES.OTHER : geminiVault,
+      type: vaultAsBill ? DOC_TYPES.BILL : geminiVault,
+      vaultType: vaultAsBill
+        ? geminiVault === DOC_TYPES.OTHER
+          ? DOC_TYPES.OTHER
+          : DOC_TYPES.BILL
+        : geminiVault,
       label: labelMap[geminiVault] || 'Document',
       isVehicleInvoice: false,
       categoryHint: requiresVehicleLink || geminiVault === DOC_TYPES.RC ? 'Vehicles' : null,
       documentKind: geminiVault,
       requiresVehicleLink,
+      isServiceInvoice: geminiVault === DOC_TYPES.SERVICE_INVOICE,
+      isSalesInvoice: geminiVault === DOC_TYPES.SALES_INVOICE || geminiVault === DOC_TYPES.BILL,
       source: 'gemini',
     };
   }

@@ -22,7 +22,35 @@ export class ScanErrorBoundary extends Component {
   componentDidCatch(error, info) {
     console.error('[ScanErrorBoundary]', error?.message || error);
     console.error('[ScanErrorBoundary] stack:', info?.componentStack || '');
+    try {
+      // eslint-disable-next-line global-require
+      const { CrashlyticsService } = require('../services/crashlytics/CrashlyticsService');
+      CrashlyticsService.recordError?.(error, {
+        componentStack: String(info?.componentStack || '').slice(0, 200),
+        boundary: 'scan',
+      });
+      // eslint-disable-next-line global-require
+      const { pushDiagnosticLog } = require('../services/diagnostics/DeviceDiagnostics');
+      pushDiagnosticLog(`ScanError: ${error?.message || error}`);
+    } catch {
+      /* optional */
+    }
   }
+
+  reportError = async () => {
+    Haptics.tap();
+    try {
+      // eslint-disable-next-line global-require
+      const { openSupportErrorEmail } = require('../services/diagnostics/DeviceDiagnostics');
+      await openSupportErrorEmail({
+        subject: '[Asset Doctor] Scan Error',
+        message: 'Scanner crashed while capturing / reading a document.',
+        error: this.state.error,
+      });
+    } catch {
+      /* ignore */
+    }
+  };
 
   goBackSafe = () => {
     Haptics.tap();
@@ -58,6 +86,9 @@ export class ScanErrorBoundary extends Component {
           </Text>
           <Pressable style={styles.btn} onPress={this.retry}>
             <Text style={styles.btnText}>Try again</Text>
+          </Pressable>
+          <Pressable style={[styles.btn, styles.btnGhost]} onPress={this.reportError}>
+            <Text style={styles.btnGhostText}>Report Error</Text>
           </Pressable>
           <Pressable style={[styles.btn, styles.btnGhost]} onPress={this.goBackSafe}>
             <Text style={styles.btnGhostText}>Go back</Text>

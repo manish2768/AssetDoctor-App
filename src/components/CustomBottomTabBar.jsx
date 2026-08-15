@@ -141,9 +141,9 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     ...Platform.select({
       ios: {
-        shadowColor: '#0F172A',
+        shadowColor: '#64748B',
         shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.1,
+        shadowOpacity: 0.12,
         shadowRadius: 16,
       },
       android: { elevation: 10 },

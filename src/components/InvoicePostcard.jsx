@@ -67,7 +67,7 @@ export function InvoicePostcard({
         onRequestClose={() => setZoomOpen(false)}
         statusBarTranslucent
       >
-        <StatusBar barStyle="light-content" />
+        <StatusBar barStyle="dark-content" />
         <Pressable
           style={styles.zoomBackdrop}
           onPress={() => {

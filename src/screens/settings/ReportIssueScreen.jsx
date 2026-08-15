@@ -22,6 +22,8 @@ import { Screen, GlassCard, GlassButton } from '../../components/ui/Glass';
 import { BRAND, COLORS, SPACING } from '../../theme/branding';
 import { Haptics } from '../../services/haptics';
 import { FeedbackService } from '../../services/feedback/FeedbackService';
+import { buildDeviceDiagnostics } from '../../services/diagnostics/DeviceDiagnostics';
+import { CrashlyticsService } from '../../services/crashlytics/CrashlyticsService';
 import { useTabSafeBottomPadding } from '../../utils/tabSafePadding';
 
 const CATEGORIES = [
@@ -33,16 +35,8 @@ const CATEGORIES = [
   { id: 'other', label: 'Other feedback', emoji: '💬' },
 ];
 
-function buildDeviceBlock() {
-  const appVersion =
-    Constants.expoConfig?.version ||
-    Constants.nativeAppVersion ||
-    'unknown';
-  return [
-    `App: ${BRAND.name} v${appVersion}`,
-    `Platform: ${Platform.OS} ${Platform.Version}`,
-    `Device: ${Constants.deviceName || 'unknown'}`,
-  ].join('\n');
+function buildDeviceBlock(user, profile) {
+  return buildDeviceDiagnostics({ user, profile });
 }
 
 export function ReportIssueScreen({ route, navigation }) {
@@ -56,7 +50,10 @@ export function ReportIssueScreen({ route, navigation }) {
   const [contact, setContact] = useState(user?.email || profile?.phone || '');
   const [busy, setBusy] = useState(false);
 
-  const deviceBlock = useMemo(() => buildDeviceBlock(), []);
+  const deviceBlock = useMemo(
+    () => buildDeviceBlock(user, profile),
+    [user, profile],
+  );
 
   const composeBody = () => {
     const cat = CATEGORIES.find((c) => c.id === category);
@@ -81,15 +78,16 @@ export function ReportIssueScreen({ route, navigation }) {
     Haptics.tap();
     setBusy(true);
     const subject = encodeURIComponent(
-      `[Asset Doctor] ${CATEGORIES.find((c) => c.id === category)?.label || 'Feedback'}`,
+      `[Asset Doctor] ${CATEGORIES.find((c) => c.id === category)?.label || 'Report Error'}`,
     );
     const body = encodeURIComponent(composeBody());
     const url = `mailto:${BRAND.supportEmail}?subject=${subject}&body=${body}`;
     try {
       await FeedbackService.saveLocalDraft({ category, message, contact });
+      CrashlyticsService.log?.(`Report Error: ${category} — ${message.slice(0, 120)}`);
       const can = await Linking.canOpenURL(url);
       if (can) await Linking.openURL(url);
-      else await Share.share({ message: composeBody(), title: 'Asset Doctor feedback' });
+      else await Share.share({ message: composeBody(), title: 'Asset Doctor Report Error' });
       Haptics.success();
     } catch (e) {
       Alert.alert('Email', e?.message || 'Could not open email app');
@@ -212,7 +210,7 @@ export function ReportIssueScreen({ route, navigation }) {
         </GlassCard>
 
         <GlassButton
-          title="📧 Send via Email"
+          title="📧 Report Error via Email"
           style={{ marginTop: 14 }}
           loading={busy}
           onPress={onEmail}

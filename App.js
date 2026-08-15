@@ -109,7 +109,7 @@ export default function App() {
   if (!fontsLoaded) {
     return (
       <View style={[styles.root, styles.boot]}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
         <ActivityIndicator color={COLORS.emerald} />
       </View>
     );
@@ -119,7 +119,7 @@ export default function App() {
     <GestureHandlerRootView style={styles.root} key={bootKey}>
       <RootErrorBoundary onRestart={() => setBootKey((k) => k + 1)}>
         <SafeAreaProvider>
-          <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+          <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
           <View style={styles.root}>
             <AppLockProvider>
               <AuthProvider>

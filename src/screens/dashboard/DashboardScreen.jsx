@@ -51,6 +51,8 @@ import {
 import { normalizeAssetRecord } from '../../services/storageService';
 import { summarizePortfolioCost, calculateCostToUse } from '../../utils/costToUse';
 import { calculateResaleValue } from '../../utils/resaleCalculator';
+import { summarizeHouseholdNetWorth } from '../../utils/portfolioNetWorth';
+import { findUpgradeReviewAlerts } from '../../utils/maintenanceValueAlert';
 
 function formatRupee(amount) {
   const n = Number(amount) || 0;
@@ -141,27 +143,16 @@ export function DashboardScreen({ navigation }) {
     [assets],
   );
 
-  const totalVaultValue = useMemo(
-    () => activeAssets.reduce((sum, asset) => sum + (Number(asset.value) || 0), 0),
+  const netWorth = useMemo(
+    () => summarizeHouseholdNetWorth(activeAssets),
     [activeAssets],
   );
+  const totalVaultValue = netWorth.totalCurrent;
+  const vehicleValue = netWorth.vehiclesCurrent;
+  const gadgetsValue = netWorth.gadgetsCurrent;
 
-  const vehicleValue = useMemo(
-    () =>
-      activeAssets
-        .filter((a) => getAssetFolderType(a) === 'vehicle')
-        .reduce((sum, a) => sum + (Number(a.value) || 0), 0),
-    [activeAssets],
-  );
-
-  const gadgetsValue = useMemo(
-    () =>
-      activeAssets
-        .filter((a) => {
-          const folder = getAssetFolderType(a);
-          return folder === 'electronics' || folder === 'property';
-        })
-        .reduce((sum, a) => sum + (Number(a.value) || 0), 0),
+  const upgradeAlerts = useMemo(
+    () => findUpgradeReviewAlerts(activeAssets),
     [activeAssets],
   );
   const portfolioCost = useMemo(() => summarizePortfolioCost(activeAssets), [activeAssets]);
@@ -425,15 +416,18 @@ export function DashboardScreen({ navigation }) {
           assetCount={portfolioHealth?.count ?? 0}
         />
 
-        {/* Net worth card */}
+        {/* Net worth card — estimated current / resale value across household */}
         <View style={styles.worthCard}>
           <View style={styles.worthTop}>
-            <Text style={styles.worthEyebrow}>TOTAL MANAGED NET WORTH</Text>
+            <Text style={styles.worthEyebrow}>HOUSEHOLD NET WORTH</Text>
             <View style={styles.lockerBadge}>
-              <Text style={styles.lockerBadgeText}>🛡 Active Locker</Text>
+              <Text style={styles.lockerBadgeText}>🛡 Est. market value</Text>
             </View>
           </View>
           <Text style={styles.worthValue}>{formatINR(totalVaultValue)}</Text>
+          <Text style={[styles.guestSub, { marginBottom: 10 }]}>
+            Purchase total {formatINR(netWorth.totalPurchase)} · {netWorth.count} assets
+          </Text>
           <View style={styles.worthSplit}>
             <View style={styles.worthSplitItem}>
               <Text style={styles.splitIcon}>🏍️</Text>
@@ -452,6 +446,30 @@ export function DashboardScreen({ navigation }) {
             </View>
           </View>
         </View>
+
+        {upgradeAlerts.length ? (
+          <View style={[styles.worthCard, { marginTop: 12, borderColor: '#F59E0B', borderWidth: 1 }]}>
+            <Text style={styles.worthEyebrow}>MAINTENANCE VS VALUE</Text>
+            {upgradeAlerts.slice(0, 2).map((row) => (
+              <Pressable
+                key={row.asset?.assetId || row.asset?.id}
+                onPress={() => {
+                  Haptics.tap();
+                  const id = row.asset?.assetId || row.asset?.id;
+                  if (id) navigation?.navigate?.('AssetPassport', { assetId: id });
+                }}
+                style={{ marginTop: 8 }}
+              >
+                <Text style={{ color: COLORS.text, fontWeight: '700', fontSize: 14 }}>
+                  {cleanAssetDisplayName(row.asset?.assetName) || 'Asset'}
+                </Text>
+                <Text style={{ color: COLORS.muted, fontSize: 12, marginTop: 2 }}>
+                  {row.eval?.message}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
 
 
         {/* Master feature modules */}

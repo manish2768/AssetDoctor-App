@@ -51,14 +51,15 @@ export async function runSweetBillChecker(invoice = {}, options = {}) {
   const fingerprint = buildInvoiceFingerprint(invoice);
   const isDuplicate = fingerprint ? await hasInvoiceFingerprint(fingerprint) : false;
   const duplicateMessage = isDuplicate
-    ? 'This invoice number + GSTIN was already scanned. Duplicate warranty/expense entry blocked.'
+    ? 'This invoice number + seller GSTIN already exists in a saved record.'
     : fingerprint
-      ? 'No prior scan found for this invoice + GSTIN combo.'
-      : 'Invoice number missing — duplicate check skipped.';
+      ? 'No saved record found for this invoice number + seller GSTIN.'
+      : 'Duplicate check skipped — need both invoice number and seller GSTIN.';
 
   if (isDuplicate) flags.push('duplicate_invoice');
 
-  if (options.markDuplicateOnSave && fingerprint && !isDuplicate) {
+  // Never remember fingerprints during OCR/preview — only on committed save
+  if (options.markDuplicateOnSave === true && fingerprint && !isDuplicate) {
     await rememberInvoiceFingerprint(fingerprint);
   }
 
@@ -76,7 +77,8 @@ export async function runSweetBillChecker(invoice = {}, options = {}) {
     isDuplicate,
     duplicateMessage,
     fingerprint,
-    canSave: !isDuplicate && !missingTotal,
+    // Soft warning only — Review can still save / update with confirm
+    canSave: !missingTotal,
     missingTotal,
     totalOk: !missingTotal,
     flags,
@@ -134,23 +136,28 @@ export function buildInvoiceFingerprint(invoice = {}) {
     .toUpperCase()
     .replace(/\s+/g, '')
     .trim();
-  const gst = String(invoice.shopGstin || '')
+  const gst = String(invoice.shopGstin || invoice.gstin || '')
     .toUpperCase()
     .replace(/\s+/g, '')
     .trim();
-  if (!inv) return '';
-  return `${gst || 'NOGST'}::${inv}`;
+  // BOTH invoice number AND seller GSTIN required — never use NOGST fallback
+  // (that caused false "Invoice already saved" on fresh bills).
+  if (!inv || inv.length < 2) return '';
+  if (!gst || !isValidGstinFormat(gst)) return '';
+  return `${gst}::${inv}`;
 }
 
 export async function hasInvoiceFingerprint(fingerprint) {
   if (!fingerprint) return false;
+  // Legacy false-positive keys (invoice# without GSTIN)
+  if (/^NOGST::/i.test(fingerprint)) return false;
   const list = await loadFingerprints();
   return list.includes(fingerprint);
 }
 
 export async function rememberInvoiceFingerprint(fingerprint) {
-  if (!fingerprint) return;
-  const list = await loadFingerprints();
+  if (!fingerprint || /^NOGST::/i.test(fingerprint)) return;
+  const list = (await loadFingerprints()).filter((f) => !/^NOGST::/i.test(f));
   if (list.includes(fingerprint)) return;
   const next = [fingerprint, ...list].slice(0, 500);
   await AsyncStorage.setItem(FINGERPRINT_KEY, JSON.stringify(next));

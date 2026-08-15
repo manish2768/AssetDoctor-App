@@ -1,5 +1,6 @@
 /**
- * App lock gate — phone PIN / pattern / biometric before vault UI.
+ * App lock — device PIN / biometric ONLY on cold start or true background resume.
+ * Never re-prompt during in-app navigation or brief inactive (dialog / permission) flickers.
  */
 
 import React, {
@@ -39,7 +40,9 @@ export function AppLockProvider({ children }) {
   const [canUseDeviceLock, setCanUse] = useState(false);
   const [missingEnrollment, setMissingEnrollment] = useState(false);
   const [securityLabel, setSecurityLabel] = useState('Phone PIN / pattern');
+  /** Only stamp when app truly goes to background — ignore `inactive` (biometric sheets, pickers). */
   const backgroundAt = useRef(null);
+  const sessionUnlocked = useRef(false);
 
   const refresh = useCallback(async () => {
     const nativeOk = AppLockService.isNativeAvailable();
@@ -49,6 +52,7 @@ export function AppLockProvider({ children }) {
       setCanUse(false);
       setMissingEnrollment(false);
       setSecurityLabel('Install latest APK for App Lock');
+      sessionUnlocked.current = true;
       return { on: false, enrolled: false };
     }
     const [on, enrolled, label] = await Promise.all([
@@ -62,7 +66,9 @@ export function AppLockProvider({ children }) {
     setMissingEnrollment(on && !enrolled);
     if (!on) {
       setLocked(false);
-    } else {
+      sessionUnlocked.current = true;
+    } else if (!sessionUnlocked.current) {
+      // Cold start only — require unlock once per process
       setLocked(true);
     }
     return { on, enrolled };
@@ -79,19 +85,25 @@ export function AppLockProvider({ children }) {
     };
   }, [refresh]);
 
-  // Re-lock after background (bank-app style)
+  // Re-lock ONLY after real background (≥ BACKGROUND_LOCK_MS), never on inactive
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
-      if (next === 'background' || next === 'inactive') {
+      if (next === 'background') {
         backgroundAt.current = Date.now();
+        return;
+      }
+      if (next === 'inactive') {
+        // Permission sheets / biometric UI — do NOT mark as left / do NOT re-lock
         return;
       }
       if (next !== 'active') return;
       const leftAt = backgroundAt.current;
       backgroundAt.current = null;
       if (!enabled) return;
-      const elapsed = leftAt ? Date.now() - leftAt : AppLockService.BACKGROUND_LOCK_MS;
+      if (!leftAt) return;
+      const elapsed = Date.now() - leftAt;
       if (elapsed >= AppLockService.BACKGROUND_LOCK_MS) {
+        sessionUnlocked.current = false;
         setLocked(true);
         setMissingEnrollment(!canUseDeviceLock);
       }
@@ -102,6 +114,7 @@ export function AppLockProvider({ children }) {
   const unlock = useCallback(async () => {
     if (!enabled) {
       setLocked(false);
+      sessionUnlocked.current = true;
       return { success: true };
     }
     const result = await AppLockService.authenticate({
@@ -110,6 +123,7 @@ export function AppLockProvider({ children }) {
     if (result.success) {
       setLocked(false);
       setMissingEnrollment(false);
+      sessionUnlocked.current = true;
       Haptics.success();
     } else if (result.missingEnrollment) {
       setMissingEnrollment(true);
@@ -119,7 +133,6 @@ export function AppLockProvider({ children }) {
   }, [enabled]);
 
   const setAppLockEnabled = useCallback(async (nextEnabled) => {
-    // Confirm with device lock before changing preference
     if (nextEnabled) {
       const enrolled = await AppLockService.canUseDeviceLock();
       if (!enrolled) {
@@ -139,6 +152,7 @@ export function AppLockProvider({ children }) {
       setCanUse(true);
       setMissingEnrollment(false);
       setLocked(false);
+      sessionUnlocked.current = true;
       Haptics.success();
       return { success: true };
     }
@@ -151,6 +165,7 @@ export function AppLockProvider({ children }) {
     setEnabled(false);
     setLocked(false);
     setMissingEnrollment(false);
+    sessionUnlocked.current = true;
     Haptics.success();
     return { success: true };
   }, []);
@@ -158,6 +173,7 @@ export function AppLockProvider({ children }) {
   const onUnlocked = useCallback(() => {
     setLocked(false);
     setMissingEnrollment(false);
+    sessionUnlocked.current = true;
   }, []);
 
   const value = useMemo(

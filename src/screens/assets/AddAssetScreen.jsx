@@ -682,7 +682,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  scanBtnText: { color: '#04110A', fontWeight: '900', fontSize: 14 },
+  scanBtnText: { color: COLORS.onPrimary, fontWeight: '900', fontSize: 14 },
   scanPreview: { marginBottom: 12 },
   scanImage: { width: '100%', height: 160, borderRadius: 14 },
   scanHint: { color: COLORS.emerald, fontSize: 12, fontWeight: '700', marginTop: 8, marginBottom: 8 },

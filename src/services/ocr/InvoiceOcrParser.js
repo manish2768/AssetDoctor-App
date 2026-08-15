@@ -10,6 +10,7 @@ import {
   SMART_CATEGORIES,
 } from './categoryClassifier';
 import { classifyDocumentType } from './documentTypeClassifier';
+import { mapFieldsForDocumentType } from './documentFieldMapper';
 
 /** Official Indian GSTIN — e.g. 09AAKCC0172C1ZZ / 09AAMCR6805R1ZF */
 export const GSTIN_RE =
@@ -257,6 +258,8 @@ export function parseInvoiceText(rawText) {
   data.documentLabel = docClass.label;
   data.isVehicleInvoice = Boolean(docClass.isVehicleInvoice);
   data.requiresVehicleLink = Boolean(docClass.requiresVehicleLink);
+  data.isServiceInvoice = Boolean(docClass.isServiceInvoice);
+  mapFieldsForDocumentType(data, docClass);
 
   if (
     docClass.isVehicleInvoice ||
@@ -702,8 +705,20 @@ function isGoodProductName(name) {
   if (/policy\s*no|1800|toll\s*free|helpline|includes?\s+hsrp|welcome\s*kit/i.test(s)) {
     return false;
   }
-  if (/^(?:date|total|tax|gst|number|qty|rate|amount|hsn|sac|includes?)$/i.test(s)) return false;
+  if (/^(?:date|total|tax|gst|number|qty|rate|amount|hsn|sac|includes?|product)$/i.test(s)) {
+    return false;
+  }
   if (/includes?\s+hsrp|hsrp\s+and\s+fittings|fittings\s+only/i.test(s)) return false;
+  // Never treat address / city / pincode lines as product names
+  if (
+    /\b(?:pin\s*code|pincode|uttar\s*pradesh|maharashtra|lucknow|mumbai|delhi|noida|sector|nagar|colony|district|state)\b/i.test(
+      s,
+    )
+  ) {
+    return false;
+  }
+  if (/\b[1-9]\d{5}\b/.test(s) && s.split(/\s+/).length >= 2) return false;
+  if (/^\d{14,17}$/.test(s.replace(/\D/g, ''))) return false;
   if (!/[A-Za-z]{3,}/.test(s)) return false;
   return true;
 }

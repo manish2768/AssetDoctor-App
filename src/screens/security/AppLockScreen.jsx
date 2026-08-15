@@ -85,16 +85,17 @@ export function AppLockScreen({ onUnlocked, missingEnrollment }) {
     tryUnlock({ force: false });
 
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'background' || state === 'inactive') {
-        // Ignore brief inactive from system biometric sheet
+      // Never treat `inactive` as left — biometric sheets / nav overlays would re-prompt
+      if (state === 'background') {
         if (!backgroundAt.current) backgroundAt.current = Date.now();
         return;
       }
+      if (state === 'inactive') return;
       if (state !== 'active') return;
       const leftAt = backgroundAt.current;
       backgroundAt.current = null;
       if (!leftAt || isAuthenticatingRef.current) return;
-      // Only re-prompt after a real background (≥3s), not biometric dialog flicker
+      // Only re-prompt after a real background (≥3s), not dialog flicker
       if (Date.now() - leftAt < 3000) return;
       hasTriggeredBiometrics.current = false;
       tryUnlock({ force: true });

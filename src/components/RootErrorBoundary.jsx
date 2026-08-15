@@ -19,24 +19,13 @@ import { BRAND, COLORS } from '../theme/branding';
 
 function reportCrashEmail(error) {
   try {
-    const appVersion = Constants.expoConfig?.version || 'unknown';
-    const subject = encodeURIComponent('[Asset Doctor] App crash report');
-    const body = encodeURIComponent(
-      [
-        'The app crashed with this error:',
-        '',
-        String(error?.message || error),
-        '',
-        String(error?.stack || ''),
-        '',
-        '---',
-        `App version: ${appVersion}`,
-        `Support: ${BRAND.supportEmail}`,
-      ].join('\n'),
-    );
-    Linking.openURL(`mailto:${BRAND.supportEmail}?subject=${subject}&body=${body}`).catch(
-      () => {},
-    );
+    // eslint-disable-next-line global-require
+    const { openSupportErrorEmail } = require('../services/diagnostics/DeviceDiagnostics');
+    openSupportErrorEmail({
+      subject: '[Asset Doctor] App crash report',
+      message: 'The app crashed with this error.',
+      error,
+    });
   } catch {
     /* ignore */
   }
@@ -151,7 +140,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(244,63,94,0.35)',
   },
-  crashBody: { color: '#FDA4AF', fontSize: 13, lineHeight: 18, fontWeight: '600' },
+  crashBody: { color: COLORS.rose, fontSize: 13, lineHeight: 18, fontWeight: '600' },
   crashBtn: {
     backgroundColor: COLORS.emerald,
     borderRadius: 14,

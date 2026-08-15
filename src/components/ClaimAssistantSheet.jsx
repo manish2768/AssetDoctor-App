@@ -107,9 +107,9 @@ export function ClaimAssistantSheet({ visible, asset, onClose }) {
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end' },
-  dim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(2,6,23,0.55)' },
+  dim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15, 23, 42, 0.35)' },
   sheet: {
-    backgroundColor: COLORS.bgElevated || '#0f172a',
+    backgroundColor: COLORS.card,
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     paddingHorizontal: 16,
@@ -117,14 +117,14 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     maxHeight: '78%',
     borderWidth: 1,
-    borderColor: COLORS.border || 'rgba(255,255,255,0.08)',
+    borderColor: COLORS.border,
   },
   handle: {
     alignSelf: 'center',
     width: 42,
     height: 4,
     borderRadius: 99,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: COLORS.border,
     marginBottom: 10,
   },
   title: { color: COLORS.text, fontWeight: '900', fontSize: 16 },
@@ -138,11 +138,11 @@ const styles = StyleSheet.create({
   },
   userBubble: {
     alignSelf: 'flex-end',
-    backgroundColor: 'rgba(16,185,129,0.22)',
+    backgroundColor: COLORS.successSoft,
   },
   aiBubble: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: COLORS.bgDeep,
   },
   bubbleText: { color: COLORS.text, fontSize: 13, lineHeight: 19 },
   composer: { flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 6 },
@@ -150,11 +150,11 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.border || 'rgba(255,255,255,0.12)',
+    borderColor: COLORS.border,
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: COLORS.text,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: COLORS.bgDeep,
   },
   send: {
     backgroundColor: COLORS.emerald,
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  sendText: { color: '#04110A', fontWeight: '800' },
+  sendText: { color: COLORS.onPrimary, fontWeight: '800' },
   close: { alignItems: 'center', marginTop: 10, padding: 8 },
   closeText: { color: COLORS.muted, fontWeight: '700' },
 });

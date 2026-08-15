@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     alignItems: 'center',
   },
-  primaryText: { color: '#04110A', fontWeight: '900', fontSize: 15 },
+  primaryText: { color: COLORS.onPrimary, fontWeight: '900', fontSize: 15 },
   skip: { color: COLORS.muted, textAlign: 'center', fontWeight: '700' },
   footer: {
     color: COLORS.muted,

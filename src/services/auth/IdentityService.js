@@ -57,8 +57,8 @@ export class IdentityService {
           message:
             data.message ||
             (data.field === 'email'
-              ? 'Email is already registered with another account.'
-              : 'Phone number is already registered with another account.'),
+              ? 'This email is already on another Asset Doctor account — sign in with it.'
+              : 'This mobile is already a login. Use OTP verify to open that vault (no duplicate block).'),
         };
       }
       return { available: true, skipped: Boolean(data.skipped) };

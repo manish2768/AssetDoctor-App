@@ -136,20 +136,33 @@ export function extractWarrantyMonths(text) {
 }
 
 /**
- * Duplicate helper: GSTIN + Total Amount + Invoice Date fingerprint in AsyncStorage.
+ * Duplicate helper: ONLY when seller GSTIN + invoice number both present & match
+ * an already-committed fingerprint. (Legacy total+date key kept for old saves.)
  */
-export function buildBillFingerprint({ gstin, totalAmount, invoiceDate } = {}) {
+export function buildBillFingerprint({ gstin, invoiceNumber, totalAmount, invoiceDate } = {}) {
   const g = String(gstin || '')
     .toUpperCase()
+    .replace(/\s+/g, '')
     .trim();
-  const t = totalAmount != null && Number.isFinite(Number(totalAmount)) ? String(Number(totalAmount)) : '';
-  const d = String(invoiceDate || '').trim();
-  if (!g || !t || !d) return '';
-  return `${g}::${t}::${d}`;
+  const inv = String(invoiceNumber || '')
+    .toUpperCase()
+    .replace(/\s+/g, '')
+    .trim();
+  // Primary key: GSTIN + invoice number (exact)
+  if (g && /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/i.test(g) && inv.length >= 2) {
+    return `INV::${g}::${inv}`;
+  }
+  // Do NOT fingerprint without GSTIN — avoids blocking fresh scans
+  return '';
 }
 
 export async function isDuplicateBill(parsed) {
-  const fingerprint = buildBillFingerprint(parsed);
+  const fingerprint = buildBillFingerprint({
+    gstin: parsed?.gstin || parsed?.shopGstin,
+    invoiceNumber: parsed?.invoiceNumber || parsed?.invoice_number,
+    totalAmount: parsed?.totalAmount,
+    invoiceDate: parsed?.invoiceDate || parsed?.purchaseDate,
+  });
   if (!fingerprint) return { isDuplicate: false, fingerprint: '' };
   const list = await loadFingerprints();
   return { isDuplicate: list.includes(fingerprint), fingerprint };

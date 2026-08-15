@@ -604,7 +604,7 @@ export function ReviewAssetModal({
               label="Owner / Buyer Name"
               value={form.customerName}
               onChangeText={(t) => patch('customerName', t)}
-              placeholder="e.g. NIKLESH KUMAR"
+              placeholder="Buyer / Bill To name from document"
             />
             <GlassInput
               label={isInsurance ? 'Policy Number' : isRc ? 'RC / Certificate No' : 'Invoice Number'}

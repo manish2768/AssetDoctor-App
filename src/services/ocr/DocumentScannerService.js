@@ -1,10 +1,12 @@
 /**
- * Document capture via expo-image-picker only.
- * Never uses Google ML Kit / react-native-document-scanner-plugin
- * (those destroy the Activity on Android and bounce users to Home).
+ * Document capture:
+ * 1) Prefer Google ML Kit Document Scanner (edge detect + auto capture)
+ * 2) Fall back to expo-image-picker camera / gallery
+ *
+ * Always call markScanSession('ScanBill') before launch — Android may recreate
+ * the Activity when the scanner Activity finishes.
  */
 
-import * as ImagePicker from 'expo-image-picker';
 import { Linking, Platform } from 'react-native';
 
 import {
@@ -12,36 +14,48 @@ import {
   SCAN_IMAGE_COMPRESS,
   SCAN_IMAGE_MAX_WIDTH,
 } from '../../utils/compressScanImage';
-import { getImageManipulator } from '../../utils/safeNativeModules';
+import { getImageManipulator, getImagePicker } from '../../utils/safeNativeModules';
+
+/** Soft-load ML Kit scanner — missing native binary must not crash at import. */
+function getDocumentScanner() {
+  try {
+    // eslint-disable-next-line global-require
+    const mod = require('react-native-document-scanner-plugin');
+    const scanner = mod?.default || mod;
+    if (typeof scanner?.scanDocument === 'function') return scanner;
+    return null;
+  } catch (error) {
+    console.warn('[DocumentScanner] plugin unavailable:', error?.message || error);
+    return null;
+  }
+}
 
 /** Prefer MediaTypeOptions when present; else modern string array. */
-function resolveMediaTypes() {
-  return ImagePicker.MediaTypeOptions?.Images || ['images'];
+function resolveMediaTypes(ImagePicker) {
+  return ImagePicker?.MediaTypeOptions?.Images || ['images'];
 }
 
-/** Camera options — Expo ImagePicker (no ML Kit document scanner). */
-function cameraOptions() {
+function cameraOptions(ImagePicker) {
   return {
-    mediaTypes: resolveMediaTypes(),
+    mediaTypes: resolveMediaTypes(ImagePicker),
     allowsEditing: true,
-    quality: 0.5,
+    quality: 0.75,
     base64: false,
     exif: false,
   };
 }
 
-/** Gallery options — same picker stack, slightly leaner. */
-function galleryOptions() {
+function galleryOptions(ImagePicker) {
   return {
-    mediaTypes: resolveMediaTypes(),
+    mediaTypes: resolveMediaTypes(ImagePicker),
     allowsEditing: true,
-    quality: 0.5,
+    quality: 0.75,
     base64: false,
     exif: false,
   };
 }
 
-/** Resize to min 1200px + JPEG 0.6 (EXIF-upright) immediately after capture/pick. */
+/** Resize + JPEG compress (EXIF-upright) immediately after capture/pick. */
 async function compressCapturedUri(uri) {
   if (!uri) return uri;
   try {
@@ -67,8 +81,47 @@ async function compressCapturedUri(uri) {
   });
 }
 
+function normalizeFileUri(path) {
+  if (!path || typeof path !== 'string') return null;
+  if (path.startsWith('file://') || path.startsWith('content://') || path.startsWith('ph://')) {
+    return path;
+  }
+  // Android ML Kit often returns absolute paths without scheme
+  if (path.startsWith('/')) return `file://${path}`;
+  return path;
+}
+
+/**
+ * Live document scanner: hold paper in frame → auto edge detect → crop.
+ * @returns {Promise<'unavailable'|null|string>} unavailable | cancel null | compressed uri
+ */
+export async function scanWithMlKitDocumentScanner() {
+  const DocumentScanner = getDocumentScanner();
+  if (!DocumentScanner) return 'unavailable';
+
+  try {
+    const result = await DocumentScanner.scanDocument({
+      maxNumDocuments: 1,
+      croppedImageQuality: 85,
+      responseType: 'imageFilePath',
+    });
+
+    if (result?.status === 'cancel') return null;
+
+    const raw = result?.scannedImages?.[0];
+    const uri = normalizeFileUri(raw);
+    if (!uri) return null;
+    return await compressCapturedUri(uri);
+  } catch (error) {
+    console.warn('[DocumentScanner] ML Kit scan failed:', error?.message || error);
+    return 'unavailable';
+  }
+}
+
 export async function getCameraPermissionStatus() {
   try {
+    const ImagePicker = getImagePicker();
+    if (!ImagePicker?.getCameraPermissionsAsync) return 'undetermined';
     const current = await ImagePicker.getCameraPermissionsAsync();
     if (current?.granted) return 'granted';
     if (current?.canAskAgain === false) return 'denied';
@@ -81,6 +134,10 @@ export async function getCameraPermissionStatus() {
 
 export async function ensureCameraPermission() {
   try {
+    const ImagePicker = getImagePicker();
+    if (!ImagePicker?.getCameraPermissionsAsync) {
+      return { granted: false, status: 'denied', error: 'ImagePicker unavailable' };
+    }
     const current = await ImagePicker.getCameraPermissionsAsync();
     if (current?.granted) return { granted: true, status: 'granted' };
 
@@ -100,6 +157,10 @@ export async function ensureCameraPermission() {
 
 export async function ensureLibraryPermission() {
   try {
+    const ImagePicker = getImagePicker();
+    if (!ImagePicker?.getMediaLibraryPermissionsAsync) {
+      return { granted: false, status: 'denied', error: 'ImagePicker unavailable' };
+    }
     const current = await ImagePicker.getMediaLibraryPermissionsAsync();
     if (current?.granted) return { granted: true, status: 'granted' };
     const asked = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -111,11 +172,32 @@ export async function ensureLibraryPermission() {
   }
 }
 
+async function captureWithImagePickerCamera() {
+  const ImagePicker = getImagePicker();
+  if (!ImagePicker?.launchCameraAsync) {
+    throw new Error('Camera picker unavailable on this build.');
+  }
+  const cam = await ensureCameraPermission();
+  if (!cam.granted) {
+    throw new Error(
+      'Camera permission denied. Enable Camera in Settings to scan invoices.',
+    );
+  }
+  const result = await ImagePicker.launchCameraAsync(cameraOptions(ImagePicker));
+  if (result.canceled || !result.assets?.[0]?.uri) return null;
+  return compressCapturedUri(result.assets[0].uri);
+}
+
 /**
- * Capture / pick with expo-image-picker only.
- * Cancel → returns null (caller must stay on ScanBillScreen — never Home).
+ * Capture document image.
+ * mode:
+ *  - 'auto' | 'camera' → ML Kit document scanner first, then ImagePicker camera
+ *  - 'gallery' → photo library only
+ *  - 'photo' → ImagePicker camera only (skip ML Kit)
  *
- * @param {'camera'|'gallery'|'auto'} mode
+ * Cancel → returns null (caller must stay on ScanBillScreen).
+ *
+ * @param {'camera'|'gallery'|'auto'|'photo'} mode
  * @returns {Promise<string|null>} compressed image uri
  */
 export async function captureDocumentImage(mode = 'auto') {
@@ -124,19 +206,20 @@ export async function captureDocumentImage(mode = 'auto') {
       return await pickGalleryImage();
     }
 
-    const cam = await ensureCameraPermission();
-    if (!cam.granted) {
-      throw new Error(
-        'Camera permission denied. Enable Camera in Settings to scan invoices.',
-      );
+    if (mode !== 'photo') {
+      const mlKitUri = await scanWithMlKitDocumentScanner();
+      if (mlKitUri && mlKitUri !== 'unavailable') {
+        return mlKitUri;
+      }
+      if (mlKitUri === null) {
+        // User cancelled ML Kit UI — stay on ScanBill
+        return null;
+      }
+      // unavailable → fall through to ImagePicker
+      console.warn('[DocumentScanner] falling back to ImagePicker camera');
     }
 
-    const result = await ImagePicker.launchCameraAsync(cameraOptions());
-    if (result.canceled || !result.assets?.[0]?.uri) {
-      // User cancelled — stay on ScanBill; do not navigate Home
-      return null;
-    }
-    return await compressCapturedUri(result.assets[0].uri);
+    return await captureWithImagePickerCamera();
   } catch (error) {
     console.error('[ScanBillScreen Error]:', error);
     console.warn('[DocumentScanner] captureDocumentImage:', error?.message || error);
@@ -145,17 +228,18 @@ export async function captureDocumentImage(mode = 'auto') {
 }
 
 export async function pickGalleryImage() {
+  const ImagePicker = getImagePicker();
+  if (!ImagePicker?.launchImageLibraryAsync) {
+    throw new Error('Photo picker unavailable on this build.');
+  }
   const perm = await ensureLibraryPermission();
   if (!perm.granted) {
     throw new Error(
       'Photo library permission denied. Enable Photos access in Settings to import invoices.',
     );
   }
-  const result = await ImagePicker.launchImageLibraryAsync(galleryOptions());
-  if (result.canceled || !result.assets?.[0]?.uri) {
-    // User cancelled — stay on ScanBill; do not navigate Home
-    return null;
-  }
+  const result = await ImagePicker.launchImageLibraryAsync(galleryOptions(ImagePicker));
+  if (result.canceled || !result.assets?.[0]?.uri) return null;
   return compressCapturedUri(result.assets[0].uri);
 }
 
@@ -175,6 +259,7 @@ export default {
   getCameraPermissionStatus,
   ensureCameraPermission,
   ensureLibraryPermission,
+  scanWithMlKitDocumentScanner,
   captureDocumentImage,
   pickGalleryImage,
   openAppSettings,

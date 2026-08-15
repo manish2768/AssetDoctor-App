@@ -9,7 +9,8 @@ import { Platform } from 'react-native';
 
 import { APP_LOCK_ENABLED_KEY } from '../../constants/storageKeys';
 
-const BACKGROUND_LOCK_MS = 5_000;
+/** Re-lock only after the app was truly backgrounded this long (not mid-navigation). */
+const BACKGROUND_LOCK_MS = 30_000;
 
 let LocalAuthentication = null;
 let nativeLoadError = null;

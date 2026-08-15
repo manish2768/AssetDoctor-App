@@ -377,6 +377,17 @@ export class CloudVisionOcrService {
       console.warn('[OCR] Gemini enhance skipped', err?.message || err);
     }
 
+    try {
+      const { mapFieldsForDocumentType } = require('./documentFieldMapper');
+      mapFieldsForDocumentType(data, {
+        documentKind: data.documentKind || data.documentType,
+        vaultType: data.documentType,
+        label: data.documentLabel,
+      });
+    } catch {
+      /* optional */
+    }
+
     Haptics.success();
     return {
       success: true,

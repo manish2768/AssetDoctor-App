@@ -66,118 +66,61 @@ const SYSTEM_PROMPT = `You are a strict Invoice OCR parser for Indian documents 
 
 STEP 1 — CLASSIFY the document BEFORE extracting fields.
 document_type MUST be exactly one of:
-["TAX_INVOICE", "INSURANCE_POLICY", "REGISTRATION_CERTIFICATE", "PUC", "OTHER_RECEIPT"]
+["TAX_INVOICE", "SALES_INVOICE", "SERVICE_INVOICE", "INSURANCE_POLICY", "REGISTRATION_CERTIFICATE", "PUC", "OTHER_RECEIPT"]
 
 STRICT KEYWORD PRIORITY (apply in this order):
-1) If OCR contains POLICY / INSURANCE / "POLICY NO" / "PERIOD OF INSURANCE" / "CERTIFICATE OF INSURANCE" → document_type = INSURANCE_POLICY (even if the word Invoice also appears).
-2) Else if OCR contains "TAX INVOICE" / INVOICE / BILL (with GSTIN) → document_type = TAX_INVOICE.
-3) Else if Registration Certificate / Form 23 / RC book → REGISTRATION_CERTIFICATE.
-4) Else if PUC / Pollution Under Control → PUC.
-5) Else OTHER_RECEIPT.
+1) POLICY / INSURANCE / "POLICY NO" / "PERIOD OF INSURANCE" → INSURANCE_POLICY.
+2) Job card / workshop / labour / odometer service → SERVICE_INVOICE.
+3) "TAX INVOICE" / SALES INVOICE / BILL (with GSTIN) → TAX_INVOICE or SALES_INVOICE.
+4) Registration Certificate / Form 23 / RC book → REGISTRATION_CERTIFICATE.
+5) PUC / Pollution Under Control → PUC.
+6) Else OTHER_RECEIPT.
 
-STEP 2 — EXTRACT fields. Return ONLY valid JSON (no markdown). Prefer this clean invoice shape:
+STEP 2 — Return ONLY valid JSON (no markdown) with these keys:
 {
   "document_type": "TAX_INVOICE",
-  "item_name": "TVS Ronin",
-  "asset_name": "TVS Ronin",
-  "total_amount": 135500,
-  "vendor_name": "Raftaar Moto Legends Pvt Ltd",
-  "vendor_dealer_name": "Raftaar Moto Legends Pvt Ltd",
-  "vendor": "Raftaar Moto Legends Pvt Ltd",
-  "buyer_name": "Manish Kumar Rai",
-  "owner_buyer_name": "Manish Kumar Rai",
+  "product_name": "Nothing Phone (2a)",
+  "item_name": "Nothing Phone (2a)",
+  "asset_name": "Nothing Phone (2a)",
+  "total_amount": 24999,
+  "seller_name": "Retail Store Pvt Ltd",
+  "vendor_name": "Retail Store Pvt Ltd",
+  "vendor_dealer_name": "Retail Store Pvt Ltd",
+  "buyer_name": "Rahul Sharma",
+  "owner_buyer_name": "Rahul Sharma",
+  "invoice_number": "INV-1001",
+  "invoice_or_policy_no": "INV-1001",
   "purchase_date": "YYYY-MM-DD",
   "purchase_or_issue_date": "YYYY-MM-DD",
-  "invoice_number": "INV-XXXX",
-  "invoice_or_policy_no": "INV-XXXX",
-  "category": "Vehicles",
+  "category": "Gadget",
+  "serial_number": "",
   "chassis_or_frame_no": "",
   "vehicle_registration_number": "",
   "engine_number": "",
-  "expiry_date": "",
-  "registration_number": ""
+  "expiry_date": ""
 }
 
-STRICT INVOICE EXTRACTION RULES (TAX_INVOICE / bills):
+PRODUCT NAME RULES (critical):
+- product_name / item_name / asset_name MUST be the sold product or primary line-item description
+  (phone model, TVS Ronin, fridge model, etc.).
+- NEVER put city, state, pincode, street, "Bill To" address blocks, or shop address into product_name.
+- If the product title is unclear, copy the highest-value line-item description from the item table.
+- NEVER default to the word "Product". If truly missing, return "".
+- NEVER put IMEI, serial, GSTIN, CGST/SGST amounts, or invoice numbers into product_name.
+- serial_number is a SEPARATE field (IMEI/serial/chassis) — keep it out of product_name.
 
-- asset_name / item_name:
-  Look at the item table / vehicle description / product title
-  (e.g. "TVS RONIN", "TVS RONIN 225", "TVS RONIN 1CH BASE LIGHTNING").
-  DO NOT extract small footer text, disclaimers, watermarks, stamps, or OCR garbage
-  like "CautavArota", "Original for Recipient", page numbers, or QR captions.
-
-- total_amount:
-  Look STRICTLY for "Net Total", "Grand Total", "Total Amount", "Amount Payable",
-  or "Net Amount Payable" (e.g. 135500).
-  IGNORE tax calculation sub-totals, Taxable Value, CGST/SGST/IGST amounts,
-  and invoice numbers that look like amounts (e.g. ignore 63246 when it is Invoice No).
-
-- vendor / vendor_dealer_name:
-  Look at the header or dealership / company name
-  (e.g. "RAFTAAR MOTO LEGENDS PVT. LTD." or "TVS").
-  NEVER use footer disclaimers, dates, times, or invoice numbers.
-
-- buyer_name / owner_buyer_name:
-  Look for "Customer Name", "Buyer Name", "Purchaser", "Insured Name",
-  or a name next to "S/O", "W/O", "D/O" (e.g. "NIKLESH KUMAR").
-  Do not leave blank if clearly present.
-
-- invoice_number / invoice_or_policy_no:
-  Extract Invoice No / Bill No at the top (e.g. "63246").
-  For insurance, extract Policy No / Certificate No instead.
-
-- purchase_date / purchase_or_issue_date:
-  Extract invoice / issue date in YYYY-MM-DD format only.
-
-FALLBACK CLEANUP (mandatory):
-- If a field is not clearly found, return null for numbers and "" for strings.
-- NEVER invent, guess, or copy random footer / watermark / stamp text.
-- Never put invoice numbers into total_amount.
-- Never put dates/times into vendor or buyer fields.
-
-STRICT RULES BY document_type:
-
-IF TAX_INVOICE:
-- asset_name = product / vehicle model from item table.
-- vendor_dealer_name = shop / dealer header.
-- owner_buyer_name = buyer / customer if printed.
-- invoice_or_policy_no = exact invoice number.
-- purchase_or_issue_date = invoice date YYYY-MM-DD.
-- total_amount = Net Total / Grand Total ONLY.
-- category = Vehicle | Gadget | Home.
-
-IF INSURANCE_POLICY:
-- category = "Insurance".
-- vendor_dealer_name = insurer (e.g. "ICICI LOMBARD") — NOT a date/time.
-- owner_buyer_name = insured / policy holder.
-- invoice_or_policy_no = Policy No / Certificate No (REQUIRED when "Policy No" appears).
-- purchase_or_issue_date = policy start / From date.
-- expiry_date = policy end / To / Valid Till (REQUIRED when printed).
-- total_amount = premium ONLY if clearly labelled; else null.
-- asset_name = insured vehicle / product if printed; else "".
-
-IF REGISTRATION_CERTIFICATE:
-- category = "Vehicle"; total_amount MUST be null.
-- owner_buyer_name = registered owner; ALWAYS fill vehicle_registration_number + chassis_or_frame_no + engine_number when printed.
-
-IF PUC (or PUC_CERTIFICATE):
-- category = "Vehicle"; total_amount MUST be null; expiry_date = PUC validity end.
-- ALWAYS fill vehicle_registration_number when printed; chassis_or_frame_no / engine_number when present.
-
-IF OTHER_RECEIPT:
-- Fill only confident fields; leave unknown fields "" / null.
-
-VEHICLE IDENTIFIERS (when printed):
-- vehicle_registration_number / registration_number = Indian plate (e.g. UP32AB1234).
-- chassis_or_frame_no = Chassis / Frame / VIN.
-- engine_number = Engine No / Engine Number.
-Never invent these.
+AMOUNT / PARTIES:
+- total_amount = Net Total / Grand Total / Amount Payable ONLY (ignore tax sub-totals).
+- seller_name / vendor_* = shop / dealer header (not footer disclaimers).
+- buyer_name = Bill To / Customer / Purchaser / Insured name only (real printed name).
+- invoice_number = Invoice No / Bill No / Policy No as applicable.
+- purchase_date = YYYY-MM-DD only.
 
 General:
-- Never invent missing values; use "" or null.
-- Dates must be YYYY-MM-DD or "".
+- Missing fields → "" for strings, null for numbers. Never invent.
+- Never map CGST/SGST/GSTIN into serial_number / IMEI / chassis.
 - Always include document_type.
-- If HINTS.expectedDocumentType is set, KEEP that document_type unless OCR clearly contradicts it.`;
+- If HINTS.expectedDocumentType is set, KEEP it unless OCR clearly contradicts it.`;
 
 function apiKey() {
   return String(
@@ -300,7 +243,9 @@ export function applyDocumentTypeGuards(payload) {
 export function normalizeGeminiPayload(data = {}) {
   const documentType = normalizeDocumentType(data.document_type || data.documentType);
   let assetName = str(
-    data.asset_name ||
+    data.product_name ||
+      data.productName ||
+      data.asset_name ||
       data.item_name ||
       data.assetName ||
       data.itemName ||
@@ -309,7 +254,9 @@ export function normalizeGeminiPayload(data = {}) {
   if (isJunkAssetName(assetName)) assetName = '';
 
   const vendorRaw = str(
-    data.vendor_dealer_name ||
+    data.seller_name ||
+      data.sellerName ||
+      data.vendor_dealer_name ||
       data.vendor_name ||
       data.vendorName ||
       data.vendor ||
@@ -320,8 +267,8 @@ export function normalizeGeminiPayload(data = {}) {
   const vendor = isJunkVendorOrName(vendorRaw) ? '' : vendorRaw;
 
   let owner = str(
-    data.owner_buyer_name ||
-      data.buyer_name ||
+    data.buyer_name ||
+      data.owner_buyer_name ||
       data.ownerBuyerName ||
       data.ownerName ||
       data.customerName ||
@@ -330,16 +277,16 @@ export function normalizeGeminiPayload(data = {}) {
   if (isJunkVendorOrName(owner)) owner = '';
 
   const invoiceOrPolicy = str(
-    data.invoice_or_policy_no ||
-      data.invoice_number ||
+    data.invoice_number ||
+      data.invoice_or_policy_no ||
       data.invoiceOrPolicyNo ||
       data.invoiceNumber ||
       data.policyNumber ||
       data.certificateNumber,
   );
   const purchaseOrIssue = str(
-    data.purchase_or_issue_date ||
-      data.purchase_date ||
+    data.purchase_date ||
+      data.purchase_or_issue_date ||
       data.purchaseOrIssueDate ||
       data.invoiceDate ||
       data.issueDate ||
@@ -359,6 +306,18 @@ export function normalizeGeminiPayload(data = {}) {
   const chassis = str(
     data.chassis_or_frame_no || data.chassisOrFrameNo || data.chassisNumber || data.frameNumber,
   );
+  const serialNumber = str(
+    data.serial_number || data.serialNumber || data.imei || '',
+  );
+  // Keep IMEI/serial out of product title
+  if (
+    assetName &&
+    serialNumber &&
+    assetName.replace(/\D/g, '') === serialNumber.replace(/\D/g, '') &&
+    serialNumber.replace(/\D/g, '').length >= 10
+  ) {
+    assetName = '';
+  }
   const expiry = str(
     data.expiry_date || data.expiryDate || data.insuranceExpiry || data.fitnessExpiryDate,
   );

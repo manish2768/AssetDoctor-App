@@ -258,9 +258,25 @@ export class UserService {
           excludeUid: uid,
         });
         if (!identity.available) {
-          throw new Error(
-            identity.message || 'Phone number / Email is already registered with another account.',
-          );
+          // Never hard-block profile save for phone taken elsewhere — Auth OTP link merges sessions
+          if (identity.field === 'phone' || allowed.phone || allowed.phoneNumber) {
+            delete allowed.phone;
+            delete allowed.phoneNumber;
+            if (Object.keys(allowed).length === 0) {
+              return {
+                success: true,
+                profile: await this.getProfile(uid),
+                phoneNeedsOtpLink: true,
+                message:
+                  'This mobile is already used for login. Use Verify mobile (OTP) in Profile to connect it seamlessly.',
+              };
+            }
+          } else {
+            throw new Error(
+              identity.message ||
+                'This email is already on another account. Sign in with that email instead.',
+            );
+          }
         }
       }
 

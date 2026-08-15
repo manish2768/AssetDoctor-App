@@ -45,16 +45,16 @@ import { ReviewAssetModal } from '../components/ReviewAssetModal';
 import { openReviewInvoice, navigationRef, safeNavigate } from '../navigation/navActions';
 import { markScanSession } from '../utils/scanNavGuard';
 
-const AUTO_FOCUS_MS = 2000;
+const AUTO_OPEN_MS = 280;
 const SCREEN_H = Dimensions.get('window').height;
 const FRAME_HEIGHT = Math.round(SCREEN_H * 0.46);
-/** Compress before OCR / base64 — keep memory low but readable for Gemini. */
-const SCAN_MAX_WIDTH = 1200;
-const SCAN_COMPRESS = 0.6;
-/** Expo ImagePicker only — no ML Kit document scanner (avoids Activity destroy). */
+/** Compress before OCR / base64 — sharp enough for Gemini, still memory-safe. */
+const SCAN_MAX_WIDTH = 1400;
+const SCAN_COMPRESS = 0.7;
+/** ImagePicker fallback when ML Kit document scanner is unavailable. */
 const PICKER_OPTIONS = {
   mediaTypes: ['images'],
-  quality: 0.5,
+  quality: 0.75,
   allowsEditing: true,
   base64: false,
   exif: false,
@@ -128,17 +128,31 @@ function mapOcrToInvoiceFields(parsedData = {}) {
   const src = parsedData && typeof parsedData === 'object' ? parsedData : {};
   const extract =
     src.ocrExtract && typeof src.ocrExtract === 'object' ? src.ocrExtract : {};
-  return {
-    ...src,
-    productName:
+  let productName = '';
+  try {
+    const { resolveProductName } = require('../utils/productNameSanitizer');
+    productName = resolveProductName({
+      product_name: src.product_name || extract.product_name,
+      productName: src.productName,
+      asset_name: extract.asset_name || src.asset_name,
+      assetName: src.assetName,
+      item_name: src.item_name || extract.item_name,
+      itemName: src.itemName,
+      title: src.title,
+      items: src.items,
+    });
+  } catch {
+    productName =
       src.productName ||
-      src.title ||
+      src.product_name ||
       src.assetName ||
       src.item_name ||
-      src.itemName ||
       extract.asset_name ||
-      extract.item_name ||
-      '',
+      '';
+  }
+  return {
+    ...src,
+    productName,
     totalAmount:
       src.totalAmount ??
       src.amount ??
@@ -154,14 +168,17 @@ function mapOcrToInvoiceFields(parsedData = {}) {
       '',
     shopName:
       src.shopName ||
+      src.seller_name ||
       src.vendor ||
       src.vendor_dealer_name ||
       extract.vendor_dealer_name ||
+      extract.seller_name ||
       extract.vendor ||
       '',
     customerName:
       src.customerName ||
       src.buyer_name ||
+      src.buyerName ||
       src.owner_buyer_name ||
       extract.owner_buyer_name ||
       extract.buyer_name ||
@@ -171,6 +188,12 @@ function mapOcrToInvoiceFields(parsedData = {}) {
       src.invoice_number ||
       extract.invoice_or_policy_no ||
       extract.invoice_number ||
+      '',
+    serialNumber:
+      src.serialNumber ||
+      src.serial_number ||
+      extract.serial_number ||
+      src.imei ||
       '',
     category: src.category || src.smartCategory || extract.category || '',
     smartCategory: src.smartCategory || '',
@@ -395,12 +418,10 @@ function ScanBillScreenInner({ navigation }) {
   const [processLabel, setProcessLabel] = useState('Reading invoice…');
   const [lastError, setLastError] = useState('');
   const [autoArmed, setAutoArmed] = useState(false);
-  const [countdownMs, setCountdownMs] = useState(AUTO_FOCUS_MS);
   const [reviewPayload, setReviewPayload] = useState(null);
   /** Low-res file path only — set first so UI can paint before OCR. */
   const [pendingImageUri, setPendingImageUri] = useState('');
   const pulse = useRef(new Animated.Value(0.35)).current;
-  const progress = useRef(new Animated.Value(0)).current;
   const autoTimer = useRef(null);
   const tickTimer = useRef(null);
   const ocrTimer = useRef(null);
@@ -435,10 +456,7 @@ function ScanBillScreenInner({ navigation }) {
     autoTimer.current = null;
     tickTimer.current = null;
     ocrTimer.current = null;
-    progress.stopAnimation();
-    progress.setValue(0);
-    setCountdownMs(AUTO_FOCUS_MS);
-  }, [progress]);
+  }, []);
 
   useEffect(() => () => clearAutoTimers(), [clearAutoTimers]);
 
@@ -697,9 +715,9 @@ function ScanBillScreenInner({ navigation }) {
     if (capturing.current || processing) return;
     capturing.current = true;
     clearAutoTimers();
-    setAutoArmed(false);
+    setAutoArmed(true);
     setLastError('');
-    // Mark before camera so Activity kill restores ScanBill (not Home)
+    // Mark before scanner/camera so Activity kill restores ScanBill (not Home)
     markScanSession('ScanBill').catch(() => {});
 
     try {
@@ -707,6 +725,7 @@ function ScanBillScreenInner({ navigation }) {
       if (!ok) {
         capturing.current = false;
         startedRef.current = false;
+        setAutoArmed(false);
         setLastError('Camera permission is required to scan invoices.');
         Alert.alert(
           'Camera permission needed',
@@ -721,34 +740,39 @@ function ScanBillScreenInner({ navigation }) {
 
       let uri = null;
       try {
-        uri = await captureDocumentImage('camera');
+        // ML Kit document scanner first (edge detect + auto capture)
+        uri = await captureDocumentImage('auto');
       } catch (captureErr) {
         console.error('[ScanBillScreen Error]:', captureErr);
-        // Fallback to direct ImagePicker.launchCameraAsync (still no ML Kit)
         const fallback = await safeLaunchCameraAsync();
         if (fallback.error && !fallback.canceled) {
           const msg = reportScanError(fallback.error, { alertTitle: 'Could not capture image' });
           capturing.current = false;
           startedRef.current = false;
+          setAutoArmed(false);
           setLastError(msg);
           return;
         }
         if (fallback.canceled) {
           capturing.current = false;
           startedRef.current = false;
-          setLastError('Capture cancelled. Tap Camera to try again.');
+          setAutoArmed(false);
+          setLastError('Scan cancelled. Tap Scan document to try again.');
           return;
         }
         uri = fallback.uri;
       }
 
-      // Cancelled camera — stay on ScanBillScreen (never Home / MainTabs)
+      // Cancelled scanner/camera — stay on ScanBillScreen (never Home / MainTabs)
       if (!uri) {
         capturing.current = false;
         startedRef.current = false;
-        setLastError('Capture cancelled. Tap Camera to try again.');
+        setAutoArmed(false);
+        setLastError('Scan cancelled. Tap Scan document to try again.');
         return;
       }
+
+      setAutoArmed(false);
 
       let compressedUri = uri;
       try {
@@ -764,6 +788,7 @@ function ScanBillScreenInner({ navigation }) {
     } catch (error) {
       capturing.current = false;
       startedRef.current = false;
+      setAutoArmed(false);
       const msg = reportScanError(error, { alertTitle: 'Could not capture image' });
       setLastError(msg);
       Haptics.error();
@@ -863,7 +888,6 @@ function ScanBillScreenInner({ navigation }) {
 
   const startAutoFocusCapture = useCallback(() => {
     // TODO: RE-ENABLE AUTH REQUIREMENT BEFORE PRODUCTION
-    // Was: requireAuth({ isAuthenticated, navigation, ... })
     (async () => {
       if (capturing.current || processing) return;
       const ok =
@@ -873,48 +897,32 @@ function ScanBillScreenInner({ navigation }) {
       Haptics.select();
       clearAutoTimers();
       setAutoArmed(true);
-      setCountdownMs(AUTO_FOCUS_MS);
-      progress.setValue(0);
-      Animated.timing(progress, {
-        toValue: 1,
-        duration: AUTO_FOCUS_MS,
-        easing: Easing.linear,
-        useNativeDriver: false,
-      }).start();
-
-      const started = Date.now();
-      tickTimer.current = setInterval(() => {
-        const left = Math.max(0, AUTO_FOCUS_MS - (Date.now() - started));
-        setCountdownMs(left);
-      }, 80);
-
+      // Open ML Kit document scanner almost immediately (doc in front → auto scan)
       autoTimer.current = setTimeout(() => {
         launchCameraCapture();
-      }, AUTO_FOCUS_MS);
+      }, AUTO_OPEN_MS);
     })();
   }, [
     clearAutoTimers,
-    progress,
     launchCameraCapture,
     processing,
     cameraPermission,
     requestCameraAccess,
   ]);
 
-  // Only auto-arm after permission is known + granted (never open camera blind)
+  // Auto-open document scanner once camera permission is granted
   useEffect(() => {
     if (startedRef.current || processing) return undefined;
     if (cameraPermission !== 'granted') return undefined;
     if (reviewPayload) return undefined;
     startedRef.current = true;
-    const t = setTimeout(() => startAutoFocusCapture(), 350);
+    const t = setTimeout(() => startAutoFocusCapture(), 200);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraPermission]);
 
   const openCamera = useCallback(() => {
     // TODO: RE-ENABLE AUTH REQUIREMENT BEFORE PRODUCTION
-    // Was: requireAuth({ isAuthenticated, navigation, ... })
     clearAutoTimers();
     setAutoArmed(false);
     launchCameraCapture();
@@ -922,18 +930,19 @@ function ScanBillScreenInner({ navigation }) {
 
   const openGallery = useCallback(() => {
     // TODO: RE-ENABLE AUTH REQUIREMENT BEFORE PRODUCTION
-    // Was: requireAuth({ isAuthenticated, navigation, ... })
     Haptics.tap();
     clearAutoTimers();
     setAutoArmed(false);
     launchGalleryPicker();
   }, [launchGalleryPicker, clearAutoTimers]);
 
-  const secondsLeft = Math.max(1, Math.ceil(countdownMs / 1000));
-  const progressWidth = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0%', '100%'],
-  });
+  const cancelAutoOpen = useCallback(() => {
+    clearAutoTimers();
+    setAutoArmed(false);
+    capturing.current = false;
+    startedRef.current = true;
+    Haptics.select();
+  }, [clearAutoTimers]);
 
   const reviewModal = (
     <ReviewAssetModal
@@ -991,7 +1000,7 @@ function ScanBillScreenInner({ navigation }) {
               <GlassButton title="Allow camera" onPress={requestCameraAccess} style={styles.actionBtn} />
               <View style={styles.sourceRow}>
                 <GlassButton
-                  title="Camera"
+                  title="Scan document"
                   onPress={openCamera}
                   style={[styles.actionBtn, styles.sourceBtn]}
                 />
@@ -1051,18 +1060,15 @@ function ScanBillScreenInner({ navigation }) {
       >
         <View style={styles.headerBlock}>
           <Text style={styles.eyebrow}>SCAN INVOICE</Text>
-          <Text style={styles.title}>Align invoice inside the frame</Text>
+          <Text style={styles.title}>Hold document in front of camera</Text>
           <Text style={styles.sub}>
-            Use Camera or Browse Gallery — both run the same Gemini OCR and open Review & Confirm.
+            Edges detect automatically — scan starts when the invoice is clear. Gallery works the same OCR path.
           </Text>
           <PrivacyVaultTag style={{ marginTop: 10, alignSelf: 'flex-start' }} />
 
           {autoArmed && !processing ? (
             <View style={styles.countdownStrip}>
-              <Text style={styles.countdownLabel}>Hold steady… {secondsLeft}s</Text>
-              <View style={styles.progressTrack}>
-                <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
-              </View>
+              <Text style={styles.countdownLabel}>Opening document scanner…</Text>
             </View>
           ) : null}
 
@@ -1089,7 +1095,7 @@ function ScanBillScreenInner({ navigation }) {
             <View style={[styles.corner, styles.tr]} />
             <View style={[styles.corner, styles.bl]} />
             <View style={[styles.corner, styles.br]} />
-            <Text style={styles.previewHint}>Camera or Gallery → same OCR → Review</Text>
+            <Text style={styles.previewHint}>Doc in frame → auto scan → Review</Text>
           </View>
         </View>
 
@@ -1105,7 +1111,7 @@ function ScanBillScreenInner({ navigation }) {
           <View style={styles.actions}>
             <View style={styles.sourceRow}>
               <GlassButton
-                title="Camera"
+                title="Scan document"
                 onPress={openCamera}
                 style={[styles.actionBtn, styles.sourceBtn]}
               />
@@ -1118,19 +1124,14 @@ function ScanBillScreenInner({ navigation }) {
             </View>
             {autoArmed ? (
               <GlassButton
-                title="Cancel auto-capture"
-                onPress={() => {
-                  clearAutoTimers();
-                  setAutoArmed(false);
-                  startedRef.current = false;
-                  Haptics.tap();
-                }}
+                title="Cancel"
+                onPress={cancelAutoOpen}
                 variant="ghost"
                 style={styles.actionBtn}
               />
             ) : (
               <GlassButton
-                title="Auto-capture (2s)"
+                title="Scan again"
                 onPress={startAutoFocusCapture}
                 variant="ghost"
                 style={styles.actionBtn}

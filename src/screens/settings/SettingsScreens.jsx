@@ -440,9 +440,9 @@ export function SettingsScreen({ navigation }) {
         <Text style={styles.sectionHeader}>Support</Text>
         <GlassCard style={styles.sectionCard}>
           <Row
-            title="Report an issue / Feedback"
-            subtitle="Crash, bug, or idea — reach the team"
-            onPress={() => navigation?.navigate?.('ReportIssue')}
+            title="Report Error"
+            subtitle={`Email ${BRAND.supportEmail} with device logs`}
+            onPress={() => navigation?.navigate?.('ReportIssue', { category: 'crash' })}
           />
           <Row
             title="About Us"

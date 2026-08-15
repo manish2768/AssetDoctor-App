@@ -2,9 +2,9 @@
   "expo": {
     "name": "Asset Doctor",
     "slug": "asset-doctor",
-    "version": "1.0.44",
+    "version": "1.0.46",
     "orientation": "portrait",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "scheme": "assetdoctor",
     "icon": "./assets/icon.png",
     "runtimeVersion": {
@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.assetdoctor.app",
-      "versionCode": 45,
+      "versionCode": 47,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -92,6 +92,12 @@
           "photosPermission": "Allow Asset Doctor to access your photos for household and vehicle documents.",
           "cameraPermission": "Allow Asset Doctor to capture invoices, RC, PUC, insurance and warranty documents.",
           "microphonePermission": false
+        }
+      ],
+      [
+        "react-native-document-scanner-plugin",
+        {
+          "cameraPermission": "Allow Asset Doctor to scan invoices, RC, PUC, insurance and warranty documents."
         }
       ],
       "expo-sharing",

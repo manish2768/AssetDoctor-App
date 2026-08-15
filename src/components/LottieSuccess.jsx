@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
     minWidth: 180,
     alignItems: 'center',
   },
-  ctaText: { color: '#04110A', fontWeight: '900', fontSize: 14 },
+  ctaText: { color: COLORS.onPrimary, fontWeight: '900', fontSize: 14 },
 });
 
 export default LottieSuccess;

@@ -674,6 +674,7 @@ export function ReviewAssetScreen({ navigation, route }) {
       if (!isAttachDoc) {
         await rememberBillFingerprint({
           gstin: invoice.shopGstin,
+          invoiceNumber: invoice.invoiceNumber,
           totalAmount: invoice.totalAmount,
           invoiceDate: invoice.invoiceDate,
         });
@@ -851,7 +852,7 @@ export function ReviewAssetScreen({ navigation, route }) {
             label="Owner / Buyer Name"
             value={blank(invoice.customerName)}
             onChangeText={(t) => patch('customerName', t)}
-            placeholder="e.g. NIKLESH KUMAR"
+            placeholder="Buyer / Bill To name from document"
           />
           <GlassInput
             label={

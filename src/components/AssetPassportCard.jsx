@@ -252,7 +252,7 @@ export function AssetPassportCard({ asset, onShared }) {
         disabled={sharing}
       >
         {sharing ? (
-          <ActivityIndicator color="#04110A" />
+          <ActivityIndicator color={COLORS.onPrimary} />
         ) : (
           <Text style={styles.sharePrimaryText}>✨ Share Asset Passport</Text>
         )}

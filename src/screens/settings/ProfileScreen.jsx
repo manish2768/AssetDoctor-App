@@ -74,6 +74,8 @@ export function ProfileScreen({ navigation }) {
     signOut,
     displayName: authDisplayName,
     refreshLocalProfile,
+    sendOTP,
+    verifyOTP,
   } = useAuth();
   const { assets, isGuestDemo } = useAssets();
   const [editing, setEditing] = useState(false);
@@ -87,6 +89,10 @@ export function ProfileScreen({ navigation }) {
   const [gender, setGender] = useState('');
   const [busy, setBusy] = useState(false);
   const [photoSheet, setPhotoSheet] = useState(false);
+  const [otpBusy, setOtpBusy] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [otpConfirmation, setOtpConfirmation] = useState(null);
 
   const vaultedCount = useMemo(
     () => assets.filter((a) => !a.isDemo && !a.deletedAt).length,
@@ -230,6 +236,78 @@ export function ProfileScreen({ navigation }) {
     Alert.alert('Saved', 'Profile details updated.');
   };
 
+  const onSendLinkOtp = async () => {
+    if (!isAuthenticated) {
+      openLogin(navigation);
+      return;
+    }
+    const cleanPhone = normalizePhone(mobile);
+    if (!cleanPhone || cleanPhone.length < 10) {
+      Alert.alert('Mobile', 'Enter a valid mobile number first.');
+      return;
+    }
+    setOtpBusy(true);
+    try {
+      const result = await sendOTP(cleanPhone, { mode: 'link' });
+      setOtpBusy(false);
+      if (!result?.success) {
+        Alert.alert('OTP', result?.error || 'Could not send OTP');
+        return;
+      }
+      setOtpConfirmation(result.confirmation);
+      setOtpSent(true);
+      Haptics.success();
+      Alert.alert(
+        'OTP sent',
+        result.mode === 'link'
+          ? 'Enter the code to link this mobile to your Google/email account.'
+          : 'Enter the code to open the vault for this mobile.',
+      );
+    } catch (e) {
+      setOtpBusy(false);
+      Alert.alert('OTP', e?.message || 'Could not send OTP');
+    }
+  };
+
+  const onVerifyLinkOtp = async () => {
+    if (!otpConfirmation) {
+      Alert.alert('OTP', 'Request a new OTP first.');
+      return;
+    }
+    setOtpBusy(true);
+    try {
+      const result = await verifyOTP(otpConfirmation, otpCode, { mode: 'link' });
+      setOtpBusy(false);
+      if (!result?.success) {
+        Alert.alert('OTP', result?.error || 'Invalid OTP');
+        return;
+      }
+      const linkedPhone = result.user?.phoneNumber || normalizePhone(mobile);
+      if (linkedPhone) {
+        setMobile(linkedPhone);
+        await saveLocalProfile({
+          phone: linkedPhone,
+          phoneNumber: linkedPhone,
+        });
+        refreshLocalProfile?.();
+      }
+      setOtpSent(false);
+      setOtpCode('');
+      setOtpConfirmation(null);
+      Haptics.success();
+      Alert.alert(
+        'Connected',
+        result.message ||
+          (result.merged
+            ? 'Opened the vault for this mobile number.'
+            : 'Mobile linked to your account.'),
+      );
+    } catch (e) {
+      setOtpBusy(false);
+      Alert.alert('OTP', e?.message || 'Could not verify OTP');
+    }
+  };
+
   const shownName =
     name || authDisplayName || profile?.name || DEFAULT_PROFILE.name || 'Asset Owner';
 
@@ -314,6 +392,38 @@ export function ProfileScreen({ navigation }) {
               keyboardType="phone-pad"
               placeholder="+91 …"
             />
+            {isAuthenticated ? (
+              <View style={{ marginBottom: 10 }}>
+                <Text style={styles.sub}>
+                  Verify mobile with OTP to link Google/email + phone on one vault (no “already linked” block).
+                </Text>
+                {!otpSent ? (
+                  <GlassButton
+                    title="Verify mobile (OTP)"
+                    variant="ghost"
+                    loading={otpBusy}
+                    style={{ marginTop: 8 }}
+                    onPress={onSendLinkOtp}
+                  />
+                ) : (
+                  <>
+                    <GlassInput
+                      label="OTP"
+                      value={otpCode}
+                      onChangeText={setOtpCode}
+                      keyboardType="number-pad"
+                      placeholder="6-digit code"
+                      maxLength={6}
+                    />
+                    <GlassButton
+                      title="Confirm & link"
+                      loading={otpBusy}
+                      onPress={onVerifyLinkOtp}
+                    />
+                  </>
+                )}
+              </View>
+            ) : null}
             <GlassInput
               label="City"
               value={city}

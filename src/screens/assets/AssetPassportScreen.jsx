@@ -24,6 +24,8 @@ import { getAssetFolderType } from '../../utils/assetFolders';
 import { getExpiryTone } from '../../utils/warrantyStatus';
 import { ValuationBlock } from '../../components/ValuationBlock';
 import { WarrantyBadge } from '../../components/WarrantyBadge';
+import { WarrantyProgressBar } from '../../components/WarrantyProgressBar';
+import { evaluateMaintenanceVsValue } from '../../utils/maintenanceValueAlert';
 import { resolveSupportContact } from '../../constants/brandDirectory';
 import { IndiaNumberPlate } from '../../components/vehicle/IndiaNumberPlate';
 import { VehicleStatusBadges } from '../../components/vehicle/VehicleStatusBadges';
@@ -61,6 +63,7 @@ export function AssetPassportScreen({ route, navigation }) {
   const warrantyTone = getExpiryTone(asset.warrantyExpiry, { urgentDays: 30 });
   const serviceTone = getExpiryTone(asset.nextServiceDue, { urgentDays: 15 });
   const vehicleSpecs = isVehicle ? getVehicleSpecs(asset) : null;
+  const maintenanceAlert = evaluateMaintenanceVsValue(asset);
 
   const onEmergencyShare = async () => {
     Haptics.tap();
@@ -153,6 +156,52 @@ export function AssetPassportScreen({ route, navigation }) {
       </View>
 
       <AssetPassportCard asset={asset} />
+
+      <View style={styles.panel}>
+        <Text style={styles.panelTitle}>Coverage progress</Text>
+        {asset.warrantyExpiry ? (
+          <WarrantyProgressBar
+            label="Warranty"
+            startDate={asset.purchaseDate || asset.invoiceDate}
+            endDate={asset.warrantyExpiry}
+          />
+        ) : null}
+        {asset.insuranceExpiry ? (
+          <WarrantyProgressBar
+            label="Insurance"
+            startDate={asset.insuranceStart || asset.purchaseDate}
+            endDate={asset.insuranceExpiry}
+          />
+        ) : null}
+        {asset.pucExpiry ? (
+          <WarrantyProgressBar
+            label="PUC"
+            startDate={asset.purchaseDate}
+            endDate={asset.pucExpiry}
+            totalDays={180}
+          />
+        ) : null}
+        {asset.nextServiceDue ? (
+          <WarrantyProgressBar
+            label="Next service"
+            startDate={asset.lastServiceDate || asset.purchaseDate}
+            endDate={asset.nextServiceDue}
+          />
+        ) : null}
+        {!asset.warrantyExpiry &&
+        !asset.insuranceExpiry &&
+        !asset.pucExpiry &&
+        !asset.nextServiceDue ? (
+          <Text style={styles.demoNote}>Add warranty / insurance / PUC dates to track coverage.</Text>
+        ) : null}
+      </View>
+
+      {maintenanceAlert?.shouldAlert ? (
+        <View style={[styles.panel, { borderColor: '#F59E0B', borderWidth: 1 }]}>
+          <Text style={styles.panelTitle}>Upgrade review</Text>
+          <Text style={styles.demoNote}>{maintenanceAlert.message}</Text>
+        </View>
+      ) : null}
 
       <View style={styles.panel}>
         <Text style={styles.panelTitle}>Valuation</Text>
@@ -326,7 +375,7 @@ export function AssetPassportScreen({ route, navigation }) {
         disabled={sharingPassport}
       >
         {sharingPassport ? (
-          <ActivityIndicator color="#04110A" />
+          <ActivityIndicator color={COLORS.onPrimary} />
         ) : (
           <Text style={styles.btnTextDark}>Share Asset Passport PDF · WhatsApp</Text>
         )}
@@ -473,7 +522,7 @@ const styles = StyleSheet.create({
   },
   deleteText: { color: '#fff', fontWeight: '900', fontSize: 15 },
   btnText: { color: COLORS.text, fontWeight: '800' },
-  btnTextDark: { color: '#04110A', fontWeight: '900' },
+  btnTextDark: { color: COLORS.onPrimary, fontWeight: '900' },
 });
 
 export default AssetPassportScreen;

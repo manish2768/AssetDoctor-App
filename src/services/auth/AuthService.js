@@ -464,27 +464,43 @@ export class AuthService {
 
       const mode = confirmation.mode || options.mode || 'signIn';
       let userCredential;
+      let linkMeta = { merged: false, message: null };
 
       if (mode === 'link') {
-        const current = auth().currentUser;
-        if (!current) {
-          throw new Error('Sign in with email first, then link your phone number.');
-        }
         const verificationId = confirmation.verificationId;
         if (!verificationId) {
           throw new Error('OTP session expired. Please request a new code.');
         }
-        const credential = auth.PhoneAuthProvider.credential(verificationId, code);
         try {
-          userCredential = await current.linkWithCredential(credential);
+          const { linkOrRecoverPhoneCredential } = require('./AccountLinkService');
+          const recovered = await linkOrRecoverPhoneCredential(verificationId, code);
+          userCredential = recovered.userCredential;
+          linkMeta = {
+            merged: Boolean(recovered.merged),
+            message: recovered.message || null,
+          };
         } catch (linkErr) {
+          // Never show raw Firebase "already linked" — recover via sign-in
           const linkCode = String(linkErr?.code || '');
-          // Phone already belongs to another Firebase user → sign in as that account instead
           if (
             linkCode.includes('credential-already-in-use') ||
-            linkCode.includes('account-exists-with-different-credential')
+            linkCode.includes('account-exists-with-different-credential') ||
+            linkCode.includes('provider-already-linked')
           ) {
-            userCredential = await auth().signInWithCredential(credential);
+            const credential = auth.PhoneAuthProvider.credential(verificationId, code);
+            if (linkCode.includes('provider-already-linked')) {
+              userCredential = {
+                user: auth().currentUser,
+                additionalUserInfo: { isNewUser: false },
+              };
+              linkMeta = { merged: false, message: 'Mobile already on this account.' };
+            } else {
+              userCredential = await auth().signInWithCredential(credential);
+              linkMeta = {
+                merged: true,
+                message: 'Opened the vault for this mobile number.',
+              };
+            }
           } else {
             throw linkErr;
           }
@@ -497,13 +513,14 @@ export class AuthService {
       }
 
       const { user } = userCredential;
+      if (!user) {
+        throw new Error('Could not complete phone verification.');
+      }
       const isNewUser = Boolean(userCredential.additionalUserInfo?.isNewUser);
       const displayName =
         String(options.name || '').trim() || user.displayName || undefined;
 
       const phone = user.phoneNumber || confirmation.phone || undefined;
-      // Sign-in path: Firebase already authenticated this phone — never block with
-      // "already registered". Link path uniqueness was handled above / at sendOTP.
 
       if (displayName && displayName !== user.displayName) {
         try {
@@ -515,7 +532,7 @@ export class AuthService {
 
       const providers = (user.providerData || []).map((p) => p.providerId).join(',');
       const profile = await UserService.syncUserToFirestore(user, {
-        authProvider: mode === 'link' ? 'linked' : 'phone',
+        authProvider: mode === 'link' && !linkMeta.merged ? 'linked' : 'phone',
         extra: {
           phone: phone || undefined,
           phoneNumber: phone || undefined,
@@ -545,8 +562,10 @@ export class AuthService {
         user,
         profile,
         channel: 'sms',
-        mode,
+        mode: linkMeta.merged ? 'signIn' : mode,
         isNewUser,
+        merged: linkMeta.merged,
+        message: linkMeta.message || undefined,
       };
     } catch (error) {
       Haptics.error();
@@ -671,10 +690,18 @@ function mapAuthError(error) {
   ) {
     return 'Signing services are warming up — tap again in a moment.';
   }
-  if (code.includes('email-already-in-use')) return 'Email is already registered with another account.';
-  // Phone credential conflicts are recovered via signInWithCredential in verifyOTP
-  if (code.includes('credential-already-in-use') || code.includes('account-exists-with-different-credential')) {
-    return 'Signing you into the account for this phone number…';
+  if (code.includes('email-already-in-use')) {
+    return 'This email is already on an Asset Doctor account — sign in with it, or use another email.';
+  }
+  if (code.includes('provider-already-linked') || /already\s*linked/i.test(message)) {
+    return 'Connecting your accounts…';
+  }
+  // Phone / provider conflicts are recovered in verifyOTP — never scare the user
+  if (
+    code.includes('credential-already-in-use') ||
+    code.includes('account-exists-with-different-credential')
+  ) {
+    return 'Connecting your accounts…';
   }
   if (code.includes('invalid-email')) return 'Enter a valid email address';
   if (code.includes('weak-password')) return 'Password must be at least 6 characters';
@@ -684,7 +711,9 @@ function mapAuthError(error) {
   if (code.includes('too-many-requests')) return 'Too many attempts. Try again later';
   if (code.includes('invalid-phone-number')) return 'Enter a valid mobile number';
   if (code.includes('too-many-requests') || code.includes('quota')) return 'Too many OTP attempts. Try again later.';
-  if (message.includes('already registered')) return message;
+  if (message.includes('already registered')) {
+    return 'Connecting your accounts…';
+  }
   if (message.includes('Firebase Auth is unavailable') || message.includes('Firebase is still starting')) {
     return message;
   }

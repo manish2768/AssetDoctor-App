@@ -1,6 +1,6 @@
 ﻿/**
  * Asset Doctor — Design System
- * Original dark neon vault · deep ink canvas · emerald / cyan accents
+ * Modern light slate · off-white canvas · emerald / blue accents
  * Typography: Inter / system sans
  */
 
@@ -18,33 +18,33 @@ export const BRAND = {
   supportWhatsApp: '',
 };
 
-/** Original dark fintech palette (website / vault neon) */
+/** Light slate / off-white fintech palette */
 export const COLORS = {
-  bg: '#020617',
-  bgDeep: '#01040C',
-  bgElevated: '#0F172A',
-  card: '#0F172A',
-  cardStrong: '#1E293B',
-  border: 'rgba(148, 163, 184, 0.16)',
+  bg: '#F8FAFC',
+  bgDeep: '#F1F5F9',
+  bgElevated: '#FFFFFF',
+  card: '#FFFFFF',
+  cardStrong: '#F8FAFC',
+  border: '#E2E8F0',
   borderGlow: 'rgba(16, 185, 129, 0.35)',
   emerald: '#10B981',
-  neonBlue: '#22D3EE',
-  indigo: '#6366F1',
-  violet: '#8B5CF6',
-  rose: '#F43F5E',
-  amber: '#F59E0B',
-  success: '#34D399',
-  gold: '#EAB308',
-  goldSoft: 'rgba(234, 179, 8, 0.14)',
-  text: '#F1F5F9',
-  muted: '#94A3B8',
-  successSoft: 'rgba(16, 185, 129, 0.14)',
-  warnSoft: 'rgba(245, 158, 11, 0.14)',
-  dangerSoft: 'rgba(244, 63, 94, 0.14)',
-  glassGlow: ['rgba(16, 185, 129, 0.12)', 'rgba(34, 211, 238, 0.08)'],
-  onPrimary: '#04110A',
-  urgentBg: 'rgba(245, 158, 11, 0.12)',
-  urgentBorder: 'rgba(245, 158, 11, 0.35)',
+  neonBlue: '#2563EB',
+  indigo: '#4F46E5',
+  violet: '#7C3AED',
+  rose: '#E11D48',
+  amber: '#D97706',
+  success: '#059669',
+  gold: '#CA8A04',
+  goldSoft: 'rgba(202, 138, 4, 0.12)',
+  text: '#1E293B',
+  muted: '#64748B',
+  successSoft: 'rgba(16, 185, 129, 0.12)',
+  warnSoft: 'rgba(217, 119, 6, 0.12)',
+  dangerSoft: 'rgba(225, 29, 72, 0.10)',
+  glassGlow: ['rgba(16, 185, 129, 0.08)', 'rgba(37, 99, 235, 0.06)'],
+  onPrimary: '#FFFFFF',
+  urgentBg: 'rgba(217, 119, 6, 0.10)',
+  urgentBorder: 'rgba(217, 119, 6, 0.28)',
 };
 
 export const FONTS = {
@@ -60,13 +60,13 @@ export const RADIUS = { sm: 12, md: 16, lg: 22, xl: 28, full: 999 };
 
 export const CHART_PALETTE = [
   '#10B981',
-  '#22D3EE',
-  '#8B5CF6',
-  '#F59E0B',
-  '#34D399',
+  '#2563EB',
+  '#7C3AED',
+  '#D97706',
+  '#059669',
   '#0EA5E9',
-  '#F43F5E',
-  '#6366F1',
+  '#E11D48',
+  '#4F46E5',
 ];
 
 const NAV_FONTS = {
@@ -77,11 +77,11 @@ const NAV_FONTS = {
 };
 
 export const NAV_THEME = {
-  dark: true,
+  dark: false,
   colors: {
     primary: COLORS.emerald,
     background: COLORS.bg,
-    card: COLORS.bgElevated,
+    card: COLORS.card,
     text: COLORS.text,
     border: COLORS.border,
     notification: COLORS.emerald,

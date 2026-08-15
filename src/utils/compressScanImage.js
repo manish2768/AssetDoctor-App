@@ -5,8 +5,8 @@
 
 import { getImageManipulator } from './safeNativeModules';
 
-export const SCAN_IMAGE_MAX_WIDTH = 1200;
-export const SCAN_IMAGE_COMPRESS = 0.6;
+export const SCAN_IMAGE_MAX_WIDTH = 1400;
+export const SCAN_IMAGE_COMPRESS = 0.7;
 
 /**
  * @param {string} uri
