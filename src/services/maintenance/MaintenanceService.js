@@ -6,6 +6,17 @@ import firestore from '@react-native-firebase/firestore';
 
 import { COLLECTIONS } from '../constants';
 import { Haptics, triggerHaptic } from '../haptics/triggerHaptic';
+import { OfflineQueue } from '../offline/OfflineQueue';
+import { OfflineVaultCache } from '../offline/OfflineVaultCache';
+import { ConnectivityService } from '../offline/ConnectivityService';
+import { SYNC_STATUS, SYNC_ENTITY, makeOperationId } from '../offline/syncConstants';
+import { toErrorMessage } from '../../utils/errors';
+
+function isTransientError(error) {
+  return /network|offline|unavailable|timeout|timed out|connection|retry-limit|unknown/i.test(
+    `${error?.code || ''} ${error?.message || error || ''}`,
+  );
+}
 
 function assetRef(userId, assetId) {
   return firestore()
@@ -190,31 +201,101 @@ export class ServiceScheduleService {
 export class RepairLogService {
   static async create(userId, assetId, payload = {}) {
     triggerHaptic('impactMedium');
+    const skipQueue = payload.skipOfflineQueue === true;
+    const stableId =
+      payload.repairId ||
+      payload.id ||
+      `repair_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+    const docBody = {
+      repairId: stableId,
+      assetId,
+      title: payload.title || 'Maintenance',
+      category: payload.category || 'repair',
+      repairDate: payload.repairDate || new Date().toISOString().slice(0, 10),
+      costInr: Number(payload.costInr) || 0,
+      vendor: payload.vendor || '',
+      odometerKm: Number(payload.odometerKm) || null,
+      parts: Array.isArray(payload.parts) ? payload.parts : [],
+      invoiceDocId: payload.invoiceDocId || null,
+      invoiceUrl: payload.invoiceUrl || '',
+      notes: payload.notes || '',
+      operationId:
+        payload.operationId ||
+        makeOperationId(SYNC_ENTITY.EXPENSE, stableId, 'CREATE'),
+    };
+
+    const queueLocal = async () => {
+      const operationId = docBody.operationId;
+      await OfflineVaultCache.upsertRepairLog(userId, assetId, {
+        ...docBody,
+        id: stableId,
+        syncStatus: SYNC_STATUS.PENDING_CREATE,
+        pendingSync: true,
+      });
+      await OfflineQueue.enqueue({
+        type: 'createRepairLog',
+        entityType: SYNC_ENTITY.EXPENSE,
+        entityId: stableId,
+        operationType: 'CREATE',
+        operationId,
+        payload: {
+          userId,
+          assetId,
+          repair: docBody,
+          operationId,
+          entityType: SYNC_ENTITY.EXPENSE,
+          entityId: stableId,
+        },
+      });
+      Haptics.success();
+      return {
+        success: true,
+        id: stableId,
+        repair: docBody,
+        queuedOffline: true,
+      };
+    };
+
     try {
       if (!userId || !assetId) throw new Error('userId and assetId required');
-      const ref = assetRef(userId, assetId).collection('RepairLogs').doc();
+
+      if (!skipQueue) {
+        const online = await ConnectivityService.isOnline();
+        if (!online) return queueLocal();
+      }
+
+      const ref = assetRef(userId, assetId).collection('RepairLogs').doc(stableId);
       const doc = {
-        repairId: ref.id,
-        assetId,
-        title: payload.title || 'Maintenance',
-        category: payload.category || 'repair',
-        repairDate: payload.repairDate || new Date().toISOString().slice(0, 10),
-        costInr: Number(payload.costInr) || 0,
-        vendor: payload.vendor || '',
-        odometerKm: Number(payload.odometerKm) || null,
-        parts: Array.isArray(payload.parts) ? payload.parts : [],
-        invoiceDocId: payload.invoiceDocId || null,
-        invoiceUrl: payload.invoiceUrl || '',
-        notes: payload.notes || '',
+        ...docBody,
+        syncStatus: SYNC_STATUS.SYNCED,
+        pendingSync: false,
         createdAt: firestore.FieldValue.serverTimestamp(),
         updatedAt: firestore.FieldValue.serverTimestamp(),
       };
-      await ref.set(doc);
+      // Idempotent merge — retries must not create duplicates
+      await ref.set(doc, { merge: true });
+      await OfflineVaultCache.upsertRepairLog(userId, assetId, {
+        ...docBody,
+        id: stableId,
+        syncStatus: SYNC_STATUS.SYNCED,
+        pendingSync: false,
+      });
       Haptics.success();
       return { success: true, id: ref.id, repair: doc };
     } catch (error) {
       Haptics.error();
-      return { success: false, error: error?.message || 'Failed to save repair log' };
+      if (!skipQueue && isTransientError(error)) {
+        try {
+          return await queueLocal();
+        } catch {
+          /* ignore */
+        }
+      }
+      return {
+        success: false,
+        error: toErrorMessage(error, 'Failed to save repair log'),
+      };
     }
   }
 
@@ -223,12 +304,33 @@ export class RepairLogService {
       onUpdate([]);
       return () => {};
     }
+    // Warm local cache immediately
+    OfflineVaultCache.listRepairLogs(userId, assetId)
+      .then((cached) => {
+        if (cached?.length) onUpdate(cached);
+      })
+      .catch(() => {});
     return assetRef(userId, assetId)
       .collection('RepairLogs')
       .orderBy('repairDate', 'desc')
       .onSnapshot(
-        (snap) => onUpdate(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
-        () => onUpdate([]),
+        (snap) => {
+          const remote = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          OfflineVaultCache.listRepairLogs(userId, assetId)
+            .then((cached) => {
+              const map = new Map();
+              for (const row of [...cached, ...remote]) {
+                const key = row.repairId || row.id;
+                map.set(key, { ...map.get(key), ...row });
+              }
+              onUpdate([...map.values()]);
+            })
+            .catch(() => onUpdate(remote));
+        },
+        async () => {
+          const cached = await OfflineVaultCache.listRepairLogs(userId, assetId);
+          onUpdate(cached);
+        },
       );
   }
 
@@ -241,6 +343,15 @@ export class RepairLogService {
       const logs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       return { success: true, logs, summary: summarizeMaintenanceCost(logs) };
     } catch (error) {
+      const cached = await OfflineVaultCache.listRepairLogs(userId, assetId);
+      if (cached.length) {
+        return {
+          success: true,
+          offline: true,
+          logs: cached,
+          summary: summarizeMaintenanceCost(cached),
+        };
+      }
       return {
         success: false,
         error: error?.message || 'Cost analysis failed',

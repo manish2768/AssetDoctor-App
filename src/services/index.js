@@ -40,6 +40,9 @@ export {
 export { VendorService } from './vendors/VendorService';
 export { OfflineQueue } from './offline/OfflineQueue';
 export { OfflineVaultCache } from './offline/OfflineVaultCache';
+export { SyncEngine, OfflineSyncService } from './offline/SyncEngine';
+export { ConnectivityService, CONNECTIVITY } from './offline/ConnectivityService';
+export { SYNC_STATUS, SYNC_ENTITY, makeOperationId } from './offline/syncConstants';
 export { triggerHaptic, Haptics } from './haptics';
 export {
   COLLECTIONS,

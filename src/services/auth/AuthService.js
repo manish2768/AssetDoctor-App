@@ -14,6 +14,7 @@ import { EmailService } from '../email/EmailService';
 import { ExpiryAlertService } from '../notifications/ExpiryAlertService';
 import { OfflineVaultCache } from '../offline/OfflineVaultCache';
 import { OfflineQueue } from '../offline/OfflineQueue';
+import { removeOcrJobsForUser } from '../ocr/ocrOfflineQueue';
 import {
   configureGoogleSignIn,
   getGoogleIdToken,
@@ -442,6 +443,12 @@ export class AuthService {
       };
     } catch (error) {
       Haptics.error();
+      try {
+        const { logPhoneAuthFailure } = require('./AuthDiagnostics');
+        logPhoneAuthFailure(error, 'sendOTP');
+      } catch {
+        console.warn('[AuthService] sendOTP error:', error?.code, error?.message);
+      }
       return { success: false, error: mapAuthError(error) || error?.message || 'Failed to send OTP' };
     }
   }
@@ -531,6 +538,13 @@ export class AuthService {
       }
 
       const providers = (user.providerData || []).map((p) => p.providerId).join(',');
+      let authProviders = [];
+      try {
+        const { authProvidersFromUser } = require('./authProviders');
+        authProviders = authProvidersFromUser(user);
+      } catch {
+        authProviders = ['phone'];
+      }
       const profile = await UserService.syncUserToFirestore(user, {
         authProvider: mode === 'link' && !linkMeta.merged ? 'linked' : 'phone',
         extra: {
@@ -538,6 +552,7 @@ export class AuthService {
           phoneNumber: phone || undefined,
           name: displayName,
           linkedProviders: providers,
+          authProviders,
         },
       });
 
@@ -600,6 +615,7 @@ export class AuthService {
             ExpiryAlertService.unregisterPushToken(userId),
             OfflineVaultCache.clearUser(userId),
             OfflineQueue.removeUser(userId),
+            removeOcrJobsForUser(userId),
           ]),
           new Promise((resolve) => setTimeout(resolve, 2500)),
         ]).catch(() => {});
@@ -676,6 +692,13 @@ export class AuthService {
 
 function mapAuthError(error) {
   try {
+    const { toAuthUserMessage } = require('./authErrors');
+    const authFriendly = toAuthUserMessage(error, '');
+    if (authFriendly) return authFriendly;
+  } catch {
+    /* fall through */
+  }
+  try {
     const { toFriendlyError } = require('../../utils/friendlyErrors');
     const friendly = toFriendlyError(error, '');
     if (friendly) return friendly;
@@ -696,7 +719,6 @@ function mapAuthError(error) {
   if (code.includes('provider-already-linked') || /already\s*linked/i.test(message)) {
     return 'Connecting your accounts…';
   }
-  // Phone / provider conflicts are recovered in verifyOTP — never scare the user
   if (
     code.includes('credential-already-in-use') ||
     code.includes('account-exists-with-different-credential')
@@ -708,9 +730,10 @@ function mapAuthError(error) {
   if (code.includes('user-not-found') || code.includes('wrong-password') || code.includes('invalid-credential')) {
     return 'Incorrect email or password';
   }
-  if (code.includes('too-many-requests')) return 'Too many attempts. Try again later';
+  if (code.includes('too-many-requests') || code.includes('quota')) {
+    return 'Too many attempts. Try again later.';
+  }
   if (code.includes('invalid-phone-number')) return 'Enter a valid mobile number';
-  if (code.includes('too-many-requests') || code.includes('quota')) return 'Too many OTP attempts. Try again later.';
   if (message.includes('already registered')) {
     return 'Connecting your accounts…';
   }
@@ -720,18 +743,16 @@ function mapAuthError(error) {
   if (message.includes('cancelled') || message.includes('canceled') || code === 'SIGN_IN_CANCELLED') {
     return 'Google Sign-In was cancelled';
   }
-  // Surface native Google / Firebase details so Play Console debugging is accurate
+  // Never dump raw DEVELOPER_ERROR / Integrity token strings to the user
   if (
-    code.includes('DEVELOPER_ERROR') ||
-    message.includes('DEVELOPER_ERROR') ||
-    code.includes('GOOGLE') ||
-    code.includes('SIGN_IN') ||
-    message.includes('[')
+    /developer_error|integrity|safetynet|app-not-authorized|play.?integrity/i.test(`${code} ${message}`)
   ) {
-    const parts = [code && `code=${code}`, message && `message=${message}`].filter(Boolean);
-    return parts.length ? `Google Sign-In failed (${parts.join(' | ')})` : 'Google Sign-In failed';
+    return 'Sign-in is not ready on this install. Use the Play Store build, or try Email / Phone OTP.';
   }
-  return message || 'Authentication failed';
+  if (message && message.length < 140 && !/exception|stack|token/i.test(message)) {
+    return message;
+  }
+  return 'Sign-in failed. Please try again.';
 }
 
 export default AuthService;

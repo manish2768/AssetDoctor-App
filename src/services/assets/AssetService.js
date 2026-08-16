@@ -23,6 +23,8 @@ import { ASSET_STATUS } from '../../constants/assetStatus';
 import { ExpiryAlertService } from '../notifications/ExpiryAlertService';
 import { OfflineQueue } from '../offline/OfflineQueue';
 import { OfflineVaultCache } from '../offline/OfflineVaultCache';
+import { ConnectivityService } from '../offline/ConnectivityService';
+import { SYNC_STATUS, SYNC_ENTITY, makeOperationId } from '../offline/syncConstants';
 import { normalizeAssetList } from '../storageService';
 import { resolveVaultDocumentMeta } from '../ocr/documentTypeClassifier';
 import { toErrorMessage, runDetached } from '../../utils/errors';
@@ -33,10 +35,10 @@ import {
 } from '../vault/VaultInvoiceUpload';
 import { toVaultValue } from '../../utils/parseMoneyValue';
 import { lookupBrandHelpline } from '../../constants/brandDirectory';
-import { assignEnergyFieldsOnCreate } from '../energy/EnergyService';
 import { cleanAssetDisplayName } from '../../utils/displayAssetName';
 import { computeGadgetSmartMetrics } from '../../utils/gadgetSmartMetrics';
 import { enqueueReminder } from '../reminders/ReminderService';
+import { enrichUniversalAssetFields } from './enrichUniversalAsset';
 
 /**
  * @typedef {Object} AssetDocument
@@ -96,8 +98,56 @@ function isTransientError(error) {
 }
 
 function offlineFriendlyMessage() {
-  return 'Network taking time, saved locally';
+  return 'Saved offline. Changes will sync automatically.';
 }
+
+async function queueAssetCreate(effectiveUserId, form, localImagePath, options = {}) {
+  const stableAssetId = form.assetId || createAssetId();
+  const formWithId = { ...form, assetId: stableAssetId };
+  const queuedImagePath = localImagePath
+    ? await OfflineVaultCache.persistPendingFile(effectiveUserId, localImagePath)
+    : null;
+  const operationId =
+    options.operationId ||
+    makeOperationId(SYNC_ENTITY.ASSET, stableAssetId, 'CREATE');
+  await OfflineQueue.enqueue({
+    type: 'createAsset',
+    entityType: SYNC_ENTITY.ASSET,
+    entityId: stableAssetId,
+    operationType: 'CREATE',
+    operationId,
+    payload: {
+      userId: effectiveUserId,
+      form: formWithId,
+      localImagePath: queuedImagePath,
+      operationId,
+      entityType: SYNC_ENTITY.ASSET,
+      entityId: stableAssetId,
+    },
+  });
+  const localAsset = {
+    ...formWithId,
+    id: stableAssetId,
+    assetId: stableAssetId,
+    uid: effectiveUserId,
+    ownerUid: effectiveUserId,
+    syncStatus: SYNC_STATUS.PENDING_CREATE,
+    pendingSync: true,
+    version: Number(form.version) || 1,
+    createdAt: new Date().toISOString(),
+    clientUpdatedAt: new Date().toISOString(),
+    deletedAt: null,
+  };
+  await OfflineVaultCache.upsertAsset(effectiveUserId, localAsset);
+  return {
+    success: false,
+    queuedOffline: true,
+    id: stableAssetId,
+    asset: localAsset,
+    error: offlineFriendlyMessage(),
+  };
+}
+
 
 function enrichMetrics(partial, repairs = [], powerLogs = []) {
   const health = calculateHealthScore(partial);
@@ -122,7 +172,14 @@ function enrichMetrics(partial, repairs = [], powerLogs = []) {
   return {
     healthScore: health.score,
     healthGrade: health.grade,
+    // Universal Asset Health Intelligence fields
+    assetHealthScore: health.score,
+    assetHealthScoreVersion: health.version || 1,
+    healthBand: health.band || health.grade,
+    healthBreakdown: health.breakdown || null,
+    healthWhy: health.why || health.tips || [],
     estimatedResale: resale.estimatedResale,
+    currentEstimatedValue: resale.estimatedResale,
     bookValue: dep.bookValue,
     accumulatedDepreciation: dep.accumulatedDepreciation,
     tco: tco.tco,
@@ -168,6 +225,15 @@ export class AssetService {
     try {
       if (!effectiveUserId) throw new Error('Please sign in to save assets to your vault.');
       if (!form.assetName?.trim()) throw new Error('Asset name is required');
+
+      // Offline-first: persist locally immediately when network is unavailable.
+      if (!options.skipOfflineQueue) {
+        const online = await ConnectivityService.isOnline();
+        if (!online) {
+          Haptics.success();
+          return queueAssetCreate(effectiveUserId, form, localImagePath, options);
+        }
+      }
 
       const cat = resolveCategoryMeta(form.categoryId, form.category);
       const stableAssetId = form.assetId || createAssetId();
@@ -270,25 +336,29 @@ export class AssetService {
         pendingSync: false,
         deletedAt: null,
         clientUpdatedAt: new Date().toISOString(),
+        syncStatus: SYNC_STATUS.SYNCED,
+        version: Number(form.version) || 1,
+        lastSyncedAt: new Date().toISOString(),
         createdAt: firestore.FieldValue.serverTimestamp(),
         updatedAt: firestore.FieldValue.serverTimestamp(),
       };
 
-      const energy = assignEnergyFieldsOnCreate({ ...form, ...base });
-      const gadget = computeGadgetSmartMetrics({ ...base, ...energy });
+      const universal = enrichUniversalAssetFields(form, base);
+      const gadget = computeGadgetSmartMetrics({ ...base, ...universal });
       const withEnergy = {
         ...base,
-        ...energy,
+        ...universal,
         smartCategory: form.smartCategory || '',
         trackImei: Boolean(form.trackImei),
         trackPucService: Boolean(form.trackPucService),
         seasonalServiceAlerts: Boolean(form.seasonalServiceAlerts),
         estimatedMonthlyUnits:
-          form.estimatedMonthlyUnits ?? energy.estimatedMonthlyUnits ?? null,
+          form.estimatedMonthlyUnits ?? universal.estimatedMonthlyUnits ?? null,
         estimatedMonthlyBillCost:
-          form.estimatedMonthlyBillCost ?? energy.estimatedMonthlyBillCost ?? null,
+          form.estimatedMonthlyBillCost ?? universal.estimatedMonthlyBillCost ?? null,
         reminderText: form.reminderText || form.whatsappReminderText || form.invoiceMeta?.reminderText || form.invoiceMeta?.whatsappReminderText || '',
-        batteryHealthPercent: gadget?.batteryHealthPercent ?? null,
+        batteryHealthPercent:
+          universal.batteryProfile?.healthPercent ?? gadget?.batteryHealthPercent ?? null,
         liveResaleValue: gadget?.liveResaleValue ?? null,
         batteryReplacementCost: gadget?.batteryReplacementCost ?? null,
       };
@@ -351,13 +421,7 @@ export class AssetService {
       const shouldQueue = !options.skipOfflineQueue && isTransientError(error);
       if (shouldQueue) {
         try {
-          const queuedImagePath = localImagePath
-            ? await OfflineVaultCache.persistPendingFile(effectiveUserId, localImagePath)
-            : null;
-          await OfflineQueue.enqueue({
-            type: 'createAsset',
-            payload: { userId: effectiveUserId, form, localImagePath: queuedImagePath },
-          });
+          return await queueAssetCreate(effectiveUserId, form, localImagePath, options);
         } catch {
           /* ignore queue errors */
         }
@@ -373,21 +437,62 @@ export class AssetService {
   /**
    * Soft-delete (preferred) — keeps history; CRON skips deletedAt != null
    */
-  static async softDeleteAsset(userId, assetId) {
+  static async softDeleteAsset(userId, assetId, options = {}) {
     Haptics.tap();
     try {
+      if (!options.skipOfflineQueue) {
+        const online = await ConnectivityService.isOnline();
+        if (!online) {
+          const operationId =
+            options.operationId ||
+            makeOperationId(SYNC_ENTITY.ASSET, assetId, 'DELETE');
+          await OfflineQueue.enqueue({
+            type: 'softDeleteAsset',
+            entityType: SYNC_ENTITY.ASSET,
+            entityId: assetId,
+            operationType: 'DELETE',
+            operationId,
+            payload: { userId, assetId, operationId, entityType: SYNC_ENTITY.ASSET, entityId: assetId },
+          });
+          await OfflineVaultCache.markAssetDeleted(userId, assetId);
+          Haptics.success();
+          return { success: true, queuedOffline: true };
+        }
+      }
       await assetsRef(userId).doc(assetId).set(
         {
           deletedAt: firestore.FieldValue.serverTimestamp(),
           status: ASSET_STATUS.RETIRED,
+          syncStatus: SYNC_STATUS.SYNCED,
           updatedAt: firestore.FieldValue.serverTimestamp(),
         },
         { merge: true },
       );
+      await OfflineVaultCache.markAssetDeleted(userId, assetId);
       Haptics.success();
       return { success: true };
     } catch (error) {
       Haptics.error();
+      const shouldQueue = !options.skipOfflineQueue && isTransientError(error);
+      if (shouldQueue) {
+        try {
+          const operationId =
+            options.operationId ||
+            makeOperationId(SYNC_ENTITY.ASSET, assetId, 'DELETE');
+          await OfflineQueue.enqueue({
+            type: 'softDeleteAsset',
+            entityType: SYNC_ENTITY.ASSET,
+            entityId: assetId,
+            operationType: 'DELETE',
+            operationId,
+            payload: { userId, assetId, operationId },
+          });
+          await OfflineVaultCache.markAssetDeleted(userId, assetId);
+          return { success: true, queuedOffline: true };
+        } catch {
+          /* ignore */
+        }
+      }
       return { success: false, error: toErrorMessage(error) };
     }
   }
@@ -484,8 +589,58 @@ export class AssetService {
   static async updateAsset(userId, assetId, updates = {}, localImagePath, options = {}) {
     Haptics.tap();
 
+    const queueUpdate = async () => {
+      const queuedImagePath = localImagePath
+        ? await OfflineVaultCache.persistPendingFile(userId, localImagePath)
+        : null;
+      const baseVersion = Number(updates.version ?? options.baseVersion) || 0;
+      const operationId =
+        options.operationId ||
+        makeOperationId(SYNC_ENTITY.ASSET, assetId, 'UPDATE');
+      await OfflineQueue.enqueue({
+        type: 'updateAsset',
+        entityType: SYNC_ENTITY.ASSET,
+        entityId: assetId,
+        operationType: 'UPDATE',
+        operationId,
+        payload: {
+          userId,
+          assetId,
+          updates,
+          localImagePath: queuedImagePath,
+          operationId,
+          baseVersion,
+          entityType: SYNC_ENTITY.ASSET,
+          entityId: assetId,
+        },
+      });
+      await OfflineVaultCache.upsertAsset(userId, {
+        assetId,
+        id: assetId,
+        ...updates,
+        syncStatus: SYNC_STATUS.PENDING_UPDATE,
+        pendingSync: true,
+        version: baseVersion,
+        clientUpdatedAt: new Date().toISOString(),
+      });
+      return {
+        success: false,
+        queuedOffline: true,
+        id: assetId,
+        error: offlineFriendlyMessage(),
+      };
+    };
+
     try {
       if (!userId || !assetId) throw new Error('userId and assetId are required');
+
+      if (!options.skipOfflineQueue) {
+        const online = await ConnectivityService.isOnline();
+        if (!online) {
+          Haptics.success();
+          return queueUpdate();
+        }
+      }
 
       const patch = {
         updatedAt: firestore.FieldValue.serverTimestamp(),
@@ -493,6 +648,10 @@ export class AssetService {
         // Keep ownership fields stable across merges
         uid: userId,
         ownerUid: userId,
+        syncStatus: SYNC_STATUS.SYNCED,
+        pendingSync: false,
+        lastSyncedAt: new Date().toISOString(),
+        version: firestore.FieldValue.increment(1),
       };
 
       const allow = [
@@ -534,10 +693,39 @@ export class AssetService {
         'ocrExtract',
         'billThumbDataUrl',
         'classifiedDocumentType',
+        // Universal asset architecture (publicAssetId is permanent — never overwrite if already set)
+        'nickname',
+        'locationId',
+        'locationPath',
+        'specifications',
+        'batteryProfile',
+        'energyProfile',
+        'assetCategory',
+        'vehicleType',
+        'powertrain',
+        'subcategory',
+        'applianceType',
+        'gadgetType',
+        'starRating',
+        'usageDaysPerMonth',
+        'electricityTariff',
+        'batteryCapacityKwh',
+        'energyConsumptionPer100Km',
+        'rangeKm',
       ];
 
       for (const key of allow) {
         if (updates[key] !== undefined) patch[key] = updates[key];
+      }
+
+      // publicAssetId / assetCode are permanent — only set if caller provides and doc lacked them
+      if (updates.publicAssetId || updates.assetCode) {
+        const existing = await assetsRef(userId).doc(assetId).get();
+        const prior = existing.data() || {};
+        if (!prior.publicAssetId && !prior.assetCode) {
+          patch.publicAssetId = updates.publicAssetId || updates.assetCode;
+          patch.assetCode = patch.publicAssetId;
+        }
       }
 
       if (localImagePath) {
@@ -559,13 +747,7 @@ export class AssetService {
       const shouldQueue = !options.skipOfflineQueue && isTransientError(error);
       if (shouldQueue) {
         try {
-          const queuedImagePath = localImagePath
-            ? await OfflineVaultCache.persistPendingFile(userId, localImagePath)
-            : null;
-          await OfflineQueue.enqueue({
-            type: 'updateAsset',
-            payload: { userId, assetId, updates, localImagePath: queuedImagePath },
-          });
+          return await queueUpdate();
         } catch {
           /* ignore */
         }
@@ -575,6 +757,18 @@ export class AssetService {
         error: shouldQueue ? offlineFriendlyMessage() : (error?.message || 'Failed to update asset'),
         queuedOffline: shouldQueue,
       };
+    }
+  }
+
+  /** Lightweight read for conflict detection during sync. */
+  static async fetchAssetSnapshot(userId, assetId) {
+    try {
+      if (!userId || !assetId) return { success: false };
+      const snap = await assetsRef(userId).doc(assetId).get();
+      if (!snap.exists) return { success: false };
+      return { success: true, asset: { id: snap.id, assetId: snap.id, ...snap.data() } };
+    } catch (error) {
+      return { success: false, error: toErrorMessage(error) };
     }
   }
 

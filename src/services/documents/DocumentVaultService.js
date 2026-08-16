@@ -133,15 +133,24 @@ export class DocumentVaultService {
         cachedDraft?.localCachePath &&
         !payload?.skipOfflineQueue;
       if (shouldQueue) {
+        const operationId = `opid_DOCUMENT_${localDocId}_UPLOAD`;
         await OfflineQueue.enqueue({
           type: 'uploadDocument',
+          entityType: 'DOCUMENT',
+          entityId: localDocId,
+          operationType: 'UPLOAD',
+          operationId,
           payload: {
             userId,
             assetId,
+            operationId,
+            entityType: 'DOCUMENT',
+            entityId: localDocId,
             document: {
               ...payload,
               docId: localDocId,
               localPath: cachedDraft.localCachePath,
+              syncStatus: 'PENDING_UPLOAD',
             },
           },
         }).catch(() => {});

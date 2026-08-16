@@ -1,15 +1,18 @@
 /**
- * Offline CACHE only — not the primary store for vault data.
- * Source of truth: Firestore Users/{uid}/Assets (+ Storage for files).
+ * Local durable vault store for the active device experience (STEP 8).
+ * Cloud remains backup/sync. Single encrypted cache — do not add a second DB.
  * Local JSON is AES-encrypted via EncryptedVaultStorage (SecureStore key).
  */
 
 import * as FileSystem from 'expo-file-system/legacy';
 
 import { EncryptedVaultStorage } from '../security/EncryptedVaultStorage';
+import { SYNC_STATUS } from './syncConstants';
 
 const ASSET_KEY = (userId) => `@asset_doctor/assets_v2/${userId}`;
 const DOC_KEY = (userId, assetId) => `@asset_doctor/docs_v2/${userId}/${assetId}`;
+const REPAIR_KEY = (userId, assetId) => `@asset_doctor/repairs_v1/${userId}/${assetId}`;
+const CONFLICT_KEY = (userId) => `@asset_doctor/conflicts_v1/${userId}`;
 const KEY_DOC_TYPES = new Set([
   'rc',
   'puc',
@@ -53,13 +56,113 @@ export class OfflineVaultCache {
     const ownedKeys = keys.filter(
       (key) =>
         key === ASSET_KEY(userId) ||
-        key.startsWith(`@asset_doctor/docs_v2/${userId}/`),
+        key === CONFLICT_KEY(userId) ||
+        key.startsWith(`@asset_doctor/docs_v2/${userId}/`) ||
+        key.startsWith(`@asset_doctor/repairs_v1/${userId}/`),
     );
     if (ownedKeys.length) await EncryptedVaultStorage.multiRemove(ownedKeys);
     if (FileSystem.documentDirectory) {
       const directory = `${FileSystem.documentDirectory}asset-doctor/${safePart(userId)}/`;
       await FileSystem.deleteAsync(directory, { idempotent: true }).catch(() => {});
     }
+  }
+
+  /** Upsert one asset into durable local cache (survives restart). */
+  static async upsertAsset(userId, asset) {
+    if (!userId || !asset) return null;
+    const id = asset.assetId || asset.id;
+    if (!id) return null;
+    const existing = await this.getAssets(userId);
+    const prior = existing.find((a) => (a.assetId || a.id) === id) || {};
+    const nextRow = {
+      ...prior,
+      ...asset,
+      id,
+      assetId: id,
+      pendingSync:
+        asset.pendingSync !== undefined
+          ? asset.pendingSync
+          : asset.syncStatus && asset.syncStatus !== SYNC_STATUS.SYNCED,
+      clientUpdatedAt: asset.clientUpdatedAt || new Date().toISOString(),
+    };
+    const next = [nextRow, ...existing.filter((a) => (a.assetId || a.id) !== id)];
+    await this.cacheAssets(userId, next);
+    return nextRow;
+  }
+
+  static async markAssetDeleted(userId, assetId) {
+    if (!userId || !assetId) return;
+    const existing = await this.getAssets(userId);
+    const next = existing.map((a) =>
+      (a.assetId || a.id) === assetId
+        ? {
+            ...a,
+            deletedAt: new Date().toISOString(),
+            status: 'retired',
+            syncStatus: SYNC_STATUS.PENDING_DELETE,
+            pendingSync: true,
+          }
+        : a,
+    );
+    await this.cacheAssets(userId, next);
+  }
+
+  static async listRepairLogs(userId, assetId) {
+    return readList(REPAIR_KEY(userId, assetId));
+  }
+
+  static async upsertRepairLog(userId, assetId, repair) {
+    if (!userId || !assetId || !repair) return null;
+    const repairId = repair.repairId || repair.id;
+    if (!repairId) return null;
+    const existing = await this.listRepairLogs(userId, assetId);
+    const row = {
+      ...repair,
+      id: repairId,
+      repairId,
+      assetId,
+      pendingSync: repair.pendingSync !== false,
+      syncStatus: repair.syncStatus || SYNC_STATUS.PENDING_CREATE,
+      clientUpdatedAt: new Date().toISOString(),
+    };
+    const next = [row, ...existing.filter((r) => (r.repairId || r.id) !== repairId)];
+    await EncryptedVaultStorage.setJSON(REPAIR_KEY(userId, assetId), next);
+    return row;
+  }
+
+  static async markRepairSynced(userId, assetId, repairId) {
+    const existing = await this.listRepairLogs(userId, assetId);
+    const next = existing.map((r) =>
+      (r.repairId || r.id) === repairId
+        ? {
+            ...r,
+            pendingSync: false,
+            syncStatus: SYNC_STATUS.SYNCED,
+            lastSyncedAt: new Date().toISOString(),
+          }
+        : r,
+    );
+    await EncryptedVaultStorage.setJSON(REPAIR_KEY(userId, assetId), next);
+  }
+
+  static async listConflicts(userId) {
+    return readList(CONFLICT_KEY(userId));
+  }
+
+  static async saveConflict(userId, conflict) {
+    if (!userId || !conflict) return;
+    const existing = await this.listConflicts(userId);
+    const next = [conflict, ...existing.filter((c) => c.conflictId !== conflict.conflictId)].slice(
+      0,
+      30,
+    );
+    await EncryptedVaultStorage.setJSON(CONFLICT_KEY(userId), next);
+  }
+
+  static async clearConflict(userId, conflictId) {
+    const existing = await this.listConflicts(userId);
+    const next = existing.filter((c) => c.conflictId !== conflictId);
+    await EncryptedVaultStorage.setJSON(CONFLICT_KEY(userId), next);
   }
 
   static async persistPendingFile(userId, localPath) {

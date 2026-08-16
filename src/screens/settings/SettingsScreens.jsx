@@ -184,15 +184,23 @@ export function SettingsScreen({ navigation }) {
 
   const onSyncNow = async () => {
     setBusy(true);
-    const result = await OfflineSyncService.flushNow();
+    const result =
+      typeof OfflineSyncService.retryNow === 'function'
+        ? await OfflineSyncService.retryNow()
+        : await OfflineSyncService.flushNow({ force: true });
     await refreshPending();
     setBusy(false);
-    Alert.alert(
-      'Cloud Locker',
-      result.success
-        ? pendingAfterSuccessMessage(result)
-        : result.error || 'Sync failed — will retry when you reopen the app.',
-    );
+    let message;
+    if (result.offline) {
+      message = "You're offline. Changes will sync automatically when you're back online.";
+    } else if (result.hasHardFailures) {
+      message = "Some data couldn't sync. Tap Sync again to retry.";
+    } else if (result.success !== false) {
+      message = pendingAfterSuccessMessage(result);
+    } else {
+      message = result.error || 'Sync failed — will retry when you reopen the app.';
+    }
+    Alert.alert('Cloud Locker', message);
   };
 
   function pendingAfterSuccessMessage(result) {

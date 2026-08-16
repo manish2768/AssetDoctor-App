@@ -251,17 +251,25 @@ export function AssetProvider({ children }) {
       }
       const result = await AssetService.createFromForm(effectiveUid, formWithId, localImagePath);
       if (!result.success && result.queuedOffline) {
-        setAssets((current) => [
-          {
-            ...formWithId,
-            id,
-            assetId: id,
-            pendingSync: true,
-            createdAt: new Date().toISOString(),
-          },
-          ...current,
-        ]);
-        return { success: true, queuedOffline: true, id };
+        const offlineRow = {
+          ...(result.asset || formWithId),
+          id: result.id || id,
+          assetId: result.id || id,
+          pendingSync: true,
+          syncStatus: 'PENDING_CREATE',
+          createdAt: new Date().toISOString(),
+        };
+        await OfflineVaultCache.upsertAsset(effectiveUid, offlineRow).catch(() => {});
+        setAssets((current) => {
+          const exists = current.some((a) => (a.assetId || a.id) === offlineRow.assetId);
+          if (exists) {
+            return current.map((a) =>
+              (a.assetId || a.id) === offlineRow.assetId ? { ...a, ...offlineRow } : a,
+            );
+          }
+          return [offlineRow, ...current];
+        });
+        return { success: true, queuedOffline: true, id: offlineRow.assetId };
       }
       return result;
     },
@@ -283,10 +291,17 @@ export function AssetProvider({ children }) {
         localImagePath,
       );
       if (!result.success && result.queuedOffline) {
+        await OfflineVaultCache.upsertAsset(uid, {
+          assetId,
+          id: assetId,
+          ...updates,
+          pendingSync: true,
+          syncStatus: 'PENDING_UPDATE',
+        }).catch(() => {});
         setAssets((current) =>
           current.map((asset) =>
             (asset.assetId || asset.id) === assetId
-              ? { ...asset, ...updates, pendingSync: true }
+              ? { ...asset, ...updates, pendingSync: true, syncStatus: 'PENDING_UPDATE' }
               : asset,
           ),
         );
@@ -305,7 +320,13 @@ export function AssetProvider({ children }) {
         return { success: false, error: 'Demo asset — sign in to manage your vault.' };
       }
       Haptics.tap();
-      return AssetService.softDeleteAsset(uid, assetId);
+      const result = await AssetService.softDeleteAsset(uid, assetId);
+      if (result?.success) {
+        setAssets((current) =>
+          current.filter((a) => (a.assetId || a.id) !== assetId),
+        );
+      }
+      return result;
     },
     [user?.uid, sessionUid],
   );

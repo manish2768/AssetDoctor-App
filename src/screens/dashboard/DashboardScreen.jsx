@@ -20,13 +20,21 @@ import * as Print from 'expo-print';
 import { useAuth } from '../../context/AuthProvider';
 import { useAssets } from '../../context/AssetProvider';
 import { buildCountdownTasks } from '../../utils/countdownTasks';
+import {
+  buildTodaysAssetActions,
+  buildHouseholdHealthOverview,
+} from '../../services/health/homeHealthSummary';
 import { requireAuth, openLogin } from '../../navigation/authGate';
 import { openScanInvoice } from '../../navigation/navActions';
 import { BRAND, COLORS } from '../../theme/branding';
 import { formatINR, formatLakhs } from '../../utils/format';
 import { Haptics } from '../../services/haptics';
 import { daysUntil } from '../../utils/dates';
-import { getAssetFolderType } from '../../utils/assetFolders';
+import {
+  getAssetFolderType,
+  FOLDER_META,
+  countAssetsByFolder,
+} from '../../utils/assetFolders';
 import { isAlertableStatus } from '../../constants/assetStatus';
 import { OTA_BUNDLE_LABEL } from '../../services/updates/OtaUpdateService';
 import { getCurrentValuation } from '../../components/ValuationBlock';
@@ -52,7 +60,10 @@ import { normalizeAssetRecord } from '../../services/storageService';
 import { summarizePortfolioCost, calculateCostToUse } from '../../utils/costToUse';
 import { calculateResaleValue } from '../../utils/resaleCalculator';
 import { summarizeHouseholdNetWorth } from '../../utils/portfolioNetWorth';
+import { buildPortfolioFinance } from '../../services/finance/portfolioFinance';
+import { formatInr as formatFinanceInr } from '../../services/finance/financeConstants';
 import { findUpgradeReviewAlerts } from '../../utils/maintenanceValueAlert';
+import { OfflineSyncBanner } from '../../components/OfflineSyncBanner';
 
 function formatRupee(amount) {
   const n = Number(amount) || 0;
@@ -147,6 +158,10 @@ export function DashboardScreen({ navigation }) {
     () => summarizeHouseholdNetWorth(activeAssets),
     [activeAssets],
   );
+  const portfolioFinance = useMemo(
+    () => buildPortfolioFinance(activeAssets),
+    [activeAssets],
+  );
   const totalVaultValue = netWorth.totalCurrent;
   const vehicleValue = netWorth.vehiclesCurrent;
   const gadgetsValue = netWorth.gadgetsCurrent;
@@ -190,6 +205,16 @@ export function DashboardScreen({ navigation }) {
     [assets],
   );
 
+  const todaysActions = useMemo(
+    () => buildTodaysAssetActions(assets, { maxItems: 5 }),
+    [assets],
+  );
+
+  const householdHealth = useMemo(
+    () => buildHouseholdHealthOverview(assets),
+    [assets],
+  );
+
   /** Expired + due-soon banners (expired first, red alert) */
   const urgentBanners = useMemo(() => {
     const expiredFirst = (urgent || [])
@@ -218,6 +243,8 @@ export function DashboardScreen({ navigation }) {
         tone: task.days != null && task.days < 0 ? 'expired' : 'warn',
       }));
   }, [countdownTasks, urgent]);
+
+  const folderCounts = useMemo(() => countAssetsByFolder(activeAssets), [activeAssets]);
 
   const listedAssets = useMemo(() => {
     if (listFilter === 'expired') {
@@ -356,6 +383,7 @@ export function DashboardScreen({ navigation }) {
         contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 12) + 8 }]}
         showsVerticalScrollIndicator={false}
       >
+        <OfflineSyncBanner userId={user?.uid} />
         {/* Header */}
         <View style={styles.headerRow}>
           <Pressable style={styles.profileChip} onPress={goProfile}>
@@ -446,6 +474,71 @@ export function DashboardScreen({ navigation }) {
             </View>
           </View>
         </View>
+
+        {portfolioFinance?.totalAssets > 0 ? (
+          <View style={[styles.worthCard, { marginTop: 12 }]}>
+            <Text style={styles.worthEyebrow}>MY ASSET PORTFOLIO</Text>
+            <Text style={[styles.guestSub, { marginBottom: 8 }]}>
+              {portfolioFinance.totalAssets} assets · estimates labeled clearly
+            </Text>
+            <Text style={styles.splitLabel}>
+              Purchase Value:{' '}
+              <Text style={styles.splitValue}>{formatFinanceInr(portfolioFinance.purchaseValue)}</Text>
+            </Text>
+            <Text style={styles.splitLabel}>
+              Estimated Current Value:{' '}
+              <Text style={styles.splitValue}>
+                {formatFinanceInr(portfolioFinance.currentEstimatedValue)}
+              </Text>
+            </Text>
+            <Text style={styles.splitLabel}>
+              Maintenance:{' '}
+              <Text style={styles.splitValue}>
+                {formatFinanceInr(portfolioFinance.expenses.maintenance)}
+              </Text>
+            </Text>
+            <Text style={styles.splitLabel}>
+              Repairs:{' '}
+              <Text style={styles.splitValue}>
+                {formatFinanceInr(portfolioFinance.expenses.repairs)}
+              </Text>
+            </Text>
+            <Text style={styles.splitLabel}>
+              Insurance:{' '}
+              <Text style={styles.splitValue}>
+                {formatFinanceInr(portfolioFinance.expenses.insurance)}
+              </Text>
+            </Text>
+            <Text style={[styles.splitLabel, { marginTop: 4, fontWeight: '800' }]}>
+              Total Ownership Cost:{' '}
+              <Text style={styles.splitValue}>
+                {formatFinanceInr(portfolioFinance.totalOwnershipCost)}
+              </Text>
+            </Text>
+            {(portfolioFinance.byCategory || [])
+              .filter((c) => c.folder !== 'documents')
+              .slice(0, 4)
+              .map((c) => (
+                <Pressable
+                  key={c.folder}
+                  onPress={() => {
+                    Haptics.tap();
+                    navigation?.navigate?.('CategoryFolders', { focusFolder: c.folder });
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    marginTop: 6,
+                  }}
+                >
+                  <Text style={styles.splitLabel}>
+                    {c.label} · {c.count}
+                  </Text>
+                  <Text style={styles.splitValue}>{formatFinanceInr(c.purchaseValue)}</Text>
+                </Pressable>
+              ))}
+          </View>
+        ) : null}
 
         {upgradeAlerts.length ? (
           <View style={[styles.worthCard, { marginTop: 12, borderColor: '#F59E0B', borderWidth: 1 }]}>
@@ -554,6 +647,46 @@ export function DashboardScreen({ navigation }) {
             <Text style={styles.featureSub}>PUC · Insurance</Text>
           </Pressable>
         </View>
+        {householdHealth.totalAssets > 0 ? (
+          <View style={styles.sectionBlock}>
+            <Text style={styles.sectionTitle}>Household health</Text>
+            <Text style={styles.sectionSub}>
+              {householdHealth.healthyAssets} healthy · {householdHealth.needsAttention} need
+              attention · {householdHealth.criticalAssets} critical
+            </Text>
+          </View>
+        ) : null}
+        {todaysActions.length ? (
+          <View style={styles.sectionBlock}>
+            <Text style={styles.sectionTitle}>Today&apos;s asset actions</Text>
+            {todaysActions.map((action) => (
+              <Pressable
+                key={action.alertId || `${action.rank}-${action.title}`}
+                style={styles.urgentCard}
+                onPress={() => {
+                  Haptics.tap();
+                  if (action.assetId) {
+                    navigation.navigate('AssetPassport', { assetId: action.assetId });
+                  } else {
+                    Alert.alert(action.title, action.message);
+                  }
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.urgentTitle} numberOfLines={1}>
+                    {action.rank}. {action.title}
+                  </Text>
+                  <Text style={styles.urgentSub} numberOfLines={2}>
+                    {action.message}
+                  </Text>
+                </View>
+                <View style={styles.urgentPill}>
+                  <Text style={styles.urgentPillText}>{action.priority}</Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
         {/* Action row */}
         <View style={styles.actionRow}>
           <Pressable
@@ -647,7 +780,37 @@ export function DashboardScreen({ navigation }) {
           </View>
         )}
 
-        {/* Assets */}
+        {/* Folder vaults — primary home organization */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionLabelTight}>YOUR FOLDERS</Text>
+          <Pressable onPress={goFolders}>
+            <Text style={styles.viewAll}>Open all →</Text>
+          </Pressable>
+        </View>
+        <View style={styles.folderGrid}>
+          {['vehicle', 'gadgets', 'appliances', 'documents'].map((id) => {
+            const folder = FOLDER_META[id];
+            if (!folder) return null;
+            return (
+              <Pressable
+                key={id}
+                style={[styles.folderTile, { borderLeftColor: folder.accent }]}
+                onPress={() => {
+                  Haptics.tap();
+                  navigation?.navigate?.('CategoryFolders', { focusFolder: id });
+                }}
+              >
+                <CategoryIcon name={folder.iconKey || id} size={28} color={folder.accent} />
+                <Text style={styles.folderTileTitle}>{folder.title}</Text>
+                <Text style={styles.folderTileCount}>
+                  {folderCounts[id] || 0} {folder.countLabel}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Attention filters */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionLabelTight}>ACTIVE ASSETS</Text>
           <Pressable onPress={goAssets}>
@@ -1063,6 +1226,21 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginBottom: 10,
   },
+  sectionBlock: {
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    color: COLORS.text,
+    fontWeight: '800',
+    fontSize: 15,
+    marginBottom: 4,
+  },
+  sectionSub: {
+    color: COLORS.muted,
+    fontSize: 12,
+    marginBottom: 8,
+  },
   viewAll: { color: COLORS.neonBlue, fontWeight: '800', fontSize: 12 },
 
   urgentCard: {
@@ -1204,6 +1382,35 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     backgroundColor: COLORS.card,
     marginBottom: 10,
+  },
+  folderGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 14,
+  },
+  folderTile: {
+    width: '47%',
+    flexGrow: 1,
+    minWidth: '42%',
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderLeftWidth: 4,
+    padding: 14,
+  },
+  folderTileTitle: {
+    color: COLORS.text,
+    fontWeight: '800',
+    fontSize: 14,
+    marginTop: 8,
+  },
+  folderTileCount: {
+    color: COLORS.muted,
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 4,
   },
   emptyTitle: { color: COLORS.text, fontWeight: '800', fontSize: 15 },
   emptySub: { color: COLORS.muted, marginTop: 6, fontSize: 12, lineHeight: 17 },
