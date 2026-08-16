@@ -305,8 +305,26 @@ export class SyncEngine {
           message: 'Some data couldn\'t sync.',
           failed: result.failed || 0,
         });
+        try {
+          // eslint-disable-next-line global-require
+          const { markBackupFailure } = require('../security/BackupStatusService');
+          await markBackupFailure(opts.userId, 'SYNC_PARTIAL');
+        } catch {
+          /* ignore */
+        }
       } else if (result.remaining === 0) {
-        emitStatus({ message: 'All data synced', pending: 0 });
+        emitStatus({
+          message: 'All data synced',
+          pending: 0,
+          lastSuccessAt: new Date().toISOString(),
+        });
+        try {
+          // eslint-disable-next-line global-require
+          const { markBackupSuccess } = require('../security/BackupStatusService');
+          await markBackupSuccess(opts.userId);
+        } catch {
+          /* ignore */
+        }
       }
       return result;
     } catch (error) {

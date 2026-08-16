@@ -1,5 +1,6 @@
 /**
- * Cloud Vision OCR client — prefers direct Vision API key, then Cloud Function, then ML Kit.
+ * Cloud Vision OCR client — prefers authenticated Cloud Function in production,
+ * then optional client Vision key (dev only), then ML Kit.
  */
 
 import auth from '@react-native-firebase/auth';
@@ -12,6 +13,11 @@ import { parseInvoiceText } from './InvoiceOcrParser';
 import { emptyInvoiceData } from './invoiceSchema';
 import { parseBillData } from '../../utils/billParser';
 import { extractApplianceEnergyFromText } from '../../utils/powerCost';
+import { preferPurchaseTotal, isTaxIdentifierText } from './invoiceAmountGuard';
+import { allowClientLlmKeys } from '../security/clientSecretPolicy';
+import { isJunkVendorOrName } from './ocrFieldHeuristics';
+import { recordRawOcr, recordExtraction, recordFinalMapping, resetOcrTrail } from './ocrDebugTrail';
+import { scoreFieldConfidences } from './fieldConfidence';
 
 const DEFAULT_VISION_URL =
   'https://asia-south1-assetdoctor-5fd25.cloudfunctions.net/scanInvoiceVision';
@@ -96,33 +102,36 @@ export class CloudVisionOcrService {
     let engine = 'none';
     let cloudError = null;
 
+    // 1) Authenticated Cloud Function (Vision secret stays server-side)
     try {
-      const direct = await this.recognizeTextViaApiKey(imageUri, precomputedBase64);
-      if (direct.success && direct.text) {
-        rawText = direct.text;
-        engine = 'cloud-vision-api-key';
+      const proxy = await this.recognizeTextViaCloudFunction(imageUri, precomputedBase64);
+      if (proxy.success && proxy.text) {
+        rawText = proxy.text;
+        engine = 'cloud-vision-function';
       } else {
-        cloudError = direct.error;
+        cloudError = proxy.error;
       }
     } catch (error) {
-      cloudError = error?.message || 'Cloud Vision API key call failed';
+      cloudError = error?.message || 'Cloud Function OCR failed';
     }
 
-    if (!rawText) {
+    // 2) Client Vision key — development / explicit opt-in only
+    if (!rawText && allowClientLlmKeys()) {
       try {
-        const proxy = await this.recognizeTextViaCloudFunction(imageUri, precomputedBase64);
-        if (proxy.success && proxy.text) {
-          rawText = proxy.text;
-          engine = 'cloud-vision-function';
+        const direct = await this.recognizeTextViaApiKey(imageUri, precomputedBase64);
+        if (direct.success && direct.text) {
+          rawText = direct.text;
+          engine = 'cloud-vision-api-key';
           cloudError = null;
         } else if (!cloudError) {
-          cloudError = proxy.error;
+          cloudError = direct.error;
         }
       } catch (error) {
-        if (!cloudError) cloudError = error?.message || 'Cloud Function OCR failed';
+        if (!cloudError) cloudError = error?.message || 'Cloud Vision API key call failed';
       }
     }
 
+    // 3) On-device ML Kit
     if (!rawText) {
       const local = await this.recognizeTextViaMlKit(imageUri);
       if (local.success && local.text) {
@@ -142,6 +151,13 @@ export class CloudVisionOcrService {
         engine,
         error: cloudError || 'Could not read text from this invoice.',
       };
+    }
+
+    try {
+      resetOcrTrail();
+      recordRawOcr(rawText, engine);
+    } catch {
+      /* debug optional */
     }
 
     const parsed = parseInvoiceText(rawText);
@@ -165,9 +181,22 @@ export class CloudVisionOcrService {
         serialHint: data.serialNumber || data.chassisNumber || data.registration || '',
         expectedDocumentType:
           keywordClass?.document_type || data.documentType || data.documentKind || '',
+        imageBase64: precomputedBase64 || undefined,
+        imageMimeType: 'image/jpeg',
       });
       if (enhanced.success && enhanced.data) {
         gemini = enhanced.data;
+        try {
+          const { cleanAndValidateOCR } = require('./cleanAndValidateOCR');
+          const cleaned = cleanAndValidateOCR(gemini);
+          if (cleaned) gemini = { ...gemini, ...cleaned };
+        } catch {
+          /* optional */
+        }
+        if (enhanced.confidence != null) data.confidence = enhanced.confidence;
+        if (enhanced.needsManualReview != null) {
+          data.needsManualReview = enhanced.needsManualReview;
+        }
         const docType = gemini.document_type || gemini.documentType;
         const vaultType = gemini.vaultType || keywordClass?.vaultType || 'bill';
 
@@ -183,9 +212,25 @@ export class CloudVisionOcrService {
         data.classifiedDocumentType = docType;
 
         if (gemini.asset_name || gemini.item_name || gemini.assetName || gemini.itemName) {
-          data.productName = String(
+          const geminiProduct = String(
             gemini.asset_name || gemini.item_name || gemini.assetName || gemini.itemName,
           ).trim();
+          const parserProduct = String(data.productName || '').trim();
+          if (
+            geminiProduct &&
+            !isTaxIdentifierText(geminiProduct) &&
+            !isJunkVendorOrName(geminiProduct)
+          ) {
+            // Prefer Gemini only when parser empty or clearly weaker
+            if (!parserProduct || parserProduct.length < 4 || isJunkVendorOrName(parserProduct)) {
+              data.productName = geminiProduct;
+            } else if (
+              geminiProduct.length >= parserProduct.length * 0.6 &&
+              !/^(?:hsn|sac|cin)/i.test(geminiProduct)
+            ) {
+              data.productName = geminiProduct;
+            }
+          }
         }
         if (
           gemini.vendor_dealer_name ||
@@ -195,7 +240,7 @@ export class CloudVisionOcrService {
           gemini.vendorDealerName ||
           gemini.shopName
         ) {
-          data.shopName = String(
+          const geminiShop = String(
             gemini.vendor_dealer_name ||
               gemini.vendor_name ||
               gemini.vendorName ||
@@ -203,6 +248,18 @@ export class CloudVisionOcrService {
               gemini.vendorDealerName ||
               gemini.shopName,
           ).trim();
+          if (
+            geminiShop &&
+            !isTaxIdentifierText(geminiShop) &&
+            !isJunkVendorOrName(geminiShop)
+          ) {
+            data.shopName = geminiShop;
+          } else if (
+            isTaxIdentifierText(data.shopName) ||
+            isJunkVendorOrName(data.shopName)
+          ) {
+            data.shopName = '';
+          }
         }
         if (
           gemini.owner_buyer_name ||
@@ -269,7 +326,12 @@ export class CloudVisionOcrService {
         if (gemini.engine_number || gemini.engineNumber) {
           data.engineNumber = String(gemini.engine_number || gemini.engineNumber).trim();
         }
-        if (gemini.serialNumber) data.serialNumber = String(gemini.serialNumber).trim();
+        if (gemini.serialNumber || gemini.serial_number || gemini.imei) {
+          data.serialNumber = String(
+            gemini.serialNumber || gemini.serial_number || gemini.imei,
+          ).trim();
+          data.imei = data.serialNumber;
+        }
         if (gemini.category) data.geminiCategory = gemini.category;
         if (gemini.reminderText || gemini.whatsappReminderText) {
           data.reminderText = gemini.reminderText || gemini.whatsappReminderText;
@@ -289,6 +351,7 @@ export class CloudVisionOcrService {
           chassis_or_frame_no: data.chassisNumber || '',
           engine_number: data.engineNumber || '',
           vehicle_registration_number: data.registration || '',
+          serial_number: data.serialNumber || '',
           expiry_date: '',
         };
 
@@ -336,11 +399,32 @@ export class CloudVisionOcrService {
           data.ocrExtract.category = 'Vehicle';
           data.ocrExtract.vehicle_registration_number = data.registration || '';
         } else if (docType === DOC_CLASS.TAX_INVOICE) {
-          if (gemini.total_amount != null && !(data.totalAmount > 0)) {
-            data.totalAmount = Number(gemini.total_amount);
+          const geminiTotal =
+            gemini.total_amount != null ? Number(gemini.total_amount) : null;
+          const parserTotal = Number(data.totalAmount) || 0;
+          // NEVER prefer glued tax (183043) over parser Grand Total (23999)
+          const resolved = preferPurchaseTotal(parserTotal, geminiTotal);
+          if (resolved != null && resolved > 0) {
+            data.totalAmount = resolved;
           }
-          if (gemini.calculatedExpiryDate && !data.warrantyExpiry) {
-            data.warrantyExpiry = gemini.calculatedExpiryDate;
+          try {
+            recordExtraction({
+              parserTotal,
+              geminiTotal,
+              finalPrice: data.totalAmount,
+              productName: data.productName,
+              shopName: data.shopName,
+              confidence: enhanced.confidence,
+            });
+          } catch {
+            /* optional */
+          }
+          if (gemini.calculatedExpiryDate || gemini.expiry_date) {
+            data.warrantyExpiry =
+              data.warrantyExpiry ||
+              gemini.calculatedExpiryDate ||
+              gemini.expiry_date ||
+              null;
           }
           if (gemini.warrantyMonths != null) {
             data.warrantyPeriodMonths = gemini.warrantyMonths;
@@ -358,19 +442,25 @@ export class CloudVisionOcrService {
           }
           data.ocrExtract.total_amount = data.totalAmount;
           data.ocrExtract.expiry_date = data.warrantyExpiry || gemini.expiry_date || '';
+          data.ocrExtract.serial_number = data.serialNumber || '';
           if (energyHints && gemini.estimatedMonthlyUnits != null) {
             energyHints.estimatedMonthlyUnits = gemini.estimatedMonthlyUnits;
             energyHints.estimatedMonthlyBillCost = gemini.estimatedMonthlyBillCost;
           }
         } else {
-          if (gemini.total_amount != null && !(data.totalAmount > 0)) {
-            data.totalAmount = Number(gemini.total_amount);
+          const geminiTotal =
+            gemini.total_amount != null ? Number(gemini.total_amount) : null;
+          const parserTotal = Number(data.totalAmount) || 0;
+          const resolved = preferPurchaseTotal(parserTotal, geminiTotal);
+          if (resolved != null && resolved > 0) {
+            data.totalAmount = resolved;
           }
           if (gemini.expiry_date && !data.warrantyExpiry) {
             data.warrantyExpiry = gemini.expiry_date;
           }
           data.ocrExtract.total_amount = data.totalAmount;
           data.ocrExtract.expiry_date = gemini.expiry_date || '';
+          data.ocrExtract.serial_number = data.serialNumber || '';
         }
       }
     } catch (err) {
@@ -388,12 +478,39 @@ export class CloudVisionOcrService {
       /* optional */
     }
 
+    try {
+      if (isTaxIdentifierText(data.shopName) || isJunkVendorOrName(data.shopName)) {
+        data.shopName = '';
+      }
+      const fc = scoreFieldConfidences(data);
+      data.fieldConfidence = fc.fields;
+      data.fieldConfidenceReasons = fc.reasons;
+      data.lowConfidenceFields = fc.lowFields;
+      if (fc.overall > 0 && (data.confidence == null || data.confidence <= 0)) {
+        data.confidence = Math.round(fc.overall * 100);
+      }
+      if (fc.lowFields.includes('productName') || fc.lowFields.includes('price')) {
+        data.needsManualReview = true;
+      }
+      recordFinalMapping({
+        finalPrice: data.totalAmount,
+        productName: data.productName,
+        shopName: data.shopName,
+        confidence: data.confidence,
+        fieldConfidence: fc.fields,
+        rawTextSample: rawText,
+      });
+    } catch {
+      /* optional */
+    }
+
     Haptics.success();
     return {
       success: true,
       data,
       sweetBill,
-      confidence: parsed.confidence,
+      confidence: data.confidence ?? parsed.confidence,
+      needsManualReview: Boolean(data.needsManualReview),
       energyHints,
       gemini,
       rawText,

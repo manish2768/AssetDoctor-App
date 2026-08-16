@@ -2,9 +2,10 @@
  * Offline OCR processing queue — capture now, process when online.
  * Status: PROCESSING_PENDING → PROCESSING → DONE | FAILED
  * Does not store API keys. Does not log raw document text.
+ * Queue metadata encrypted via EncryptedVaultStorage.
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { EncryptedVaultStorage } from '../security/EncryptedVaultStorage';
 
 const KEY = '@asset_doctor/ocr_offline_queue_v1';
 const MAX = 25;
@@ -15,6 +16,10 @@ export const OCR_JOB_STATUS = Object.freeze({
   DONE: 'DONE',
   FAILED: 'FAILED',
 });
+
+async function writeList(list) {
+  await EncryptedVaultStorage.setJSON(KEY, list);
+}
 
 export async function enqueueOcrJob(job = {}) {
   if (!job.localImageUri && !job.imageUri) {
@@ -33,14 +38,13 @@ export async function enqueueOcrJob(job = {}) {
   };
   const list = await listOcrJobs();
   const next = [row, ...list.filter((j) => j.id !== row.id)].slice(0, MAX);
-  await AsyncStorage.setItem(KEY, JSON.stringify(next));
+  await writeList(next);
   return { success: true, job: row };
 }
 
 export async function listOcrJobs() {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
+    const parsed = await EncryptedVaultStorage.getJSON(KEY, []);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
@@ -50,11 +54,9 @@ export async function listOcrJobs() {
 export async function updateOcrJob(id, patch = {}) {
   const list = await listOcrJobs();
   const next = list.map((j) =>
-    j.id === id
-      ? { ...j, ...patch, updatedAt: new Date().toISOString() }
-      : j,
+    j.id === id ? { ...j, ...patch, updatedAt: new Date().toISOString() } : j,
   );
-  await AsyncStorage.setItem(KEY, JSON.stringify(next));
+  await writeList(next);
   return next.find((j) => j.id === id) || null;
 }
 
@@ -110,7 +112,7 @@ export async function removeOcrJobsForUser(userId) {
   const list = await listOcrJobs();
   const next = list.filter((j) => j.ownerUid !== userId);
   const removed = list.length - next.length;
-  await AsyncStorage.setItem(KEY, JSON.stringify(next));
+  await writeList(next);
   return { success: true, removed };
 }
 

@@ -11,6 +11,7 @@ import {
   nextRetryAtIso,
   makeOperationId,
 } from './syncConstants';
+import { EncryptedVaultStorage } from '../security/EncryptedVaultStorage';
 
 const STORAGE_KEY = '@asset_doctor/offline_queue_v1';
 const memoryFallback = { value: '[]' };
@@ -25,10 +26,22 @@ function getAsyncStorage() {
 }
 
 async function readRaw() {
+  // Prefer encrypted vault; migrate legacy plaintext once.
+  try {
+    const enc = await EncryptedVaultStorage.getItem(STORAGE_KEY);
+    if (enc != null) return enc;
+  } catch {
+    /* fall through */
+  }
   const AsyncStorage = getAsyncStorage();
   if (AsyncStorage) {
     try {
-      return (await AsyncStorage.getItem(STORAGE_KEY)) || '[]';
+      const legacy = (await AsyncStorage.getItem(STORAGE_KEY)) || null;
+      if (legacy) {
+        await EncryptedVaultStorage.setItem(STORAGE_KEY, legacy);
+        return legacy;
+      }
+      return '[]';
     } catch {
       return memoryFallback.value;
     }
@@ -37,16 +50,14 @@ async function readRaw() {
 }
 
 async function writeRaw(json) {
-  const AsyncStorage = getAsyncStorage();
-  if (AsyncStorage) {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY, json);
-      return;
-    } catch {
-      /* fall through */
-    }
+  // Never write plaintext queue to AsyncStorage — memory-only if encryption fails.
+  try {
+    await EncryptedVaultStorage.setItem(STORAGE_KEY, json);
+    return;
+  } catch (error) {
+    console.warn('[OfflineQueue] encrypted write failed; keeping in-memory only');
+    memoryFallback.value = json;
   }
-  memoryFallback.value = json;
 }
 
 function normalizeJob(job = {}) {

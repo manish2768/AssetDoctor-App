@@ -23,6 +23,10 @@ const { onMailQueueCreate } = require('./src/onMailQueueCreate');
 const { scanInvoiceVision } = require('./src/scanInvoiceVision');
 const { grantAdminAccess } = require('./src/grantAdmin');
 const { checkIdentityAvailable, checkIdentityAvailableHttp } = require('./src/identityGuard');
+const {
+  requestAccountDeletion,
+  processPendingAccountDeletions,
+} = require('./src/deleteAccount');
 
 exports.dailyExpiryAlerts = dailyExpiryAlerts;
 exports.onMailQueueCreate = onMailQueueCreate;
@@ -30,3 +34,5 @@ exports.scanInvoiceVision = scanInvoiceVision;
 exports.grantAdminAccess = grantAdminAccess;
 exports.checkIdentityAvailable = checkIdentityAvailable;
 exports.checkIdentityAvailableHttp = checkIdentityAvailableHttp;
+exports.requestAccountDeletion = requestAccountDeletion;
+exports.processPendingAccountDeletions = processPendingAccountDeletions;

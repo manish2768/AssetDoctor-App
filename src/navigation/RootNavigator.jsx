@@ -34,6 +34,7 @@ import { SettingsScreen, AboutScreen } from '../screens/settings/SettingsScreens
 import { ProfileScreen } from '../screens/settings/ProfileScreen';
 import { ReportIssueScreen } from '../screens/settings/ReportIssueScreen';
 import { PrivacyPolicyScreen } from '../screens/settings/PrivacyPolicyScreen';
+import { PrivacySecurityScreen } from '../screens/settings/PrivacySecurityScreen';
 import { ContactUsScreen } from '../screens/settings/ContactUsScreen';
 import { PlayStoreListingScreen } from '../screens/settings/PlayStoreListingScreen';
 import { NotificationSettingsScreen } from '../screens/settings/NotificationSettingsScreen';
@@ -187,6 +188,11 @@ function SettingsStackNav() {
   return (
     <Stack.Navigator initialRouteName="SettingsHome" screenOptions={stackOptions}>
       <Stack.Screen name="SettingsHome" component={SettingsScreen} options={{ title: 'Settings' }} />
+      <Stack.Screen
+        name="PrivacySecurity"
+        component={PrivacySecurityScreen}
+        options={{ title: 'Privacy & Security' }}
+      />
       <Stack.Screen name="ProfileHome" component={ProfileScreen} options={{ title: 'Profile' }} />
       <Stack.Screen name="About" component={AboutScreen} options={{ title: 'About Us' }} />
       <Stack.Screen name="ContactUs" component={ContactUsScreen} options={{ title: 'Contact Us' }} />

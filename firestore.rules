@@ -106,6 +106,18 @@ service cloud.firestore {
             && (!('costInr' in request.resource.data)
               || (request.resource.data.costInr is number && request.resource.data.costInr >= 0));
         }
+
+        match /LocationHistory/{histId} {
+          allow read, write: if isOwner(uid);
+        }
+
+        match /serviceHistory/{histId} {
+          allow read, write: if isOwner(uid);
+        }
+      }
+
+      match /Locations/{locationId} {
+        allow read, write: if isOwner(uid);
       }
 
       match /PowerLogs/{logId} {

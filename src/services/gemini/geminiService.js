@@ -6,12 +6,20 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 import { ENV } from '../../config/env';
+import { resolveClientApiKey } from '../security/clientSecretPolicy';
 import {
   classifyDocumentTypeFromKeywords,
   extractFieldsFromOcrText,
   isJunkVendorOrName,
   mergeExtractPreferFilled,
 } from '../ocr/ocrFieldHeuristics';
+import {
+  GEMINI_EXTRACTION_SCHEMA,
+  scoreExtractionConfidence,
+  needsManualReview,
+  OCR_CONFIDENCE_THRESHOLD,
+} from '../ocr/ocrSchemas';
+import { cleanAndValidateOCR } from '../ocr/cleanAndValidateOCR';
 
 const MODEL = 'gemini-1.5-flash';
 
@@ -117,15 +125,19 @@ AMOUNT / PARTIES:
 - purchase_date = YYYY-MM-DD only.
 
 General:
-- Missing fields → "" for strings, null for numbers. Never invent.
+- Missing fields → null (never invent, never guess).
 - Never map CGST/SGST/GSTIN into serial_number / IMEI / chassis.
 - Always include document_type.
+- Include confidence as integer 0–100 for extraction certainty.
 - If HINTS.expectedDocumentType is set, KEEP it unless OCR clearly contradicts it.`;
 
 function apiKey() {
-  return String(
-    process.env.EXPO_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || ENV.geminiApiKey || '',
-  ).trim();
+  // Production: empty → callers fall back to Cloud Function / local heuristics (no key in APK).
+  return resolveClientApiKey([
+    process.env.EXPO_PUBLIC_GEMINI_API_KEY,
+    process.env.GEMINI_API_KEY,
+    ENV.geminiApiKey,
+  ]);
 }
 
 function safeJsonParse(text) {
@@ -388,7 +400,9 @@ export function normalizeGeminiPayload(data = {}) {
     calculatedExpiryDate: expiry,
     reminderText: str(data.reminderText || data.whatsappReminderText),
     whatsappReminderText: str(data.reminderText || data.whatsappReminderText),
-    serialNumber: str(data.serialNumber),
+    serial_number: serialNumber,
+    serialNumber,
+    imei: serialNumber && serialNumber.replace(/\D/g, '').length === 15 ? serialNumber : str(data.imei),
     certificateNumber: str(data.certificateNumber),
     subCategory: str(data.subCategory),
     starRating: numOrNull(data.starRating),
@@ -417,15 +431,15 @@ function isJunkAssetName(value) {
 }
 
 /**
- * Extract structured asset fields from raw OCR text (and optional hints).
- * Always classifies document_type first.
+ * Extract structured asset fields from OCR text + optional bill image (multimodal).
+ * Image recovers fine print (IMEI, tiny amounts, expiry) that text OCR misses.
  */
 export async function extractAssetWithGemini(rawText, hints = {}) {
   const key = apiKey();
   if (!key) {
     return { success: false, error: 'GEMINI_API_KEY not configured', data: null };
   }
-  if (!String(rawText || '').trim()) {
+  if (!String(rawText || '').trim() && !hints.imageBase64) {
     return { success: false, error: 'No OCR text to enhance', data: null };
   }
 
@@ -440,14 +454,19 @@ export async function extractAssetWithGemini(rawText, hints = {}) {
     const genAI = new GoogleGenerativeAI(key);
     const model = genAI.getGenerativeModel({
       model: MODEL,
-      generationConfig: { temperature: 0.1, maxOutputTokens: 1400 },
+      generationConfig: {
+        temperature: 0.05,
+        maxOutputTokens: 1600,
+        responseMimeType: 'application/json',
+        responseSchema: GEMINI_EXTRACTION_SCHEMA,
+      },
     });
 
     const prompt = `${SYSTEM_PROMPT}
 
-OCR TEXT:
+OCR TEXT (may be incomplete — prefer the IMAGE when they conflict):
 """
-${String(rawText).slice(0, 12000)}
+${String(rawText || '').slice(0, 10000)}
 """
 
 HINTS:
@@ -456,25 +475,47 @@ serialHint=${hints.serialHint || ''}
 expectedDocumentType=${forcedType || ''}
 keywordClassification=${keywordClass?.document_type || ''}
 
-Remember:
-- If POLICY / INSURANCE / PERIOD OF INSURANCE appear → INSURANCE_POLICY.
-- asset_name / item_name = product table only (e.g. TVS RONIN) — NEVER footer/watermark junk.
-- total_amount = Net Total / Grand Total ONLY (e.g. 135500) — NEVER tax sub-totals or invoice nos.
-- vendor = dealership header; buyer_name from Customer/Buyer/S/W/D; invoice_number from Invoice No.
-- purchase_date = YYYY-MM-DD. Missing fields → "" or null (never invent).
+Rules for ONE-PASS accuracy:
+- Read product / vehicle name from the main item line (not address / GST footer).
+- total_amount = Grand Total / Net Payable / Amount Payable only.
+- Fill serial_number / IMEI / chassis / registration from printed labels when visible.
+- expiry_date for insurance/PUC/warranty when printed.
+- Missing fields → null. Never invent.
+- confidence = integer 0–100.
 `;
 
-    const result = await model.generateContent(prompt);
-    const text = result?.response?.text?.() || '';
-    let parsed = normalizeGeminiPayload(safeJsonParse(text));
+    const parts = [{ text: prompt }];
+    const b64 = String(hints.imageBase64 || '')
+      .replace(/^data:image\/\w+;base64,/, '')
+      .trim();
+    if (b64.length > 80) {
+      parts.push({
+        inlineData: {
+          mimeType: hints.imageMimeType || 'image/jpeg',
+          data: b64.slice(0, 4_500_000),
+        },
+      });
+    }
 
-    // Keyword classification wins when present
-    if (keywordClass?.document_type) {
+    const result = await model.generateContent(parts);
+    const text = result?.response?.text?.() || '';
+    const cleaned = cleanAndValidateOCR(safeJsonParse(text));
+    if (!cleaned) {
+      throw new Error('Gemini returned invalid JSON');
+    }
+    let parsed = normalizeGeminiPayload(cleaned);
+
+    // Strong keyword classes (insurance/RC/PUC) override Gemini; weak invoice hints do not
+    const strongKeyword =
+      keywordClass?.document_type === DOC_CLASS.INSURANCE_POLICY ||
+      keywordClass?.document_type === DOC_CLASS.REGISTRATION_CERTIFICATE ||
+      keywordClass?.document_type === DOC_CLASS.PUC_CERTIFICATE;
+    if (strongKeyword && keywordClass?.document_type) {
       parsed = normalizeGeminiPayload({
         ...parsed,
         document_type: keywordClass.document_type,
       });
-    } else if (forcedType) {
+    } else if (forcedType && strongKeyword) {
       parsed = normalizeGeminiPayload({
         ...parsed,
         document_type: forcedType,
@@ -489,8 +530,12 @@ Remember:
         purchase_or_issue_date: parsed.purchase_or_issue_date,
         expiry_date: parsed.expiry_date,
         asset_name: parsed.asset_name,
+        product_name: parsed.asset_name,
         chassis_or_frame_no: parsed.chassis_or_frame_no,
         vehicle_registration_number: parsed.vehicle_registration_number,
+        serial_number: parsed.serialNumber || parsed.serial_number,
+        total_amount: parsed.total_amount,
+        engine_number: parsed.engine_number,
       },
       heuristicFields,
     );
@@ -500,14 +545,28 @@ Remember:
       ...merged,
       document_type: parsed.document_type,
     });
+    try {
+      const again = cleanAndValidateOCR(parsed);
+      if (again) parsed = normalizeGeminiPayload({ ...parsed, ...again });
+    } catch {
+      /* ignore */
+    }
+
+    const confidence = scoreExtractionConfidence(parsed, parsed.document_type);
+    parsed.confidence = confidence;
+    parsed.needsManualReview = needsManualReview(confidence);
 
     return {
       success: true,
       data: parsed,
+      confidence,
+      needsManualReview: parsed.needsManualReview,
+      confidenceThreshold: OCR_CONFIDENCE_THRESHOLD,
       raw: text,
       model: MODEL,
       keywordClass,
       heuristicFields,
+      multimodal: Boolean(b64.length > 80),
     };
   } catch (error) {
     // Soft fallback: still return heuristic extract so Review is not empty
@@ -522,9 +581,15 @@ Remember:
             ? 'Insurance'
             : 'Vehicle',
       });
+      const confidence = scoreExtractionConfidence(fallback, fallback.document_type);
+      fallback.confidence = confidence;
+      fallback.needsManualReview = needsManualReview(confidence);
       return {
         success: true,
         data: fallback,
+        confidence,
+        needsManualReview: fallback.needsManualReview,
+        confidenceThreshold: OCR_CONFIDENCE_THRESHOLD,
         raw: '',
         model: 'heuristic-fallback',
         error: error?.message || 'Gemini extraction failed',
@@ -536,6 +601,8 @@ Remember:
       success: false,
       error: error?.message || 'Gemini extraction failed',
       data: null,
+      confidence: 0,
+      needsManualReview: true,
     };
   }
 }

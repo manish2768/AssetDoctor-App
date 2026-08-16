@@ -77,6 +77,18 @@ function bootstrapSideEffects() {
   } catch (e) {
     console.warn('[AssetDoctor] Crashlytics init:', e?.message || e);
   }
+
+  try {
+    // eslint-disable-next-line global-require
+    const { initializeAppCheckIfAvailable } = require('./src/services/security/AppCheckBootstrap');
+    initializeAppCheckIfAvailable().then((r) => {
+      if (r?.skipped && __DEV__) {
+        console.log('[AssetDoctor] App Check skipped:', r.reason);
+      }
+    });
+  } catch (e) {
+    console.warn('[AssetDoctor] App Check bootstrap:', e?.message || e);
+  }
 }
 
 export default function App() {

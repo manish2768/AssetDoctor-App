@@ -616,6 +616,15 @@ export class AuthService {
             OfflineVaultCache.clearUser(userId),
             OfflineQueue.removeUser(userId),
             removeOcrJobsForUser(userId),
+            (async () => {
+              try {
+                // eslint-disable-next-line global-require
+                const { InvoiceOfflineCache } = require('../ocr/InvoiceOfflineCache');
+                await InvoiceOfflineCache.clearUser(userId);
+              } catch {
+                /* ignore */
+              }
+            })(),
           ]),
           new Promise((resolve) => setTimeout(resolve, 2500)),
         ]).catch(() => {});

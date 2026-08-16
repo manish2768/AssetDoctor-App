@@ -31,8 +31,18 @@ async function getOrCreateKey() {
     return key;
   } catch (error) {
     console.warn('[EncryptedVaultStorage] SecureStore unavailable:', error?.message || error);
-    // Soft fallback — still obfuscate so plain JSON is not left on disk
-    cachedKey = 'asset-doctor-local-fallback-key';
+    // Device-session ephemeral key — never a shared hardcoded secret.
+    // Data encrypted with this key is not durable across process restarts.
+    if (!cachedKey) {
+      try {
+        const bytes = await Crypto.getRandomBytesAsync(32);
+        cachedKey = Array.from(bytes)
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join('');
+      } catch {
+        cachedKey = `ephemeral_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      }
+    }
     return cachedKey;
   }
 }

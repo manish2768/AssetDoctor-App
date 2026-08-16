@@ -1,0 +1,76 @@
+rules_version = '2';
+
+/**
+ * Asset Doctor — production Storage rules
+ * Bucket: assetdoctor-5fd25-vault
+ * Paths: users/{uid}/... and vault_invoices/{uid}/... ; images/PDF ≤ 15MB
+ */
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isSafeContent() {
+      return request.resource.contentType.matches('image/.*')
+        || request.resource.contentType == 'application/pdf';
+    }
+
+    function underMaxSize() {
+      return request.resource.size < 15 * 1024 * 1024;
+    }
+
+    function validWrite() {
+      return isSafeContent() && underMaxSize();
+    }
+
+    match /users/{uid}/bills/{fileName} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) && validWrite();
+      allow delete: if isOwner(uid);
+    }
+
+    // Profile avatar
+    match /users/{uid}/avatar.jpg {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) && validWrite();
+      allow delete: if isOwner(uid);
+    }
+
+    match /users/{uid}/avatar/{fileName} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) && validWrite();
+      allow delete: if isOwner(uid);
+    }
+
+    // Invoice scans — vault_invoices/{uid}/{timestamp}.jpg
+    match /vault_invoices/{uid}/{fileName} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) && validWrite();
+      allow delete: if isOwner(uid);
+    }
+
+    match /users/{uid}/assets/{assetId}/docs/{fileName} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) && validWrite();
+      allow delete: if isOwner(uid);
+    }
+
+    match /users/{uid}/assets/{assetId}/repairs/{fileName} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) && validWrite();
+      allow delete: if isOwner(uid);
+    }
+
+    // Explicit deny for any other path
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

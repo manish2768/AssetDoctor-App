@@ -375,6 +375,14 @@ export function SettingsScreen({ navigation }) {
         <Text style={styles.sectionHeader}>Security & Privacy</Text>
         <PrivacyVaultTag style={{ marginBottom: 10 }} />
         <GlassCard style={styles.sectionCard}>
+          <Row
+            title="Privacy & Security"
+            subtitle="Status · backup · vault · notification privacy · export · deletion"
+            onPress={() => {
+              Haptics.tap();
+              navigation?.navigate?.('PrivacySecurity');
+            }}
+          />
           <View style={[styles.row, styles.switchRow]}>
             <View style={{ flex: 1, paddingRight: 12 }}>
               <Text style={styles.rowTitle}>Biometric Unlock</Text>
@@ -427,8 +435,24 @@ export function SettingsScreen({ navigation }) {
         <Text style={styles.sectionHeader}>Reminders & Alerts</Text>
         <GlassCard style={styles.sectionCard}>
           <Row
+            title="Notification Center"
+            subtitle="All · Unread · Due soon · Expired"
+            onPress={() => {
+              Haptics.tap();
+              navigation?.navigate?.('NotificationCenter');
+            }}
+          />
+          <Row
+            title="Notification settings"
+            subtitle="Categories · timing 30/15/7/3/1 · quiet hours"
+            onPress={() => {
+              Haptics.tap();
+              navigation?.navigate?.('NotificationSettings');
+            }}
+          />
+          <Row
             title="Enable expiry alerts"
-            subtitle="PUC 7/1 · Insurance 15/3 · Warranty 30 days"
+            subtitle="PUC · Insurance · Warranty · Service (30/15/7/3/1/day-of)"
             onPress={onEnableAlerts}
           />
           <Row
