@@ -1,6 +1,6 @@
 /**
- * Root navigation — Splash → Onboarding → Main app (browse first)
- * Login opens as modal only when saving assets / documents.
+ * Root navigation — Splash → Auth → Profile → Onboarding → Home
+ * Guest browse still allowed; onboarding is per authenticated uid.
  *
  * IMPORTANT: Scan Invoice is a ROOT modal — never the Home tab landing screen.
  * Home tab always shows Dashboard (vault overview).
@@ -36,6 +36,10 @@ import { ReportIssueScreen } from '../screens/settings/ReportIssueScreen';
 import { PrivacyPolicyScreen } from '../screens/settings/PrivacyPolicyScreen';
 import { ContactUsScreen } from '../screens/settings/ContactUsScreen';
 import { PlayStoreListingScreen } from '../screens/settings/PlayStoreListingScreen';
+import { NotificationSettingsScreen } from '../screens/settings/NotificationSettingsScreen';
+import { NotificationCenterScreen } from '../screens/notifications/NotificationCenterScreen';
+import { AssetAnalyticsScreen } from '../screens/analytics/AssetAnalyticsScreen';
+import { openNotificationDeepLink } from '../services/notifications/notificationDeepLink';
 import { OfflineSyncService } from '../services/offline/OfflineSyncService';
 import { PlayStoreUpdateService } from '../services/updates/PlayStoreUpdateService';
 import { Haptics } from '../services/haptics';
@@ -43,9 +47,11 @@ import { COLORS, NAV_THEME } from '../theme/branding';
 import { ONBOARDING_KEY } from '../constants/storageKeys';
 import { CustomBottomTabBar } from '../components/CustomBottomTabBar';
 import {
-  WelcomeGreetingModal,
+  WelcomeBackModal,
   shouldShowWelcomeGreeting,
-} from '../components/WelcomeGreetingModal';
+} from '../components/WelcomeBackModal';
+import { OnboardingGuideModal } from '../components/OnboardingGuideModal';
+import { ProfileSetupModal } from '../components/profile/ProfileSetupModal';
 import { navigationRef, goHomeDashboard } from './navActions';
 import { AuthBootGate } from './AuthBootGate';
 import {
@@ -99,23 +105,7 @@ function openNotificationTarget(response) {
     return;
   }
   pendingNotificationResponse = null;
-  navigationRef.navigate('MainTabs', {
-    screen: 'Home',
-    params: {
-      screen: 'Dashboard',
-      params: {},
-    },
-  });
-  setTimeout(() => {
-    if (!navigationRef.isReady()) return;
-    navigationRef.navigate('MainTabs', {
-      screen: 'Home',
-      params: {
-        screen: 'AssetPassport',
-        params: { assetId },
-      },
-    });
-  }, 50);
+  openNotificationDeepLink(navigationRef, response);
 }
 
 const stackOptions = {
@@ -142,6 +132,8 @@ function HomeStackNav() {
         component={DashboardScreen}
         options={{ title: 'Home', headerShown: false }}
       />
+      <HomeStack.Screen name="NotificationCenter" component={NotificationCenterScreen} options={{ title: 'Notifications' }} />
+      <HomeStack.Screen name="AssetAnalytics" component={AssetAnalyticsScreen} options={{ title: 'Asset Analytics' }} />
       <HomeStack.Screen name="AssetPassport" component={AssetPassportScreen} options={{ title: 'Asset Passport' }} />
       <HomeStack.Screen name="AddAsset" component={AddAssetScreen} options={addAssetOptions} />
       <HomeStack.Screen name="Maintenance" component={MaintenanceScreen} options={{ title: 'Service & Maintenance' }} />
@@ -161,6 +153,7 @@ function AssetsStackNav() {
     <AssetsStack.Navigator initialRouteName="AssetList" screenOptions={stackOptions}>
       <AssetsStack.Screen name="AssetList" component={AssetListScreen} options={{ title: 'Assets' }} />
       <AssetsStack.Screen name="AddAsset" component={AddAssetScreen} options={addAssetOptions} />
+      <AssetsStack.Screen name="AssetAnalytics" component={AssetAnalyticsScreen} options={{ title: 'Analytics' }} />
       <AssetsStack.Screen name="AssetPassport" component={AssetPassportScreen} options={{ title: 'Passport' }} />
       <AssetsStack.Screen name="Maintenance" component={MaintenanceScreen} options={{ title: 'Service & Maintenance' }} />
       <AssetsStack.Screen name="DocumentsVault" component={DocumentsVaultScreen} options={{ title: 'Documents' }} />
@@ -393,6 +386,7 @@ export function RootNavigator() {
     displayName,
     allowGuestBrowse,
     retryProfileHydrate,
+    needsProfileSetup,
   } = useAuth();
   const AUTH_BYPASS_FOR_SCAN_TESTING = false;
   const isAuthenticated = AUTH_BYPASS_FOR_SCAN_TESTING ? true : authIsAuthenticated;
@@ -408,8 +402,8 @@ export function RootNavigator() {
   const [bootBypass, setBootBypass] = useState(false);
 
   useEffect(() => {
-    return OfflineSyncService.startAutoFlush();
-  }, []);
+    return SyncEngine.startAutoFlush(() => user?.uid);
+  }, [user?.uid]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
@@ -441,25 +435,57 @@ export function RootNavigator() {
   }, []);
 
   useEffect(() => {
-    if (!bootDone) return;
+    if (!bootDone) return undefined;
     let cancelled = false;
+
+    // Guests / logged-out: never block on product onboarding before auth
+    if (showAuthStack || allowGuestBrowse || !isAuthenticated || !user?.uid) {
+      setShowOnboarding(false);
+      setOnboardingChecked(true);
+      return undefined;
+    }
+
+    // Wait until profile setup finishes for new phone users
+    if (needsProfileSetup) {
+      setShowOnboarding(false);
+      setOnboardingChecked(true);
+      return undefined;
+    }
+
     (async () => {
       try {
-        const done = await AsyncStorage.getItem(ONBOARDING_KEY);
-        if (!cancelled) setShowOnboarding(done !== '1');
+        const key = `${ONBOARDING_KEY}:${user.uid}`;
+        const done = await AsyncStorage.getItem(key);
+        // Migrate legacy global flag once
+        const legacy = await AsyncStorage.getItem(ONBOARDING_KEY);
+        const complete = done === '1' || legacy === '1';
+        if (complete && done !== '1') {
+          await AsyncStorage.setItem(key, '1');
+        }
+        if (!cancelled) setShowOnboarding(!complete);
       } catch {
         if (!cancelled) setShowOnboarding(true);
       } finally {
         if (!cancelled) setOnboardingChecked(true);
       }
     })();
+
     return () => {
       cancelled = true;
     };
-  }, [bootDone]);
+  }, [
+    bootDone,
+    showAuthStack,
+    allowGuestBrowse,
+    isAuthenticated,
+    user?.uid,
+    needsProfileSetup,
+  ]);
 
   const finishOnboarding = async () => {
     try {
+      const uid = user?.uid;
+      if (uid) await AsyncStorage.setItem(`${ONBOARDING_KEY}:${uid}`, '1');
       await AsyncStorage.setItem(ONBOARDING_KEY, '1');
     } catch {
       /* ignore */
@@ -512,7 +538,8 @@ export function RootNavigator() {
     );
   }
 
-  if (showOnboarding) {
+  // Auth first — onboarding only for signed-in users after profile gate
+  if (showOnboarding && isAuthenticated && !needsProfileSetup && !showAuthStack) {
     return <OnboardingScreen onDone={finishOnboarding} />;
   }
 
@@ -574,7 +601,8 @@ export function RootNavigator() {
           <MainAppStackNavigator />
         )}
       </NavigationContainer>
-      <WelcomeGreetingModal
+      <ProfileSetupModal />
+      <WelcomeBackModal
         visible={showWelcome && !showAuthStack}
         displayName={displayName || user?.displayName || 'Guest'}
         onDismiss={() => setShowWelcome(false)}

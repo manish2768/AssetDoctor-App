@@ -2,7 +2,7 @@
  * Home Dashboard — premium vault overview (light slate UI).
  */
 
-import React, { useMemo, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -64,6 +64,10 @@ import { buildPortfolioFinance } from '../../services/finance/portfolioFinance';
 import { formatInr as formatFinanceInr } from '../../services/finance/financeConstants';
 import { findUpgradeReviewAlerts } from '../../utils/maintenanceValueAlert';
 import { OfflineSyncBanner } from '../../components/OfflineSyncBanner';
+import { OfflineVaultCache } from '../../services/offline/OfflineVaultCache';
+import { buildUpcomingSummary } from '../../services/notifications/notificationRules';
+import { evaluatePortfolioNotifications } from '../../services/notifications/notificationRules';
+import { unreadCount as getUnreadNotificationCount } from '../../services/health/notificationCenter';
 
 function formatRupee(amount) {
   const n = Number(amount) || 0;
@@ -120,6 +124,7 @@ export function DashboardScreen({ navigation }) {
   const [exporting, setExporting] = useState(false);
   const [listFilter, setListFilter] = useState('all'); // all | expired | attention
   const [reminderTask, setReminderTask] = useState(null);
+  const [expenseRowsByAsset, setExpenseRowsByAsset] = useState({});
   const swipeRefs = useRef({});
 
   // Never blank the greeting on auth hydrate flicker — use cached name immediately
@@ -154,13 +159,45 @@ export function DashboardScreen({ navigation }) {
     [assets],
   );
 
+  useEffect(() => {
+    let cancelled = false;
+    const uid = user?.uid;
+    if (!uid || !activeAssets.length) {
+      setExpenseRowsByAsset({});
+      return undefined;
+    }
+    (async () => {
+      const map = {};
+      const slice = activeAssets.slice(0, 50);
+      await Promise.all(
+        slice.map(async (a) => {
+          const id = a.assetId || a.id;
+          if (!id) return;
+          try {
+            map[id] = (await OfflineVaultCache.listRepairLogs(uid, id)) || [];
+          } catch {
+            map[id] = [];
+          }
+        }),
+      );
+      if (!cancelled) setExpenseRowsByAsset(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid, activeAssets]);
+
   const netWorth = useMemo(
     () => summarizeHouseholdNetWorth(activeAssets),
     [activeAssets],
   );
   const portfolioFinance = useMemo(
-    () => buildPortfolioFinance(activeAssets),
-    [activeAssets],
+    () =>
+      buildPortfolioFinance(activeAssets, {
+        expenseRowsByAsset,
+        actorUserId: user?.uid,
+      }),
+    [activeAssets, expenseRowsByAsset, user?.uid],
   );
   const totalVaultValue = netWorth.totalCurrent;
   const vehicleValue = netWorth.vehiclesCurrent;
@@ -214,6 +251,20 @@ export function DashboardScreen({ navigation }) {
     () => buildHouseholdHealthOverview(assets),
     [assets],
   );
+
+  const upcomingSummary = useMemo(() => {
+    const rows = evaluatePortfolioNotifications(activeAssets, {
+      userId: user?.uid,
+    });
+    return buildUpcomingSummary(rows);
+  }, [activeAssets, user?.uid]);
+
+  const [notifUnread, setNotifUnread] = useState(0);
+  React.useEffect(() => {
+    getUnreadNotificationCount()
+      .then(setNotifUnread)
+      .catch(() => setNotifUnread(0));
+  }, [assets]);
 
   /** Expired + due-soon banners (expired first, red alert) */
   const urgentBanners = useMemo(() => {
@@ -515,6 +566,17 @@ export function DashboardScreen({ navigation }) {
                 {formatFinanceInr(portfolioFinance.totalOwnershipCost)}
               </Text>
             </Text>
+            {portfolioFinance.snapshots?.[0]?.period?.available ? (
+              <Text style={styles.splitLabel}>
+                Sample monthly ownership:{' '}
+                <Text style={styles.splitValue}>
+                  {formatFinanceInr(portfolioFinance.snapshots[0].period.costPerMonth)}
+                </Text>
+              </Text>
+            ) : null}
+            <Text style={[styles.guestSub, { marginTop: 8 }]}>
+              Open any asset passport → View Asset Analytics for age, depreciation, and lifecycle.
+            </Text>
             {(portfolioFinance.byCategory || [])
               .filter((c) => c.folder !== 'documents')
               .slice(0, 4)
@@ -647,6 +709,21 @@ export function DashboardScreen({ navigation }) {
             <Text style={styles.featureSub}>PUC · Insurance</Text>
           </Pressable>
         </View>
+        <Pressable
+          style={styles.sectionBlock}
+          onPress={() => {
+            Haptics.tap();
+            navigation?.navigate?.('NotificationCenter');
+          }}
+        >
+          <Text style={styles.sectionTitle}>
+            Upcoming {notifUnread > 0 ? `· 🔔 ${notifUnread}` : ''}
+          </Text>
+          <Text style={styles.sectionSub}>
+            Insurance {upcomingSummary.insurance} · Service {upcomingSummary.service} · Warranty{' '}
+            {upcomingSummary.warranty} · PUC {upcomingSummary.puc} · Expired {upcomingSummary.expired}
+          </Text>
+        </Pressable>
         {householdHealth.totalAssets > 0 ? (
           <View style={styles.sectionBlock}>
             <Text style={styles.sectionTitle}>Household health</Text>

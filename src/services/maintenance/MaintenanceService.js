@@ -262,7 +262,11 @@ export class RepairLogService {
 
       if (!skipQueue) {
         const online = await ConnectivityService.isOnline();
-        if (!online) return queueLocal();
+        if (!online) {
+          const queued = await queueLocal();
+          await RepairLogService.refreshExpenseRollups(userId, assetId).catch(() => {});
+          return queued;
+        }
       }
 
       const ref = assetRef(userId, assetId).collection('RepairLogs').doc(stableId);
@@ -281,6 +285,7 @@ export class RepairLogService {
         syncStatus: SYNC_STATUS.SYNCED,
         pendingSync: false,
       });
+      await RepairLogService.refreshExpenseRollups(userId, assetId).catch(() => {});
       Haptics.success();
       return { success: true, id: ref.id, repair: doc };
     } catch (error) {
@@ -297,6 +302,50 @@ export class RepairLogService {
         error: toErrorMessage(error, 'Failed to save repair log'),
       };
     }
+  }
+
+  /** Persist expense bucket totals on the asset from real RepairLogs (no invented amounts). */
+  static async refreshExpenseRollups(userId, assetId) {
+    if (!userId || !assetId) return { success: false };
+    let logs = [];
+    try {
+      const snap = await assetRef(userId, assetId).collection('RepairLogs').get();
+      logs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    } catch {
+      logs = await OfflineVaultCache.listRepairLogs(userId, assetId);
+    }
+    const cached = await OfflineVaultCache.listRepairLogs(userId, assetId);
+    const map = new Map();
+    for (const row of [...cached, ...logs]) {
+      map.set(row.repairId || row.id, row);
+    }
+    const { sumExpenseBuckets } = require('../finance/ownershipCostEngine');
+    const buckets = sumExpenseBuckets([...map.values()]);
+    const patch = {
+      serviceCostTotal: buckets.service || 0,
+      repairCostTotal: buckets.repair || 0,
+      insurancePremiumTotal: buckets.insurance || 0,
+      energyCostTotal: buckets.energy || 0,
+      accessoriesCostTotal: buckets.accessories || 0,
+      fuelCostTotal: buckets.fuel || 0,
+      chargingCostTotal: buckets.charging || 0,
+      otherCostTotal: buckets.other || 0,
+      repairCount: buckets.expenseCount || 0,
+      expenseRollupsUpdatedAt: new Date().toISOString(),
+    };
+    try {
+      await assetRef(userId, assetId).set(patch, { merge: true });
+    } catch {
+      /* offline */
+    }
+    if (typeof OfflineVaultCache.upsertAsset === 'function') {
+      await OfflineVaultCache.upsertAsset(userId, {
+        assetId,
+        id: assetId,
+        ...patch,
+      }).catch(() => {});
+    }
+    return { success: true, buckets: patch };
   }
 
   static listen(userId, assetId, onUpdate) {

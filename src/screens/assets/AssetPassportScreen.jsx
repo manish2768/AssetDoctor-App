@@ -206,6 +206,15 @@ export function AssetPassportScreen({ route, navigation }) {
       <View style={styles.panel}>
         <Text style={styles.panelTitle}>Valuation</Text>
         <ValuationBlock asset={asset} />
+        <Pressable
+          style={styles.analyticsBtn}
+          onPress={() => {
+            Haptics.tap();
+            navigation.navigate('AssetAnalytics', { assetId: asset.assetId || asset.id });
+          }}
+        >
+          <Text style={styles.analyticsBtnText}>View Asset Analytics</Text>
+        </Pressable>
       </View>
 
       {isVehicle || asset.nextServiceDue || asset.pucExpiry || asset.insuranceExpiry ? (
@@ -312,15 +321,36 @@ export function AssetPassportScreen({ route, navigation }) {
       </View>
 
       <View style={styles.panel}>
-        <Text style={styles.panelTitle}>Health Score</Text>
+        <Text style={styles.panelTitle}>Asset Health</Text>
         <Text style={styles.score}>
-          {health.score} <Text style={styles.grade}>{health.grade}</Text>
+          {health.score} / 100 <Text style={styles.grade}>{health.band || health.grade}</Text>
         </Text>
-        {health.tips.map((t) => (
-          <Text key={t} style={styles.tip}>
-            • {t}
+        {(health.why || health.tips || []).length ? (
+          <>
+            <Text style={[styles.panelTitle, { marginTop: 10, fontSize: 13 }]}>Why?</Text>
+            {(health.why || health.tips).slice(0, 5).map((t) => (
+              <Text key={t} style={styles.tip}>
+                • {t}
+              </Text>
+            ))}
+          </>
+        ) : null}
+        {health.breakdown ? (
+          <>
+            <Text style={[styles.panelTitle, { marginTop: 10, fontSize: 13 }]}>Health breakdown</Text>
+            {Object.values(health.breakdown).map((row) => (
+              <Text key={row.label} style={styles.tip}>
+                {row.label}: {row.earned}/{row.max}
+              </Text>
+            ))}
+          </>
+        ) : null}
+        {health.service?.message ? (
+          <Text style={[styles.tip, { marginTop: 8 }]}>
+            Next: {health.service.recommended ? 'Recommended — ' : ''}
+            {health.service.message}
           </Text>
-        ))}
+        ) : null}
       </View>
 
       <Pressable style={styles.supportCard} onPress={onCallSupport}>
@@ -523,6 +553,15 @@ const styles = StyleSheet.create({
   deleteText: { color: '#fff', fontWeight: '900', fontSize: 15 },
   btnText: { color: COLORS.text, fontWeight: '800' },
   btnTextDark: { color: COLORS.onPrimary, fontWeight: '900' },
+  analyticsBtn: {
+    marginTop: 10,
+    marginHorizontal: 16,
+    backgroundColor: '#0F766E',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  analyticsBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
 });
 
 export default AssetPassportScreen;
