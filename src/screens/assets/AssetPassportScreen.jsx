@@ -38,6 +38,7 @@ import { computeGadgetSmartMetrics } from '../../utils/gadgetSmartMetrics';
 
 export function AssetPassportScreen({ route, navigation }) {
   const assetId = route?.params?.assetId;
+  const fromQr = !!route?.params?.fromQr;
   const { getAsset, removeAsset } = useAssets();
   const { user, profile } = useAuth();
   const asset = getAsset(assetId);
@@ -156,6 +157,49 @@ export function AssetPassportScreen({ route, navigation }) {
       </View>
 
       <AssetPassportCard asset={asset} />
+
+      {fromQr ? (
+        <View style={styles.qrActions}>
+          {[
+            {
+              label: 'Add Service',
+              onPress: () =>
+                navigation.navigate('Maintenance', { assetId: asset.assetId || asset.id }),
+            },
+            {
+              label: 'Add Expense',
+              onPress: () =>
+                navigation.navigate('Maintenance', {
+                  assetId: asset.assetId || asset.id,
+                  tab: 'add',
+                }),
+            },
+            {
+              label: 'Documents',
+              onPress: () =>
+                navigation.navigate('DocumentsVault', { assetId: asset.assetId || asset.id }),
+            },
+            {
+              label: 'History',
+              onPress: () =>
+                navigation.navigate('Maintenance', { assetId: asset.assetId || asset.id }),
+            },
+          ].map((a) => (
+            <Pressable
+              key={a.label}
+              style={styles.qrChip}
+              onPress={() => {
+                Haptics.tap();
+                a.onPress();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={a.label}
+            >
+              <Text style={styles.qrChipText}>{a.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
 
       <View style={styles.panel}>
         <Text style={styles.panelTitle}>Coverage progress</Text>
@@ -469,6 +513,21 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     backgroundColor: 'rgba(255,255,255,0.03)',
   },
+  qrActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  qrChip: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.bgDeep,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  qrChipText: { color: COLORS.emerald, fontWeight: '800', fontSize: 12 },
   panelTitle: { color: COLORS.muted, fontSize: 11, fontWeight: '800', marginBottom: 8 },
   score: { color: COLORS.text, fontSize: 28, fontWeight: '900', marginTop: 6 },
   grade: { fontSize: 14, color: COLORS.emerald, fontWeight: '700' },

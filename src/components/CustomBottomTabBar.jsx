@@ -1,13 +1,16 @@
 /**
- * Floating premium tab bar — clean Park+-style light shell + solid icons.
+ * Floating premium tab bar — theme-aware + responsive width.
  */
 
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useWindowDimensions } from 'react-native';
 
 import { Haptics } from '../services/haptics';
-import { COLORS, FONTS } from '../theme/branding';
+import { FONTS } from '../theme/branding';
+import { HIT, RADIUS } from '../theme/tokens';
+import { useThemeColors } from '../context/ThemeProvider';
 import { openScanInvoice } from '../navigation/navActions';
 import {
   IconHome,
@@ -16,9 +19,6 @@ import {
   IconSettings,
   IconPlus,
 } from './icons/TabIcons';
-
-const { width } = Dimensions.get('window');
-const ACTIVE = COLORS.neonBlue;
 
 const TAB_CONFIG = [
   { name: 'Home', label: 'Home', Icon: IconHome },
@@ -30,6 +30,10 @@ const TAB_CONFIG = [
 
 export function CustomBottomTabBar({ state, descriptors, navigation }) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const colors = useThemeColors();
+  const active = colors.tabActive || colors.secondary || colors.neonBlue;
+  const barWidth = Math.min(width - 20, 720);
 
   const onFabPress = () => {
     Haptics.tap();
@@ -38,7 +42,17 @@ export function CustomBottomTabBar({ state, descriptors, navigation }) {
 
   return (
     <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 10) }]}>
-      <View style={styles.floatingBar}>
+      <View
+        style={[
+          styles.floatingBar,
+          {
+            width: barWidth,
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            shadowColor: colors.shadow,
+          },
+        ]}
+      >
         {TAB_CONFIG.map((config) => {
           if (config.fab) {
             return (
@@ -46,13 +60,13 @@ export function CustomBottomTabBar({ state, descriptors, navigation }) {
                 <TouchableOpacity
                   onPress={onFabPress}
                   activeOpacity={0.9}
-                  style={styles.fabBtn}
+                  style={[styles.fabBtn, { backgroundColor: colors.primary }]}
                   accessibilityRole="button"
                   accessibilityLabel="Scan invoice"
                 >
-                  <IconPlus color="#FFFFFF" />
+                  <IconPlus color={colors.textOnPrimary || '#FFFFFF'} />
                 </TouchableOpacity>
-                <Text style={styles.fabLabel}>Scan</Text>
+                <Text style={[styles.fabLabel, { color: colors.textMuted }]}>Scan</Text>
               </View>
             );
           }
@@ -96,14 +110,27 @@ export function CustomBottomTabBar({ state, descriptors, navigation }) {
               onPress={onPress}
               activeOpacity={0.85}
               style={styles.tabItem}
-              accessibilityRole="button"
-              accessibilityState={isFocused ? { selected: true } : {}}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isFocused }}
               accessibilityLabel={descriptors[route.key]?.options?.tabBarLabel || config.label}
             >
-              <View style={[styles.iconWrap, isFocused && styles.iconWrapActive]}>
-                <Icon color={isFocused ? ACTIVE : COLORS.muted} solid={isFocused} />
+              <View
+                style={[
+                  styles.iconWrap,
+                  isFocused && {
+                    backgroundColor: colors.infoSoft || 'rgba(37,99,235,0.10)',
+                  },
+                ]}
+              >
+                <Icon color={isFocused ? active : colors.textMuted} solid={isFocused} />
               </View>
-              <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>
+              <Text
+                style={[
+                  styles.tabLabel,
+                  { color: isFocused ? active : colors.textMuted },
+                  isFocused && styles.tabLabelActive,
+                ]}
+              >
                 {config.label}
               </Text>
             </TouchableOpacity>
@@ -119,94 +146,73 @@ export const TAB_BAR_HEIGHT = 72;
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
+    bottom: 0,
     alignItems: 'center',
-    backgroundColor: 'transparent',
-    zIndex: 50,
+    pointerEvents: 'box-none',
   },
   floatingBar: {
     flexDirection: 'row',
-    width: width - 20,
-    minHeight: TAB_BAR_HEIGHT,
-    backgroundColor: COLORS.bgElevated,
-    borderRadius: 28,
-    paddingHorizontal: 6,
-    paddingTop: 8,
-    paddingBottom: 6,
     alignItems: 'flex-end',
     justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 8,
+    borderRadius: RADIUS.xl,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
     ...Platform.select({
-      ios: {
-        shadowColor: '#64748B',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.12,
-        shadowRadius: 16,
-      },
-      android: { elevation: 10 },
+      ios: {},
+      android: {},
+      default: {},
     }),
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBottom: 4,
-    gap: 2,
+    minHeight: HIT.min,
+    minWidth: HIT.min,
   },
   iconWrap: {
-    width: 40,
-    height: 32,
+    width: 44,
+    height: 36,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconWrapActive: {
-    backgroundColor: 'rgba(37, 99, 235, 0.10)',
-  },
   tabLabel: {
-    color: COLORS.muted,
     fontSize: 10,
+    fontFamily: FONTS.medium,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  tabLabelActive: {
     fontFamily: FONTS.semibold,
     fontWeight: '700',
   },
-  tabLabelActive: {
-    color: ACTIVE,
-  },
   fabSlot: {
-    width: 68,
+    width: 64,
     alignItems: 'center',
-    justifyContent: 'flex-end',
     marginTop: -22,
-    paddingBottom: 2,
   },
   fabBtn: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: ACTIVE,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 4,
-    borderColor: COLORS.bg,
-    ...Platform.select({
-      ios: {
-        shadowColor: ACTIVE,
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.35,
-        shadowRadius: 10,
-      },
-      android: { elevation: 8 },
-    }),
+    elevation: 4,
   },
   fabLabel: {
-    marginTop: 2,
-    color: ACTIVE,
     fontSize: 10,
-    fontFamily: FONTS.bold,
-    fontWeight: '800',
+    fontFamily: FONTS.medium,
+    fontWeight: '600',
+    marginTop: 4,
   },
 });
 

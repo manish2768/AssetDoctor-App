@@ -18,6 +18,7 @@ import { RootErrorBoundary } from './src/components/RootErrorBoundary';
 import { AuthProvider } from './src/context/AuthProvider';
 import { AssetProvider } from './src/context/AssetProvider';
 import { AppLockProvider } from './src/context/AppLockProvider';
+import { ThemeProvider } from './src/context/ThemeProvider';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { ProfileSetupModal } from './src/components/profile/ProfileSetupModal';
 import { COLORS } from './src/theme/branding';
@@ -131,19 +132,20 @@ export default function App() {
     <GestureHandlerRootView style={styles.root} key={bootKey}>
       <RootErrorBoundary onRestart={() => setBootKey((k) => k + 1)}>
         <SafeAreaProvider>
-          <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
-          <View style={styles.root}>
-            <AppLockProvider>
-              <AuthProvider>
-                <AssetProvider>
-                  <RootErrorBoundary onRestart={() => setBootKey((k) => k + 1)}>
-                    <RootNavigator />
-                    <ProfileSetupModal />
-                  </RootErrorBoundary>
-                </AssetProvider>
-              </AuthProvider>
-            </AppLockProvider>
-          </View>
+          <ThemeProvider>
+            <View style={styles.root}>
+              <AppLockProvider>
+                <AuthProvider>
+                  <AssetProvider>
+                    <RootErrorBoundary onRestart={() => setBootKey((k) => k + 1)}>
+                      <RootNavigator />
+                      <ProfileSetupModal />
+                    </RootErrorBoundary>
+                  </AssetProvider>
+                </AuthProvider>
+              </AppLockProvider>
+            </View>
+          </ThemeProvider>
         </SafeAreaProvider>
       </RootErrorBoundary>
     </GestureHandlerRootView>

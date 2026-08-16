@@ -30,11 +30,14 @@ import { requestUserDataExport } from '../../services/security/dataExport';
 import { setNotificationPrivacyMode } from '../../services/notifications/notificationRules';
 import { Haptics } from '../../services/haptics';
 import { COLORS } from '../../theme/branding';
+import { useTheme } from '../../context/ThemeProvider';
+import { TYPE, SPACING } from '../../theme/tokens';
 
 export function PrivacySecurityScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { user, isAuthenticated, signOut } = useAuth();
   const { assets } = useAssets();
+  const { mode, isDark, setMode } = useTheme();
   const uid = user?.uid;
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState(null);
@@ -150,6 +153,29 @@ export function PrivacySecurityScreen({ navigation }) {
     >
       <Text style={styles.heading}>Privacy & Security</Text>
       <Text style={styles.sub}>Only settings that are implemented are shown.</Text>
+
+      <Text style={styles.section}>Appearance</Text>
+      <View style={styles.card}>
+        <View style={styles.switchRow}>
+          <View style={{ flex: 1, paddingRight: 12 }}>
+            <Text style={styles.rowTitle}>Dark mode</Text>
+            <Text style={styles.muted}>
+              Proper dark surfaces — not a simple invert. Charts and forms stay readable.
+            </Text>
+          </View>
+          <Switch
+            value={isDark}
+            onValueChange={(v) => {
+              Haptics.tap();
+              setMode(v ? 'dark' : 'light');
+            }}
+            trackColor={{ false: 'rgba(148,163,184,0.35)', true: 'rgba(16,185,129,0.45)' }}
+            thumbColor={isDark ? COLORS.emerald : '#E2E8F0'}
+            accessibilityLabel="Dark mode"
+          />
+        </View>
+        <Text style={[styles.muted, { marginTop: 8 }]}>Current: {mode}</Text>
+      </View>
 
       <Text style={styles.section}>Security Status</Text>
       <View style={styles.card}>

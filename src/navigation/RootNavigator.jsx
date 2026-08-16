@@ -42,17 +42,19 @@ import { NotificationCenterScreen } from '../screens/notifications/NotificationC
 import { AssetAnalyticsScreen } from '../screens/analytics/AssetAnalyticsScreen';
 import { openNotificationDeepLink } from '../services/notifications/notificationDeepLink';
 import { OfflineSyncService } from '../services/offline/OfflineSyncService';
+import { SyncEngine } from '../services/offline/SyncEngine';
 import { PlayStoreUpdateService } from '../services/updates/PlayStoreUpdateService';
 import { Haptics } from '../services/haptics';
-import { COLORS, NAV_THEME } from '../theme/branding';
+import { COLORS } from '../theme/branding';
+import { useTheme } from '../context/ThemeProvider';
 import { ONBOARDING_KEY } from '../constants/storageKeys';
 import { CustomBottomTabBar } from '../components/CustomBottomTabBar';
+import { GlobalSearchScreen } from '../screens/search/GlobalSearchScreen';
+import { ScanAssetQrScreen } from '../screens/assets/ScanAssetQrScreen';
 import {
   WelcomeBackModal,
   shouldShowWelcomeGreeting,
 } from '../components/WelcomeBackModal';
-import { OnboardingGuideModal } from '../components/OnboardingGuideModal';
-import { ProfileSetupModal } from '../components/profile/ProfileSetupModal';
 import { navigationRef, goHomeDashboard } from './navActions';
 import { AuthBootGate } from './AuthBootGate';
 import {
@@ -134,6 +136,8 @@ function HomeStackNav() {
         options={{ title: 'Home', headerShown: false }}
       />
       <HomeStack.Screen name="NotificationCenter" component={NotificationCenterScreen} options={{ title: 'Notifications' }} />
+      <HomeStack.Screen name="GlobalSearch" component={GlobalSearchScreen} options={{ title: 'Search', headerShown: false }} />
+      <HomeStack.Screen name="ScanAssetQr" component={ScanAssetQrScreen} options={{ title: 'Scan Asset QR' }} />
       <HomeStack.Screen name="AssetAnalytics" component={AssetAnalyticsScreen} options={{ title: 'Asset Analytics' }} />
       <HomeStack.Screen name="AssetPassport" component={AssetPassportScreen} options={{ title: 'Asset Passport' }} />
       <HomeStack.Screen name="AddAsset" component={AddAssetScreen} options={addAssetOptions} />
@@ -154,6 +158,8 @@ function AssetsStackNav() {
     <AssetsStack.Navigator initialRouteName="AssetList" screenOptions={stackOptions}>
       <AssetsStack.Screen name="AssetList" component={AssetListScreen} options={{ title: 'Assets' }} />
       <AssetsStack.Screen name="AddAsset" component={AddAssetScreen} options={addAssetOptions} />
+      <AssetsStack.Screen name="GlobalSearch" component={GlobalSearchScreen} options={{ title: 'Search', headerShown: false }} />
+      <AssetsStack.Screen name="ScanAssetQr" component={ScanAssetQrScreen} options={{ title: 'Scan Asset QR' }} />
       <AssetsStack.Screen name="AssetAnalytics" component={AssetAnalyticsScreen} options={{ title: 'Analytics' }} />
       <AssetsStack.Screen name="AssetPassport" component={AssetPassportScreen} options={{ title: 'Passport' }} />
       <AssetsStack.Screen name="Maintenance" component={MaintenanceScreen} options={{ title: 'Service & Maintenance' }} />
@@ -193,7 +199,21 @@ function SettingsStackNav() {
         component={PrivacySecurityScreen}
         options={{ title: 'Privacy & Security' }}
       />
+      <Stack.Screen
+        name="NotificationSettings"
+        component={NotificationSettingsScreen}
+        options={{ title: 'Notification settings' }}
+      />
+      <Stack.Screen
+        name="NotificationCenter"
+        component={NotificationCenterScreen}
+        options={{ title: 'Notifications' }}
+      />
       <Stack.Screen name="ProfileHome" component={ProfileScreen} options={{ title: 'Profile' }} />
+      <Stack.Screen name="AssetPassport" component={AssetPassportScreen} options={{ title: 'Asset Passport' }} />
+      <Stack.Screen name="Maintenance" component={MaintenanceScreen} options={{ title: 'Service & Maintenance' }} />
+      <Stack.Screen name="DocumentsVault" component={DocumentsVaultScreen} options={{ title: 'Documents' }} />
+      <Stack.Screen name="AssetAnalytics" component={AssetAnalyticsScreen} options={{ title: 'Analytics' }} />
       <Stack.Screen name="About" component={AboutScreen} options={{ title: 'About Us' }} />
       <Stack.Screen name="ContactUs" component={ContactUsScreen} options={{ title: 'Contact Us' }} />
       <Stack.Screen name="ReportIssue" component={ReportIssueScreen} options={{ title: 'Report Issue' }} />
@@ -394,6 +414,7 @@ export function RootNavigator() {
     retryProfileHydrate,
     needsProfileSetup,
   } = useAuth();
+  const { navTheme } = useTheme();
   const AUTH_BYPASS_FOR_SCAN_TESTING = false;
   const isAuthenticated = AUTH_BYPASS_FOR_SCAN_TESTING ? true : authIsAuthenticated;
   /** Auth stack when logged out (unless guest Skip). */
@@ -586,7 +607,7 @@ export function RootNavigator() {
       <NavigationContainer
         key={switchKey}
         ref={navigationRef}
-        theme={NAV_THEME}
+        theme={navTheme}
         onReady={() => {
           if (pendingNotificationResponse) {
             openNotificationTarget(pendingNotificationResponse);
@@ -607,7 +628,6 @@ export function RootNavigator() {
           <MainAppStackNavigator />
         )}
       </NavigationContainer>
-      <ProfileSetupModal />
       <WelcomeBackModal
         visible={showWelcome && !showAuthStack}
         displayName={displayName || user?.displayName || 'Guest'}

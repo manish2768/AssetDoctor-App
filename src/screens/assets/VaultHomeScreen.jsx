@@ -39,8 +39,31 @@ export function VaultHomeScreen({ navigation }) {
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}>
         <Text style={styles.title}>Document Vault</Text>
         <Text style={styles.sub}>
-          Vehicles, appliances, digital bills and legal records — protected in one place
+          Insurance, RC, PUC, warranty, invoices and service reports — by household folder
         </Text>
+
+        {!loading && !(assets || []).length ? (
+          <GlassCard style={{ marginBottom: 14 }}>
+            <Text style={{ color: COLORS.text, fontWeight: '800', fontSize: 16 }}>
+              No documents yet
+            </Text>
+            <Text style={{ color: COLORS.muted, marginTop: 8, lineHeight: 20 }}>
+              Add your first asset to start tracking documents, service, expenses and health.
+            </Text>
+            <GlassButton
+              title="+ Add Asset"
+              style={{ marginTop: 14 }}
+              onPress={() =>
+                requireAuth({
+                  isAuthenticated,
+                  navigation,
+                  message: 'Sign in to add assets to your vault.',
+                  onAuthed: () => navigation.navigate('AddAsset'),
+                })
+              }
+            />
+          </GlassCard>
+        ) : null}
 
         {!isAuthenticated ? (
           <Pressable style={styles.syncBanner} onPress={() => openLogin(navigation)}>

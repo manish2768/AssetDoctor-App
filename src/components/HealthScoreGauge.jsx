@@ -1,37 +1,43 @@
 /**
- * Interactive Asset Health Score gauge (0–100%).
+ * Interactive Asset Health Score gauge (0–100).
+ * Uses existing portfolio health — does not invent a new algorithm.
  */
 
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Stop, G } from 'react-native-svg';
 
-import { COLORS } from '../theme/branding';
+import { useThemeColors } from '../context/ThemeProvider';
+import { RADIUS, SPACING, TYPE, elevation } from '../theme/tokens';
 import { Haptics } from '../services/haptics';
 
-function toneForScore(score) {
-  if (score >= 100) return { ring: COLORS.gold, label: 'Perfect' };
-  if (score >= 85) return { ring: COLORS.emerald, label: 'Excellent' };
-  if (score >= 70) return { ring: COLORS.neonBlue, label: 'Good' };
-  if (score >= 50) return { ring: COLORS.amber, label: 'Fair' };
-  return { ring: COLORS.rose, label: 'At Risk' };
+function toneForScore(score, colors) {
+  if (score >= 100) return { ring: colors.gold, label: 'Perfect' };
+  if (score >= 85) return { ring: colors.emerald, label: 'Healthy' };
+  if (score >= 70) return { ring: colors.neonBlue, label: 'Good' };
+  if (score >= 50) return { ring: colors.amber, label: 'Fair' };
+  return { ring: colors.rose, label: 'Needs attention' };
 }
 
 export function HealthScoreGauge({
   score = 100,
   grade = '',
   assetCount = 0,
-  size = 148,
-  title = 'Vault Protection Score',
+  attentionCount = 0,
+  size = 132,
+  title = 'Asset Health',
   onPress,
+  onViewDetails,
   style,
 }) {
+  const colors = useThemeColors();
   const clamped = Math.max(0, Math.min(100, Math.round(Number(score) || 0)));
-  const tone = useMemo(() => toneForScore(clamped), [clamped]);
+  const tone = useMemo(() => toneForScore(clamped, colors), [clamped, colors]);
   const stroke = 12;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
   const progress = (clamped / 100) * circumference;
+  const statusLabel = grade || tone.label;
 
   return (
     <Pressable
@@ -39,23 +45,33 @@ export function HealthScoreGauge({
         Haptics.select();
         onPress?.();
       }}
-      style={[styles.wrap, style]}
+      style={[
+        styles.wrap,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+        },
+        elevation(2, colors.shadow),
+        style,
+      ]}
       accessibilityRole="button"
-      accessibilityLabel={`Asset health score ${clamped} percent, ${grade || tone.label}`}
+      accessibilityLabel={`Asset health ${clamped} of 100, ${statusLabel}${
+        attentionCount ? `, ${attentionCount} assets need attention` : ''
+      }`}
     >
       <View style={{ width: size, height: size }}>
         <Svg width={size} height={size}>
           <Defs>
             <LinearGradient id="healthGrad" x1="0%" y1="0%" x2="100%" y2="100%">
               <Stop offset="0%" stopColor={tone.ring} stopOpacity="1" />
-              <Stop offset="100%" stopColor={COLORS.neonBlue} stopOpacity="0.85" />
+              <Stop offset="100%" stopColor={colors.neonBlue} stopOpacity="0.85" />
             </LinearGradient>
           </Defs>
           <Circle
             cx={size / 2}
             cy={size / 2}
             r={radius}
-            stroke={COLORS.bgDeep}
+            stroke={colors.backgroundDeep}
             strokeWidth={stroke}
             fill="none"
           />
@@ -64,7 +80,7 @@ export function HealthScoreGauge({
               cx={size / 2}
               cy={size / 2}
               r={radius}
-              stroke={clamped >= 100 ? COLORS.gold : 'url(#healthGrad)'}
+              stroke={clamped >= 100 ? colors.gold : 'url(#healthGrad)'}
               strokeWidth={stroke}
               fill="none"
               strokeDasharray={`${progress} ${circumference}`}
@@ -73,22 +89,40 @@ export function HealthScoreGauge({
           </G>
         </Svg>
         <View style={[styles.center, { width: size, height: size }]} pointerEvents="none">
-          <Text style={styles.percent}>{clamped}%</Text>
-          <Text style={styles.grade}>{grade || tone.label}</Text>
+          <Text style={[styles.percent, { color: colors.text }]}>{clamped}</Text>
+          <Text style={[styles.over, { color: colors.textMuted }]}>/100</Text>
+          <Text style={[styles.grade, { color: tone.ring }]}>{statusLabel}</Text>
         </View>
       </View>
       <View style={styles.meta}>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.sub}>
+        <Text style={[TYPE.h3, { color: colors.text }]}>{title}</Text>
+        <Text style={[TYPE.caption, { color: colors.textMuted, marginTop: 4 }]}>
           {assetCount > 0
-            ? `Portfolio average across ${assetCount} asset${assetCount === 1 ? '' : 's'}`
+            ? `Across ${assetCount} asset${assetCount === 1 ? '' : 's'}`
             : 'Add assets to start scoring your vault'}
         </Text>
-        {clamped >= 100 ? (
-          <Text style={styles.perfect}>Golden shield unlocked</Text>
-        ) : (
-          <Text style={styles.hint}>Tap for passport tips to improve score</Text>
-        )}
+        {attentionCount > 0 ? (
+          <Text style={[TYPE.caption, { color: colors.warning, marginTop: 8, fontWeight: '700' }]}>
+            {attentionCount} asset{attentionCount === 1 ? '' : 's'} need attention
+          </Text>
+        ) : assetCount > 0 ? (
+          <Text style={[TYPE.caption, { color: colors.success, marginTop: 8, fontWeight: '600' }]}>
+            No urgent attention items
+          </Text>
+        ) : null}
+        <Pressable
+          onPress={() => {
+            Haptics.tap();
+            (onViewDetails || onPress)?.();
+          }}
+          style={styles.detailsBtn}
+          accessibilityRole="button"
+          accessibilityLabel="View health details"
+        >
+          <Text style={[TYPE.caption, { color: colors.primary, fontWeight: '700' }]}>
+            View Details ›
+          </Text>
+        </Pressable>
       </View>
     </Pressable>
   );
@@ -99,11 +133,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
-    backgroundColor: COLORS.card,
-    borderRadius: 22,
+    borderRadius: RADIUS.lg,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 16,
+    padding: SPACING.md,
     marginBottom: 14,
   },
   center: {
@@ -114,42 +146,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   percent: {
-    color: COLORS.text,
     fontSize: 28,
     fontWeight: '900',
     letterSpacing: -0.5,
   },
+  over: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: -2,
+  },
   grade: {
-    color: COLORS.muted,
     fontSize: 11,
     fontWeight: '800',
-    marginTop: 2,
+    marginTop: 4,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
   meta: { flex: 1 },
-  title: {
-    color: COLORS.text,
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  sub: {
-    color: COLORS.muted,
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 4,
-  },
-  perfect: {
-    color: COLORS.gold,
-    fontSize: 12,
-    fontWeight: '800',
-    marginTop: 8,
-  },
-  hint: {
-    color: COLORS.emerald,
-    fontSize: 11,
-    fontWeight: '700',
-    marginTop: 8,
+  detailsBtn: {
+    marginTop: 10,
+    minHeight: 32,
+    justifyContent: 'center',
   },
 });
 

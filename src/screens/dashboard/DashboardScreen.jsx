@@ -68,6 +68,9 @@ import { OfflineVaultCache } from '../../services/offline/OfflineVaultCache';
 import { buildUpcomingSummary } from '../../services/notifications/notificationRules';
 import { evaluatePortfolioNotifications } from '../../services/notifications/notificationRules';
 import { unreadCount as getUnreadNotificationCount } from '../../services/health/notificationCenter';
+import { QuickActionGrid, SectionHeader } from '../../components/ui/DesignSystem';
+import { SmartAssetListCard } from '../../components/ui/SmartAssetListCard';
+import { useResponsiveLayout } from '../../utils/responsive';
 
 function formatRupee(amount) {
   const n = Number(amount) || 0;
@@ -119,6 +122,7 @@ function urgentLabel(task) {
 
 export function DashboardScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const { isCompact } = useResponsiveLayout();
   const { profile, isAuthenticated, user, displayName: authDisplayName } = useAuth();
   const { assets, urgent, loading, removeAsset, portfolioHealth } = useAssets();
   const [exporting, setExporting] = useState(false);
@@ -477,8 +481,31 @@ export function DashboardScreen({ navigation }) {
             </View>
           </Pressable>
           <View style={styles.headerActions}>
-            <IconButton label="👥" onPress={goVault} />
-            <IconButton label="▦" onPress={goFolders} />
+            <IconButton
+              label="🔎"
+              accessibilityLabel="Search vault"
+              onPress={() => {
+                Haptics.tap();
+                navigation?.navigate?.('GlobalSearch');
+              }}
+            />
+            <IconButton
+              label={notifUnread > 0 ? `🔔${notifUnread > 9 ? '9+' : notifUnread}` : '🔔'}
+              accessibilityLabel={
+                notifUnread > 0
+                  ? `Notifications, ${notifUnread} unread`
+                  : 'Notifications'
+              }
+              onPress={() => {
+                Haptics.tap();
+                navigation?.navigate?.('NotificationCenter');
+              }}
+            />
+            <IconButton
+              label="▦"
+              accessibilityLabel="Category folders"
+              onPress={goFolders}
+            />
           </View>
         </View>
 
@@ -493,6 +520,110 @@ export function DashboardScreen({ navigation }) {
           score={portfolioHealth?.score ?? 100}
           grade={portfolioHealth?.grade}
           assetCount={portfolioHealth?.count ?? 0}
+          attentionCount={attentionCount}
+          onPress={() => {
+            Haptics.tap();
+            setListFilter('attention');
+          }}
+          onViewDetails={() => {
+            Haptics.tap();
+            setListFilter('attention');
+            goAssets();
+          }}
+        />
+
+        {/* Compact asset summary */}
+        <View style={styles.summaryStrip}>
+          {(isCompact
+            ? [
+                { label: 'Assets', value: activeAssets.length },
+                { label: 'Vehicles', value: folderCounts.vehicle || 0 },
+                { label: 'Home', value: (folderCounts.appliances || 0) + (folderCounts.gadgets || 0) },
+                { label: 'Expiring', value: (upcomingSummary?.insurance || 0) + (upcomingSummary?.warranty || 0) + (upcomingSummary?.puc || 0) || expiredCount },
+              ]
+            : [
+                { label: 'Assets', value: activeAssets.length },
+                { label: 'Vehicles', value: folderCounts.vehicle || 0 },
+                { label: 'Appliances', value: folderCounts.appliances || 0 },
+                { label: 'Gadgets', value: folderCounts.gadgets || 0 },
+                { label: 'Docs', value: folderCounts.documents || 0 },
+                { label: 'Services', value: upcomingSummary?.service ?? 0 },
+                { label: 'Expiring', value: (upcomingSummary?.insurance || 0) + (upcomingSummary?.warranty || 0) + (upcomingSummary?.puc || 0) || expiredCount },
+              ]
+          ).map((cell) => (
+            <View
+              key={cell.label}
+              style={[styles.summaryCell, isCompact && { width: '25%', minWidth: 72 }]}
+            >
+              <Text style={styles.summaryValue}>{cell.value}</Text>
+              <Text style={styles.summaryLabel}>{cell.label}</Text>
+            </View>
+          ))}
+        </View>
+
+        <SectionHeader title="Quick actions" subtitle="Most used tools" />
+        <QuickActionGrid
+          actions={[
+            {
+              id: 'add',
+              icon: '＋',
+              label: 'Add Asset',
+              onPress: goManual,
+            },
+            {
+              id: 'scan',
+              icon: '📷',
+              label: 'Scan Bill',
+              onPress: goScan,
+            },
+            {
+              id: 'doc',
+              icon: '📄',
+              label: 'Documents',
+              onPress: goVault,
+            },
+            {
+              id: 'svc',
+              icon: '🛠',
+              label: 'Service',
+              onPress: () => {
+                Haptics.tap();
+                const first = activeAssets[0];
+                if (first) {
+                  navigation?.navigate?.('Maintenance', {
+                    assetId: first.assetId || first.id,
+                  });
+                } else {
+                  goManual();
+                }
+              },
+            },
+            {
+              id: 'analytics',
+              icon: '📊',
+              label: 'Analytics',
+              onPress: () => {
+                Haptics.tap();
+                const first = activeAssets[0];
+                if (first) {
+                  navigation?.navigate?.('AssetAnalytics', {
+                    assetId: first.assetId || first.id,
+                  });
+                } else {
+                  goAssets();
+                }
+              },
+            },
+            {
+              id: 'qr',
+              icon: '⬚',
+              label: 'Scan QR',
+              onPress: () => {
+                Haptics.tap();
+                navigation?.navigate?.('ScanAssetQr');
+              },
+            },
+          ]}
         />
 
         {/* Net worth card — estimated current / resale value across household */}
@@ -1074,7 +1205,7 @@ export function DashboardScreen({ navigation }) {
   );
 }
 
-function IconButton({ label, onPress }) {
+function IconButton({ label, onPress, accessibilityLabel }) {
   return (
     <Pressable
       onPress={() => {
@@ -1082,6 +1213,9 @@ function IconButton({ label, onPress }) {
         onPress?.();
       }}
       style={styles.iconBtn}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel || label}
+      hitSlop={6}
     >
       <Text style={styles.iconBtnText}>{label}</Text>
     </Pressable>
@@ -1091,7 +1225,7 @@ function IconButton({ label, onPress }) {
 const styles = StyleSheet.create({
   shell: { flex: 1, backgroundColor: COLORS.bg },
   root: { flex: 1 },
-  content: { padding: 20, paddingBottom: 110 },
+  content: { padding: 20, paddingBottom: 120 },
 
   headerRow: {
     flexDirection: 'row',
@@ -1146,8 +1280,8 @@ const styles = StyleSheet.create({
   },
   headerActions: { flexDirection: 'row', gap: 8 },
   iconBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: 12,
     backgroundColor: COLORS.card,
     borderWidth: 1,
@@ -1167,6 +1301,36 @@ const styles = StyleSheet.create({
   },
   guestTitle: { color: COLORS.text, fontWeight: '800', fontSize: 14 },
   guestSub: { color: COLORS.muted, marginTop: 4, fontSize: 12 },
+
+  summaryStrip: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    marginBottom: 8,
+  },
+  summaryCell: {
+    width: '14.28%',
+    minWidth: 48,
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  summaryValue: {
+    color: COLORS.text,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  summaryLabel: {
+    color: COLORS.muted,
+    fontSize: 9,
+    fontWeight: '600',
+    marginTop: 2,
+    textAlign: 'center',
+  },
 
   worthCard: {
     borderRadius: 24,

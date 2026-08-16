@@ -1,49 +1,88 @@
 /**
- * Glassmorphic UI primitives — shared across Asset Doctor screens
+ * Glassmorphic UI primitives — theme-aware (STEP 13).
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
   TextInput,
   Pressable,
-  StyleSheet,
   ActivityIndicator,
   Modal,
 } from 'react-native';
 
-import { BRAND, COLORS, RADIUS, SPACING } from '../../theme/branding';
+import { BRAND } from '../../theme/branding';
+import { RADIUS, SPACING, HIT, elevation } from '../../theme/tokens';
+import { useThemeColors } from '../../context/ThemeProvider';
 import { Haptics } from '../../services/haptics';
 
 export function Screen({ children, style }) {
-  return <View style={[styles.screen, style]}>{children}</View>;
-}
-
-export function GlassCard({ children, style, glow = false }) {
+  const colors = useThemeColors();
   return (
-    <View style={[styles.card, glow && styles.cardGlow, style]}>
-      {children}
-    </View>
+    <View style={[{ flex: 1, backgroundColor: colors.background }, style]}>{children}</View>
   );
 }
 
-export function GlassInput({
-  label,
-  error,
-  style,
-  inputStyle,
-  ...props
-}) {
+export function GlassCard({ children, style, glow = false }) {
+  const colors = useThemeColors();
+  const cardStyle = useMemo(
+    () => [
+      {
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: glow ? colors.borderAccent || colors.borderGlow : colors.border,
+        borderRadius: RADIUS.lg,
+        padding: SPACING.md,
+        ...elevation(glow ? 2 : 1, colors.shadow),
+      },
+      style,
+    ],
+    [colors, glow, style],
+  );
+  return <View style={cardStyle}>{children}</View>;
+}
+
+export function GlassInput({ label, error, style, inputStyle, ...props }) {
+  const colors = useThemeColors();
   return (
     <View style={[{ marginBottom: SPACING.md }, style]}>
-      {label ? <Text style={styles.label}>{label}</Text> : null}
+      {label ? (
+        <Text
+          style={{
+            color: colors.textMuted,
+            fontSize: 11,
+            fontWeight: '700',
+            letterSpacing: 0.6,
+            textTransform: 'uppercase',
+            marginBottom: 8,
+          }}
+        >
+          {label}
+        </Text>
+      ) : null}
       <TextInput
-        placeholderTextColor={COLORS.muted}
-        style={[styles.input, error && styles.inputError, inputStyle]}
+        placeholderTextColor={colors.textMuted}
+        accessibilityLabel={label || props.placeholder || 'Input'}
+        style={[
+          {
+            backgroundColor: colors.backgroundDeep,
+            borderWidth: 1,
+            borderColor: error ? colors.error : colors.border,
+            borderRadius: RADIUS.md,
+            paddingHorizontal: 14,
+            paddingVertical: 13,
+            color: colors.text,
+            fontSize: 15,
+            minHeight: HIT.min,
+          },
+          inputStyle,
+        ]}
         {...props}
       />
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error ? (
+        <Text style={{ color: colors.error, fontSize: 12, marginTop: 6 }}>{error}</Text>
+      ) : null}
     </View>
   );
 }
@@ -56,9 +95,22 @@ export function GlassButton({
   disabled = false,
   style,
 }) {
+  const colors = useThemeColors();
   const isPrimary = variant === 'primary';
   const isGhost = variant === 'ghost';
   const isDanger = variant === 'danger';
+
+  const bg = isPrimary
+    ? colors.primary
+    : isDanger
+      ? colors.dangerSoft || colors.errorSoft
+      : 'transparent';
+  const borderColor = isGhost ? colors.border : isDanger ? colors.error : 'transparent';
+  const textColor = isPrimary
+    ? colors.textOnPrimary
+    : isDanger
+      ? colors.error
+      : colors.text;
 
   return (
     <Pressable
@@ -67,56 +119,58 @@ export function GlassButton({
         Haptics.tap();
         onPress?.();
       }}
+      accessibilityRole="button"
+      accessibilityLabel={title || 'Button'}
+      accessibilityState={{ disabled: disabled || loading, busy: loading }}
       style={({ pressed }) => [
-        styles.btn,
-        isPrimary && styles.btnPrimary,
-        isGhost && styles.btnGhost,
-        isDanger && styles.btnDanger,
-        (disabled || loading) && { opacity: 0.55 },
-        pressed && { transform: [{ scale: 0.98 }] },
+        {
+          borderRadius: RADIUS.md,
+          paddingVertical: 14,
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: HIT.min,
+          backgroundColor: bg,
+          borderWidth: isGhost || isDanger ? 1 : 0,
+          borderColor,
+          opacity: disabled || loading ? 0.55 : 1,
+          transform: [{ scale: pressed ? 0.98 : 1 }],
+        },
         style,
       ]}
     >
       {loading ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <ActivityIndicator color={isGhost || isDanger ? COLORS.emerald : COLORS.onPrimary} />
-          <Text
-            style={[
-              styles.btnText,
-              (isGhost || isDanger) && { color: COLORS.text },
-              isDanger && { color: COLORS.rose },
-            ]}
-          >
+          <ActivityIndicator color={isGhost || isDanger ? colors.primary : colors.textOnPrimary} />
+          <Text style={{ color: textColor, fontWeight: '800', fontSize: 15 }}>
             {title || 'Please wait…'}
           </Text>
         </View>
       ) : (
-        <Text
-          style={[
-            styles.btnText,
-            (isGhost || isDanger) && { color: COLORS.text },
-            isDanger && { color: COLORS.rose },
-          ]}
-        >
-          {title}
-        </Text>
+        <Text style={{ color: textColor, fontWeight: '800', fontSize: 15 }}>{title}</Text>
       )}
     </Pressable>
   );
 }
 
 export function BrandFooter({ compact = false }) {
+  const colors = useThemeColors();
   return (
-    <View style={[styles.footer, compact && { marginTop: SPACING.sm }]}>
-      <Text style={styles.footerTag}>{BRAND.tagline}</Text>
-      <Text style={styles.footerCredit}>{BRAND.footer}</Text>
+    <View
+      style={[
+        { marginTop: SPACING.lg, alignItems: 'center', paddingBottom: SPACING.md },
+        compact && { marginTop: SPACING.sm },
+      ]}
+    >
+      <Text style={{ color: colors.textMuted, fontSize: 11, textAlign: 'center', fontWeight: '600' }}>
+        {BRAND.tagline}
+      </Text>
+      <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700', marginTop: 4 }}>
+        {BRAND.footer}
+      </Text>
     </View>
   );
 }
 
-/**
- * Custom glass confirmation modal
- */
 export function GlassConfirmModal({
   visible,
   title = 'Confirm',
@@ -127,13 +181,25 @@ export function GlassConfirmModal({
   onCancel,
   loading = false,
 }) {
+  const colors = useThemeColors();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <View style={styles.modalBackdrop}>
-        <GlassCard style={styles.modalCard} glow>
-          <Text style={styles.modalTitle}>{title}</Text>
-          {message ? <Text style={styles.modalMsg}>{message}</Text> : null}
-          <View style={styles.modalActions}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: colors.overlay,
+          justifyContent: 'center',
+          padding: SPACING.lg,
+        }}
+      >
+        <GlassCard style={{ padding: SPACING.lg }} glow>
+          <Text style={{ color: colors.text, fontSize: 18, fontWeight: '800' }}>{title}</Text>
+          {message ? (
+            <Text style={{ color: colors.textMuted, fontSize: 14, marginTop: 10, lineHeight: 20 }}>
+              {message}
+            </Text>
+          ) : null}
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: SPACING.lg }}>
             <GlassButton title={cancelLabel} variant="ghost" onPress={onCancel} style={{ flex: 1 }} />
             <GlassButton
               title={confirmLabel}
@@ -148,112 +214,11 @@ export function GlassConfirmModal({
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-  },
-  card: {
-    backgroundColor: COLORS.card,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.md,
-    shadowColor: '#64748B',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
-  cardGlow: {
-    borderColor: COLORS.borderGlow,
-    shadowColor: COLORS.emerald,
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  label: {
-    color: COLORS.muted,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: COLORS.bgDeep,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    color: COLORS.text,
-    fontSize: 15,
-  },
-  inputError: { borderColor: COLORS.rose },
-  errorText: { color: COLORS.rose, fontSize: 12, marginTop: 6 },
-  btn: {
-    borderRadius: RADIUS.md,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnPrimary: {
-    backgroundColor: COLORS.emerald,
-  },
-  btnGhost: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  btnDanger: {
-    backgroundColor: COLORS.dangerSoft,
-    borderWidth: 1,
-    borderColor: 'rgba(220,38,38,0.35)',
-  },
-  btnText: {
-    color: COLORS.onPrimary,
-    fontWeight: '800',
-    fontSize: 15,
-  },
-  footer: {
-    marginTop: SPACING.lg,
-    alignItems: 'center',
-    paddingBottom: SPACING.md,
-  },
-  footerTag: {
-    color: COLORS.muted,
-    fontSize: 11,
-    textAlign: 'center',
-    fontWeight: '600',
-  },
-  footerCredit: {
-    color: COLORS.emerald,
-    fontSize: 12,
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-    justifyContent: 'center',
-    padding: SPACING.lg,
-  },
-  modalCard: { padding: SPACING.lg },
-  modalTitle: {
-    color: COLORS.text,
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  modalMsg: {
-    color: COLORS.muted,
-    fontSize: 14,
-    marginTop: 10,
-    lineHeight: 20,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: SPACING.lg,
-  },
-});
+export default {
+  Screen,
+  GlassCard,
+  GlassInput,
+  GlassButton,
+  BrandFooter,
+  GlassConfirmModal,
+};

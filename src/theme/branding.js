@@ -1,10 +1,34 @@
 ﻿/**
- * Asset Doctor — Design System
- * Modern light slate · off-white canvas · emerald / blue accents
- * Typography: Inter / system sans
+ * Asset Doctor — Design System entry
+ * Modern light slate · semantic colors · Inter typography
+ * Prefer useTheme() for dark-mode-aware colors; COLORS remains light default for StyleSheets.
  */
 
-import { Platform } from 'react-native';
+import { LIGHT } from './palettes';
+import {
+  FONTS,
+  TYPE,
+  SPACING,
+  RADIUS,
+  elevation,
+  ELEVATION,
+  MOTION,
+  HIT,
+  ICON_SIZE,
+} from './tokens';
+
+export { LIGHT, DARK } from './palettes';
+export {
+  FONTS,
+  TYPE,
+  SPACING,
+  RADIUS,
+  elevation,
+  ELEVATION,
+  MOTION,
+  HIT,
+  ICON_SIZE,
+};
 
 export const BRAND = {
   name: 'Asset Doctor',
@@ -18,55 +42,18 @@ export const BRAND = {
   supportWhatsApp: '',
 };
 
-/** Light slate / off-white fintech palette */
-export const COLORS = {
-  bg: '#F8FAFC',
-  bgDeep: '#F1F5F9',
-  bgElevated: '#FFFFFF',
-  card: '#FFFFFF',
-  cardStrong: '#F8FAFC',
-  border: '#E2E8F0',
-  borderGlow: 'rgba(16, 185, 129, 0.35)',
-  emerald: '#10B981',
-  neonBlue: '#2563EB',
-  indigo: '#4F46E5',
-  violet: '#7C3AED',
-  rose: '#E11D48',
-  amber: '#D97706',
-  success: '#059669',
-  gold: '#CA8A04',
-  goldSoft: 'rgba(202, 138, 4, 0.12)',
-  text: '#1E293B',
-  muted: '#64748B',
-  successSoft: 'rgba(16, 185, 129, 0.12)',
-  warnSoft: 'rgba(217, 119, 6, 0.12)',
-  dangerSoft: 'rgba(225, 29, 72, 0.10)',
-  glassGlow: ['rgba(16, 185, 129, 0.08)', 'rgba(37, 99, 235, 0.06)'],
-  onPrimary: '#FFFFFF',
-  urgentBg: 'rgba(217, 119, 6, 0.10)',
-  urgentBorder: 'rgba(217, 119, 6, 0.28)',
-};
-
-export const FONTS = {
-  regular: Platform.select({ ios: 'Inter_400Regular', android: 'Inter_400Regular', default: 'System' }),
-  medium: Platform.select({ ios: 'Inter_500Medium', android: 'Inter_500Medium', default: 'System' }),
-  semibold: Platform.select({ ios: 'Inter_600SemiBold', android: 'Inter_600SemiBold', default: 'System' }),
-  bold: Platform.select({ ios: 'Inter_700Bold', android: 'Inter_700Bold', default: 'System' }),
-  system: Platform.select({ ios: 'System', android: 'sans-serif', default: 'System' }),
-};
-
-export const SPACING = { xs: 6, sm: 10, md: 16, lg: 24, xl: 32 };
-export const RADIUS = { sm: 12, md: 16, lg: 22, xl: 28, full: 999 };
+/** Light default — keep stable for existing StyleSheet.create modules */
+export const COLORS = { ...LIGHT };
 
 export const CHART_PALETTE = [
-  '#10B981',
-  '#2563EB',
-  '#7C3AED',
-  '#D97706',
-  '#059669',
+  LIGHT.emerald,
+  LIGHT.neonBlue,
+  LIGHT.violet,
+  LIGHT.amber,
+  LIGHT.success,
   '#0EA5E9',
-  '#E11D48',
-  '#4F46E5',
+  LIGHT.rose,
+  LIGHT.indigo,
 ];
 
 const NAV_FONTS = {
@@ -76,23 +63,29 @@ const NAV_FONTS = {
   heavy: { fontFamily: FONTS.bold, fontWeight: '800' },
 };
 
-export const NAV_THEME = {
-  dark: false,
-  colors: {
-    primary: COLORS.emerald,
-    background: COLORS.bg,
-    card: COLORS.card,
-    text: COLORS.text,
-    border: COLORS.border,
-    notification: COLORS.emerald,
-  },
-  fonts: NAV_FONTS,
-};
+export function buildNavTheme(colors = COLORS, dark = false) {
+  return {
+    dark,
+    colors: {
+      primary: colors.primary || colors.emerald,
+      background: colors.background || colors.bg,
+      card: colors.surface || colors.card,
+      text: colors.text,
+      border: colors.border,
+      notification: colors.primary || colors.emerald,
+    },
+    fonts: NAV_FONTS,
+  };
+}
+
+export const NAV_THEME = buildNavTheme(COLORS, false);
 
 export const ASSET_CATEGORY_OPTIONS = [
-  { id: 'bike', label: 'Bike', icon: 'bike', group: 'Vehicles', powerWatts: 0, powerFactor: 1, dailyHours: 0 },
   { id: 'car', label: 'Car', icon: 'car', group: 'Vehicles', powerWatts: 0, powerFactor: 1, dailyHours: 0 },
+  { id: 'bike', label: 'Bike', icon: 'bike', group: 'Vehicles', powerWatts: 0, powerFactor: 1, dailyHours: 0 },
   { id: 'scooter', label: 'Scooter', icon: 'scooter', group: 'Vehicles', powerWatts: 0, powerFactor: 1, dailyHours: 0 },
+  { id: 'ev', label: 'EV', icon: 'ev', group: 'Vehicles', powerWatts: 0, powerFactor: 1, dailyHours: 0 },
+  { id: 'commercial', label: 'Commercial', icon: 'commercial', group: 'Vehicles', powerWatts: 0, powerFactor: 1, dailyHours: 0 },
   { id: 'mobile', label: 'Phone', icon: 'mobile', group: 'Electronics & Appliances', powerWatts: 15, powerFactor: 0.7, dailyHours: 2 },
   { id: 'ac', label: 'AC', icon: 'ac', group: 'Electronics & Appliances', powerWatts: 1500, powerFactor: 0.85, dailyHours: 8 },
   { id: 'tv', label: 'TV', icon: 'tv', group: 'Electronics & Appliances', powerWatts: 120, powerFactor: 0.95, dailyHours: 5 },
@@ -147,22 +140,27 @@ export const DEFAULT_TARIFF_PER_KWH = 7.5;
 
 export const EXPIRY_ALERT_PROFILES = Object.freeze({
   pucExpiry: Object.freeze({
-    days: Object.freeze([15, 7, 1]),
+    days: Object.freeze([30, 15, 7, 3, 1, 0]),
     label: 'PUC',
     message: 'PUC expiring soon — renew to avoid fines.',
   }),
   insuranceExpiry: Object.freeze({
-    days: Object.freeze([15, 3]),
+    days: Object.freeze([30, 15, 7, 3, 1, 0]),
     label: 'Motor insurance',
     message: 'Your motor insurance expires soon. Renew before your cover ends.',
   }),
   warrantyExpiry: Object.freeze({
-    days: Object.freeze([30]),
+    days: Object.freeze([30, 15, 7, 3, 1, 0]),
     label: 'Warranty',
     message: 'Claim free service or extend warranty now.',
   }),
+  extendedWarrantyExpiry: Object.freeze({
+    days: Object.freeze([30, 15, 7, 3, 1, 0]),
+    label: 'Extended warranty',
+    message: 'Your extended warranty expires soon.',
+  }),
   nextServiceDue: Object.freeze({
-    days: Object.freeze([15, 7, 1]),
+    days: Object.freeze([30, 15, 7, 3, 1, 0]),
     label: 'Service',
     message: 'Vehicle / appliance service is due soon.',
   }),

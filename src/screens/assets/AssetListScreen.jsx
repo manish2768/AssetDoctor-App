@@ -1,5 +1,5 @@
 /**
- * Assets tab — searchable list with empty state + delete
+ * Assets tab — searchable list with smart cards + filter chips
  */
 
 import React, { useMemo, useState } from 'react';
@@ -12,37 +12,57 @@ import {
   TextInput,
   Alert,
   RefreshControl,
+  ScrollView,
 } from 'react-native';
 
 import { useAssets } from '../../context/AssetProvider';
 import { useAuth } from '../../context/AuthProvider';
-import { Screen, GlassCard, GlassButton } from '../../components/ui/Glass';
+import { Screen } from '../../components/ui/Glass';
+import { EmptyState, FilterChip } from '../../components/ui/DesignSystem';
+import { SmartAssetListCard } from '../../components/ui/SmartAssetListCard';
 import { COLORS, SPACING } from '../../theme/branding';
-import { formatINR } from '../../utils/format';
-import { calculateHealthScore } from '../../utils/healthScore';
+import { TYPE } from '../../theme/tokens';
 import { Haptics } from '../../services/haptics';
 import { requireAuth } from '../../navigation/authGate';
-import { ShareService } from '../../services/share/ShareService';
-import { CategoryIcon } from '../../components/icons/CategoryIcon';
-import { VehicleCard } from '../../components/vehicle/VehicleCard';
 import { getAssetFolderType } from '../../utils/assetFolders';
 import { useTabSafeBottomPadding } from '../../utils/tabSafePadding';
+import { needsAttention, hasExpiredDocuments } from '../../utils/assetExpiry';
+import { useThemeColors } from '../../context/ThemeProvider';
+
+const FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'vehicle', label: 'Vehicle' },
+  { id: 'appliances', label: 'Appliance' },
+  { id: 'gadgets', label: 'Gadget' },
+  { id: 'attention', label: 'Needs Attention' },
+  { id: 'expired', label: 'Expired' },
+];
 
 export function AssetListScreen({ navigation }) {
+  const colors = useThemeColors();
   const { assets, loading, removeAsset } = useAssets();
   const { isAuthenticated } = useAuth();
   const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
   const bottomPad = useTabSafeBottomPadding();
 
   const filtered = useMemo(() => {
+    let list = assets || [];
+    if (filter === 'vehicle' || filter === 'appliances' || filter === 'gadgets') {
+      list = list.filter((a) => getAssetFolderType(a) === filter);
+    } else if (filter === 'attention') {
+      list = list.filter((a) => needsAttention(a, 15));
+    } else if (filter === 'expired') {
+      list = list.filter((a) => hasExpiredDocuments(a));
+    }
     const q = query.trim().toLowerCase();
-    if (!q) return assets;
-    return assets.filter((a) => {
-      const blob = `${a.assetName || ''} ${a.categoryLabel || a.category || ''} ${a.registration || ''}`.toLowerCase();
+    if (!q) return list;
+    return list.filter((a) => {
+      const blob = `${a.assetName || ''} ${a.nickname || ''} ${a.categoryLabel || a.category || ''} ${a.registration || ''} ${a.locationPath || ''} ${a.publicAssetId || ''}`.toLowerCase();
       return blob.includes(q);
     });
-  }, [assets, query]);
+  }, [assets, query, filter]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -68,15 +88,19 @@ export function AssetListScreen({ navigation }) {
   };
 
   return (
-    <Screen>
+    <Screen style={{ backgroundColor: colors.background }}>
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.title}>Assets</Text>
-            <Text style={styles.sub}>{assets.length} in your vault</Text>
+            <Text style={[TYPE.h2 || styles.title, { color: colors.text, fontSize: 22, fontWeight: '800' }]}>
+              Assets
+            </Text>
+            <Text style={[styles.sub, { color: colors.textMuted }]}>
+              {assets.length} in your vault
+            </Text>
           </View>
           <Pressable
-            style={styles.addChip}
+            style={[styles.addChip, { backgroundColor: colors.primary }]}
             onPress={() =>
               requireAuth({
                 isAuthenticated,
@@ -85,17 +109,53 @@ export function AssetListScreen({ navigation }) {
                 onAuthed: () => navigation.navigate('AddAsset'),
               })
             }
+            accessibilityRole="button"
+            accessibilityLabel="Add asset"
           >
-            <Text style={styles.addChipText}>+ Add</Text>
+            <Text style={[styles.addChipText, { color: colors.textOnPrimary }]}>+ Add</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.iconChip, { borderColor: colors.border }]}
+            onPress={() => navigation.navigate('GlobalSearch')}
+            accessibilityRole="button"
+            accessibilityLabel="Search"
+          >
+            <Text>🔎</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.iconChip, { borderColor: colors.border }]}
+            onPress={() => navigation.navigate('ScanAssetQr')}
+            accessibilityRole="button"
+            accessibilityLabel="Scan asset QR"
+          >
+            <Text>⬚</Text>
           </Pressable>
         </View>
         <TextInput
-          style={styles.search}
+          style={[
+            styles.search,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              color: colors.text,
+            },
+          ]}
           value={query}
           onChangeText={setQuery}
-          placeholder="Search name, category, registration…"
-          placeholderTextColor="#6B7280"
+          placeholder="Search name, location, registration…"
+          placeholderTextColor={colors.textMuted}
+          accessibilityLabel="Filter assets"
         />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
+          {FILTERS.map((f) => (
+            <FilterChip
+              key={f.id}
+              label={f.label}
+              selected={filter === f.id}
+              onPress={() => setFilter(f.id)}
+            />
+          ))}
+        </ScrollView>
       </View>
 
       <FlatList
@@ -103,183 +163,69 @@ export function AssetListScreen({ navigation }) {
         keyExtractor={(item) => item.id || item.assetId}
         contentContainerStyle={{ paddingHorizontal: SPACING.lg, paddingBottom: bottomPad }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.emerald} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
         ListEmptyComponent={
-          <GlassCard glow>
-            <Text style={styles.emptyTitle}>
-              {loading ? 'Loading assets…' : query ? 'No matches' : 'No assets yet'}
-            </Text>
-            <Text style={styles.sub}>
-              {query
-                ? 'Try a different search.'
-                : 'Add vehicles, electronics, or appliances to track warranty, insurance & value.'}
-            </Text>
-            {!query && !loading ? (
-              <GlassButton
-                title="Add your first asset"
-                style={{ marginTop: 14 }}
-                onPress={() => navigation.navigate('AddAsset')}
-              />
-            ) : null}
-          </GlassCard>
+          <EmptyState
+            icon="📦"
+            title={loading ? 'Loading assets…' : query || filter !== 'all' ? 'No matches' : 'No assets yet'}
+            message={
+              query || filter !== 'all'
+                ? 'Try a different search or filter.'
+                : 'Add your first asset to start tracking documents, service, expenses and health.'
+            }
+            ctaLabel={!query && filter === 'all' && !loading ? '+ Add Asset' : undefined}
+            onCta={
+              !query && filter === 'all' && !loading
+                ? () => navigation.navigate('AddAsset')
+                : undefined
+            }
+          />
         }
-        renderItem={({ item }) => {
-          const health = calculateHealthScore(item);
-          if (getAssetFolderType(item) === 'vehicle') {
-            return (
-              <VehicleCard
-                asset={item}
-                onPress={() =>
-                  navigation.navigate('AssetPassport', { assetId: item.assetId || item.id })
-                }
-              />
-            );
-          }
-          return (
-            <Pressable
-              onPress={() => {
-                Haptics.tap();
-                navigation.navigate('AssetPassport', { assetId: item.assetId || item.id });
-              }}
-              onLongPress={() => onDelete(item)}
-            >
-              <GlassCard style={{ marginBottom: 10 }}>
-                <View style={styles.row}>
-                  <CategoryIcon
-                    name={item.categoryId || item.icon || 'other'}
-                    size={36}
-                    color={COLORS.emerald}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.name}>
-                      {item.assetName}
-                      {item.isDemo ? ' · Demo' : ''}
-                    </Text>
-                    <Text style={styles.sub}>
-                      {item.registration || item.categoryLabel || item.category} · Health{' '}
-                      {health.score}
-                    </Text>
-                    <Text style={styles.valueText}>{formatINR(item.value)}</Text>
-                  </View>
-                </View>
-                <View style={styles.actions}>
-                  <Pressable
-                    style={styles.waBtn}
-                    onPress={async () => {
-                      Haptics.tap();
-                      await ShareService.sharePassportCard({
-                        asset: item,
-                        prefer: 'whatsapp',
-                      });
-                    }}
-                  >
-                    <Text style={styles.waText}>💬 WhatsApp</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.editBtn}
-                    onPress={() => {
-                      Haptics.tap();
-                      requireAuth({
-                        isAuthenticated,
-                        navigation,
-                        message: 'Sign in to edit assets.',
-                        onAuthed: () =>
-                          navigation.navigate('AddAsset', {
-                            assetId: item.assetId || item.id,
-                          }),
-                      });
-                    }}
-                  >
-                    <Text style={styles.editText}>Edit</Text>
-                  </Pressable>
-                  <Pressable style={styles.deleteBtn} onPress={() => onDelete(item)}>
-                    <Text style={styles.deleteText}>Delete</Text>
-                  </Pressable>
-                </View>
-              </GlassCard>
-            </Pressable>
-          );
-        }}
+        renderItem={({ item }) => (
+          <SmartAssetListCard
+            asset={item}
+            onPress={() =>
+              navigation.navigate('AssetPassport', { assetId: item.assetId || item.id })
+            }
+            onLongPress={() => onDelete(item)}
+          />
+        )}
       />
-
-      <View style={styles.fabWrap}>
-        <GlassButton
-          title="+ Add Asset"
-          onPress={() =>
-            requireAuth({
-              isAuthenticated,
-              navigation,
-              message: 'Sign in to add and save assets in your vault.',
-              onAuthed: () => navigation.navigate('AddAsset'),
-            })
-          }
-        />
-      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { padding: SPACING.lg, paddingTop: 48, paddingBottom: 8 },
-  headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  title: { color: COLORS.text, fontSize: 22, fontWeight: '900' },
-  sub: { color: COLORS.muted, marginTop: 4, fontSize: 12 },
+  header: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.md, paddingBottom: SPACING.sm },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  title: { fontSize: 22, fontWeight: '800' },
+  sub: { fontSize: 13, marginTop: 2 },
   addChip: {
-    backgroundColor: COLORS.neonBlue,
-    borderRadius: 12,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 8,
+    borderRadius: 999,
+    minHeight: 40,
+    justifyContent: 'center',
   },
-  addChipText: { color: '#fff', fontWeight: '800', fontSize: 11 },
-  search: {
-    marginTop: 14,
+  addChipText: { fontWeight: '800', fontSize: 13 },
+  iconChip: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.card,
+  },
+  search: {
+    marginTop: 12,
+    borderWidth: 1,
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    color: COLORS.text,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    fontSize: 15,
   },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  icon: { fontSize: 28 },
-  name: { color: COLORS.text, fontWeight: '800', fontSize: 16 },
-  valueText: { color: COLORS.emerald, fontWeight: '800', fontSize: 13, marginTop: 4 },
-  emptyTitle: { color: COLORS.text, fontWeight: '800', fontSize: 16 },
-  actions: { flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' },
-  waBtn: {
-    flexGrow: 1,
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: '#128C7E',
-    minWidth: '30%',
-  },
-  waText: { color: '#fff', fontWeight: '800', fontSize: 12 },
-  editBtn: {
-    flexGrow: 1,
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    minWidth: '28%',
-  },
-  editText: { color: COLORS.text, fontWeight: '700', fontSize: 12 },
-  deleteBtn: {
-    flexGrow: 1,
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(244,63,94,0.4)',
-    backgroundColor: 'rgba(244,63,94,0.12)',
-    minWidth: '28%',
-  },
-  deleteText: { color: COLORS.rose, fontWeight: '700', fontSize: 12 },
-  fabWrap: { paddingHorizontal: SPACING.lg, paddingBottom: 8 },
 });
 
 export default AssetListScreen;
