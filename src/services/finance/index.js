@@ -54,6 +54,7 @@ export {
   computeOwnershipCostScore,
   analyzeMaintenanceTrend,
   analyzeRepairFrequency,
+  analyzeMaintenanceFrequency,
 } from './assetAnalyticsEngine';
 
 export {
@@ -61,5 +62,18 @@ export {
   resolveAnnualDepreciationRate,
   DEPRECIATION_USEFUL_LIFE_YEARS,
 } from './depreciationRates';
+
+export {
+  ANALYTICS_DATE_RANGES,
+  filterRowsByDateRange,
+  buildMonthlyCostSeries,
+} from './dateRangeFilter';
+
+export { buildLocationAnalytics, spendForCategoryAtLocations } from './locationAnalytics';
+
+export {
+  buildAnalyticsExportPayload,
+  ANALYTICS_EXPORT_FORMATS,
+} from './analyticsExport';
 
 export { queryPortfolioFinance, FINANCE_QUERY_INTENTS } from './financeQuery';

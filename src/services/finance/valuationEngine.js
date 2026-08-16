@@ -3,9 +3,8 @@
  */
 
 import { calculateResaleValue } from '../../utils/resaleCalculator';
-import { calculateDepreciation } from '../../utils/depreciation';
 import { yearsSince } from '../../utils/dates';
-import { resolveUsefulLifeYears } from './depreciationRates';
+import { resolveUsefulLifeYears, resolveAnnualDepreciationRate } from './depreciationRates';
 import { CURRENCY_INR, VALUE_SOURCE, DEPRECIATION_METHOD } from './financeConstants';
 
 /**
@@ -75,10 +74,8 @@ export function calculateConfigurableDepreciation(asset = {}, opts = {}) {
   }
 
   if (method === DEPRECIATION_METHOD.STRAIGHT_LINE) {
-    const lifeYears =
-      Number(opts.usefulLifeYears || asset.usefulLifeYears) || resolveUsefulLifeYears(asset);
     const age = yearsSince(asset.purchaseDate);
-    if (!asset.purchaseDate || !(lifeYears > 0)) {
+    if (!asset.purchaseDate) {
       return {
         available: false,
         method,
@@ -88,10 +85,28 @@ export function calculateConfigurableDepreciation(asset = {}, opts = {}) {
         isEstimate: true,
       };
     }
-    const salvage = purchase.value * 0.1;
-    const annual = (purchase.value - salvage) / lifeYears;
-    const dep = Math.min(purchase.value - salvage, annual * age);
-    const book = Math.max(salvage, purchase.value - dep);
+    // Spec: Depreciation = Purchase × annualRate × elapsedYears; floor ₹0
+    const rate =
+      Number(opts.depreciationRate || asset.depreciationRate) ||
+      resolveAnnualDepreciationRate(asset);
+    const lifeYears =
+      Number(opts.usefulLifeYears || asset.usefulLifeYears) || resolveUsefulLifeYears(asset);
+    let dep;
+    if (rate > 0) {
+      dep = purchase.value * rate * age;
+    } else if (lifeYears > 0) {
+      dep = (purchase.value / lifeYears) * age;
+    } else {
+      return {
+        available: false,
+        method,
+        bookValue: null,
+        accumulatedDepreciation: null,
+        label: 'Estimate unavailable',
+        isEstimate: true,
+      };
+    }
+    const book = Math.max(0, purchase.value - dep);
     return {
       available: true,
       method,
@@ -101,24 +116,45 @@ export function calculateConfigurableDepreciation(asset = {}, opts = {}) {
       isEstimate: true,
       valueSource: VALUE_SOURCE.ESTIMATED,
       usefulLifeYears: lifeYears,
+      annualRate: rate,
+      formula: 'Purchase × depreciationRate × elapsedYears (floor ₹0)',
     };
   }
 
-  // PERCENTAGE — reuse existing engine
-  const dep = calculateDepreciation({
-    purchaseValue: purchase.value,
-    purchaseDate: asset.purchaseDate,
-    categoryId: asset.categoryId,
-  });
+  // PERCENTAGE — category rates from depreciationRates (central config)
+  const rate = resolveAnnualDepreciationRate(asset);
+  const ageYears = yearsSince(asset.purchaseDate);
+  if (!asset.purchaseDate) {
+    return {
+      available: false,
+      method: DEPRECIATION_METHOD.PERCENTAGE,
+      bookValue: null,
+      accumulatedDepreciation: null,
+      label: 'Estimate unavailable',
+      isEstimate: true,
+    };
+  }
+  // Declining-balance style using centralized category rate
+  let book = purchase.value;
+  const whole = Math.floor(ageYears);
+  for (let y = 0; y < whole; y += 1) {
+    book = Math.max(0, book * (1 - rate));
+  }
+  const frac = ageYears - whole;
+  if (frac > 0.01) {
+    book = Math.max(0, book * (1 - rate * frac));
+  }
+  book = Math.max(0, Math.round(book));
   return {
     available: true,
     method: DEPRECIATION_METHOD.PERCENTAGE,
-    bookValue: dep.bookValue,
-    accumulatedDepreciation: dep.accumulatedDepreciation,
+    bookValue: book,
+    accumulatedDepreciation: Math.round(purchase.value - book),
     label: 'Estimated (category rate)',
     isEstimate: true,
     valueSource: VALUE_SOURCE.ESTIMATED,
-    ageYears: dep.ageYears,
+    ageYears,
+    annualRate: rate,
   };
 }
 

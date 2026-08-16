@@ -86,6 +86,12 @@ const val = loadPlain(
     const map = { mobile: 3, car: 8, bike: 7, other: 5 };
     return map[key] || 5;
   }
+  function resolveAnnualDepreciationRate(asset) {
+    if (Number(asset.depreciationRate) > 0) return Number(asset.depreciationRate);
+    const key = String(asset.categoryId || 'other').toLowerCase();
+    const map = { mobile: 0.35, car: 0.12, bike: 0.14, other: 0.15 };
+    return map[key] || 0.15;
+  }
   function calculateResaleValue({ purchaseValue }) {
     return { estimatedResale: Math.round(purchaseValue * 0.7) };
   }
@@ -115,7 +121,7 @@ const sl = val.calculateConfigurableDepreciation(
 );
 ok('straight-line estimate', sl.isEstimate === true && sl.available === true);
 ok('depreciation floor >= 0', sl.bookValue >= 0 && sl.accumulatedDepreciation >= 0);
-ok('salvage floor 10%', sl.bookValue >= Math.round(60000 * 0.1));
+ok('depreciation never negative book', sl.bookValue >= 0);
 
 ok('missing purchase no invent', val.resolvePurchasePrice({}).available === false);
 ok(
@@ -301,6 +307,17 @@ const engine2 = loadPlain(
     return { status, age, replacementFlag: resolveReplacementFlag(asset, opts.analytics||{}, opts), stages: [], events: [] };
   }
   function summarizeRepairFrequency(rows){ return (${own.summarizeRepairFrequency.toString()})(rows); }
+  const ANALYTICS_DATE_RANGES = { THIS_MONTH:'this_month', LAST_3_MONTHS:'last_3_months', LAST_6_MONTHS:'last_6_months', THIS_YEAR:'this_year', LAST_YEAR:'last_year', ALL:'all', CUSTOM:'custom' };
+  function filterRowsByDateRange(rows){ return { rows: rows||[], bounds: { label: 'All Time' }, filtered: false }; }
+  function buildMonthlyCostSeries(rows){
+    const map = {};
+    for (const r of rows||[]) {
+      const k = String(r.repairDate||'').slice(0,7);
+      if (!k) continue;
+      map[k] = (map[k]||0) + (Number(r.costInr)||0);
+    }
+    return Object.keys(map).sort().map(k => ({ month:k, total:map[k], service:0, repair:0, other:0, source:'Actual Recorded' }));
+  }
   const LIFECYCLE_STATUS = { NEW:'NEW', ACTIVE:'ACTIVE', HIGH_MAINTENANCE:'HIGH_MAINTENANCE', AGING:'AGING', SOLD:'SOLD', ARCHIVED:'ARCHIVED', DISPOSED:'DISPOSED', END_OF_LIFE:'END_OF_LIFE', MAINTENANCE:'MAINTENANCE' };
   `,
 );
@@ -381,6 +398,86 @@ ok('repair freq last12', trend.last12Months >= 2);
 
 const hv = engine2.resolveHealthVsCost(80, 'Low');
 ok('excellent quadrant', hv.code === 'HIGH_HEALTH_LOW_COST');
+
+ok('cost per year available', analytics.period.available && analytics.period.costPerYear > 0);
+ok(
+  'missing service history warning',
+  engine2.buildAssetAnalytics(
+    { assetId: 'y', ownerUid: 'u1', purchasePrice: 1000, purchaseDate: '2024-01-01' },
+    { actorUserId: 'u1', expenseRows: [] },
+  ).warnings.some((w) => w.code === 'INCOMPLETE_SERVICE_HISTORY'),
+);
+ok('maintenance frequency message', Boolean(analytics.maintenanceFrequency?.message));
+ok('cost trend series array', Array.isArray(analytics.costTrendSeries));
+ok('vehicle profile', analytics.categoryProfile === 'vehicle');
+ok(
+  'MAINTENANCE when overdue service',
+  life.resolveLifecycleStatus({
+    purchaseDate: '2024-01-01',
+    nextServiceDue: '2025-01-01',
+  }) === 'MAINTENANCE',
+);
+ok(
+  'zero purchase no invent',
+  val.resolvePurchasePrice({ purchasePrice: 0 }).available === false,
+);
+
+const loc = loadPlain(
+  'src/services/finance/locationAnalytics.js',
+  ['buildLocationAnalytics'],
+  `
+  const CURRENCY_INR = 'INR';
+  function resolvePurchasePrice(a){
+    const n = Number(a.purchasePrice ?? a.value);
+    if (!Number.isFinite(n) || n <= 0) return { available:false, value:null, label:'Not available', currencyCode: CURRENCY_INR };
+    return { available:true, value:Math.round(n), label:'Purchase Value', currencyCode: CURRENCY_INR };
+  }
+  function computeAssetOwnershipCost(asset){
+    const p = Number(asset.purchasePrice)||0;
+    return { totalOwnershipCost: p + (Number(asset.repairCostTotal)||0), repair: Number(asset.repairCostTotal)||0, service:0 };
+  }
+  function formatInr(n){ return '₹'+n; }
+  `,
+);
+const locReport = loc.buildLocationAnalytics(
+  [
+    { assetId: 'a1', ownerUid: 'u1', categoryId: 'ac', locationPath: 'Bedroom', purchasePrice: 40000 },
+    { assetId: 'a2', ownerUid: 'u1', categoryId: 'ac', locationPath: 'Living Room', purchasePrice: 45000, repairCostTotal: 2000 },
+  ],
+  { actorUserId: 'u1' },
+);
+ok('location analytics rows', locReport.rows.length === 2);
+
+const exportMod = loadPlain('src/services/finance/analyticsExport.js', [
+  'buildAnalyticsExportPayload',
+  'ANALYTICS_EXPORT_FORMATS',
+]);
+ok(
+  'export stub ready',
+  exportMod.buildAnalyticsExportPayload(analytics).available === true &&
+    exportMod.ANALYTICS_EXPORT_FORMATS.CSV === 'csv',
+);
+
+const large = Array.from({ length: 200 }, (_, i) => ({
+  category: i % 2 ? 'repair' : 'service',
+  costInr: 100 + i,
+  repairDate: `2026-${String((i % 12) + 1).padStart(2, '0')}-01`,
+}));
+const largeAnalytics = engine2.buildAssetAnalytics(asset, {
+  expenseRows: large,
+  actorUserId: 'u1',
+  userId: 'u1',
+  now: NOW,
+});
+ok('large dataset ok', largeAnalytics.available && largeAnalytics.costTrendSeries.length >= 1);
+
+const offlineLike = engine2.buildAssetAnalytics(asset, {
+  expenseRows,
+  actorUserId: 'u1',
+  userId: 'u1',
+  now: NOW,
+});
+ok('offline ready flag', offlineLike.offlineReady === true);
 
 console.log(`\n=== Result: ${passed} passed, ${failed} failed ===\n`);
 process.exit(failed ? 1 : 0);

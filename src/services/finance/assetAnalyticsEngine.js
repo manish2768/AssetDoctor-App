@@ -23,6 +23,11 @@ import {
   buildLifecycleReport,
 } from './lifecycleAnalytics';
 import { calculateHealthScore } from '../../utils/healthScore';
+import {
+  filterRowsByDateRange,
+  buildMonthlyCostSeries,
+  ANALYTICS_DATE_RANGES,
+} from './dateRangeFilter';
 
 /**
  * Ownership Cost Score (0–100, higher = more expensive to own).
@@ -162,6 +167,94 @@ export function analyzeRepairFrequency(expenseRows = [], now = new Date()) {
   };
 }
 
+/**
+ * Maintenance / service frequency from actual service-like records + asset fields.
+ */
+export function analyzeMaintenanceFrequency(asset = {}, expenseRows = [], now = new Date()) {
+  const isService = (row) => {
+    const cat = categorizeExpenseRow(row);
+    return (
+      cat &&
+      (cat.bucket === BUCKET.SERVICE ||
+        /maintenance|amc|service/i.test(String(row.category || '')))
+    );
+  };
+  const dates = (expenseRows || [])
+    .filter(isService)
+    .map((r) => String(r.repairDate || r.serviceDate || r.date || '').slice(0, 10))
+    .filter(Boolean)
+    .sort();
+
+  const lastFromRows = dates.length ? dates[dates.length - 1] : null;
+  const lastService = lastFromRows || asset.lastServiceDate || null;
+  const nextService = asset.nextServiceDue || null;
+  const numberOfServices = dates.length;
+
+  let averageIntervalDays = null;
+  if (dates.length >= 2) {
+    let sum = 0;
+    for (let i = 1; i < dates.length; i += 1) {
+      const a = new Date(`${dates[i - 1]}T12:00:00`).getTime();
+      const b = new Date(`${dates[i]}T12:00:00`).getTime();
+      sum += Math.max(0, (b - a) / 86400000);
+    }
+    averageIntervalDays = Math.round(sum / (dates.length - 1));
+  }
+
+  if (numberOfServices < 2 && !lastService && !nextService) {
+    return {
+      available: false,
+      lastService: null,
+      nextService: null,
+      numberOfServices: 0,
+      averageIntervalDays: null,
+      message: 'Insufficient service history',
+      source: 'Actual Recorded',
+    };
+  }
+
+  return {
+    available: true,
+    lastService,
+    nextService,
+    numberOfServices,
+    averageIntervalDays,
+    message:
+      numberOfServices >= 2
+        ? `${numberOfServices} services · avg ${averageIntervalDays} days apart`
+        : numberOfServices === 1
+          ? '1 service recorded'
+          : lastService || nextService
+            ? 'Service dates from asset record'
+            : 'Insufficient service history',
+    source: 'Actual Recorded',
+  };
+}
+
+function resolveCategoryProfile(asset = {}) {
+  const id = String(asset.categoryId || asset.category || '').toLowerCase();
+  if (['car', 'bike', 'scooter', 'ev', 'commercial'].includes(id)) {
+    return id === 'ev' ? 'ev' : 'vehicle';
+  }
+  if (['mobile', 'laptop', 'tablet', 'smartwatch', 'camera'].includes(id)) return 'gadget';
+  if (
+    [
+      'ac',
+      'fridge',
+      'refrigerator',
+      'washing_machine',
+      'tv',
+      'geyser',
+      'microwave',
+      'water_purifier',
+      'air_purifier',
+    ].includes(id)
+  ) {
+    return 'appliance';
+  }
+  return 'other';
+}
+
 function dataQualityWarnings(asset, purchase, age, expenseRows) {
   const warnings = [];
   if (!purchase.available) warnings.push({ code: 'MISSING_PURCHASE_PRICE', message: 'Purchase price missing' });
@@ -181,7 +274,15 @@ function dataQualityWarnings(asset, purchase, age, expenseRows) {
  */
 export function buildAssetAnalytics(asset = {}, opts = {}) {
   if (!asset || asset.deletedAt) return null;
-  const expenseRows = opts.expenseRows || [];
+  const rangeKey = opts.dateRange || ANALYTICS_DATE_RANGES.ALL;
+  const now = opts.now || new Date();
+  const rangeResult = filterRowsByDateRange(
+    opts.expenseRows || [],
+    rangeKey,
+    now,
+    opts.customRange || {},
+  );
+  const expenseRows = rangeResult.rows;
   const userId = opts.userId || asset.ownerUid || asset.uid;
 
   // Security: caller must only pass authorized assets
@@ -195,14 +296,25 @@ export function buildAssetAnalytics(asset = {}, opts = {}) {
   const purchase = resolvePurchasePrice(asset);
   const current = resolveCurrentEstimatedValue(asset);
   const depreciation = calculateConfigurableDepreciation(asset, opts);
-  const age = calculateAssetAge(asset, opts.now);
+  const age = calculateAssetAge(asset, now);
   const ownership = computeAssetOwnershipCost(asset, { ...opts, expenseRows });
   const period = computeCostPerPeriod(ownership, asset);
   const costPerUse = computeCostPerUse(asset, ownership);
   const completeness = computeProfileCompleteness(asset);
   const health = calculateHealthScore(asset);
-  const repairFrequency = analyzeRepairFrequency(expenseRows, opts.now || new Date());
-  const maintenanceTrend = analyzeMaintenanceTrend(expenseRows, opts.now || new Date());
+  const repairFrequency = analyzeRepairFrequency(expenseRows, now);
+  const maintenanceFrequency = analyzeMaintenanceFrequency(asset, expenseRows, now);
+  const maintenanceTrend = analyzeMaintenanceTrend(expenseRows, now);
+  const chartMonths =
+    rangeKey === ANALYTICS_DATE_RANGES.LAST_3_MONTHS
+      ? 3
+      : rangeKey === ANALYTICS_DATE_RANGES.LAST_6_MONTHS
+        ? 6
+        : rangeKey === ANALYTICS_DATE_RANGES.ALL
+          ? null
+          : 12;
+  const costTrendSeries = buildMonthlyCostSeries(expenseRows, chartMonths, now);
+  const categoryProfile = resolveCategoryProfile(asset);
 
   const lastRepairCost = expenseRows
     .map(categorizeExpenseRow)
@@ -266,7 +378,7 @@ export function buildAssetAnalytics(asset = {}, opts = {}) {
       label: 'Insurance',
     },
     maintenance: {
-      value: Math.round((ownership.service || 0) + (ownership.other || 0)),
+      value: Math.round(ownership.other || 0),
       available: true,
       source: 'Actual Recorded',
       label: 'Maintenance',
@@ -343,11 +455,40 @@ export function buildAssetAnalytics(asset = {}, opts = {}) {
           }
         : { label: 'Charging cost data unavailable' },
     repairFrequency,
+    maintenanceFrequency,
     maintenanceTrend,
+    costTrendSeries,
+    dateRange: {
+      key: rangeKey,
+      label: rangeResult.bounds.label,
+      filtered: rangeResult.filtered,
+    },
+    categoryProfile,
+    warranty: {
+      start: asset.warrantyStart || asset.purchaseDate || null,
+      end: asset.warrantyExpiry || null,
+      remainingDays: asset.warrantyExpiry
+        ? Math.round(
+            (new Date(`${String(asset.warrantyExpiry).slice(0, 10)}T12:00:00`).getTime() -
+              now.getTime()) /
+              86400000,
+          )
+        : null,
+      source: asset.warrantyExpiry ? 'User Entered / Actual Recorded' : 'Not available',
+    },
+    vehicleExtras:
+      categoryProfile === 'vehicle' || categoryProfile === 'ev'
+        ? {
+            insuranceExpiry: asset.insuranceExpiry || null,
+            pucExpiry: asset.pucExpiry || null,
+            registration: asset.registration || asset.vehicleNumber || null,
+            odometerKm: asset.odometerKm != null ? Number(asset.odometerKm) : null,
+          }
+        : null,
     serviceHistoryNote:
-      expenseRows.length >= 2
+      maintenanceFrequency.available && maintenanceFrequency.numberOfServices >= 2
         ? null
-        : 'Insufficient service history',
+        : maintenanceFrequency.message || 'Insufficient service history',
     repairVsReplace: {
       ...repairVsReplace,
       advisory:
@@ -384,7 +525,7 @@ export function compareAssets(assets = [], opts = {}) {
       ownershipCost: r.ownership.totalOwnershipCost,
       repairCost: r.breakdown.repair.value,
       ageLabel: r.age.label,
-      warranty: null,
+      warranty: r.warranty?.end || null,
       energyEstimate: r.energy.estimatedMonthlyCost,
       replacementFlag: r.replacementFlag,
     })),
@@ -398,4 +539,5 @@ export default {
   resolveHealthVsCost,
   analyzeMaintenanceTrend,
   analyzeRepairFrequency,
+  analyzeMaintenanceFrequency,
 };

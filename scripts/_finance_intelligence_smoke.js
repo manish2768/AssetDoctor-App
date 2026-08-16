@@ -75,6 +75,16 @@ const val = loadPlain(
   const VALUE_SOURCE = ${JSON.stringify(constants.VALUE_SOURCE)};
   const DEPRECIATION_METHOD = ${JSON.stringify(constants.DEPRECIATION_METHOD)};
   const CURRENCY_INR = 'INR';
+  function resolveUsefulLifeYears(asset) {
+    if (Number(asset.usefulLifeYears) > 0) return Number(asset.usefulLifeYears);
+    return 5;
+  }
+  function resolveAnnualDepreciationRate(asset) {
+    if (Number(asset.depreciationRate) > 0) return Number(asset.depreciationRate);
+    const key = String(asset.categoryId || 'other').toLowerCase();
+    const map = { mobile: 0.35, car: 0.12, bike: 0.14, other: 0.15 };
+    return map[key] || 0.15;
+  }
   function calculateResaleValue({ purchaseValue }) {
     return { estimatedResale: Math.round(purchaseValue * 0.7) };
   }
@@ -216,6 +226,9 @@ const portfolioPreamble = `
   }
   function computeCostPerPeriod(){ return { available:false }; }
   function computeProfileCompleteness(){ return { percent: 70, missing: [] }; }
+  function calculateHealthScore(a){ return { score: Number(a.assetHealthScore)||80, band: 'Good' }; }
+  function resolveReplacementFlag(){ return 'NORMAL'; }
+  function summarizeRepairFrequency(){ return { numberOfRepairs: 0 }; }
   function buildEnergyCostDashboard(assets){
     const acs = assets.filter(a=>a.categoryId==='ac').map(a=>({
       assetId:a.assetId, name:a.nickname||a.assetName,

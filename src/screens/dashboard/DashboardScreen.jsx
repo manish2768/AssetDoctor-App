@@ -566,14 +566,28 @@ export function DashboardScreen({ navigation }) {
                 {formatFinanceInr(portfolioFinance.totalOwnershipCost)}
               </Text>
             </Text>
-            {portfolioFinance.snapshots?.[0]?.period?.available ? (
-              <Text style={styles.splitLabel}>
-                Sample monthly ownership:{' '}
-                <Text style={styles.splitValue}>
-                  {formatFinanceInr(portfolioFinance.snapshots[0].period.costPerMonth)}
-                </Text>
+            <Text style={styles.splitLabel}>
+              Monthly ownership (sum):{' '}
+              <Text style={styles.splitValue}>
+                {formatFinanceInr(portfolioFinance.monthlyMaintenanceCost || 0)}
               </Text>
-            ) : null}
+            </Text>
+            <Text style={styles.splitLabel}>
+              Annual ownership (×12):{' '}
+              <Text style={styles.splitValue}>
+                {formatFinanceInr(portfolioFinance.annualMaintenanceCost || 0)}
+              </Text>
+            </Text>
+            <Text style={styles.splitLabel}>
+              Requiring attention:{' '}
+              <Text style={styles.splitValue}>
+                {portfolioFinance.assetsRequiringAttention ?? 0}
+              </Text>
+            </Text>
+            <Text style={styles.splitLabel}>
+              Near replacement:{' '}
+              <Text style={styles.splitValue}>{portfolioFinance.assetsNearReplacement ?? 0}</Text>
+            </Text>
             <Text style={[styles.guestSub, { marginTop: 8 }]}>
               Open any asset passport → View Asset Analytics for age, depreciation, and lifecycle.
             </Text>

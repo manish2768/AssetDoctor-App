@@ -55,6 +55,14 @@ export function resolveLifecycleStatus(asset = {}, opts = {}) {
 
   if (status === 'in_repair') return LIFECYCLE_STATUS.MAINTENANCE;
 
+  // Overdue service → MAINTENANCE (deterministic from nextServiceDue)
+  if (asset.nextServiceDue) {
+    const due = new Date(`${String(asset.nextServiceDue).slice(0, 10)}T12:00:00`);
+    if (!Number.isNaN(due.getTime()) && due.getTime() < Date.now()) {
+      return LIFECYCLE_STATUS.MAINTENANCE;
+    }
+  }
+
   const repairish = expenseRows.filter((r) =>
     /repair|spare|labour|labor/i.test(String(r.category || r.title || '')),
   );

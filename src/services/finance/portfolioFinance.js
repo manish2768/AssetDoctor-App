@@ -14,6 +14,9 @@ import { computeAssetOwnershipCost, computeCostPerPeriod } from './ownershipCost
 import { computeProfileCompleteness } from './completenessScore';
 import { buildEnergyCostDashboard } from './energyCostAnalytics';
 import { CURRENCY_INR, formatInr } from './financeConstants';
+import { resolveReplacementFlag } from './lifecycleAnalytics';
+import { calculateHealthScore } from '../../utils/healthScore';
+import { summarizeRepairFrequency } from './ownershipCostEngine';
 
 const FOLDER_LABEL = {
   vehicle: 'Vehicles',
@@ -64,7 +67,15 @@ export function buildAssetFinanceSnapshot(asset = {}, opts = {}) {
  * Portfolio health: average of per-asset health scores (documented).
  */
 export function buildPortfolioFinance(assets = [], opts = {}) {
-  const list = (assets || []).filter((a) => a && !a.deletedAt);
+  const list = (assets || []).filter((a) => {
+    if (!a || a.deletedAt) return false;
+    if (!opts.actorUserId) return true;
+    const owner = a.ownerUid || a.uid;
+    if (!owner || opts.actorUserId === owner) return true;
+    const ownership = String(a.ownershipType || 'PERSONAL').toUpperCase();
+    if (ownership === 'PERSONAL' || !a.householdId) return false;
+    return true;
+  });
   const snapshots = list
     .map((a) =>
       buildAssetFinanceSnapshot(a, {
@@ -135,6 +146,26 @@ export function buildPortfolioFinance(assets = [], opts = {}) {
 
   const energyDash = buildEnergyCostDashboard(list, opts);
 
+  let requiringAttention = 0;
+  let nearReplacement = 0;
+  let monthlyMaintenance = 0;
+  for (const a of list) {
+    const id = a.assetId || a.id;
+    const expenseRows = opts.expenseRowsByAsset?.[id] || [];
+    const health = calculateHealthScore(a);
+    const freq = summarizeRepairFrequency(expenseRows);
+    const snap = snapshots.find((s) => s.assetId === id);
+    const flag = resolveReplacementFlag(a, {
+      age: snap?.age,
+      repairFrequency: { last12Months: freq.numberOfRepairs || 0 },
+      period: snap?.period,
+      repairVsReplace: {},
+    });
+    if (flag === 'REVIEW_REPLACEMENT' || flag === 'WATCH') nearReplacement += 1;
+    if ((health?.score != null && health.score < 75) || flag !== 'NORMAL') requiringAttention += 1;
+    if (snap?.period?.available) monthlyMaintenance += snap.period.costPerMonth || 0;
+  }
+
   const top = {
     highestValue: [...snapshots]
       .filter((s) => s.currentEstimated.available)
@@ -175,6 +206,10 @@ export function buildPortfolioFinance(assets = [], opts = {}) {
     },
     totalOwnershipCost: Math.round(ownershipTotal),
     ownershipLabel: 'Total Ownership Cost',
+    monthlyMaintenanceCost: Math.round(monthlyMaintenance),
+    annualMaintenanceCost: Math.round(monthlyMaintenance * 12),
+    assetsRequiringAttention: requiringAttention,
+    assetsNearReplacement: nearReplacement,
     byCategory: Object.values(byCategory).sort((a, b) => b.purchaseValue - a.purchaseValue),
     portfolioHealth,
     energy: energyDash,
