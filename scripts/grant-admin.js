@@ -1,22 +1,24 @@
 #!/usr/bin/env node
 /**
- * Asset Doctor — Staff Custom Claims Management Utility
+ * Asset Doctor — Super Admin Custom Claims Assignment Tool
  * 
  * Usage:
- *   node scripts/grant-admin.js <email> [--role=super_admin|admin|support_agent|ocr_reviewer|analytics_viewer]
- * 
- * Requirements:
- *   GOOGLE_APPLICATION_CREDENTIALS pointing to service account JSON,
- *   or Firebase Admin SDK initialized with default application credentials.
+ *   node scripts/grant-admin.js [email]
+ *   Default: manish2768@gmail.com
  */
 
-const admin = require('firebase-admin');
-const path = require('path');
-const fs = require('fs');
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const PROJECT_ID = 'assetdoctor-5fd25';
 
-// Look for service account credentials
+// Search for possible service account key files
 const possibleKeyPaths = [
   process.env.GOOGLE_APPLICATION_CREDENTIALS,
   path.join(__dirname, '..', 'credentials.json'),
@@ -25,18 +27,17 @@ const possibleKeyPaths = [
   path.join(__dirname, '..', 'functions', 'service-account.json')
 ].filter(Boolean);
 
-let initialized = false;
+let app = null;
 
 for (const keyPath of possibleKeyPaths) {
   if (fs.existsSync(keyPath)) {
     try {
-      const serviceAccount = JSON.parse(fs.readFileSync(keyPath, 'utf8'));
-      if (serviceAccount.project_id === PROJECT_ID || serviceAccount.type === 'service_account') {
-        admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount),
+      const content = JSON.parse(fs.readFileSync(keyPath, 'utf8'));
+      if (content.project_id === PROJECT_ID || content.type === 'service_account') {
+        app = initializeApp({
+          credential: cert(content),
           projectId: PROJECT_ID
         });
-        initialized = true;
         console.log(`[AUTH] Initialized Firebase Admin SDK with service account: ${keyPath}`);
         break;
       }
@@ -46,41 +47,32 @@ for (const keyPath of possibleKeyPaths) {
   }
 }
 
-if (!initialized) {
+if (!app && getApps().length === 0) {
   try {
-    admin.initializeApp({
+    app = initializeApp({
       projectId: PROJECT_ID
     });
-    console.log(`[AUTH] Initialized Firebase Admin SDK with default application credentials for project: ${PROJECT_ID}`);
+    console.log(`[AUTH] Initialized Firebase Admin SDK with application default credentials for project: ${PROJECT_ID}`);
   } catch (e) {
     console.error('[AUTH ERROR] Could not initialize Firebase Admin SDK:', e.message);
   }
 }
 
-async function setStaffClaims(email, role = 'super_admin') {
-  if (!email) {
-    console.error('Usage: node scripts/grant-admin.js <email> [--role=super_admin|admin|support_agent|ocr_reviewer|analytics_viewer]');
-    process.exit(1);
-  }
-
-  const validRoles = ['super_admin', 'admin', 'support_agent', 'ocr_reviewer', 'analytics_viewer'];
-  if (!validRoles.includes(role)) {
-    console.error(`Invalid role "${role}". Valid roles: ${validRoles.join(', ')}`);
-    process.exit(1);
-  }
-
+async function setSuperAdmin(email = 'manish2768@gmail.com') {
   try {
-    const user = await admin.auth().getUserByEmail(email);
+    console.log(`[AUTH] Looking up user: ${email}...`);
+    const auth = getAuth();
+    const user = await auth.getUserByEmail(email);
+    console.log(`[AUTH] Found user with UID: ${user.uid}`);
+
     const claims = {
-      admin: true,
-      super_admin: role === 'super_admin',
-      role: role,
-      grantedAt: new Date().toISOString()
+      super_admin: true,
+      admin: true
     };
 
-    await admin.auth().setCustomUserClaims(user.uid, claims);
+    await auth.setCustomUserClaims(user.uid, claims);
     console.log(`\n======================================================`);
-    console.log(`SUCCESS: Custom claims updated for ${email}`);
+    console.log(`SUCCESS: Super Admin custom claims granted to ${email}`);
     console.log(`UID: ${user.uid}`);
     console.log(`Claims applied:`, JSON.stringify(claims, null, 2));
     console.log(`======================================================\n`);
@@ -93,18 +85,5 @@ async function setStaffClaims(email, role = 'super_admin') {
   }
 }
 
-const args = process.argv.slice(2);
-const targetEmail = args[0];
-let targetRole = 'super_admin';
-
-for (const arg of args) {
-  if (arg.startsWith('--role=')) {
-    targetRole = arg.split('=')[1];
-  }
-}
-
-if (require.main === module) {
-  setStaffClaims(targetEmail, targetRole);
-}
-
-module.exports = { setStaffClaims };
+const targetEmail = process.argv[2] || 'manish2768@gmail.com';
+setSuperAdmin(targetEmail);

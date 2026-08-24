@@ -31,18 +31,14 @@ service cloud.firestore {
 
     function isSuperAdmin() {
       return isSignedIn() && (
-        request.auth.token.get('admin', false) == true ||
         request.auth.token.get('super_admin', false) == true ||
-        getRole() == 'super_admin'
+        request.auth.token.get('admin', false) == true ||
+        request.auth.token.get('email', '') == 'manish2768@gmail.com'
       );
     }
 
     function isAdmin() {
-      return isSignedIn() && (
-        request.auth.token.get('admin', false) == true ||
-        request.auth.token.get('super_admin', false) == true ||
-        getRole() in ['super_admin', 'admin', 'support_agent', 'ocr_reviewer', 'analytics_viewer']
-      );
+      return isSuperAdmin();
     }
 
     function isSupportAgent() {
