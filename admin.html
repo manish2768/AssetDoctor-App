@@ -692,6 +692,7 @@ auth.onAuthStateChanged(async (user) => {
   }
 
   try {
+    await user.getIdToken(true);
     const tokenResult = await user.getIdTokenResult(true);
     const claims = tokenResult.claims || {};
     const isSuperAdmin = claims.super_admin === true;
