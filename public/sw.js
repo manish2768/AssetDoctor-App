@@ -1,12 +1,11 @@
-// AssetDoctor Progressive Web App Service Worker
-const CACHE_NAME = 'assetdoctor-v1';
+// AssetDoctor Progressive Web App Service Worker V2.5
+const CACHE_NAME = 'assetdoctor-v2.5';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
   '/icon.svg',
-  '/src/main.tsx',
-  '/src/index.css'
+  '/admin.html'
 ];
 
 // Install Event - Pre-cache core shell
@@ -37,13 +36,13 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch Event - Stale-While-Revalidate Strategy
+// Fetch Event - Stale-While-Revalidate with Offline Fallback
 self.addEventListener('fetch', (event) => {
-  // Only handle GET requests and non-API routes
   if (event.request.method !== 'GET') return;
   
   const url = new URL(event.request.url);
-  if (url.pathname.startsWith('/api/')) return;
+  // Do not cache backend API calls or Firestore websockets
+  if (url.pathname.startsWith('/api/') || url.hostname.includes('firestore.googleapis.com')) return;
 
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
@@ -52,7 +51,7 @@ self.addEventListener('fetch', (event) => {
           if (
             networkResponse &&
             networkResponse.status === 200 &&
-            networkResponse.type === 'basic'
+            (networkResponse.type === 'basic' || networkResponse.type === 'cors')
           ) {
             const responseToCache = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => {
@@ -62,8 +61,10 @@ self.addEventListener('fetch', (event) => {
           return networkResponse;
         })
         .catch(() => {
-          // If network fails, return cached response if available
-          return cachedResponse;
+          if (cachedResponse) return cachedResponse;
+          if (event.request.mode === 'navigate') {
+            return caches.match('/index.html');
+          }
         });
 
       return cachedResponse || fetchPromise;
