@@ -262,6 +262,48 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', app: 'AssetDoctor ServiVault' });
 });
 
+// ====================================================
+// Meta WhatsApp Cloud API Webhook Endpoints
+// ====================================================
+
+// Webhook Verification (Hub Challenge)
+app.get('/api/webhook/whatsapp', (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+
+  const expectedToken = process.env.META_WEBHOOK_VERIFY_TOKEN || 'assetdoctor_webhook_verify_secret';
+
+  if (mode === 'subscribe' && token === expectedToken) {
+    console.log('[Meta Webhook] Webhook subscription verified successfully.');
+    return res.status(200).send(challenge);
+  }
+
+  console.warn('[Meta Webhook] Verification token mismatch or invalid mode.');
+  return res.status(403).json({ error: 'Verification token mismatch' });
+});
+
+// Webhook Event Receiver (Message status updates: delivered, read, failed)
+app.post('/api/webhook/whatsapp', async (req, res) => {
+  try {
+    const payload = req.body;
+    const signature = req.headers['x-hub-signature-256'] as string;
+
+    // Validate payload existence
+    if (!payload || !payload.entry) {
+      return res.status(200).json({ status: 'ignored', reason: 'empty_payload' });
+    }
+
+    console.log('[Meta Webhook Event Received]', JSON.stringify(payload, null, 2));
+
+    // Acknowledge receipt to Meta immediately (prevents Meta retry timeout)
+    res.status(200).json({ status: 'EVENT_RECEIVED' });
+  } catch (err: any) {
+    console.error('[Meta Webhook Error]', err);
+    res.status(200).json({ status: 'error_handled' });
+  }
+});
+
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

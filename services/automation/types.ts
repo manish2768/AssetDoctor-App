@@ -1,5 +1,5 @@
 /**
- * Asset Doctor — Production Notification & Expiry Automation Engine Types
+ * Asset Doctor — Production Notification, Expiry & Meta WhatsApp Cloud API Types
  */
 
 export type OperationalEventType =
@@ -53,6 +53,64 @@ export type TemplateKey =
   | 'support_ticket_resolved'
   | 'renewal_confirmed';
 
+export type MetaTemplateCategory = 'UTILITY' | 'MARKETING' | 'AUTHENTICATION';
+
+export type TemplateHeaderType = 'NONE' | 'TEXT' | 'IMAGE' | 'DOCUMENT';
+
+export type TemplateStatus =
+  | 'draft'
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'paused'
+  | 'archived';
+
+export type MetaApprovalStatus =
+  | 'APPROVED'
+  | 'PENDING'
+  | 'REJECTED'
+  | 'PAUSED'
+  | 'NOT_SUBMITTED';
+
+export interface TemplateVariable {
+  position: number;
+  source: string; // e.g. "customer.name", "asset.assetName", "asset.insuranceExpiry"
+  sampleValue: string;
+  description?: string;
+}
+
+export interface TemplateButton {
+  type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER';
+  text: string;
+  url?: string;
+  phoneNumber?: string;
+}
+
+export interface WhatsAppTemplate {
+  id?: string;
+  templateKey: TemplateKey | string;
+  displayName: string;
+  metaTemplateName: string;
+  category: MetaTemplateCategory;
+  language: string; // e.g. "en_US", "en", "hi"
+  headerType: TemplateHeaderType;
+  headerContent?: string;
+  body: string;
+  footer?: string;
+  buttons?: TemplateButton[];
+  variables: TemplateVariable[];
+  status: TemplateStatus;
+  isActive: boolean;
+  metaTemplateId?: string;
+  metaStatus: MetaApprovalStatus;
+  rejectionReason?: string | null;
+  lastMetaSyncAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  approvedAt?: string | null;
+}
+
 export type NotificationStatus =
   | 'queued'
   | 'processing'
@@ -60,7 +118,8 @@ export type NotificationStatus =
   | 'delivered'
   | 'read'
   | 'failed'
-  | 'skipped';
+  | 'skipped'
+  | 'blocked';
 
 export interface NotificationQueueItem {
   id?: string;
@@ -69,7 +128,7 @@ export interface NotificationQueueItem {
   documentId?: string;
   eventType: OperationalEventType | string;
   channel: 'whatsapp';
-  templateKey: TemplateKey;
+  templateKey: TemplateKey | string;
   recipientPhone: string;
   payload: Record<string, any>;
   status: NotificationStatus;
@@ -84,6 +143,7 @@ export interface NotificationQueueItem {
   idempotencyKey: string;
   retryCount: number;
   lastAttemptAt?: string | null;
+  metaTemplateId?: string | null;
 }
 
 export interface ProviderResult {
@@ -91,10 +151,22 @@ export interface ProviderResult {
   messageId?: string;
   error?: string;
   status: NotificationStatus;
+  rawResponse?: any;
+}
+
+export interface MetaConfig {
+  accessToken?: string;
+  appId?: string;
+  appSecret?: string;
+  wabaId?: string;
+  phoneNumberId?: string;
+  webhookVerifyToken?: string;
+  apiVersion?: string;
 }
 
 export interface NotificationProvider {
   send(item: NotificationQueueItem): Promise<ProviderResult>;
   getStatus(messageId: string): Promise<NotificationStatus>;
   handleWebhook(payload: Record<string, any>): Promise<any>;
+  isConfigured(): boolean;
 }
