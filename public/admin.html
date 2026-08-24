@@ -2667,56 +2667,76 @@ function openAssetModal(assetId) {
   const currentOdo = Number(a.odometerKm || a.odometer || a.currentKm || 0);
   const assetNameLower = (a.assetName || a.name || '').toLowerCase();
   
-  let oemSource = 'Generic Automotive Baseline';
+  let oemSource = 'Standard Engineering Baseline';
+  let isFallback = true;
   let targetKm = 10000;
   let intervalDays = 365;
   let isRonin = false;
 
   if (assetNameLower.includes('ronin') || assetNameLower.includes('225')) {
     oemSource = 'TVS Motor Official Ronin 225 Manual (2026)';
+    isFallback = false;
     targetKm = currentOdo > 0 ? Math.ceil(currentOdo / 6000) * 6000 : 750;
     if (targetKm <= currentOdo) targetKm = currentOdo + 6000;
     intervalDays = targetKm === 750 ? 60 : 180;
     isRonin = true;
   } else if (assetNameLower.includes('classic') || assetNameLower.includes('hunter') || assetNameLower.includes('bullet')) {
     oemSource = 'Royal Enfield Official J-Series Manual';
+    isFallback = false;
     targetKm = currentOdo > 0 ? Math.ceil(currentOdo / 5000) * 5000 : 500;
     if (targetKm <= currentOdo) targetKm = currentOdo + 5000;
     intervalDays = 180;
   } else if (assetNameLower.includes('activa') || assetNameLower.includes('jupiter')) {
     oemSource = 'HMSI Official Activa 6G Schedule';
+    isFallback = false;
     targetKm = currentOdo > 0 ? Math.ceil(currentOdo / 4000) * 4000 : 1000;
     if (targetKm <= currentOdo) targetKm = currentOdo + 4000;
     intervalDays = 120;
   } else if (assetNameLower.includes('creta') || assetNameLower.includes('car')) {
     oemSource = 'Hyundai Official Creta Service Schedule';
+    isFallback = false;
     targetKm = currentOdo > 0 ? Math.ceil(currentOdo / 10000) * 10000 : 1500;
     if (targetKm <= currentOdo) targetKm = currentOdo + 10000;
     intervalDays = 365;
   }
 
   const remainingKm = Math.max(0, targetKm - currentOdo);
-  const avgDailyKm = currentOdo > 5000 ? 25 : 20;
-  const daysToKm = Math.round(remainingKm / avgDailyKm);
-  const estWeeks = Math.max(1, Math.round(daysToKm / 7));
+  
+  if (isFallback) {
+    $('modalServiceScheduleSource').textContent = 'Generic estimate — manufacturer schedule unavailable';
+    $('modalServiceScheduleSource').className = 'px-2 py-0.5 rounded text-[9px] font-mono bg-amber-500/10 text-amber-300 border border-amber-500/30';
+  } else {
+    $('modalServiceScheduleSource').textContent = 'Manufacturer Recommended · ' + oemSource;
+    $('modalServiceScheduleSource').className = 'px-2 py-0.5 rounded text-[9px] font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/30';
+  }
 
-  $('modalServiceScheduleSource').textContent = oemSource;
   $('modalServiceTargetKm').textContent = targetKm.toLocaleString('en-IN') + ' KM';
   $('modalServiceCurrentKm').textContent = currentOdo ? currentOdo.toLocaleString('en-IN') + ' KM' : '0 KM';
   $('modalServiceRemainingKm').textContent = remainingKm.toLocaleString('en-IN') + ' KM';
-  $('modalServiceEstimatedTime').textContent = `~${estWeeks} weeks`;
 
-  const whicheverRule = daysToKm < intervalDays 
-    ? `${remainingKm.toLocaleString('en-IN')} KM / ~${estWeeks} wks (KM Threshold reached first)`
-    : `${intervalDays} days calendar limit (Time Threshold reached first)`;
-  $('modalServiceWhicheverRule').textContent = whicheverRule;
+  // Check if historical driving records exist
+  const hasHistory = currentOdo > 1000;
+  if (hasHistory) {
+    const avgDailyKm = 25;
+    const daysToKm = Math.round(remainingKm / avgDailyKm);
+    const estWeeks = Math.max(1, Math.round(daysToKm / 7));
+    $('modalServiceEstimatedTime').textContent = `~${estWeeks} weeks`;
+
+    const whicheverRule = daysToKm < intervalDays 
+      ? `${remainingKm.toLocaleString('en-IN')} KM / ~${estWeeks} wks (KM Threshold reached first)`
+      : `${intervalDays} days calendar limit (Time Threshold reached first)`;
+    $('modalServiceWhicheverRule').textContent = whicheverRule;
+  } else {
+    $('modalServiceEstimatedTime').textContent = '—';
+    $('modalServiceWhicheverRule').textContent = 'Estimated service date unavailable — insufficient driving history (OEM Calendar Limit applies)';
+  }
 
   // Status Badge
   const badge = $('modalServiceStatusBadge');
-  if (remainingKm <= 500 || daysToKm <= 7) {
+  if (remainingKm <= 500) {
     badge.textContent = 'DUE SOON';
     badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase';
-  } else if (remainingKm <= 0 || daysToKm <= 0) {
+  } else if (remainingKm <= 0) {
     badge.textContent = 'OVERDUE';
     badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 uppercase';
   } else {

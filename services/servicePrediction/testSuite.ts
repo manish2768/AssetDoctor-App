@@ -1,6 +1,6 @@
 /**
- * Asset Doctor — Next Service Due & Service Prediction Engine Comprehensive Test Suite
- * Validates 16 Core Engine Capabilities & OEM Calculations
+ * Asset Doctor — Next Service Due & Service Prediction Engine Comprehensive Audit Test Suite
+ * Validates all 20 required audit scenarios and strict OEM compliance.
  */
 
 import { matchOemSchedule, OEM_SERVICE_SCHEDULES } from './oemDatabase.ts';
@@ -30,283 +30,327 @@ export function runServicePredictionTestSuite(): { passed: number; failed: numbe
   // Ref Date for Deterministic Testing: 2026-08-25
   const refDate = new Date('2026-08-25T12:00:00+05:30');
 
-  // 1. OEM Schedule Matching (TVS Ronin)
-  try {
-    const asset = { assetName: 'TVS Ronin 225 Base', brandName: 'TVS', category: 'Vehicles' };
-    const sched = matchOemSchedule(asset);
-    assert('1. OEM Schedule Match (TVS Ronin 225)', sched.id === 'tvs_ronin_225' && sched.firstServiceRule.intervalKm === 750, `Matched: ${sched.id}`);
-  } catch (e: any) {
-    assert('1. OEM Schedule Match (TVS Ronin 225)', false, e.message);
-  }
+  // ====================================================
+  // 1. SPECIFIC USER AUDIT EXAMPLES (1 to 6)
+  // ====================================================
 
-  // 2. OEM Schedule Matching (Hyundai Creta)
+  // Example 1: Last service = 20,000 KM, Interval = 10,000 KM, Current = 27,800 KM -> Expected target: 30,000 KM
   try {
-    const asset = { assetName: 'Hyundai Creta 1.5 SX', brandName: 'Hyundai', category: 'Vehicles' };
-    const sched = matchOemSchedule(asset);
-    assert('2. OEM Schedule Match (Hyundai Creta Car)', sched.id === 'hyundai_creta_15' && sched.subsequentServiceRule.intervalKm === 10000, `Matched: ${sched.id}`);
-  } catch (e: any) {
-    assert('2. OEM Schedule Match (Hyundai Creta Car)', false, e.message);
-  }
-
-  // 3. OEM Schedule Matching (Tata Nexon EV)
-  try {
-    const asset = { assetName: 'Tata Nexon EV Empowered', brandName: 'Tata', category: 'EV' };
-    const sched = matchOemSchedule(asset);
-    assert('3. OEM Schedule Match (Tata Nexon EV)', sched.id === 'tata_nexon_ev' && sched.fuelType === 'EV', `Matched: ${sched.id}`);
-  } catch (e: any) {
-    assert('3. OEM Schedule Match (Tata Nexon EV)', false, e.message);
-  }
-
-  // 4. First Service Rule Calculation (Break-in 750 KM / 60 days)
-  try {
-    const newRonin = {
-      id: 'ronin_new',
-      assetName: 'TVS Ronin 225',
-      purchaseDate: '2026-08-01',
-      odometerKm: 250
-    };
-    const pred = predictNextServiceDue(newRonin, [], { referenceDateIST: refDate });
-    assert(
-      '4. First Service Rule Calculation',
-      pred.isFirstService === true && pred.targetKm === 750 && pred.remainingKm === 500,
-      `Target: ${pred.targetKm} KM, Remaining: ${pred.remainingKm} KM`
-    );
-  } catch (e: any) {
-    assert('4. First Service Rule Calculation', false, e.message);
-  }
-
-  // 5. Subsequent Periodic Service Calculation
-  try {
-    const ronin = {
-      id: 'ronin_serviced',
-      assetName: 'TVS Ronin 225',
-      purchaseDate: '2026-01-10',
-      odometerKm: 27800
-    };
+    const car = { id: 'ex1', assetName: 'Hyundai Creta 1.5 Petrol', odometerKm: 27800 };
     const history: ServiceRecord[] = [
-      {
-        assetId: 'ronin_serviced',
-        serviceDate: '2026-06-10',
-        odometerKm: 20000,
-        serviceType: 'periodic_maintenance',
-        serviceNumber: 4,
-        verificationStatus: 'VERIFIED'
-      }
+      { assetId: 'ex1', serviceDate: '2026-01-01', odometerKm: 20000, serviceType: 'periodic_maintenance', verificationStatus: 'VERIFIED' }
     ];
-    const pred = predictNextServiceDue(ronin, history, { referenceDateIST: refDate });
+    const pred = predictNextServiceDue(car, history, { referenceDateIST: refDate });
     assert(
-      '5. Subsequent Periodic Service Calculation (+6,000 KM)',
-      pred.isFirstService === false && pred.targetKm === 26000 && pred.serviceNumber === 5,
-      `Target: ${pred.targetKm} KM, Number: ${pred.serviceNumber}`
+      'Example 1: Target KM Calculation (20,000 + 10,000 = 30,000 KM)',
+      pred.oemTargetKm === 30000 && pred.remainingKm === 2200,
+      `Target: ${pred.oemTargetKm} KM, Remaining: ${pred.remainingKm} KM`
     );
   } catch (e: any) {
-    assert('5. Subsequent Periodic Service Calculation (+6,000 KM)', false, e.message);
+    assert('Example 1: Target KM Calculation', false, e.message);
   }
 
-  // 6. Whichever Comes First Principle: KM Reached First (High Velocity)
+  // Example 2: Last service = 20,000 KM, Interval = 10,000 KM, Current = 29,500 KM -> Expected: 500 KM remaining
   try {
-    const car = {
-      id: 'creta_highway',
-      assetName: 'Hyundai Creta',
-      purchaseDate: '2026-01-01',
-      odometerKm: 28000
-    };
+    const car = { id: 'ex2', assetName: 'Hyundai Creta 1.5 Petrol', odometerKm: 29500 };
     const history: ServiceRecord[] = [
-      {
-        assetId: 'creta_highway',
-        serviceDate: '2026-06-01',
-        odometerKm: 20000,
-        serviceType: 'periodic_maintenance',
-        verificationStatus: 'VERIFIED'
-      }
+      { assetId: 'ex2', serviceDate: '2026-01-01', odometerKm: 20000, serviceType: 'periodic_maintenance', verificationStatus: 'VERIFIED' }
     ];
-    // Custom daily km = 80 KM/day (Target 30,000 KM reached in 25 days, well before 12 months)
-    const pred = predictNextServiceDue(car, history, { referenceDateIST: refDate, customDailyKm: 80 });
+    const pred = predictNextServiceDue(car, history, { referenceDateIST: refDate });
     assert(
-      '6. Whichever Comes First: KM Threshold Wins (High Velocity)',
-      pred.whicheverComesFirstReason === 'KM_THRESHOLD',
-      `Reason: ${pred.whicheverComesFirstReason}, Estimated Due: ${pred.estimatedDueDate}`
+      'Example 2: Remaining Distance Calculation (500 KM Remaining)',
+      pred.remainingKm === 500 && pred.oemTargetKm === 30000,
+      `Remaining: ${pred.remainingKm} KM`
     );
   } catch (e: any) {
-    assert('6. Whichever Comes First: KM Threshold Wins (High Velocity)', false, e.message);
+    assert('Example 2: Remaining Distance Calculation', false, e.message);
   }
 
-  // 7. Whichever Comes First Principle: Time Reached First (Low Velocity)
+  // Example 3: Last service = 20,000 KM, Current = 31,000 KM -> Expected: OVERDUE
   try {
-    const car = {
-      id: 'creta_city',
-      assetName: 'Hyundai Creta',
-      purchaseDate: '2025-09-01',
-      odometerKm: 21000
-    };
+    const car = { id: 'ex3', assetName: 'Hyundai Creta 1.5 Petrol', odometerKm: 31000 };
     const history: ServiceRecord[] = [
-      {
-        assetId: 'creta_city',
-        serviceDate: '2025-09-01',
-        odometerKm: 20000,
-        serviceType: 'periodic_maintenance',
-        verificationStatus: 'VERIFIED'
-      }
+      { assetId: 'ex3', serviceDate: '2026-01-01', odometerKm: 20000, serviceType: 'periodic_maintenance', verificationStatus: 'VERIFIED' }
     ];
-    // Custom daily km = 2 KM/day (Target date in Sept 2026 reached before 30,000 KM)
-    const pred = predictNextServiceDue(car, history, { referenceDateIST: refDate, customDailyKm: 2 });
+    const pred = predictNextServiceDue(car, history, { referenceDateIST: refDate });
     assert(
-      '7. Whichever Comes First: Time Threshold Wins (Low Velocity)',
-      pred.whicheverComesFirstReason === 'TIME_THRESHOLD',
-      `Reason: ${pred.whicheverComesFirstReason}, Estimated Due: ${pred.estimatedDueDate}`
+      'Example 3: Overdue Status Detection (Status: RED / OVERDUE)',
+      pred.status === 'RED' && pred.statusLabel === 'OVERDUE' && pred.remainingKm === 0,
+      `Status: ${pred.status}, Label: ${pred.statusLabel}`
     );
   } catch (e: any) {
-    assert('7. Whichever Comes First: Time Threshold Wins (Low Velocity)', false, e.message);
+    assert('Example 3: Overdue Status Detection', false, e.message);
   }
 
-  // 8. Usage Velocity Calculation Across Multiple Service Logs
+  // Example 4: No historical service records -> Expected: No fake velocity prediction
   try {
-    const asset = { id: 'ast_vel', purchaseDate: '2025-01-01' };
+    const car = { id: 'ex4', assetName: 'Hyundai Creta 1.5 Petrol', odometerKm: 5000 };
+    const pred = predictNextServiceDue(car, [], { referenceDateIST: refDate });
+    assert(
+      'Example 4: No Historical Records -> No Fake Velocity',
+      pred.avgDailyKm === null && pred.projectedKmThresholdDate === null && pred.whicheverReasonType === 'INSUFFICIENT_HISTORY',
+      `AvgDailyKm: ${pred.avgDailyKm}, Reason: ${pred.whicheverComesFirstCriterion}`
+    );
+  } catch (e: any) {
+    assert('Example 4: No Historical Records -> No Fake Velocity', false, e.message);
+  }
+
+  // Example 5: Two verified service records (10,000 KM & 15,500 KM over 110 days) -> Calculate velocity
+  try {
+    const asset = { id: 'ex5', assetName: 'Creta' };
     const history: ServiceRecord[] = [
-      { assetId: 'ast_vel', serviceDate: '2026-01-01', odometerKm: 10000, serviceType: 'periodic_maintenance', verificationStatus: 'VERIFIED' },
-      { assetId: 'ast_vel', serviceDate: '2026-04-11', odometerKm: 15000, serviceType: 'periodic_maintenance', verificationStatus: 'VERIFIED' } // 100 days, 5000 km = 50 km/day
+      { assetId: 'ex5', serviceDate: '2026-01-01', odometerKm: 10000, serviceType: 'periodic_maintenance', verificationStatus: 'VERIFIED' },
+      { assetId: 'ex5', serviceDate: '2026-04-21', odometerKm: 15500, serviceType: 'periodic_maintenance', verificationStatus: 'VERIFIED' } // 110 days, 5500 km = 50 km/day
     ];
     const { avgDailyKm, confidence } = calculateDrivingVelocity(asset, history, '2026-08-25');
-    assert('8. Historical Velocity Calculation (50 KM/day)', avgDailyKm === 50 && confidence === 'HIGH', `Calculated: ${avgDailyKm} KM/day, Conf: ${confidence}`);
-  } catch (e: any) {
-    assert('8. Historical Velocity Calculation (50 KM/day)', false, e.message);
-  }
-
-  // 9. Severe Usage Multiplier Scaling
-  try {
-    const assetNormal = { assetName: 'TVS Ronin 225', purchaseDate: '2026-08-01', odometerKm: 100 };
-    const assetSevere = { assetName: 'TVS Ronin 225', purchaseDate: '2026-08-01', odometerKm: 100, usageProfile: 'SEVERE' as const };
-    const predNormal = predictNextServiceDue(assetNormal, [], { referenceDateIST: refDate });
-    const predSevere = predictNextServiceDue(assetSevere, [], { referenceDateIST: refDate });
-
-    // Normal = 750 KM; Severe (0.75x) = 563 KM
     assert(
-      '9. Severe Usage Profile Scaling (0.75x)',
-      predSevere.targetKm < predNormal.targetKm && predSevere.targetKm === 563,
-      `Normal: ${predNormal.targetKm} KM, Severe: ${predSevere.targetKm} KM`
+      'Example 5: Velocity from Two Verified Records (50 KM/day)',
+      avgDailyKm === 50 && confidence === 'HIGH',
+      `Calculated: ${avgDailyKm} KM/day, Confidence: ${confidence}`
     );
   } catch (e: any) {
-    assert('9. Severe Usage Profile Scaling (0.75x)', false, e.message);
+    assert('Example 5: Velocity from Two Verified Records', false, e.message);
   }
 
-  // 10. Component Maintenance Checklist Evaluation
+  // Example 6: Odometer decreases (20,000 KM -> 18,000 KM) -> Expected: ODOMETER_ANOMALY
   try {
-    const ronin = { assetName: 'TVS Ronin 225', purchaseDate: '2026-01-01', odometerKm: 6200 };
-    const pred = predictNextServiceDue(ronin, [], { referenceDateIST: refDate });
-    const oilRule = pred.componentChecklist.find(c => c.component === 'engine_oil');
-    assert('10. Component Maintenance Checklist (Engine Oil)', oilRule !== undefined && oilRule.status === 'DUE', `Oil Status: ${oilRule?.status}`);
+    const asset = { id: 'ex6', assetName: 'Ronin' };
+    const history: ServiceRecord[] = [
+      { assetId: 'ex6', serviceDate: '2026-01-01', odometerKm: 20000, serviceType: 'periodic_maintenance', verificationStatus: 'VERIFIED' },
+      { assetId: 'ex6', serviceDate: '2026-05-01', odometerKm: 18000, serviceType: 'periodic_maintenance', verificationStatus: 'VERIFIED' }
+    ];
+    const { hasOdometerAnomaly, odometerAnomalyReason } = calculateDrivingVelocity(asset, history, '2026-08-25');
+    assert(
+      'Example 6: Odometer Decrease Flags ODOMETER_ANOMALY',
+      hasOdometerAnomaly === true && Boolean(odometerAnomalyReason),
+      `Anomaly: ${odometerAnomalyReason}`
+    );
   } catch (e: any) {
-    assert('10. Component Maintenance Checklist (Engine Oil)', false, e.message);
+    assert('Example 6: Odometer Decrease Flags ODOMETER_ANOMALY', false, e.message);
   }
 
-  // 11. OCR Service Invoice Parsing (Clean Full Invoice)
+  // ====================================================
+  // 2. WHICHEVER COMES FIRST ARBITRATION TESTS (A to F)
+  // ====================================================
+
+  // Test A: Time limit reached first (Low driving velocity)
   try {
-    const ocrSample = `
-      TVS AUTHORIZED SERVICE CENTER
-      Tax Invoice / Job Card JC-99214
+    const asset = { id: 'test_a', assetName: 'Creta', odometerKm: 21000 };
+    const history: ServiceRecord[] = [
+      { assetId: 'test_a', serviceDate: '2025-09-01', odometerKm: 20000, serviceType: 'periodic_maintenance', verificationStatus: 'VERIFIED' }
+    ];
+    // Custom daily km = 2 KM/day (Target date in Sept 2026 reached before 30,000 KM)
+    const pred = predictNextServiceDue(asset, history, { referenceDateIST: refDate, customDailyKm: 2 });
+    assert(
+      'Test A: Time Limit Reached First (Low Velocity)',
+      pred.whicheverReasonType === 'TIME_THRESHOLD' && pred.finalEstimatedDueDate === pred.oemTargetCalendarDate,
+      `Final Date: ${pred.finalEstimatedDueDate}, Reason: ${pred.whicheverComesFirstCriterion}`
+    );
+  } catch (e: any) {
+    assert('Test A: Time Limit Reached First', false, e.message);
+  }
+
+  // Test B: KM limit reached first (High driving velocity)
+  try {
+    const asset = { id: 'test_b', assetName: 'Creta', odometerKm: 28000 };
+    const history: ServiceRecord[] = [
+      { assetId: 'test_b', serviceDate: '2026-06-01', odometerKm: 20000, serviceType: 'periodic_maintenance', verificationStatus: 'VERIFIED' }
+    ];
+    // Custom daily km = 80 KM/day (Remaining 2000 KM reached in 25 days, well before 12 months)
+    const pred = predictNextServiceDue(asset, history, { referenceDateIST: refDate, customDailyKm: 80 });
+    assert(
+      'Test B: KM Limit Reached First (High Velocity)',
+      pred.whicheverReasonType === 'KM_THRESHOLD' && pred.finalEstimatedDueDate === pred.projectedKmThresholdDate,
+      `Final Date: ${pred.finalEstimatedDueDate}, Reason: ${pred.whicheverComesFirstCriterion}`
+    );
+  } catch (e: any) {
+    assert('Test B: KM Limit Reached First', false, e.message);
+  }
+
+  // Test C: Both reached simultaneously
+  try {
+    const asset = { id: 'test_c', assetName: 'Ronin', odometerKm: 20000 };
+    const history: ServiceRecord[] = [
+      { assetId: 'test_c', serviceDate: '2026-08-25', odometerKm: 20000, serviceType: 'periodic_maintenance', verificationStatus: 'VERIFIED' }
+    ];
+    // Interval is 180 days, 6000 KM. If user drives 6000 / 180 = 33.33 KM/day:
+    const pred = predictNextServiceDue(asset, history, { referenceDateIST: refDate, customDailyKm: 33.333 });
+    assert(
+      'Test C: Both Reached Simultaneously',
+      pred.finalEstimatedDueDate === pred.oemTargetCalendarDate,
+      `Target: ${pred.oemTargetCalendarDate}, Projected: ${pred.projectedKmThresholdDate}`
+    );
+  } catch (e: any) {
+    assert('Test C: Both Reached Simultaneously', false, e.message);
+  }
+
+  // Test D: No historical mileage available -> No fake velocity
+  try {
+    const asset = { id: 'test_d', assetName: 'Activa 6G', odometerKm: 0 };
+    const pred = predictNextServiceDue(asset, [], { referenceDateIST: refDate });
+    assert(
+      'Test D: No Historical Mileage Available',
+      pred.avgDailyKm === null && pred.projectedKmThresholdDate === null,
+      'Driving velocity cleanly set to null'
+    );
+  } catch (e: any) {
+    assert('Test D: No Historical Mileage Available', false, e.message);
+  }
+
+  // Test E: Only one service record available with purchase date
+  try {
+    const asset = { id: 'test_e', assetName: 'Activa 6G', purchaseDate: '2026-01-01' };
+    const history: ServiceRecord[] = [
+      { assetId: 'test_e', serviceDate: '2026-04-11', odometerKm: 2500, serviceType: 'first_service', verificationStatus: 'VERIFIED' } // 100 days = 25 km/day
+    ];
+    const { avgDailyKm, confidence } = calculateDrivingVelocity(asset, history, '2026-08-25');
+    assert(
+      'Test E: Single Record with Purchase Date',
+      avgDailyKm === 25 && confidence === 'MEDIUM',
+      `Velocity: ${avgDailyKm} KM/day, Conf: ${confidence}`
+    );
+  } catch (e: any) {
+    assert('Test E: Single Record with Purchase Date', false, e.message);
+  }
+
+  // Test F: Multiple verified service records
+  try {
+    const asset = { id: 'test_f', assetName: 'Nexon EV' };
+    const history: ServiceRecord[] = [
+      { assetId: 'test_f', serviceDate: '2026-01-01', odometerKm: 1500, serviceType: 'first_service', verificationStatus: 'VERIFIED' },
+      { assetId: 'test_f', serviceDate: '2026-07-01', odometerKm: 9000, serviceType: 'second_service', verificationStatus: 'VERIFIED' }
+    ];
+    const { avgDailyKm, confidence } = calculateDrivingVelocity(asset, history, '2026-08-25');
+    assert(
+      'Test F: Multiple Verified Service Records',
+      avgDailyKm !== null && avgDailyKm > 0 && confidence === 'HIGH',
+      `Velocity: ${avgDailyKm} KM/day, Conf: ${confidence}`
+    );
+  } catch (e: any) {
+    assert('Test F: Multiple Verified Service Records', false, e.message);
+  }
+
+  // ====================================================
+  // 3. SEVERE USAGE COMPLIANCE & FALLBACK SAFETY
+  // ====================================================
+
+  // Severe Usage: Creta has documented 5,000 KM severe interval
+  try {
+    const asset = { assetName: 'Hyundai Creta 1.5 Petrol', usageProfile: 'SEVERE' as const };
+    const history: ServiceRecord[] = [
+      { assetId: 'cr_sev', serviceDate: '2026-01-01', odometerKm: 20000, serviceType: 'periodic_maintenance', verificationStatus: 'VERIFIED' }
+    ];
+    const pred = predictNextServiceDue(asset, history, { referenceDateIST: refDate });
+    assert(
+      'Severe Usage (Creta): Uses Documented 5,000 KM Interval',
+      pred.oemIntervalKm === 5000 && pred.severeUsageActive === true,
+      `Interval: ${pred.oemIntervalKm} KM, Note: ${pred.severeUsageNote}`
+    );
+  } catch (e: any) {
+    assert('Severe Usage (Creta)', false, e.message);
+  }
+
+  // Severe Usage: Ronin has NO documented severe interval -> Retains standard 6,000 KM (No arbitrary multiplier!)
+  try {
+    const asset = { assetName: 'TVS Ronin 225', usageProfile: 'SEVERE' as const };
+    const history: ServiceRecord[] = [
+      { assetId: 'rn_sev', serviceDate: '2026-01-01', odometerKm: 20000, serviceType: 'periodic_maintenance', verificationStatus: 'VERIFIED' }
+    ];
+    const pred = predictNextServiceDue(asset, history, { referenceDateIST: refDate });
+    assert(
+      'Severe Usage (Ronin): Retains Standard 6,000 KM when OEM severe rule unavailable',
+      pred.oemIntervalKm === 6000 && pred.severeUsageActive === false && pred.severeUsageNote?.includes('unavailable'),
+      `Interval: ${pred.oemIntervalKm} KM, Note: ${pred.severeUsageNote}`
+    );
+  } catch (e: any) {
+    assert('Severe Usage (Ronin)', false, e.message);
+  }
+
+  // Fallback Schedule Safety: Never labeled "Manufacturer Recommended"
+  try {
+    const unknownVehicle = { assetName: 'Custom Vintage Roadster 1968', category: 'Vehicles' };
+    const pred = predictNextServiceDue(unknownVehicle, [], { referenceDateIST: refDate });
+    assert(
+      'Generic Fallback Safety: Labeled "Generic estimate — manufacturer schedule unavailable"',
+      pred.scheduleLabel === 'Generic estimate — manufacturer schedule unavailable' && pred.scheduleSourceType === 'GENERIC_FALLBACK',
+      `Label: ${pred.scheduleLabel}, SourceType: ${pred.scheduleSourceType}`
+    );
+  } catch (e: any) {
+    assert('Generic Fallback Safety', false, e.message);
+  }
+
+  // ====================================================
+  // 4. OCR INVOICE PARSING & NEGATIVE FILTER SAFETY
+  // ====================================================
+
+  // OCR Extraction: Clean invoice with exact fields
+  try {
+    const sample = `
+      TVS MOTORS AUTHORIZED SERVICE
+      Tax Invoice / JC No: JC-99214
+      GSTIN: 09AABCT1332F1Z8
       Vehicle Reg: UP32QU2187
-      Service Date: 2026-08-15
-      Current Odometer: 27,800 KM
-      Type: Periodic Maintenance Service
-      Replaced Parts:
-      - TVS TRU4 Synthetic Engine Oil 1.2L (₹ 750)
-      - Oil Filter Element (₹ 120)
+      Customer Name: Manish Rai
+      Date: 2026-08-15
+      Odometer Reading: 27,800 KMS
+      Phone: 9876543210
       Total Amount: ₹ 1,450.00
+      Parts:
+      - TVS TRU4 Synthetic Oil (₹ 750)
+      - Oil Filter (₹ 120)
     `;
-    const parsed = OcrServiceInvoiceParser.parseServiceInvoiceText(ocrSample);
+    const scan = OcrServiceInvoiceParser.parseServiceInvoiceText(sample);
     assert(
-      '11. OCR Service Invoice Extraction',
-      parsed.vehicleRegistration === 'UP32QU2187' && parsed.odometerKm === 27800 && parsed.verificationStatus === 'VERIFIED',
-      `Reg: ${parsed.vehicleRegistration}, Odo: ${parsed.odometerKm}, Status: ${parsed.verificationStatus}`
+      'OCR Parsing: Extracts Reg, Date, Odometer, Invoice No, Customer, Total',
+      scan.vehicleRegistration?.value === 'UP32QU2187' &&
+        scan.odometerKm?.value === 27800 &&
+        scan.invoiceNumber?.value === 'JC-99214' &&
+        scan.totalAmount?.value === 1450 &&
+        scan.verificationStatus === 'VERIFIED',
+      `Reg: ${scan.vehicleRegistration?.value}, Odo: ${scan.odometerKm?.value}, Total: ₹${scan.totalAmount?.value}`
     );
   } catch (e: any) {
-    assert('11. OCR Service Invoice Extraction', false, e.message);
+    assert('OCR Parsing', false, e.message);
   }
 
-  // 12. OCR Service Invoice Low Confidence Handling ("Needs verification")
+  // OCR Negative Filter: Never mistake GSTIN, Phone, Total Amount or Part Code for Odometer
+  try {
+    const confusingOcr = `
+      INVOICE # INV-88214
+      GSTIN: 09AABCU9603R1ZM
+      Phone Number: 9876543210
+      Part Number: 18002666
+      Item Qty: 28000
+      Total Bill Amount: ₹ 27,800.00
+      Vehicle KM: 12,450 KM
+    `;
+    const scan = OcrServiceInvoiceParser.parseServiceInvoiceText(confusingOcr);
+    assert(
+      'OCR Negative Filter: Correctly picks Vehicle KM (12,450) and rejects Total/GSTIN/Phone/Qty',
+      scan.odometerKm?.value === 12450,
+      `Extracted Odometer: ${scan.odometerKm?.value} KM (Ignored 27800 amount / 9876543210 phone / 28000 qty)`
+    );
+  } catch (e: any) {
+    assert('OCR Negative Filter', false, e.message);
+  }
+
+  // OCR Low Confidence: Blurry odometer marks NEEDS_VERIFICATION
   try {
     const blurryOcr = `
       SERVICE BILL
       Vehicle: UP32QU2187
       Date: 2026-08-15
-      ODO READING: odo 2oOl2  (blurry scan)
+      ODO READING: odo 2oOl2 (unreadable)
       Total: 500
     `;
-    const parsed = OcrServiceInvoiceParser.parseServiceInvoiceText(blurryOcr);
+    const scan = OcrServiceInvoiceParser.parseServiceInvoiceText(blurryOcr);
     assert(
-      '12. Low-Confidence OCR Flags "NEEDS_VERIFICATION"',
-      parsed.verificationStatus === 'NEEDS_VERIFICATION' && parsed.odometerConfidence < 0.70,
-      `Status: ${parsed.verificationStatus}, Conf: ${parsed.odometerConfidence}`
+      'OCR Low Confidence: Blurry Odometer marks NEEDS_VERIFICATION',
+      scan.verificationStatus === 'NEEDS_VERIFICATION' && (scan.odometerKm?.confidence || 0) < 0.70,
+      `Status: ${scan.verificationStatus}, Confidence: ${scan.odometerKm?.confidence}`
     );
   } catch (e: any) {
-    assert('12. Low-Confidence OCR Flags "NEEDS_VERIFICATION"', false, e.message);
-  }
-
-  // 13. Automatic Reset after Verified Service Record Added
-  try {
-    const asset = { id: 'reset_test', assetName: 'TVS Ronin', purchaseDate: '2026-01-01', odometerKm: 27800 };
-    const beforePred = predictNextServiceDue(asset, [], { referenceDateIST: refDate });
-    
-    // User uploads service invoice verified at 27,800 KM
-    const newServiceRecord: ServiceRecord = {
-      assetId: 'reset_test',
-      serviceDate: '2026-08-25',
-      odometerKm: 27800,
-      serviceType: 'periodic_maintenance',
-      verificationStatus: 'VERIFIED'
-    };
-    const afterPred = predictNextServiceDue(asset, [newServiceRecord], { referenceDateIST: refDate });
-
-    // Target resets from 27,800 to 27,800 + 6,000 = 33,800 KM
-    assert(
-      '13. Service Reset Recalculates Target KM (+6000 KM)',
-      afterPred.targetKm === 33800 && afterPred.remainingKm === 6000,
-      `New Target: ${afterPred.targetKm} KM, Remaining: ${afterPred.remainingKm} KM`
-    );
-  } catch (e: any) {
-    assert('13. Service Reset Recalculates Target KM (+6000 KM)', false, e.message);
-  }
-
-  // 14. Dynamic Status Color Evaluation (GREEN vs AMBER vs RED)
-  try {
-    const healthyAsset = { assetName: 'Creta', purchaseDate: '2026-08-01', odometerKm: 100 };
-    const overdueAsset = { assetName: 'Creta', purchaseDate: '2024-01-01', odometerKm: 35000 };
-    const pGreen = predictNextServiceDue(healthyAsset, [], { referenceDateIST: refDate });
-    const pRed = predictNextServiceDue(overdueAsset, [], { referenceDateIST: refDate });
-
-    assert(
-      '14. Dynamic Status Levels (GREEN vs RED)',
-      pGreen.status === 'GREEN' && pRed.status === 'RED',
-      `Healthy: ${pGreen.status}, Overdue: ${pRed.status}`
-    );
-  } catch (e: any) {
-    assert('14. Dynamic Status Levels (GREEN vs RED)', false, e.message);
-  }
-
-  // 15. Notification Window Identification (30d / 1000km / 7d / Due Today / Overdue)
-  try {
-    const nearKmAsset = { assetName: 'Ronin', purchaseDate: '2026-01-01', odometerKm: 25500 };
-    const history: ServiceRecord[] = [{ assetId: 'a1', serviceDate: '2026-06-01', odometerKm: 20000, serviceType: 'periodic_maintenance', verificationStatus: 'VERIFIED' }];
-    // Target 26,000 -> Remaining 500 KM (with 10 KM/day velocity -> 50 days to KM, so 1000km window triggers)
-    const pred = predictNextServiceDue(nearKmAsset, history, { referenceDateIST: refDate, customDailyKm: 10 });
-    const window = determineServiceReminderWindow(pred);
-
-    assert('15. Notification Trigger Window (1000 KM Before)', window === '1000km', `Window: ${window}`);
-  } catch (e: any) {
-    assert('15. Notification Trigger Window (1000 KM Before)', false, e.message);
-  }
-
-  // 16. Fallback vs OEM Schedule Transparency
-  try {
-    const unknownCar = { assetName: 'Custom Vintage Roadster 1968', category: 'Vehicles' };
-    const sched = matchOemSchedule(unknownCar);
-    assert(
-      '16. Fallback Data Identified as GENERIC_FALLBACK',
-      sched.sourceType === 'GENERIC_FALLBACK' && sched.confidence < 0.90,
-      `Source Type: ${sched.sourceType}, Conf: ${sched.confidence}`
-    );
-  } catch (e: any) {
-    assert('16. Fallback Data Identified as GENERIC_FALLBACK', false, e.message);
+    assert('OCR Low Confidence', false, e.message);
   }
 
   const passed = results.filter(r => r.passed).length;

@@ -1,5 +1,6 @@
 /**
  * Asset Doctor — Next Service Due & Service Prediction Engine Types
+ * Strictly implements OEM specifications, historical driving velocity, and safety bounds.
  */
 
 export type VehicleType = 'Car' | 'Motorcycle' | 'Scooter' | 'EV' | 'Commercial' | 'Other';
@@ -52,34 +53,51 @@ export interface ServiceStepDefinition {
   components: ComponentMaintenanceRule[];
 }
 
+export interface ServiceIntervalDefinition {
+  intervalKm: number;
+  intervalDays: number;
+  toleranceKm?: number;
+  toleranceDays?: number;
+}
+
 export interface OemServiceSchedule {
   id: string;
   manufacturer: string;
   model: string;
-  variant?: string;
-  modelYear?: number | string;
-  vehicleType: VehicleType;
+  variant: string;
+  modelYear: number | string;
   fuelType: FuelType;
   engineCc?: number;
-  firstServiceRule: {
+  vehicleType: VehicleType;
+  firstServiceRule: ServiceIntervalDefinition;
+  subsequentServiceRule: ServiceIntervalDefinition;
+  /**
+   * Specific severe-usage interval if explicitly documented by the OEM.
+   * Null if not documented (never synthesized or estimated).
+   */
+  severeSubsequentRule?: {
     intervalKm: number;
     intervalDays: number;
-    toleranceKm?: number;
-    toleranceDays?: number;
-  };
-  subsequentServiceRule: {
-    intervalKm: number;
-    intervalDays: number;
-    toleranceKm?: number;
-    toleranceDays?: number;
-  };
+    source: string;
+  } | null;
   serviceSteps: ServiceStepDefinition[];
   componentRules: ComponentMaintenanceRule[];
-  severeUsageMultiplier: number; // e.g. 0.75 for KM, 0.75 for time
   source: string;
+  sourceUrl?: string;
   sourceType: 'OFFICIAL_MANUAL' | 'OFFICIAL_PORTAL' | 'AUTHORIZED_SERVICE_DOC' | 'GENERIC_FALLBACK';
+  sourceDate: string;
   sourceVersion: string;
   confidence: number;
+  sourceVerificationStatus: 'VERIFIED' | 'NEEDS_SOURCE_VERIFICATION';
+}
+
+export interface ExtractedField<T> {
+  value: T;
+  confidence: number; // 0.0 to 1.0
+  raw_text: string;
+  source: string;
+  bounding_box?: { x: number; y: number; width: number; height: number };
+  verification_level: 'VERIFIED' | 'NEEDS_REVIEW' | 'NEEDS_VERIFICATION';
 }
 
 export interface ServiceRecord {
@@ -95,7 +113,7 @@ export interface ServiceRecord {
   cost?: number;
   replacedComponents?: ComponentType[];
   ocrConfidence?: number;
-  verificationStatus: 'VERIFIED' | 'NEEDS_VERIFICATION' | 'REJECTED';
+  verificationStatus: 'VERIFIED' | 'NEEDS_REVIEW' | 'NEEDS_VERIFICATION' | 'REJECTED';
   notes?: string;
   createdAt?: string;
 }
@@ -120,24 +138,47 @@ export interface NextServicePredictionResult {
   currentOdometerKm: number;
   lastServiceDate?: string;
   lastServiceOdometerKm?: number;
-  targetKm: number;
-  targetDate: string; // YYYY-MM-DD based on calendar rule
+  
+  // Official OEM Parameters (Unmodified)
+  oemTargetKm: number;
+  oemTargetCalendarDate: string; // YYYY-MM-DD (Official manufacturer calendar limit)
+  oemIntervalKm: number;
+  oemIntervalDays: number;
+  
   remainingKm: number;
   remainingDays: number;
-  estimatedDueDate: string; // YYYY-MM-DD whichever comes first
-  whicheverComesFirstReason: 'KM_THRESHOLD' | 'TIME_THRESHOLD';
-  estimatedDaysToReachKm: number;
-  estimatedWeeks: number;
-  avgDailyKm: number;
-  avgMonthlyKm: number;
+  
+  // Driving Velocity & Projection
+  avgDailyKm: number | null; // null if insufficient history
+  avgMonthlyKm: number | null; // null if insufficient history
+  hasDrivingHistory: boolean;
+  projectedKmThresholdDate: string | null; // YYYY-MM-DD date when target KM is reached (or null)
+  
+  // Final Decision (Whichever Comes First)
+  finalEstimatedDueDate: string; // YYYY-MM-DD
+  whicheverComesFirstCriterion: string; // e.g. "KM threshold reached first", "OEM calendar limit reached first", "OEM Calendar Limit (Insufficient history)"
+  whicheverReasonType: 'KM_THRESHOLD' | 'TIME_THRESHOLD' | 'INSUFFICIENT_HISTORY';
+  estimatedDaysToReachKm: number | null;
+  estimatedWeeks: number | null;
+  
+  // Status & Anomaly Flags
   status: 'GREEN' | 'AMBER' | 'RED';
   statusLabel: 'HEALTHY' | 'DUE_SOON' | 'OVERDUE';
-  predictionConfidence: 'HIGH' | 'MEDIUM' | 'ESTIMATED';
+  predictionConfidence: 'HIGH' | 'MEDIUM' | 'INSUFFICIENT_HISTORY' | 'ESTIMATED';
+  hasOdometerAnomaly: boolean;
+  odometerAnomalyReason?: string;
+  
+  // Provenance & Schedule Meta
   scheduleSource: string;
+  scheduleSourceUrl?: string;
   scheduleSourceType: 'OFFICIAL_MANUAL' | 'OFFICIAL_PORTAL' | 'AUTHORIZED_SERVICE_DOC' | 'GENERIC_FALLBACK';
   scheduleVersion: string;
+  scheduleLabel: string; // "Manufacturer Recommended" vs "Generic estimate — manufacturer schedule unavailable"
+  
   isFirstService: boolean;
   severeUsageActive: boolean;
+  severeUsageNote?: string;
+  
   componentChecklist: ComponentChecklistItem[];
   calculatedAt: string;
 }

@@ -61,7 +61,7 @@ export function evaluateAssetServiceReminder(
   let idempotencyKey: string | undefined;
 
   if (window !== 'none') {
-    idempotencyKey = `${ownerUid}_${assetId}_service_${prediction.targetKm}_${prediction.estimatedDueDate}_${window}`;
+    idempotencyKey = `${ownerUid}_${assetId}_service_${prediction.oemTargetKm}_${prediction.finalEstimatedDueDate}_${window}`;
   }
 
   return {
@@ -69,10 +69,10 @@ export function evaluateAssetServiceReminder(
     assetName: prediction.assetName,
     ownerUid,
     identifier: prediction.identifier,
-    targetKm: prediction.targetKm,
+    targetKm: prediction.oemTargetKm,
     remainingKm: prediction.remainingKm,
     remainingDays: prediction.remainingDays,
-    estimatedDueDate: prediction.estimatedDueDate,
+    estimatedDueDate: prediction.finalEstimatedDueDate,
     reminderWindow: window,
     idempotencyKey,
     prediction
