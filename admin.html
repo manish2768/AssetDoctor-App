@@ -86,7 +86,7 @@
         <div class="space-y-3">
           <div>
             <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Staff Email</label>
-            <input id="loginEmail" type="email" placeholder="admin@assetdoctor.in" autocomplete="username"
+            <input id="loginEmail" type="email" placeholder="manish2768@gmail.com" autocomplete="username"
               class="mt-1.5 w-full rounded-xl bg-slate-900/80 border border-white/10 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition" />
           </div>
           <div>
@@ -109,7 +109,7 @@
       <div id="resetCard" class="hidden mt-4">
         <h3 class="text-white font-bold text-sm mb-1">Reset Staff Password</h3>
         <p class="text-slate-400 text-xs mb-3">A secure password reset link will be sent to your verified staff email.</p>
-        <input id="resetEmail" type="email" placeholder="admin@assetdoctor.in"
+        <input id="resetEmail" type="email" placeholder="manish2768@gmail.com"
           class="w-full rounded-xl bg-slate-900/80 border border-white/10 px-3.5 py-2 text-sm text-white placeholder-slate-500" />
         <div class="flex gap-2 mt-3">
           <button id="btnSendReset" class="flex-1 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold py-2">Send Link</button>
@@ -694,7 +694,7 @@ auth.onAuthStateChanged(async (user) => {
   try {
     const tokenResult = await user.getIdTokenResult(true);
     const userEmail = (user.email || '').toLowerCase().trim();
-    const isOwnerStaff = ['manish2768@gmail.com', 'admin@assetdoctor.in'].includes(userEmail);
+    const isOwnerStaff = userEmail === 'manish2768@gmail.com';
     const hasAdminClaim = tokenResult.claims && (
       tokenResult.claims.admin === true ||
       ['super_admin', 'admin', 'support_agent', 'ocr_reviewer', 'analytics_viewer'].includes(tokenResult.claims.role)

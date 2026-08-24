@@ -33,7 +33,7 @@ service cloud.firestore {
       return isSignedIn() && (
         request.auth.token.get('admin', false) == true ||
         getRole() == 'super_admin' ||
-        request.auth.token.get('email', '') in ['manish2768@gmail.com', 'admin@assetdoctor.in']
+        request.auth.token.get('email', '') == 'manish2768@gmail.com'
       );
     }
 
@@ -41,7 +41,7 @@ service cloud.firestore {
       return isSignedIn() && (
         request.auth.token.get('admin', false) == true ||
         getRole() in ['super_admin', 'admin', 'support_agent', 'ocr_reviewer', 'analytics_viewer'] ||
-        request.auth.token.get('email', '') in ['manish2768@gmail.com', 'admin@assetdoctor.in']
+        request.auth.token.get('email', '') == 'manish2768@gmail.com'
       );
     }
 
