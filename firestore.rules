@@ -109,6 +109,25 @@ service cloud.firestore {
     }
 
     // ----------------------------------------------------
+    // Collection Group Rules (Super Admin Global Read)
+    // ----------------------------------------------------
+    match /{path=**}/Assets/{assetId} {
+      allow read: if isSuperAdmin();
+    }
+
+    match /{path=**}/assets/{assetId} {
+      allow read: if isSuperAdmin();
+    }
+
+    match /{path=**}/Documents/{docId} {
+      allow read: if isSuperAdmin();
+    }
+
+    match /{path=**}/documents/{docId} {
+      allow read: if isSuperAdmin();
+    }
+
+    // ----------------------------------------------------
     // 2. Support Tickets Center
     // ----------------------------------------------------
     match /supportTickets/{ticketId} {

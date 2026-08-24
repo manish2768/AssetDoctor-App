@@ -813,7 +813,10 @@ $('btnSendReset').addEventListener('click', async () => {
 // Real-Time Firestore Data Subscriptions
 // ----------------------------------------------------
 function subscribeToFirestoreData() {
-  // 1. Users (merge 'users' and 'Users' collections)
+  // Initial KPI and empty-state setup
+  updateKPIs();
+
+  // 1. Users (merge 'users' and 'Users' root collections)
   const userMap = new Map();
   const updateUserList = () => {
     state.users = Array.from(userMap.values());
@@ -825,19 +828,23 @@ function subscribeToFirestoreData() {
     snap.docs.forEach(d => userMap.set(d.id, { id: d.id, ...d.data() }));
     updateUserList();
   }, (err) => {
-    console.warn('users listener error:', err);
+    console.error('[Firestore Error: users]', err.code, err.message);
   });
 
   db.collection('Users').onSnapshot((snap) => {
     snap.docs.forEach(d => {
-      if (!userMap.has(d.id)) userMap.set(d.id, { id: d.id, ...d.data() });
+      if (!userMap.has(d.id)) {
+        userMap.set(d.id, { id: d.id, ...d.data() });
+      } else {
+        userMap.set(d.id, { ...d.data(), ...userMap.get(d.id) });
+      }
     });
     updateUserList();
   }, (err) => {
-    console.warn('Users legacy listener error:', err);
+    console.error('[Firestore Error: Users]', err.code, err.message);
   });
 
-  // 2. Assets (collection group query for both 'Assets' and 'assets')
+  // 2. Assets (collection group query for 'Assets' and 'assets')
   const assetMap = new Map();
   const updateAssetList = () => {
     state.assets = Array.from(assetMap.values());
@@ -849,14 +856,16 @@ function subscribeToFirestoreData() {
     snap.docs.forEach(d => assetMap.set(d.id, { id: d.id, ...d.data() }));
     updateAssetList();
   }, (err) => {
-    console.warn('Assets group listener error:', err);
+    console.error('[Firestore Error: collectionGroup Assets]', err.code, err.message);
   });
 
   db.collectionGroup('assets').onSnapshot((snap) => {
-    snap.docs.forEach(d => assetMap.set(d.id, { id: d.id, ...d.data() }));
+    snap.docs.forEach(d => {
+      if (!assetMap.has(d.id)) assetMap.set(d.id, { id: d.id, ...d.data() });
+    });
     updateAssetList();
   }, (err) => {
-    console.warn('assets group listener error:', err);
+    console.error('[Firestore Error: collectionGroup assets]', err.code, err.message);
   });
 
   // 3. Support Tickets
@@ -865,7 +874,8 @@ function subscribeToFirestoreData() {
     renderTickets();
     updateKPIs();
   }, (err) => {
-    console.warn('Tickets listener error:', err);
+    console.error('[Firestore Error: supportTickets]', err.code, err.message);
+    renderTickets();
   });
 
   // 4. Audit Logs
@@ -873,7 +883,8 @@ function subscribeToFirestoreData() {
     state.auditLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderAuditLogs();
   }, (err) => {
-    console.warn('Audit listener error:', err);
+    console.error('[Firestore Error: auditLogs]', err.code, err.message);
+    renderAuditLogs();
   });
 
   // 5. OCR Review Queue
@@ -882,33 +893,53 @@ function subscribeToFirestoreData() {
     renderOcrQueue();
     updateKPIs();
   }, (err) => {
-    console.warn('OCR queue listener error:', err);
+    console.error('[Firestore Error: ocrReviewQueue]', err.code, err.message);
+    renderOcrQueue();
   });
 }
 
 function updateKPIs() {
-  $('kpiUsers').textContent = state.users.length.toLocaleString('en-IN');
-  $('kpiAssets').textContent = state.assets.length.toLocaleString('en-IN');
+  $('kpiUsers').textContent = (state.users.length || 0).toLocaleString('en-IN');
+  $('kpiAssets').textContent = (state.assets.length || 0).toLocaleString('en-IN');
   const openCount = state.tickets.filter(t => t.status === 'open' || t.status === 'in_progress').length;
   $('kpiTickets').textContent = openCount.toString();
   $('openTicketsBadge').textContent = openCount.toString();
-  $('kpiOcrQueue').textContent = state.ocrQueue.length.toString();
-  $('ocrQueueBadge').textContent = state.ocrQueue.length.toString();
+  $('kpiOcrQueue').textContent = (state.ocrQueue.length || 0).toString();
+  $('ocrQueueBadge').textContent = (state.ocrQueue.length || 0).toString();
 }
 
 function renderUsers() {
-  const q = ($('userSearchInput')?.value || '').toLowerCase();
-  const filtered = state.users.filter(u => !q || (u.name && u.name.toLowerCase().includes(q)) || (u.email && u.email.toLowerCase().includes(q)) || (u.phone && u.phone.includes(q)) || (u.id && u.id.toLowerCase().includes(q)));
+  const q = ($('userSearchInput')?.value || '').toLowerCase().trim();
+  const filtered = state.users.filter(u => {
+    if (!q) return true;
+    const name = (u.name || '').toLowerCase();
+    const email = (u.email || '').toLowerCase();
+    const phone = (u.phoneNumber || u.phone || '').toLowerCase();
+    const uid = (u.uid || u.id || '').toLowerCase();
+    return name.includes(q) || email.includes(q) || phone.includes(q) || uid.includes(q);
+  });
+
   if (!filtered.length) {
-    $('usersTableBody').innerHTML = `<tr><td colspan="5" class="text-center py-6 text-slate-500 text-xs">No records found in Firestore.</td></tr>`;
+    $('usersTableBody').innerHTML = `<tr><td colspan="5" class="text-center py-6 text-slate-500 text-xs">No customer records found.</td></tr>`;
     return;
   }
+
   $('usersTableBody').innerHTML = filtered.map(u => `
     <tr class="table-row">
-      <td class="px-4 py-3 font-semibold text-white">${u.name || 'Anonymous'}<br><span class="text-[11px] text-slate-400 font-mono">${u.id}</span></td>
-      <td class="px-4 py-3 text-slate-300">${u.email || '—'}<br><span class="text-[11px] text-slate-500">${u.phone ? `+91 ${u.phone}` : '—'}</span></td>
-      <td class="px-4 py-3 text-slate-300">${u.city || '—'}</td>
-      <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${u.status === 'Suspended' ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30' : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'}">${u.status || 'Active'}</span></td>
+      <td class="px-4 py-3 font-semibold text-white">
+        ${u.name || 'Asset Owner'}<br>
+        <span class="text-[11px] text-slate-400 font-mono">${u.uid || u.id}</span>
+      </td>
+      <td class="px-4 py-3 text-slate-300">
+        ${u.email || '—'}<br>
+        <span class="text-[11px] text-slate-400 font-mono">${u.phoneNumber || u.phone || '—'}</span>
+      </td>
+      <td class="px-4 py-3 text-slate-300">${u.address || u.city || '—'}</td>
+      <td class="px-4 py-3">
+        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${u.status === 'Suspended' ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30' : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'}">
+          ${u.status || 'Active'}
+        </span>
+      </td>
       <td class="px-4 py-3 text-right">
         <button onclick="toggleUserSuspend('${u.id}', '${u.status}')" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-bold text-slate-200 transition">
           ${u.status === 'Suspended' ? 'Reactivate' : 'Suspend'}
@@ -922,7 +953,7 @@ async function toggleUserSuspend(userId, currentStatus) {
   const nextStatus = currentStatus === 'Suspended' ? 'Active' : 'Suspended';
   if (!confirm(`Are you sure you want to change user status to ${nextStatus}?`)) return;
   try {
-    await db.collection('users').doc(userId).update({ status: nextStatus });
+    await db.collection('users').doc(userId).set({ status: nextStatus }, { merge: true });
     await db.collection('auditLogs').add({
       actorId: state.currentUser.email,
       actorRole: state.currentRole,
@@ -940,23 +971,41 @@ async function toggleUserSuspend(userId, currentStatus) {
 
 function renderAssets() {
   if (!state.assets.length) {
-    $('assetsTableBody').innerHTML = `<tr><td colspan="5" class="text-center py-6 text-slate-500 text-xs">No records found in Firestore.</td></tr>`;
+    $('assetsTableBody').innerHTML = `<tr><td colspan="5" class="text-center py-6 text-slate-500 text-xs">No assets vaulted in Firestore.</td></tr>`;
     return;
   }
-  $('assetsTableBody').innerHTML = state.assets.map(a => `
-    <tr class="table-row">
-      <td class="px-4 py-3 font-semibold text-white">${a.name || a.assetName || 'Unnamed'}<br><span class="text-[11px] text-slate-400">${a.brand || '—'}</span></td>
-      <td class="px-4 py-3 uppercase text-[11px] font-bold text-slate-300">${a.category || a.type || '—'}</td>
-      <td class="px-4 py-3 font-mono text-[11px] text-slate-400">${a.uid || a.ownerUid || '—'}</td>
-      <td class="px-4 py-3 font-mono text-[11px] text-brand-300 font-bold">${a.registrationNumber || a.regNo || a.serialNumber || '—'}</td>
-      <td class="px-4 py-3"><span class="font-black text-emerald-400">${a.healthScore ? `${a.healthScore}%` : '—'}</span></td>
-    </tr>
-  `).join('');
+
+  $('assetsTableBody').innerHTML = state.assets.map(a => {
+    const assetTitle = a.assetName || a.name || 'Unnamed Asset';
+    const brand = a.brandName || a.brand || '—';
+    const category = a.categoryLabel || a.category || a.assetCategory || 'Other';
+    const identifier = a.registration || a.registrationNumber || a.chassisNumber || a.serialNumber || '—';
+    const health = a.healthScore || a.assetHealthScore;
+
+    return `
+      <tr class="table-row">
+        <td class="px-4 py-3 font-semibold text-white">
+          ${assetTitle}<br>
+          <span class="text-[11px] text-slate-400">${brand}</span>
+        </td>
+        <td class="px-4 py-3 uppercase text-[11px] font-bold text-slate-300">${category}</td>
+        <td class="px-4 py-3 font-mono text-[11px] text-slate-400 truncate max-w-[140px]" title="${a.ownerUid || a.uid || '—'}">
+          ${a.ownerUid || a.uid || '—'}
+        </td>
+        <td class="px-4 py-3 font-mono text-[11px] text-brand-300 font-bold">${identifier}</td>
+        <td class="px-4 py-3">
+          <span class="font-black ${health && health >= 80 ? 'text-emerald-400' : health && health >= 50 ? 'text-amber-400' : 'text-slate-400'}">
+            ${health ? `${health}%` : '—'}
+          </span>
+        </td>
+      </tr>
+    `;
+  }).join('');
 }
 
 function renderTickets() {
   if (!state.tickets.length) {
-    $('ticketsDeskContainer').innerHTML = `<p class="text-slate-500 py-6 text-center text-xs">No open support tickets in Firestore.</p>`;
+    $('ticketsDeskContainer').innerHTML = `<p class="text-slate-500 py-6 text-center text-xs">No open support tickets.</p>`;
     $('dashboardTicketsStream').innerHTML = `<p class="text-slate-500 py-4 text-center">No active inquiries.</p>`;
     return;
   }
@@ -1028,7 +1077,7 @@ async function replyTicket(ticketId) {
 
 function renderOcrQueue() {
   if (!state.ocrQueue.length) {
-    $('ocrQueueContainer').innerHTML = `<p class="text-slate-500 py-6 text-center text-xs">No pending OCR review items in Firestore.</p>`;
+    $('ocrQueueContainer').innerHTML = `<p class="text-slate-500 py-6 text-center text-xs">No pending OCR reviews.</p>`;
     return;
   }
 
