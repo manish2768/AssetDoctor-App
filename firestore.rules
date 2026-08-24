@@ -181,6 +181,15 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ----------------------------------------------------
+    // 8. Real-Time Customer Activity Stream
+    // ----------------------------------------------------
+    match /adminActivity/{eventId} {
+      allow read: if isAdmin();
+      allow create: if isSuperAdmin() || (isSignedIn() && request.resource.data.customerUid == request.auth.uid);
+      allow update, delete: if isSuperAdmin();
+    }
+
     match /mail_queue/{jobId} {
       allow create: if isSignedIn()
         && request.resource.data.keys().hasAll(['to', 'template', 'status'])
