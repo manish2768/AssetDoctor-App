@@ -86,12 +86,12 @@
         <div class="space-y-3">
           <div>
             <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Staff Email</label>
-            <input id="loginEmail" type="email" placeholder="manish2768@gmail.com" autocomplete="username"
+            <input id="loginEmail" type="email" placeholder="Enter staff email" autocomplete="off" value=""
               class="mt-1.5 w-full rounded-xl bg-slate-900/80 border border-white/10 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition" />
           </div>
           <div>
             <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Password</label>
-            <input id="loginPassword" type="password" placeholder="••••••••" autocomplete="current-password"
+            <input id="loginPassword" type="password" placeholder="••••••••" autocomplete="current-password" value=""
               class="mt-1.5 w-full rounded-xl bg-slate-900/80 border border-white/10 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition" />
           </div>
         </div>
@@ -108,8 +108,8 @@
 
       <div id="resetCard" class="hidden mt-4">
         <h3 class="text-white font-bold text-sm mb-1">Reset Staff Password</h3>
-        <p class="text-slate-400 text-xs mb-3">A secure password reset link will be sent to your verified staff email.</p>
-        <input id="resetEmail" type="email" placeholder="manish2768@gmail.com"
+        <p class="text-slate-400 text-xs mb-3">A secure password reset link will be sent to your verified staff email address.</p>
+        <input id="resetEmail" type="email" placeholder="Enter staff email" autocomplete="off" value=""
           class="w-full rounded-xl bg-slate-900/80 border border-white/10 px-3.5 py-2 text-sm text-white placeholder-slate-500" />
         <div class="flex gap-2 mt-3">
           <button id="btnSendReset" class="flex-1 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold py-2">Send Link</button>
@@ -693,22 +693,18 @@ auth.onAuthStateChanged(async (user) => {
 
   try {
     const tokenResult = await user.getIdTokenResult(true);
-    const userEmail = (user.email || '').toLowerCase().trim();
-    const isOwnerStaff = userEmail === 'manish2768@gmail.com';
-    const hasAdminClaim = tokenResult.claims && (
-      tokenResult.claims.admin === true ||
-      ['super_admin', 'admin', 'support_agent', 'ocr_reviewer', 'analytics_viewer'].includes(tokenResult.claims.role)
-    );
-    const isAdmin = isOwnerStaff || hasAdminClaim;
+    const claims = tokenResult.claims || {};
+    const hasAdminClaim = claims.admin === true || claims.super_admin === true ||
+      ['super_admin', 'admin', 'support_agent', 'ocr_reviewer', 'analytics_viewer'].includes(claims.role);
 
-    if (!isAdmin) {
-      showAuthError('Access Denied: Account does not have internal staff privileges.');
+    if (!hasAdminClaim) {
+      showAuthError('Access Denied: Account does not have verified staff privileges.');
       await auth.signOut();
       return;
     }
 
     state.currentUser = user;
-    state.currentRole = tokenResult.claims?.role || (isOwnerStaff ? 'super_admin' : 'admin');
+    state.currentRole = claims.role || (claims.super_admin ? 'super_admin' : 'admin');
     $('adminEmailText').textContent = user.email || 'Staff Member';
     $('activeRoleBadge').textContent = (state.currentRole).toUpperCase().replace('_', ' ');
 
@@ -756,7 +752,7 @@ $('btnLogoutSidebar').addEventListener('click', async () => {
 $('btnForgotPassword').addEventListener('click', () => {
   $('signInForm').classList.add('hidden');
   $('resetCard').classList.remove('hidden');
-  $('resetEmail').value = $('loginEmail').value.trim();
+  $('resetEmail').value = '';
 });
 
 $('btnCancelReset').addEventListener('click', () => {
@@ -766,14 +762,24 @@ $('btnCancelReset').addEventListener('click', () => {
 
 $('btnSendReset').addEventListener('click', async () => {
   const email = $('resetEmail').value.trim();
-  if (!email) return;
+  if (!email) {
+    alert('Please enter a valid staff email address.');
+    return;
+  }
+  const btn = $('btnSendReset');
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
   try {
     await auth.sendPasswordResetEmail(email);
-    alert('Password reset link sent to ' + email);
+    alert('If ' + email + ' is registered, a password reset link has been dispatched to that inbox. Please check your spam/inbox folders.');
     $('resetCard').classList.add('hidden');
     $('signInForm').classList.remove('hidden');
+    $('resetEmail').value = '';
   } catch (e) {
-    alert('Reset failed: ' + e.message);
+    alert('Password reset error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Send Link';
   }
 });
 
