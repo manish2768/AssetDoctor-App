@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Asset Doctor — Enterprise Internal Admin Control Center</title>
+<title>Asset Doctor — Enterprise Master Admin Control Center</title>
 <link rel="icon" href="./icon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -26,7 +26,8 @@
           }
         },
         boxShadow: {
-          glow: '0 0 0 1px rgba(20,166,144,0.2), 0 10px 30px -8px rgba(20,166,144,0.3)'
+          glow: '0 0 0 1px rgba(20,166,144,0.2), 0 10px 30px -8px rgba(20,166,144,0.3)',
+          modal: '0 25px 50px -12px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.1)'
         }
       }
     }
@@ -53,9 +54,10 @@
   @keyframes pulse-dot { 0%,100%{opacity:1;} 50%{opacity:.35;} }
   input:focus, textarea:focus, select:focus { outline: none; }
   .table-row:hover { background: rgba(148,163,184,0.05); }
+  .modal-backdrop { background: rgba(2, 6, 23, 0.85); backdrop-filter: blur(8px); }
 </style>
 </head>
-<body class="bg-slate-950 text-slate-200 min-h-screen antialiased">
+<body class="bg-slate-950 text-slate-200 min-h-screen antialiased selection:bg-brand-500/30 selection:text-brand-200">
 
 <!-- ============================= AUTH GATE ============================= -->
 <div id="authScreen" class="min-h-screen w-full flex items-center justify-center relative overflow-hidden px-4">
@@ -70,7 +72,7 @@
         <img src="./icon.png" alt="Asset Doctor" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentElement.innerHTML='<i data-lucide=\'shield-check\' class=\'w-8 h-8 text-white\'></i>'; if(window.lucide) lucide.createIcons();" />
       </div>
       <h1 class="text-2xl font-black text-white tracking-tight">Asset Doctor</h1>
-      <p class="text-slate-400 text-xs mt-1 uppercase tracking-widest font-semibold">Enterprise Internal Control Center</p>
+      <p class="text-slate-400 text-xs mt-1 uppercase tracking-widest font-semibold">Enterprise Master Control Center</p>
     </div>
 
     <div class="glass-strong border border-white/10 rounded-2xl p-6 sm:p-8 shadow-2xl">
@@ -104,7 +106,7 @@
 
         <button id="btnSignIn" class="mt-5 w-full rounded-xl bg-gradient-to-r from-brand-500 to-cyan-600 hover:from-brand-400 hover:to-cyan-500 text-white font-bold text-sm py-2.5 flex items-center justify-center gap-2 transition shadow-glow">
           <i data-lucide="shield-check" class="w-4 h-4"></i>
-          <span id="btnSignInText">Sign In to Super Admin Console</span>
+          <span id="btnSignInText">Authenticate &amp; Open Console</span>
         </button>
 
         <button id="btnForgotPassword" class="mt-3 w-full text-center text-xs font-semibold text-brand-300 hover:text-brand-200 transition">
@@ -134,12 +136,12 @@
   <!-- Sidebar -->
   <aside class="fixed inset-y-0 left-0 z-40 w-64 glass-strong border-r border-white/10 hidden lg:flex flex-col">
     <div class="h-16 flex items-center gap-3 px-5 border-b border-white/10 shrink-0">
-      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-400 to-cyan-600 flex items-center justify-center overflow-hidden shrink-0">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-400 to-cyan-600 flex items-center justify-center overflow-hidden shrink-0 shadow-glow">
         <img src="./icon.png" alt="" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentElement.innerHTML='<i data-lucide=\'shield-check\' class=\'w-5 h-5 text-white\'></i>'; if(window.lucide) lucide.createIcons();" />
       </div>
       <div class="min-w-0">
         <p class="text-white font-extrabold text-sm leading-tight truncate">Asset Doctor</p>
-        <p class="text-[10px] text-brand-300 font-bold uppercase tracking-wider leading-tight truncate">Admin Console</p>
+        <p class="text-[10px] text-brand-300 font-bold uppercase tracking-wider leading-tight truncate">Master Control</p>
       </div>
     </div>
 
@@ -154,19 +156,28 @@
         <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
         <i data-lucide="users" class="w-4 h-4"></i>
         <span>Customers 360</span>
+        <span id="sidebarUserCount" class="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30">0</span>
       </button>
       <button data-tab="assets" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
         <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
         <i data-lucide="boxes" class="w-4 h-4"></i>
         <span>Asset 360</span>
+        <span id="sidebarAssetCount" class="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">0</span>
       </button>
       <button data-tab="documents" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
         <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
         <i data-lucide="file-text" class="w-4 h-4"></i>
         <span>Document Vault</span>
+        <span id="sidebarDocCount" class="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30">0</span>
       </button>
 
-      <p class="px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1 mt-4">Quality &amp; Service</p>
+      <p class="px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1 mt-4">Surveillance &amp; Quality</p>
+      <button data-tab="expiry" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
+        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
+        <i data-lucide="calendar-clock" class="w-4 h-4"></i>
+        <span>Expiry Surveillance</span>
+        <span id="sidebarExpiryAlerts" class="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">0</span>
+      </button>
       <button data-tab="ocr_review" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
         <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
         <i data-lucide="scan-search" class="w-4 h-4"></i>
@@ -178,18 +189,8 @@
         <i data-lucide="wrench" class="w-4 h-4"></i>
         <span>Service &amp; Maintenance</span>
       </button>
-      <button data-tab="coverage" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
-        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
-        <i data-lucide="shield" class="w-4 h-4"></i>
-        <span>Warranty &amp; Insurance</span>
-      </button>
 
       <p class="px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1 mt-4">Support &amp; Insights</p>
-      <button data-tab="insights" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
-        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
-        <i data-lucide="trending-up" class="w-4 h-4"></i>
-        <span>Insights &amp; BI</span>
-      </button>
       <button data-tab="tickets" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
         <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
         <i data-lucide="life-buoy" class="w-4 h-4"></i>
@@ -246,17 +247,27 @@
           </div>
         </div>
 
+        <!-- Global Search Bar in Header -->
+        <div class="flex-1 max-w-md hidden md:block">
+          <div class="relative">
+            <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+            <input id="headerGlobalSearch" type="text" placeholder="Global search customers, assets, documents, UIDs... (⌘K)"
+              class="w-full rounded-xl bg-slate-900/80 border border-white/10 pl-10 pr-12 py-1.5 text-xs text-white placeholder-slate-500 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition cursor-pointer" readonly />
+            <kbd class="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] font-mono text-slate-400">⌘K</kbd>
+          </div>
+        </div>
+
         <div class="flex items-center gap-3 shrink-0">
           <button id="btnRefresh" title="Refresh data from Firestore" class="w-9 h-9 flex items-center justify-center rounded-xl border border-white/10 text-slate-300 hover:text-white hover:border-brand-500/40 transition">
             <i data-lucide="refresh-cw" class="w-4 h-4"></i>
           </button>
           <div class="flex items-center gap-2.5 pl-3 pr-2 py-1 border-l border-white/10">
-            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-brand-500 to-cyan-600 flex items-center justify-center font-bold text-white text-xs">
+            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-brand-500 to-cyan-600 flex items-center justify-center font-bold text-white text-xs shadow-glow">
               AD
             </div>
             <div class="leading-tight text-left hidden sm:block">
-              <p id="adminEmailText" class="text-xs font-bold text-white">Staff Member</p>
-              <p class="text-[10px] text-slate-400">Internal Control</p>
+              <p id="adminEmailText" class="text-xs font-bold text-white">Super Admin</p>
+              <p class="text-[10px] text-brand-300 font-semibold">Asset Doctor Master</p>
             </div>
           </div>
         </div>
@@ -267,8 +278,10 @@
 
       <!-- ===================== MODULE 1: COMMAND CENTER ===================== -->
       <section id="tab-dashboard" class="tab-panel active space-y-6">
+        <!-- 8 Live KPI Cards Grid -->
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div class="glass border border-white/10 rounded-2xl p-5 hover:border-brand-500/40 transition">
+          <!-- 1. Total Customers -->
+          <div onclick="switchTab('users')" class="glass border border-white/10 rounded-2xl p-5 hover:border-brand-500/40 cursor-pointer transition">
             <div class="flex items-center justify-between mb-2">
               <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Total Customers</span>
               <i data-lucide="users" class="w-5 h-5 text-brand-400"></i>
@@ -277,31 +290,103 @@
             <p class="text-[11px] text-slate-400 mt-1">Live customer accounts</p>
           </div>
 
-          <div class="glass border border-white/10 rounded-2xl p-5 hover:border-cyan-500/40 transition">
+          <!-- 2. Total Assets -->
+          <div onclick="switchTab('assets')" class="glass border border-white/10 rounded-2xl p-5 hover:border-cyan-500/40 cursor-pointer transition">
             <div class="flex items-center justify-between mb-2">
               <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Total Assets Vaulted</span>
               <i data-lucide="boxes" class="w-5 h-5 text-cyan-400"></i>
             </div>
             <p id="kpiAssets" class="text-3xl font-black text-white tabular-nums">0</p>
-            <p class="text-[11px] text-slate-400 mt-1">Vehicles &amp; appliances recorded</p>
+            <p class="text-[11px] text-slate-400 mt-1">Vehicles &amp; appliances</p>
           </div>
 
-          <div class="glass border border-white/10 rounded-2xl p-5 hover:border-amber-500/40 transition">
+          <!-- 3. Documents Vaulted -->
+          <div onclick="switchTab('documents')" class="glass border border-white/10 rounded-2xl p-5 hover:border-violet-500/40 cursor-pointer transition">
             <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Open Support Tickets</span>
-              <i data-lucide="life-buoy" class="w-5 h-5 text-amber-400"></i>
+              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Documents Vaulted</span>
+              <i data-lucide="file-text" class="w-5 h-5 text-violet-400"></i>
             </div>
-            <p id="kpiTickets" class="text-3xl font-black text-white tabular-nums">0</p>
-            <p class="text-[11px] text-slate-400 mt-1">Pending inquiries</p>
+            <p id="kpiDocuments" class="text-3xl font-black text-white tabular-nums">0</p>
+            <p class="text-[11px] text-slate-400 mt-1">Invoices, policies &amp; RCs</p>
           </div>
 
-          <div class="glass border border-white/10 rounded-2xl p-5 hover:border-violet-500/40 transition">
+          <!-- 4. OCR Review Queue -->
+          <div onclick="switchTab('ocr_review')" class="glass border border-white/10 rounded-2xl p-5 hover:border-amber-500/40 cursor-pointer transition">
             <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide">OCR Quality Queue</span>
-              <i data-lucide="scan-search" class="w-5 h-5 text-violet-400"></i>
+              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide">OCR Review Queue</span>
+              <i data-lucide="scan-search" class="w-5 h-5 text-amber-400"></i>
             </div>
             <p id="kpiOcrQueue" class="text-3xl font-black text-white tabular-nums">0</p>
-            <p class="text-[11px] text-slate-400 mt-1">Low-confidence checks</p>
+            <p class="text-[11px] text-slate-400 mt-1">Pending manual checks</p>
+          </div>
+
+          <!-- 5. Expiring Insurance -->
+          <div onclick="switchTab('expiry'); filterExpiryType('Insurance');" class="glass border border-white/10 rounded-2xl p-5 hover:border-rose-500/40 cursor-pointer transition">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Expiring Insurance</span>
+              <i data-lucide="shield-alert" class="w-5 h-5 text-rose-400"></i>
+            </div>
+            <p id="kpiExpiringInsurance" class="text-3xl font-black text-rose-400 tabular-nums">0</p>
+            <p class="text-[11px] text-slate-400 mt-1">Due within 30 days / expired</p>
+          </div>
+
+          <!-- 6. Expiring Warranty -->
+          <div onclick="switchTab('expiry'); filterExpiryType('Warranty');" class="glass border border-white/10 rounded-2xl p-5 hover:border-amber-500/40 cursor-pointer transition">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Expiring Warranty</span>
+              <i data-lucide="shield" class="w-5 h-5 text-amber-400"></i>
+            </div>
+            <p id="kpiExpiringWarranty" class="text-3xl font-black text-amber-300 tabular-nums">0</p>
+            <p class="text-[11px] text-slate-400 mt-1">Due within 30 days / expired</p>
+          </div>
+
+          <!-- 7. Expiring PUC -->
+          <div onclick="switchTab('expiry'); filterExpiryType('PUC');" class="glass border border-white/10 rounded-2xl p-5 hover:border-yellow-500/40 cursor-pointer transition">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Expiring PUC</span>
+              <i data-lucide="gauge" class="w-5 h-5 text-yellow-400"></i>
+            </div>
+            <p id="kpiExpiringPUC" class="text-3xl font-black text-yellow-300 tabular-nums">0</p>
+            <p class="text-[11px] text-slate-400 mt-1">Due within 30 days / expired</p>
+          </div>
+
+          <!-- 8. Open Support Tickets -->
+          <div onclick="switchTab('tickets')" class="glass border border-white/10 rounded-2xl p-5 hover:border-cyan-500/40 cursor-pointer transition">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Open Support Tickets</span>
+              <i data-lucide="life-buoy" class="w-5 h-5 text-cyan-400"></i>
+            </div>
+            <p id="kpiTickets" class="text-3xl font-black text-white tabular-nums">0</p>
+            <p class="text-[11px] text-slate-400 mt-1">Customer inquiries</p>
+          </div>
+        </div>
+
+        <!-- Quick Expiry Surveillance Strip -->
+        <div class="glass border border-white/10 rounded-2xl p-5">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-white font-bold text-sm flex items-center gap-2">
+                <i data-lucide="calendar-clock" class="w-4 h-4 text-brand-400"></i> Active Expiry Surveillance Radar
+              </h2>
+              <p class="text-xs text-slate-400 mt-0.5">Real-time status calculated from stored insurance, warranty, and PUC dates.</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                <span class="w-2 h-2 rounded-full bg-rose-400"></span>
+                <span id="radarExpiredCount">0</span> Expired
+              </span>
+              <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                <span id="radarExp30Count">0</span> &le; 30 Days
+              </span>
+              <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                <span id="radarHealthyCount">0</span> Healthy
+              </span>
+              <button onclick="switchTab('expiry')" class="px-3 py-1 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold transition">
+                Open Radar &rarr;
+              </button>
+            </div>
           </div>
         </div>
 
@@ -332,12 +417,12 @@
           <div class="p-5 border-b border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h2 class="text-white font-bold text-base flex items-center gap-2">
-                <i data-lucide="users" class="w-4 h-4 text-brand-400"></i> Customer 360 Directory
+                <i data-lucide="users" class="w-4 h-4 text-brand-400"></i> Customers 360 Directory
               </h2>
-              <p class="text-xs text-slate-400 mt-0.5">Real customer profiles and account statuses stored in Firestore.</p>
+              <p class="text-xs text-slate-400 mt-0.5">Live customer profiles, contact records, and vaulted assets.</p>
             </div>
-            <div class="flex items-center gap-2">
-              <input id="userSearchInput" type="text" placeholder="Search by name, email, phone, UID..."
+            <div class="flex items-center gap-3">
+              <input id="userSearchInput" type="text" placeholder="Search by name, phone, email, UID..."
                 class="rounded-xl bg-slate-900/80 border border-white/10 px-3.5 py-2 text-xs text-white placeholder-slate-500 w-72 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition" />
             </div>
           </div>
@@ -347,14 +432,15 @@
               <thead>
                 <tr class="text-left uppercase tracking-wider text-slate-400 bg-white/5 text-[10px]">
                   <th class="px-4 py-3 font-semibold">Customer / UID</th>
-                  <th class="px-4 py-3 font-semibold">Contact</th>
-                  <th class="px-4 py-3 font-semibold">City</th>
+                  <th class="px-4 py-3 font-semibold">Contact Details</th>
+                  <th class="px-4 py-3 font-semibold">Address / City</th>
+                  <th class="px-4 py-3 font-semibold">Vaulted Assets</th>
                   <th class="px-4 py-3 font-semibold">Status</th>
                   <th class="px-4 py-3 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
               <tbody id="usersTableBody" class="divide-y divide-white/5">
-                <tr><td colspan="5" class="text-center py-6 text-slate-500">No records found in Firestore.</td></tr>
+                <tr><td colspan="6" class="text-center py-6 text-slate-500">No customer records found.</td></tr>
               </tbody>
             </table>
           </div>
@@ -364,12 +450,16 @@
       <!-- ===================== MODULE 3: ASSET 360 ===================== -->
       <section id="tab-assets" class="tab-panel space-y-4">
         <div class="glass border border-white/10 rounded-2xl overflow-hidden">
-          <div class="p-5 border-b border-white/10 flex items-center justify-between">
+          <div class="p-5 border-b border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h2 class="text-white font-bold text-base flex items-center gap-2">
                 <i data-lucide="boxes" class="w-4 h-4 text-cyan-400"></i> Asset 360 Portfolio
               </h2>
               <p class="text-xs text-slate-400 mt-0.5">Real-time inventory of all customer vehicles, bikes, and appliances.</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <input id="assetSearchInput" type="text" placeholder="Search by asset, brand, reg, owner UID..."
+                class="rounded-xl bg-slate-900/80 border border-white/10 px-3.5 py-2 text-xs text-white placeholder-slate-500 w-72 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition" />
             </div>
           </div>
 
@@ -382,10 +472,11 @@
                   <th class="px-4 py-3 font-semibold">Owner UID</th>
                   <th class="px-4 py-3 font-semibold">Identifier (Reg/Serial)</th>
                   <th class="px-4 py-3 font-semibold">Health Score</th>
+                  <th class="px-4 py-3 font-semibold text-right">Action</th>
                 </tr>
               </thead>
               <tbody id="assetsTableBody" class="divide-y divide-white/5">
-                <tr><td colspan="5" class="text-center py-6 text-slate-500">No records found in Firestore.</td></tr>
+                <tr><td colspan="6" class="text-center py-6 text-slate-500">No assets vaulted in Firestore.</td></tr>
               </tbody>
             </table>
           </div>
@@ -394,33 +485,105 @@
 
       <!-- ===================== MODULE 4: DOCUMENT VAULT ===================== -->
       <section id="tab-documents" class="tab-panel space-y-4">
-        <div class="glass border border-white/10 rounded-2xl p-6">
-          <h2 class="text-white font-bold text-base flex items-center gap-2 mb-1">
-            <i data-lucide="file-text" class="w-4 h-4 text-violet-400"></i> Document Control Center
-          </h2>
-          <p class="text-xs text-slate-400 mb-4">Customer vaulted invoices, insurance policies, RC cards, and warranty slips.</p>
-          <div class="rounded-xl border border-white/10 bg-slate-900/60 p-5 text-center text-xs text-slate-400">
-            Document metadata streams from customer vault trees in Firestore. Actual PDF/image binaries remain encrypted in private Storage.
+        <div class="glass border border-white/10 rounded-2xl overflow-hidden">
+          <div class="p-5 border-b border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-white font-bold text-base flex items-center gap-2">
+                <i data-lucide="file-text" class="w-4 h-4 text-violet-400"></i> Document Control Center
+              </h2>
+              <p class="text-xs text-slate-400 mt-0.5">Live stream of customer insurance policies, RC cards, warranties, and purchase invoices.</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <input id="documentSearchInput" type="text" placeholder="Search by doc ID, type, owner UID..."
+                class="rounded-xl bg-slate-900/80 border border-white/10 px-3.5 py-2 text-xs text-white placeholder-slate-500 w-72 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition" />
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-xs">
+              <thead>
+                <tr class="text-left uppercase tracking-wider text-slate-400 bg-white/5 text-[10px]">
+                  <th class="px-4 py-3 font-semibold">Document Type &amp; Label</th>
+                  <th class="px-4 py-3 font-semibold">Owner UID</th>
+                  <th class="px-4 py-3 font-semibold">Linked Asset</th>
+                  <th class="px-4 py-3 font-semibold">Expiry Date</th>
+                  <th class="px-4 py-3 font-semibold">Status</th>
+                  <th class="px-4 py-3 font-semibold text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="documentsTableBody" class="divide-y divide-white/5">
+                <tr><td colspan="6" class="text-center py-6 text-slate-500">No documents found in vault.</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </section>
 
-      <!-- ===================== MODULE 5: OCR CONTROL CENTER ===================== -->
+      <!-- ===================== MODULE 5: EXPIRY SURVEILLANCE ===================== -->
+      <section id="tab-expiry" class="tab-panel space-y-4">
+        <div class="glass border border-white/10 rounded-2xl overflow-hidden">
+          <div class="p-5 border-b border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-white font-bold text-base flex items-center gap-2">
+                <i data-lucide="calendar-clock" class="w-4 h-4 text-rose-400"></i> Expiry Surveillance Radar
+              </h2>
+              <p class="text-xs text-slate-400 mt-0.5">Automated surveillance across Insurance, Warranty, and PUC expiries.</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <select id="expiryFilterCategory" class="rounded-xl bg-slate-900/80 border border-white/10 px-3 py-2 text-xs text-white">
+                <option value="ALL">All Expiry Types</option>
+                <option value="Insurance">Insurance Only</option>
+                <option value="Warranty">Warranty Only</option>
+                <option value="PUC">PUC Only</option>
+              </select>
+              <select id="expiryFilterStatus" class="rounded-xl bg-slate-900/80 border border-white/10 px-3 py-2 text-xs text-white">
+                <option value="ALL">All Statuses</option>
+                <option value="EXPIRED">Expired</option>
+                <option value="EXP30">Expiring &le; 30 Days</option>
+                <option value="EXP60">Expiring &le; 60 Days</option>
+                <option value="HEALTHY">Healthy (> 60 Days)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-xs">
+              <thead>
+                <tr class="text-left uppercase tracking-wider text-slate-400 bg-white/5 text-[10px]">
+                  <th class="px-4 py-3 font-semibold">Asset / Brand</th>
+                  <th class="px-4 py-3 font-semibold">Owner UID</th>
+                  <th class="px-4 py-3 font-semibold">Coverage Type</th>
+                  <th class="px-4 py-3 font-semibold">Expiry Date</th>
+                  <th class="px-4 py-3 font-semibold">Days Remaining</th>
+                  <th class="px-4 py-3 font-semibold text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="expiryTableBody" class="divide-y divide-white/5">
+                <tr><td colspan="6" class="text-center py-6 text-slate-500">No coverage records tracked.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== MODULE 6: OCR CONTROL CENTER ===================== -->
       <section id="tab-ocr_review" class="tab-panel space-y-4">
         <div class="glass border border-white/10 rounded-2xl overflow-hidden">
-          <div class="p-5 border-b border-white/10">
-            <h2 class="text-white font-bold text-base flex items-center gap-2">
-              <i data-lucide="scan-search" class="w-4 h-4 text-amber-400"></i> OCR Quality &amp; Manual Correction Queue
-            </h2>
-            <p class="text-xs text-slate-400 mt-0.5">Documents flagged for manual review with raw OCR inspection.</p>
+          <div class="p-5 border-b border-white/10 flex items-center justify-between">
+            <div>
+              <h2 class="text-white font-bold text-base flex items-center gap-2">
+                <i data-lucide="scan-search" class="w-4 h-4 text-amber-400"></i> OCR Control &amp; Manual Correction Queue
+              </h2>
+              <p class="text-xs text-slate-400 mt-0.5">Documents flagged for inspection, raw text extraction, and administrative corrections.</p>
+            </div>
           </div>
           <div class="p-5 space-y-3" id="ocrQueueContainer">
-            <p class="text-slate-500 py-6 text-center text-xs">No pending OCR review items in Firestore.</p>
+            <p class="text-slate-500 py-6 text-center text-xs">No pending OCR reviews.</p>
           </div>
         </div>
       </section>
 
-      <!-- ===================== MODULE 6: SERVICE & MAINTENANCE ===================== -->
+      <!-- ===================== MODULE 7: SERVICE & MAINTENANCE ===================== -->
       <section id="tab-service" class="tab-panel space-y-4">
         <div class="glass border border-white/10 rounded-2xl p-6">
           <h2 class="text-white font-bold text-base flex items-center gap-2 mb-1">
@@ -444,66 +607,22 @@
         </div>
       </section>
 
-      <!-- ===================== MODULE 7: WARRANTY & INSURANCE ===================== -->
-      <section id="tab-coverage" class="tab-panel space-y-4">
-        <div class="glass border border-white/10 rounded-2xl p-6">
-          <h2 class="text-white font-bold text-base flex items-center gap-2 mb-1">
-            <i data-lucide="shield" class="w-4 h-4 text-cyan-400"></i> Coverage Center: Warranty, Insurance &amp; PUC
-          </h2>
-          <p class="text-xs text-slate-400 mb-4">Real-time expiry surveillance across all registered customer assets.</p>
-          <div class="grid sm:grid-cols-3 gap-4">
-            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
-              <p class="text-[11px] uppercase font-bold text-slate-400">Active Policies &amp; Warranties</p>
-              <p class="text-2xl font-black text-emerald-400 mt-1">Active</p>
-            </div>
-            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
-              <p class="text-[11px] uppercase font-bold text-slate-400">Expiring in 30 Days</p>
-              <p class="text-2xl font-black text-amber-400 mt-1">Monitored</p>
-            </div>
-            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
-              <p class="text-[11px] uppercase font-bold text-slate-400">Expired Coverages</p>
-              <p class="text-2xl font-black text-rose-400 mt-1">Alerted</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ===================== MODULE 8: INSIGHTS & BI ===================== -->
-      <section id="tab-insights" class="tab-panel space-y-4">
-        <div class="glass border border-white/10 rounded-2xl p-6">
-          <h2 class="text-white font-bold text-base flex items-center gap-2 mb-1">
-            <i data-lucide="trending-up" class="w-4 h-4 text-brand-400"></i> Operations Insights &amp; Business Intelligence
-          </h2>
-          <p class="text-xs text-slate-400 mb-4">Data-driven analytics derived from real production Firestore records.</p>
-          <div class="grid sm:grid-cols-2 gap-4">
-            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
-              <h3 class="font-bold text-white text-xs mb-2">Data Completeness</h3>
-              <p class="text-xs text-slate-400">Profiles with fully completed asset identifiers and warranty dates.</p>
-            </div>
-            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
-              <h3 class="font-bold text-white text-xs mb-2">OCR Precision Trends</h3>
-              <p class="text-xs text-slate-400">Tier-1 ML Kit on-device pass rate vs Cloud Vision fallback rate.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ===================== MODULE 9: SUPPORT CENTER ===================== -->
+      <!-- ===================== MODULE 8: SUPPORT CENTER ===================== -->
       <section id="tab-tickets" class="tab-panel space-y-4">
         <div class="glass border border-white/10 rounded-2xl overflow-hidden">
           <div class="p-5 border-b border-white/10">
             <h2 class="text-white font-bold text-base flex items-center gap-2">
-              <i data-lucide="life-buoy" class="w-4 h-4 text-rose-400"></i> Support Tickets Desk
+              <i data-lucide="life-buoy" class="w-4 h-4 text-cyan-400"></i> Support Tickets Desk
             </h2>
             <p class="text-xs text-slate-400 mt-0.5">Manage customer inquiries and dispatch status updates.</p>
           </div>
           <div class="p-5 space-y-3" id="ticketsDeskContainer">
-            <p class="text-slate-500 py-6 text-center text-xs">No open support tickets in Firestore.</p>
+            <p class="text-slate-500 py-6 text-center text-xs">No open support tickets.</p>
           </div>
         </div>
       </section>
 
-      <!-- ===================== MODULE 10: WHATSAPP CONTROL ===================== -->
+      <!-- ===================== MODULE 9: WHATSAPP CONTROL ===================== -->
       <section id="tab-whatsapp" class="tab-panel space-y-4">
         <div class="glass border border-white/10 rounded-2xl p-6">
           <h2 class="text-white font-bold text-base flex items-center gap-2 mb-1">
@@ -514,7 +633,7 @@
             <div class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
               <p class="text-xs text-emerald-300 font-bold">Integration Architecture</p>
               <p class="text-lg font-black text-white mt-1">Ready (Meta Cloud API)</p>
-              <p class="text-[11px] text-emerald-400 mt-0.5">Zero live messages sent in current phase</p>
+              <p class="text-[11px] text-emerald-400 mt-0.5">Production templates verified</p>
             </div>
             <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
               <p class="text-xs text-slate-400 font-bold">Supported Templates</p>
@@ -530,18 +649,18 @@
         </div>
       </section>
 
-      <!-- ===================== MODULE 11: REPORT CENTER ===================== -->
+      <!-- ===================== MODULE 10: REPORT CENTER ===================== -->
       <section id="tab-reports" class="tab-panel space-y-4">
         <div class="glass border border-white/10 rounded-2xl p-6">
           <h2 class="text-white font-bold text-base flex items-center gap-2 mb-1">
             <i data-lucide="bar-chart-3" class="w-4 h-4 text-brand-400"></i> Enterprise Report Center
           </h2>
-          <p class="text-xs text-slate-400 mb-6">Generate and export operational reports derived from real Firestore data.</p>
-          <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <p class="text-xs text-slate-400 mb-6">Generate and export live operational reports directly from Firestore.</p>
+          <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4 flex flex-col justify-between">
               <div>
-                <h3 class="font-bold text-white text-xs">Customer Accounts Report</h3>
-                <p class="text-[11px] text-slate-400 mt-1">Full export of registered user profiles and registration dates.</p>
+                <h3 class="font-bold text-white text-xs">Customer Directory CSV</h3>
+                <p class="text-[11px] text-slate-400 mt-1">Export registered customer profiles, phone numbers, and UIDs.</p>
               </div>
               <button onclick="exportDataCsv('users')" class="mt-4 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs py-2 transition">
                 Export Users CSV
@@ -550,8 +669,8 @@
 
             <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4 flex flex-col justify-between">
               <div>
-                <h3 class="font-bold text-white text-xs">Asset Inventory Report</h3>
-                <p class="text-[11px] text-slate-400 mt-1">Full breakdown of cars, bikes, and appliances across accounts.</p>
+                <h3 class="font-bold text-white text-xs">Asset Inventory CSV</h3>
+                <p class="text-[11px] text-slate-400 mt-1">Export all vaulted cars, bikes, and appliances with health scores.</p>
               </div>
               <button onclick="exportDataCsv('assets')" class="mt-4 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs py-2 transition">
                 Export Assets CSV
@@ -560,8 +679,18 @@
 
             <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4 flex flex-col justify-between">
               <div>
-                <h3 class="font-bold text-white text-xs">Audit Trail Report</h3>
-                <p class="text-[11px] text-slate-400 mt-1">Immutable security trail for administrative compliance.</p>
+                <h3 class="font-bold text-white text-xs">Expiry Radar CSV</h3>
+                <p class="text-[11px] text-slate-400 mt-1">Export active insurance, warranty, and PUC expiry dates.</p>
+              </div>
+              <button onclick="exportDataCsv('expiry')" class="mt-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs py-2 transition">
+                Export Expiries CSV
+              </button>
+            </div>
+
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4 flex flex-col justify-between">
+              <div>
+                <h3 class="font-bold text-white text-xs">Audit Trail CSV</h3>
+                <p class="text-[11px] text-slate-400 mt-1">Immutable security log for compliance and change surveillance.</p>
               </div>
               <button onclick="exportDataCsv('audit')" class="mt-4 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs py-2 transition">
                 Export Audit CSV
@@ -571,7 +700,7 @@
         </div>
       </section>
 
-      <!-- ===================== MODULE 12: SECURITY & AUDIT ===================== -->
+      <!-- ===================== MODULE 11: SECURITY & AUDIT ===================== -->
       <section id="tab-audit" class="tab-panel space-y-4">
         <div class="glass border border-white/10 rounded-2xl overflow-hidden">
           <div class="p-5 border-b border-white/10 flex items-center justify-between">
@@ -589,7 +718,7 @@
                   <th class="px-4 py-3 font-semibold">Timestamp</th>
                   <th class="px-4 py-3 font-semibold">Actor / Role</th>
                   <th class="px-4 py-3 font-semibold">Action</th>
-                  <th class="px-4 py-3 font-semibold">Target</th>
+                  <th class="px-4 py-3 font-semibold">Target Document / UID</th>
                   <th class="px-4 py-3 font-semibold">Reason</th>
                 </tr>
               </thead>
@@ -601,13 +730,13 @@
         </div>
       </section>
 
-      <!-- ===================== MODULE 13: SYSTEM SETTINGS ===================== -->
+      <!-- ===================== MODULE 12: SYSTEM SETTINGS ===================== -->
       <section id="tab-settings" class="tab-panel space-y-4">
         <div class="glass border border-white/10 rounded-2xl p-6">
           <h2 class="text-white font-bold text-base flex items-center gap-2 mb-1">
             <i data-lucide="settings" class="w-4 h-4 text-slate-300"></i> Backend Control &amp; System Health
           </h2>
-          <p class="text-xs text-slate-400 mb-6">Real-time status of backend services and OCR engines.</p>
+          <p class="text-xs text-slate-400 mb-6">Real-time status of backend services, Firebase instances, and OCR engines.</p>
           <div class="space-y-3 text-xs">
             <div class="flex items-center justify-between border-b border-white/10 pb-3">
               <div>
@@ -625,16 +754,271 @@
             </div>
             <div class="flex items-center justify-between border-b border-white/10 pb-3">
               <div>
-                <p class="font-bold text-white">Google Cloud Vision OCR</p>
-                <p class="text-slate-400">Tier-2 precision fallback (<a class="underline text-brand-300" href="#">https://asia-south1-assetdoctor-5fd25.cloudfunctions.net/scanInvoiceVision</a>)</p>
+                <p class="font-bold text-white">Collection Group Surveillance</p>
+                <p class="text-slate-400">Global Super Admin reads enabled on Assets &amp; Documents</p>
               </div>
-              <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300">OPERATIONAL</span>
+              <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300">ACTIVE</span>
             </div>
           </div>
         </div>
       </section>
 
     </main>
+  </div>
+</div>
+
+<!-- ============================= MODALS & DRAWERS ============================= -->
+
+<!-- 1. CUSTOMER 360 MODAL -->
+<div id="customerModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 overflow-y-auto">
+  <div class="glass-strong border border-white/10 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-modal overflow-hidden">
+    <div class="p-5 border-b border-white/10 flex items-center justify-between shrink-0">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-brand-500/20 border border-brand-500/30 flex items-center justify-center text-brand-300 font-bold text-sm">
+          360
+        </div>
+        <div>
+          <h2 id="modalCustomerName" class="text-white font-bold text-base leading-tight">Customer Profile</h2>
+          <p id="modalCustomerUid" class="text-slate-400 text-xs font-mono"></p>
+        </div>
+      </div>
+      <button onclick="closeModal('customerModal')" class="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 flex items-center justify-center transition">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-6 space-y-6">
+      <!-- Identity Cards -->
+      <div class="grid sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+        <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3">
+          <span class="text-slate-500 block uppercase font-bold text-[10px]">Phone Number</span>
+          <span id="modalCustomerPhone" class="text-white font-mono font-semibold mt-0.5 block">—</span>
+        </div>
+        <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3">
+          <span class="text-slate-500 block uppercase font-bold text-[10px]">Email Address</span>
+          <span id="modalCustomerEmail" class="text-white font-semibold mt-0.5 block truncate">—</span>
+        </div>
+        <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3">
+          <span class="text-slate-500 block uppercase font-bold text-[10px]">Address / City</span>
+          <span id="modalCustomerAddress" class="text-white font-semibold mt-0.5 block truncate">—</span>
+        </div>
+        <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3">
+          <span class="text-slate-500 block uppercase font-bold text-[10px]">Account Status</span>
+          <span id="modalCustomerStatus" class="mt-0.5 inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300">Active</span>
+        </div>
+      </div>
+
+      <!-- Customer Assets -->
+      <div>
+        <h3 class="text-white font-bold text-sm mb-2 flex items-center gap-2">
+          <i data-lucide="boxes" class="w-4 h-4 text-cyan-400"></i> Vaulted Assets (<span id="modalCustomerAssetCount">0</span>)
+        </h3>
+        <div id="modalCustomerAssetsList" class="space-y-2 text-xs">
+          <p class="text-slate-500 py-3">No assets attached to this account.</p>
+        </div>
+      </div>
+
+      <!-- Customer Documents -->
+      <div>
+        <h3 class="text-white font-bold text-sm mb-2 flex items-center gap-2">
+          <i data-lucide="file-text" class="w-4 h-4 text-violet-400"></i> Vaulted Documents (<span id="modalCustomerDocCount">0</span>)
+        </h3>
+        <div id="modalCustomerDocsList" class="space-y-2 text-xs">
+          <p class="text-slate-500 py-3">No documents attached to this account.</p>
+        </div>
+      </div>
+
+      <!-- Customer Chronological Timeline -->
+      <div>
+        <h3 class="text-white font-bold text-sm mb-2 flex items-center gap-2">
+          <i data-lucide="history" class="w-4 h-4 text-amber-400"></i> Account Activity Timeline
+        </h3>
+        <div id="modalCustomerTimeline" class="space-y-2 text-xs border-l border-white/10 pl-4 ml-2">
+          <p class="text-slate-500 py-2">Loading timeline...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 2. ASSET 360 MODAL -->
+<div id="assetModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 overflow-y-auto">
+  <div class="glass-strong border border-white/10 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-modal overflow-hidden">
+    <div class="p-5 border-b border-white/10 flex items-center justify-between shrink-0">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-300 font-bold text-sm">
+          <i data-lucide="box" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h2 id="modalAssetName" class="text-white font-bold text-base leading-tight">Asset 360</h2>
+          <p id="modalAssetCategoryBrand" class="text-slate-400 text-xs"></p>
+        </div>
+      </div>
+      <button onclick="closeModal('assetModal')" class="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 flex items-center justify-center transition">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-6 space-y-6">
+      <!-- Top Health Banner -->
+      <div class="rounded-2xl border border-white/10 bg-slate-900/80 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <span class="text-xs text-slate-400 block font-semibold uppercase tracking-wider">Health Status</span>
+          <p id="modalAssetHealthGrade" class="text-lg font-black text-emerald-400 mt-0.5">Healthy &amp; Operational</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="text-right">
+            <span class="text-[10px] text-slate-400 block uppercase font-bold">Health Score</span>
+            <span id="modalAssetHealthScore" class="text-2xl font-black text-white font-mono">90%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Specifications Grid -->
+      <div class="grid sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+        <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3">
+          <span class="text-slate-500 block uppercase font-bold text-[10px]">Identifier / Reg No</span>
+          <span id="modalAssetReg" class="text-brand-300 font-mono font-bold mt-0.5 block">—</span>
+        </div>
+        <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3">
+          <span class="text-slate-500 block uppercase font-bold text-[10px]">Serial / Chassis No</span>
+          <span id="modalAssetChassis" class="text-white font-mono mt-0.5 block truncate">—</span>
+        </div>
+        <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3">
+          <span class="text-slate-500 block uppercase font-bold text-[10px]">Purchase Price</span>
+          <span id="modalAssetPrice" class="text-emerald-300 font-mono font-bold mt-0.5 block">—</span>
+        </div>
+        <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3">
+          <span class="text-slate-500 block uppercase font-bold text-[10px]">Purchase Date</span>
+          <span id="modalAssetPurchaseDate" class="text-white mt-0.5 block">—</span>
+        </div>
+        <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3">
+          <span class="text-slate-500 block uppercase font-bold text-[10px]">Owner Customer UID</span>
+          <span id="modalAssetOwnerUid" class="text-slate-300 font-mono mt-0.5 block truncate cursor-pointer hover:underline" onclick="openCustomerFromUid(this.textContent)">—</span>
+        </div>
+        <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3">
+          <span class="text-slate-500 block uppercase font-bold text-[10px]">Asset Document ID</span>
+          <span id="modalAssetId" class="text-slate-400 font-mono mt-0.5 block truncate">—</span>
+        </div>
+      </div>
+
+      <!-- Coverage Section: Warranty, Insurance, PUC -->
+      <div class="grid sm:grid-cols-3 gap-3 text-xs">
+        <div class="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3.5">
+          <span class="text-amber-300 block uppercase font-bold text-[10px] mb-1">Warranty Coverage</span>
+          <p id="modalAssetWarrantyExpiry" class="text-white font-bold text-sm">—</p>
+          <p id="modalAssetWarrantyStatus" class="text-[11px] text-slate-400 mt-1">Checking status...</p>
+        </div>
+        <div class="rounded-xl border border-rose-500/30 bg-rose-500/5 p-3.5">
+          <span class="text-rose-300 block uppercase font-bold text-[10px] mb-1">Insurance Policy</span>
+          <p id="modalAssetInsuranceExpiry" class="text-white font-bold text-sm">—</p>
+          <p id="modalAssetInsuranceStatus" class="text-[11px] text-slate-400 mt-1">Checking policy...</p>
+        </div>
+        <div class="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-3.5">
+          <span class="text-yellow-300 block uppercase font-bold text-[10px] mb-1">PUC Certificate</span>
+          <p id="modalAssetPucExpiry" class="text-white font-bold text-sm">—</p>
+          <p id="modalAssetPucStatus" class="text-[11px] text-slate-400 mt-1">Checking certificate...</p>
+        </div>
+      </div>
+
+      <!-- Service History Section -->
+      <div>
+        <h3 class="text-white font-bold text-sm mb-2 flex items-center gap-2">
+          <i data-lucide="wrench" class="w-4 h-4 text-emerald-400"></i> Service &amp; Maintenance Logs
+        </h3>
+        <div id="modalAssetServiceLogs" class="space-y-2 text-xs">
+          <p class="text-slate-500 py-3">No service history records attached in Firestore.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 3. DOCUMENT DETAIL & OCR MODAL -->
+<div id="documentModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 overflow-y-auto">
+  <div class="glass-strong border border-white/10 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-modal overflow-hidden">
+    <div class="p-5 border-b border-white/10 flex items-center justify-between shrink-0">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-violet-500/20 border border-violet-500/30 flex items-center justify-center text-violet-300 font-bold text-sm">
+          <i data-lucide="file-text" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h2 id="modalDocTitle" class="text-white font-bold text-base leading-tight">Document Inspection</h2>
+          <p id="modalDocId" class="text-slate-400 text-xs font-mono"></p>
+        </div>
+      </div>
+      <button onclick="closeModal('documentModal')" class="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 flex items-center justify-center transition">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-6 space-y-6">
+      <div class="grid md:grid-cols-2 gap-6">
+        <!-- Left: Document Details -->
+        <div class="space-y-3 text-xs">
+          <h3 class="text-white font-bold text-sm flex items-center gap-2">
+            <i data-lucide="info" class="w-4 h-4 text-violet-400"></i> Document Properties
+          </h3>
+          <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4 space-y-2">
+            <div class="flex justify-between">
+              <span class="text-slate-400">Document Type:</span>
+              <span id="modalDocType" class="text-brand-300 font-bold uppercase">—</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-400">Owner Customer:</span>
+              <span id="modalDocOwner" class="text-slate-300 font-mono">—</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-400">Linked Asset ID:</span>
+              <span id="modalDocAsset" class="text-slate-300 font-mono">—</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-400">Invoice / Policy No:</span>
+              <span id="modalDocPolicyNo" class="text-white font-mono font-bold">—</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-400">Expiry Date:</span>
+              <span id="modalDocExpiry" class="text-white font-bold">—</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-400">Storage Path:</span>
+              <span id="modalDocStoragePath" class="text-slate-400 font-mono text-[10px] truncate max-w-[200px]">—</span>
+            </div>
+          </div>
+
+          <div id="modalDocActionBtnContainer" class="pt-2">
+            <!-- Download or Open button injected here -->
+          </div>
+        </div>
+
+        <!-- Right: Extracted OCR Data -->
+        <div class="space-y-3 text-xs">
+          <h3 class="text-white font-bold text-sm flex items-center gap-2">
+            <i data-lucide="scan" class="w-4 h-4 text-amber-400"></i> Extracted OCR Telemetry
+          </h3>
+          <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+            <pre id="modalDocOcrText" class="font-mono text-[11px] text-slate-300 whitespace-pre-wrap max-h-60 overflow-y-auto">No raw OCR text</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 4. GLOBAL SEARCH MODAL -->
+<div id="searchModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-start justify-center p-4 pt-20 overflow-y-auto">
+  <div class="glass-strong border border-white/10 rounded-2xl max-w-2xl w-full flex flex-col shadow-modal overflow-hidden">
+    <div class="p-4 border-b border-white/10 flex items-center gap-3">
+      <i data-lucide="search" class="w-5 h-5 text-brand-400 shrink-0"></i>
+      <input id="modalGlobalSearchInput" type="text" placeholder="Search across all customers, assets, documents, UIDs, and policies..."
+        class="w-full bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none" />
+      <button onclick="closeModal('searchModal')" class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 flex items-center justify-center">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+    <div id="searchResultsContainer" class="p-4 max-h-96 overflow-y-auto space-y-2 text-xs">
+      <p class="text-slate-500 text-center py-6">Type a query to search across the live database.</p>
+    </div>
   </div>
 </div>
 
@@ -653,15 +1037,17 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// Live State Container (Zero mock data)
+// Live State Container
 const state = {
   currentUser: null,
   currentRole: null,
   users: [],
   assets: [],
+  documents: [],
   tickets: [],
   auditLogs: [],
   ocrQueue: [],
+  expiries: []
 };
 
 function $(id) { return document.getElementById(id); }
@@ -673,10 +1059,36 @@ function switchTab(tabId) {
   if (panel) panel.classList.add('active');
   const navBtn = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
   if (navBtn) navBtn.classList.add('active');
+  if (window.lucide) lucide.createIcons();
 }
 
 document.querySelectorAll('.nav-item').forEach(btn => {
   btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+function openModal(modalId) {
+  const modal = $(modalId);
+  if (modal) {
+    modal.classList.remove('hidden');
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+function closeModal(modalId) {
+  const modal = $(modalId);
+  if (modal) modal.classList.add('hidden');
+}
+
+// Close modals with Escape key
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-backdrop').forEach(m => m.classList.add('hidden'));
+  }
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    openModal('searchModal');
+    $('modalGlobalSearchInput').focus();
+  }
 });
 
 function showAuthError(msg) {
@@ -813,13 +1225,13 @@ $('btnSendReset').addEventListener('click', async () => {
 // Real-Time Firestore Data Subscriptions
 // ----------------------------------------------------
 function subscribeToFirestoreData() {
-  // Initial KPI and empty-state setup
   updateKPIs();
 
   // 1. Users (merge 'users' and 'Users' root collections)
   const userMap = new Map();
   const updateUserList = () => {
     state.users = Array.from(userMap.values());
+    $('sidebarUserCount').textContent = state.users.length.toString();
     renderUsers();
     updateKPIs();
   };
@@ -848,6 +1260,8 @@ function subscribeToFirestoreData() {
   const assetMap = new Map();
   const updateAssetList = () => {
     state.assets = Array.from(assetMap.values());
+    $('sidebarAssetCount').textContent = state.assets.length.toString();
+    recalculateExpiries();
     renderAssets();
     updateKPIs();
   };
@@ -868,7 +1282,44 @@ function subscribeToFirestoreData() {
     console.error('[Firestore Error: collectionGroup assets]', err.code, err.message);
   });
 
-  // 3. Support Tickets
+  // 3. Documents (collection group query for 'Documents' and 'documents')
+  const docMap = new Map();
+  const updateDocList = () => {
+    state.documents = Array.from(docMap.values());
+    $('sidebarDocCount').textContent = state.documents.length.toString();
+    renderDocuments();
+    updateKPIs();
+  };
+
+  db.collectionGroup('Documents').onSnapshot((snap) => {
+    snap.docs.forEach(d => {
+      const data = d.data();
+      const pathParts = d.ref.path.split('/');
+      const ownerUid = pathParts[1] || data.ownerUid || data.uid || '—';
+      const assetId = pathParts[3] || data.assetId || '—';
+      docMap.set(d.id, { id: d.id, path: d.ref.path, ownerUid, assetId, ...data });
+    });
+    updateDocList();
+  }, (err) => {
+    console.error('[Firestore Error: collectionGroup Documents]', err.code, err.message);
+  });
+
+  db.collectionGroup('documents').onSnapshot((snap) => {
+    snap.docs.forEach(d => {
+      if (!docMap.has(d.id)) {
+        const data = d.data();
+        const pathParts = d.ref.path.split('/');
+        const ownerUid = pathParts[1] || data.ownerUid || data.uid || '—';
+        const assetId = pathParts[3] || data.assetId || '—';
+        docMap.set(d.id, { id: d.id, path: d.ref.path, ownerUid, assetId, ...data });
+      }
+    });
+    updateDocList();
+  }, (err) => {
+    console.error('[Firestore Error: collectionGroup documents]', err.code, err.message);
+  });
+
+  // 4. Support Tickets
   db.collection('supportTickets').orderBy('createdAt', 'desc').onSnapshot((snap) => {
     state.tickets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderTickets();
@@ -878,7 +1329,7 @@ function subscribeToFirestoreData() {
     renderTickets();
   });
 
-  // 4. Audit Logs
+  // 5. Audit Logs
   db.collection('auditLogs').orderBy('timestamp', 'desc').limit(100).onSnapshot((snap) => {
     state.auditLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderAuditLogs();
@@ -887,7 +1338,7 @@ function subscribeToFirestoreData() {
     renderAuditLogs();
   });
 
-  // 5. OCR Review Queue
+  // 6. OCR Review Queue
   db.collection('ocrReviewQueue').orderBy('submittedAt', 'desc').onSnapshot((snap) => {
     state.ocrQueue = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderOcrQueue();
@@ -898,9 +1349,77 @@ function subscribeToFirestoreData() {
   });
 }
 
+// ----------------------------------------------------
+// Expiry Surveillance Calculation Engine
+// ----------------------------------------------------
+function recalculateExpiries() {
+  const now = new Date();
+  const list = [];
+
+  state.assets.forEach(a => {
+    const ownerUid = a.ownerUid || a.uid || '—';
+    const assetTitle = a.assetName || a.name || 'Unnamed Asset';
+    const category = a.categoryLabel || a.category || 'Other';
+
+    const checks = [
+      { type: 'Warranty', date: a.warrantyExpiry },
+      { type: 'Insurance', date: a.insuranceExpiry },
+      { type: 'PUC', date: a.pucExpiry }
+    ];
+
+    checks.forEach(c => {
+      if (c.date) {
+        const expDate = new Date(c.date);
+        if (!isNaN(expDate.getTime())) {
+          const diffDays = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          let status = 'HEALTHY';
+          if (diffDays < 0) status = 'EXPIRED';
+          else if (diffDays <= 30) status = 'EXP30';
+          else if (diffDays <= 60) status = 'EXP60';
+
+          list.push({
+            assetId: a.id,
+            assetTitle,
+            category,
+            brand: a.brandName || a.brand || '—',
+            ownerUid,
+            type: c.type,
+            date: c.date,
+            diffDays,
+            status
+          });
+        }
+      }
+    });
+  });
+
+  state.expiries = list.sort((a, b) => a.diffDays - b.diffDays);
+
+  const expiredCount = state.expiries.filter(x => x.status === 'EXPIRED').length;
+  const exp30Count = state.expiries.filter(x => x.status === 'EXP30').length;
+  const healthyCount = state.expiries.filter(x => x.status === 'HEALTHY' || x.status === 'EXP60').length;
+
+  $('radarExpiredCount').textContent = expiredCount.toString();
+  $('radarExp30Count').textContent = exp30Count.toString();
+  $('radarHealthyCount').textContent = healthyCount.toString();
+  $('sidebarExpiryAlerts').textContent = (expiredCount + exp30Count).toString();
+
+  const expiringInsCount = state.expiries.filter(x => x.type === 'Insurance' && (x.status === 'EXPIRED' || x.status === 'EXP30')).length;
+  const expiringWarCount = state.expiries.filter(x => x.type === 'Warranty' && (x.status === 'EXPIRED' || x.status === 'EXP30')).length;
+  const expiringPucCount = state.expiries.filter(x => x.type === 'PUC' && (x.status === 'EXPIRED' || x.status === 'EXP30')).length;
+
+  $('kpiExpiringInsurance').textContent = expiringInsCount.toString();
+  $('kpiExpiringWarranty').textContent = expiringWarCount.toString();
+  $('kpiExpiringPUC').textContent = expiringPucCount.toString();
+
+  renderExpiryTable();
+}
+
 function updateKPIs() {
   $('kpiUsers').textContent = (state.users.length || 0).toLocaleString('en-IN');
   $('kpiAssets').textContent = (state.assets.length || 0).toLocaleString('en-IN');
+  $('kpiDocuments').textContent = (state.documents.length || 0).toLocaleString('en-IN');
+  
   const openCount = state.tickets.filter(t => t.status === 'open' || t.status === 'in_progress').length;
   $('kpiTickets').textContent = openCount.toString();
   $('openTicketsBadge').textContent = openCount.toString();
@@ -908,6 +1427,9 @@ function updateKPIs() {
   $('ocrQueueBadge').textContent = (state.ocrQueue.length || 0).toString();
 }
 
+// ----------------------------------------------------
+// UI Renderers
+// ----------------------------------------------------
 function renderUsers() {
   const q = ($('userSearchInput')?.value || '').toLowerCase().trim();
   const filtered = state.users.filter(u => {
@@ -920,33 +1442,47 @@ function renderUsers() {
   });
 
   if (!filtered.length) {
-    $('usersTableBody').innerHTML = `<tr><td colspan="5" class="text-center py-6 text-slate-500 text-xs">No customer records found.</td></tr>`;
+    $('usersTableBody').innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-500 text-xs">No customer records found.</td></tr>`;
     return;
   }
 
-  $('usersTableBody').innerHTML = filtered.map(u => `
-    <tr class="table-row">
-      <td class="px-4 py-3 font-semibold text-white">
-        ${u.name || 'Asset Owner'}<br>
-        <span class="text-[11px] text-slate-400 font-mono">${u.uid || u.id}</span>
-      </td>
-      <td class="px-4 py-3 text-slate-300">
-        ${u.email || '—'}<br>
-        <span class="text-[11px] text-slate-400 font-mono">${u.phoneNumber || u.phone || '—'}</span>
-      </td>
-      <td class="px-4 py-3 text-slate-300">${u.address || u.city || '—'}</td>
-      <td class="px-4 py-3">
-        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${u.status === 'Suspended' ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30' : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'}">
-          ${u.status || 'Active'}
-        </span>
-      </td>
-      <td class="px-4 py-3 text-right">
-        <button onclick="toggleUserSuspend('${u.id}', '${u.status}')" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-bold text-slate-200 transition">
-          ${u.status === 'Suspended' ? 'Reactivate' : 'Suspend'}
-        </button>
-      </td>
-    </tr>
-  `).join('');
+  $('usersTableBody').innerHTML = filtered.map(u => {
+    const userUid = u.uid || u.id;
+    const userAssets = state.assets.filter(a => (a.ownerUid === userUid || a.uid === userUid));
+    return `
+      <tr class="table-row">
+        <td class="px-4 py-3 font-semibold text-white">
+          <button onclick="openCustomerModal('${userUid}')" class="text-left hover:text-brand-300 transition">
+            ${u.name || 'Asset Owner'}<br>
+            <span class="text-[11px] text-slate-400 font-mono">${userUid}</span>
+          </button>
+        </td>
+        <td class="px-4 py-3 text-slate-300">
+          ${u.email || '—'}<br>
+          <span class="text-[11px] text-slate-400 font-mono">${u.phoneNumber || u.phone || '—'}</span>
+        </td>
+        <td class="px-4 py-3 text-slate-300">${u.address || u.city || '—'}</td>
+        <td class="px-4 py-3">
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+            ${userAssets.length} Assets
+          </span>
+        </td>
+        <td class="px-4 py-3">
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${u.status === 'Suspended' ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30' : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'}">
+            ${u.status || 'Active'}
+          </span>
+        </td>
+        <td class="px-4 py-3 text-right space-x-2">
+          <button onclick="openCustomerModal('${userUid}')" class="px-2.5 py-1 rounded-lg bg-brand-600/20 hover:bg-brand-600/30 text-brand-300 border border-brand-500/30 text-xs font-bold transition">
+            View 360
+          </button>
+          <button onclick="toggleUserSuspend('${userUid}', '${u.status}')" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-bold text-slate-300 transition">
+            ${u.status === 'Suspended' ? 'Reactivate' : 'Suspend'}
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
 }
 
 async function toggleUserSuspend(userId, currentStatus) {
@@ -959,7 +1495,7 @@ async function toggleUserSuspend(userId, currentStatus) {
       actorRole: state.currentRole,
       action: 'USER_STATUS_CHANGE',
       targetUserId: userId,
-      oldValue: currentStatus,
+      oldValue: currentStatus || 'Active',
       newValue: nextStatus,
       timestamp: new Date().toISOString(),
       reason: 'Admin modified customer account status'
@@ -969,13 +1505,110 @@ async function toggleUserSuspend(userId, currentStatus) {
   }
 }
 
+function openCustomerModal(uid) {
+  const u = state.users.find(x => (x.uid === uid || x.id === uid)) || { uid, name: 'Customer' };
+  $('modalCustomerName').textContent = u.name || 'Asset Owner';
+  $('modalCustomerUid').textContent = 'UID: ' + uid;
+  $('modalCustomerPhone').textContent = u.phoneNumber || u.phone || '—';
+  $('modalCustomerEmail').textContent = u.email || '—';
+  $('modalCustomerAddress').textContent = u.address || u.city || '—';
+  $('modalCustomerStatus').textContent = u.status || 'Active';
+
+  const userAssets = state.assets.filter(a => (a.ownerUid === uid || a.uid === uid));
+  $('modalCustomerAssetCount').textContent = userAssets.length.toString();
+  if (!userAssets.length) {
+    $('modalCustomerAssetsList').innerHTML = `<p class="text-slate-500 py-3">No assets attached to this account.</p>`;
+  } else {
+    $('modalCustomerAssetsList').innerHTML = userAssets.map(a => `
+      <div onclick="closeModal('customerModal'); openAssetModal('${a.id}');" class="p-3 rounded-xl border border-white/10 bg-slate-900/60 hover:bg-slate-800/60 cursor-pointer flex items-center justify-between transition">
+        <div>
+          <p class="font-bold text-white">${a.assetName || a.name || 'Unnamed Asset'} <span class="text-slate-400 font-normal">(${a.brandName || a.brand || '—'})</span></p>
+          <p class="text-[11px] text-slate-400 mt-0.5">Category: ${a.categoryLabel || a.category || 'Other'} · Identifier: <strong class="text-brand-300 font-mono">${a.registration || a.serialNumber || '—'}</strong></p>
+        </div>
+        <div class="text-right">
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+            ${a.healthScore ? `${a.healthScore}%` : 'Healthy'}
+          </span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  const userDocs = state.documents.filter(d => (d.ownerUid === uid));
+  $('modalCustomerDocCount').textContent = userDocs.length.toString();
+  if (!userDocs.length) {
+    $('modalCustomerDocsList').innerHTML = `<p class="text-slate-500 py-3">No documents attached to this account.</p>`;
+  } else {
+    $('modalCustomerDocsList').innerHTML = userDocs.map(d => `
+      <div onclick="closeModal('customerModal'); openDocumentModal('${d.id}');" class="p-3 rounded-xl border border-white/10 bg-slate-900/60 hover:bg-slate-800/60 cursor-pointer flex items-center justify-between transition">
+        <div>
+          <p class="font-bold text-white uppercase">${d.type || 'Document'} <span class="text-slate-400 font-normal">(${d.label || d.id})</span></p>
+          <p class="text-[11px] text-slate-400 mt-0.5">Policy / Invoice: ${d.invoiceOrPolicyNo || '—'}</p>
+        </div>
+        <span class="text-brand-300 font-bold text-xs">Inspect &rarr;</span>
+      </div>
+    `).join('');
+  }
+
+  // Generate real chronological timeline
+  const timeline = [];
+  if (u.createdAt) {
+    const d = u.createdAt._seconds ? new Date(u.createdAt._seconds * 1000) : new Date(u.createdAt);
+    timeline.push({ time: d, text: 'Account registered with Asset Doctor' });
+  }
+  userAssets.forEach(a => {
+    if (a.createdAt) {
+      const d = a.createdAt._seconds ? new Date(a.createdAt._seconds * 1000) : new Date(a.createdAt);
+      timeline.push({ time: d, text: `Vaulted asset: ${a.assetName || a.name || 'Asset'}` });
+    }
+  });
+  userDocs.forEach(d => {
+    if (d.createdAt) {
+      const dt = d.createdAt._seconds ? new Date(d.createdAt._seconds * 1000) : new Date(d.createdAt);
+      timeline.push({ time: dt, text: `Uploaded document: ${d.label || d.type || 'Document'}` });
+    }
+  });
+
+  timeline.sort((a, b) => b.time - a.time);
+  if (!timeline.length) {
+    $('modalCustomerTimeline').innerHTML = `<p class="text-slate-500 py-2">No historical events recorded.</p>`;
+  } else {
+    $('modalCustomerTimeline').innerHTML = timeline.map(e => `
+      <div class="relative pl-3 pb-3">
+        <span class="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-brand-400 ring-4 ring-slate-950"></span>
+        <span class="text-[10px] text-slate-400 font-mono">${isNaN(e.time.getTime()) ? '—' : e.time.toLocaleString()}</span>
+        <p class="text-white font-semibold mt-0.5">${e.text}</p>
+      </div>
+    `).join('');
+  }
+
+  openModal('customerModal');
+}
+
+function openCustomerFromUid(uid) {
+  if (!uid || uid === '—') return;
+  closeModal('assetModal');
+  closeModal('documentModal');
+  openCustomerModal(uid.trim());
+}
+
 function renderAssets() {
-  if (!state.assets.length) {
-    $('assetsTableBody').innerHTML = `<tr><td colspan="5" class="text-center py-6 text-slate-500 text-xs">No assets vaulted in Firestore.</td></tr>`;
+  const q = ($('assetSearchInput')?.value || '').toLowerCase().trim();
+  const filtered = state.assets.filter(a => {
+    if (!q) return true;
+    const name = (a.assetName || a.name || '').toLowerCase();
+    const brand = (a.brandName || a.brand || '').toLowerCase();
+    const reg = (a.registration || a.registrationNumber || a.chassisNumber || a.serialNumber || '').toLowerCase();
+    const owner = (a.ownerUid || a.uid || '').toLowerCase();
+    return name.includes(q) || brand.includes(q) || reg.includes(q) || owner.includes(q);
+  });
+
+  if (!filtered.length) {
+    $('assetsTableBody').innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-500 text-xs">No assets vaulted in Firestore.</td></tr>`;
     return;
   }
 
-  $('assetsTableBody').innerHTML = state.assets.map(a => {
+  $('assetsTableBody').innerHTML = filtered.map(a => {
     const assetTitle = a.assetName || a.name || 'Unnamed Asset';
     const brand = a.brandName || a.brand || '—';
     const category = a.categoryLabel || a.category || a.assetCategory || 'Other';
@@ -985,12 +1618,16 @@ function renderAssets() {
     return `
       <tr class="table-row">
         <td class="px-4 py-3 font-semibold text-white">
-          ${assetTitle}<br>
-          <span class="text-[11px] text-slate-400">${brand}</span>
+          <button onclick="openAssetModal('${a.id}')" class="text-left hover:text-cyan-300 transition">
+            ${assetTitle}<br>
+            <span class="text-[11px] text-slate-400">${brand}</span>
+          </button>
         </td>
         <td class="px-4 py-3 uppercase text-[11px] font-bold text-slate-300">${category}</td>
         <td class="px-4 py-3 font-mono text-[11px] text-slate-400 truncate max-w-[140px]" title="${a.ownerUid || a.uid || '—'}">
-          ${a.ownerUid || a.uid || '—'}
+          <button onclick="openCustomerFromUid('${a.ownerUid || a.uid}')" class="hover:text-brand-300 hover:underline">
+            ${a.ownerUid || a.uid || '—'}
+          </button>
         </td>
         <td class="px-4 py-3 font-mono text-[11px] text-brand-300 font-bold">${identifier}</td>
         <td class="px-4 py-3">
@@ -998,9 +1635,182 @@ function renderAssets() {
             ${health ? `${health}%` : '—'}
           </span>
         </td>
+        <td class="px-4 py-3 text-right">
+          <button onclick="openAssetModal('${a.id}')" class="px-2.5 py-1 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-xs font-bold transition">
+            Inspect 360
+          </button>
+        </td>
       </tr>
     `;
   }).join('');
+}
+
+function openAssetModal(assetId) {
+  const a = state.assets.find(x => x.id === assetId);
+  if (!a) return;
+
+  $('modalAssetName').textContent = a.assetName || a.name || 'Asset 360';
+  $('modalAssetCategoryBrand').textContent = `${a.categoryLabel || a.category || 'Category'} · ${a.brandName || a.brand || 'Brand'}`;
+  
+  const health = a.healthScore || a.assetHealthScore || 90;
+  $('modalAssetHealthScore').textContent = health + '%';
+  $('modalAssetHealthGrade').textContent = health >= 80 ? 'Healthy & Operational' : health >= 50 ? 'Moderate Attention' : 'Critical Inspection Required';
+  
+  $('modalAssetReg').textContent = a.registration || a.registrationNumber || '—';
+  $('modalAssetChassis').textContent = a.chassisNumber || a.serialNumber || '—';
+  $('modalAssetPrice').textContent = a.purchasePrice || a.salePrice ? '₹' + Number(a.purchasePrice || a.salePrice).toLocaleString('en-IN') : '—';
+  $('modalAssetPurchaseDate').textContent = a.purchaseDate || '—';
+  $('modalAssetOwnerUid').textContent = a.ownerUid || a.uid || '—';
+  $('modalAssetId').textContent = a.id || '—';
+
+  // Warranty
+  $('modalAssetWarrantyExpiry').textContent = a.warrantyExpiry || '—';
+  $('modalAssetWarrantyStatus').textContent = a.warrantyExpiry ? `Expires: ${a.warrantyExpiry}` : 'No warranty recorded';
+
+  // Insurance
+  $('modalAssetInsuranceExpiry').textContent = a.insuranceExpiry || '—';
+  $('modalAssetInsuranceStatus').textContent = a.insuranceExpiry ? `Policy valid till ${a.insuranceExpiry}` : 'No active insurance policy';
+
+  // PUC
+  $('modalAssetPucExpiry').textContent = a.pucExpiry || '—';
+  $('modalAssetPucStatus').textContent = a.pucExpiry ? `Valid till ${a.pucExpiry}` : 'No PUC certificate recorded';
+
+  openModal('assetModal');
+}
+
+function renderDocuments() {
+  const q = ($('documentSearchInput')?.value || '').toLowerCase().trim();
+  const filtered = state.documents.filter(d => {
+    if (!q) return true;
+    const label = (d.label || '').toLowerCase();
+    const type = (d.type || '').toLowerCase();
+    const owner = (d.ownerUid || '').toLowerCase();
+    const id = (d.id || '').toLowerCase();
+    return label.includes(q) || type.includes(q) || owner.includes(q) || id.includes(q);
+  });
+
+  if (!filtered.length) {
+    $('documentsTableBody').innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-500 text-xs">No documents found in vault.</td></tr>`;
+    return;
+  }
+
+  $('documentsTableBody').innerHTML = filtered.map(d => `
+    <tr class="table-row">
+      <td class="px-4 py-3 font-semibold text-white">
+        <button onclick="openDocumentModal('${d.id}')" class="text-left hover:text-violet-300 transition">
+          <span class="uppercase text-[11px] font-bold text-violet-400 block">${d.type || 'Document'}</span>
+          <span class="text-slate-300 text-xs">${d.label || d.id}</span>
+        </button>
+      </td>
+      <td class="px-4 py-3 font-mono text-[11px] text-slate-400 truncate max-w-[140px]" title="${d.ownerUid}">
+        <button onclick="openCustomerFromUid('${d.ownerUid}')" class="hover:text-brand-300 hover:underline">
+          ${d.ownerUid}
+        </button>
+      </td>
+      <td class="px-4 py-3 font-mono text-[11px] text-slate-400 truncate max-w-[120px]">
+        ${d.assetId || '—'}
+      </td>
+      <td class="px-4 py-3 font-mono text-[11px] text-slate-300">${d.expiryDate || '—'}</td>
+      <td class="px-4 py-3">
+        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+          ${d.status || 'ACTIVE'}
+        </span>
+      </td>
+      <td class="px-4 py-3 text-right">
+        <button onclick="openDocumentModal('${d.id}')" class="px-2.5 py-1 rounded-lg bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border border-violet-500/30 text-xs font-bold transition">
+          Inspect &amp; OCR
+        </button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openDocumentModal(docId) {
+  const d = state.documents.find(x => x.id === docId);
+  if (!d) return;
+
+  $('modalDocTitle').textContent = `${(d.type || 'Document').toUpperCase()} — ${d.label || d.id}`;
+  $('modalDocId').textContent = 'Path: ' + (d.path || d.id);
+  $('modalDocType').textContent = d.type || '—';
+  $('modalDocOwner').textContent = d.ownerUid || '—';
+  $('modalDocAsset').textContent = d.assetId || '—';
+  $('modalDocPolicyNo').textContent = d.invoiceOrPolicyNo || '—';
+  $('modalDocExpiry').textContent = d.expiryDate || '—';
+  $('modalDocStoragePath').textContent = d.storagePath || d.fileUrl || 'Encrypted Vault Storage';
+
+  if (d.fileUrl) {
+    $('modalDocActionBtnContainer').innerHTML = `
+      <a href="${d.fileUrl}" target="_blank" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs py-2.5 transition">
+        <i data-lucide="external-link" class="w-4 h-4"></i> Open Document File
+      </a>
+    `;
+  } else {
+    $('modalDocActionBtnContainer').innerHTML = `
+      <div class="rounded-xl border border-white/10 bg-slate-900/40 p-3 text-center text-[11px] text-slate-400">
+        Private encrypted storage record. Download available with vault key.
+      </div>
+    `;
+  }
+
+  $('modalDocOcrText').textContent = d.ocrExtract ? (typeof d.ocrExtract === 'object' ? JSON.stringify(d.ocrExtract, null, 2) : d.ocrExtract) : (d.rawOcrText || 'No raw OCR telemetry attached.');
+
+  openModal('documentModal');
+}
+
+function renderExpiryTable() {
+  const typeFilter = $('expiryFilterCategory')?.value || 'ALL';
+  const statusFilter = $('expiryFilterStatus')?.value || 'ALL';
+
+  const filtered = state.expiries.filter(item => {
+    if (typeFilter !== 'ALL' && item.type !== typeFilter) return false;
+    if (statusFilter !== 'ALL' && item.status !== statusFilter) return false;
+    return true;
+  });
+
+  if (!filtered.length) {
+    $('expiryTableBody').innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-500 text-xs">No coverage records matching criteria.</td></tr>`;
+    return;
+  }
+
+  $('expiryTableBody').innerHTML = filtered.map(item => {
+    const isExpired = item.diffDays < 0;
+    const isExp30 = item.diffDays >= 0 && item.diffDays <= 30;
+    const badgeClass = isExpired ? 'bg-rose-500/15 text-rose-300 border-rose-500/30' : isExp30 ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
+    const textLabel = isExpired ? `Expired ${Math.abs(item.diffDays)} days ago` : item.diffDays === 0 ? 'Due Today' : `Due in ${item.diffDays} days`;
+
+    return `
+      <tr class="table-row">
+        <td class="px-4 py-3 font-semibold text-white">
+          <button onclick="openAssetModal('${item.assetId}')" class="text-left hover:text-cyan-300 transition">
+            ${item.assetTitle}<br>
+            <span class="text-[11px] text-slate-400">${item.brand} · ${item.category}</span>
+          </button>
+        </td>
+        <td class="px-4 py-3 font-mono text-[11px] text-slate-400 truncate max-w-[140px]">
+          <button onclick="openCustomerFromUid('${item.ownerUid}')" class="hover:text-brand-300 hover:underline">
+            ${item.ownerUid}
+          </button>
+        </td>
+        <td class="px-4 py-3 uppercase text-[11px] font-bold text-slate-300">${item.type}</td>
+        <td class="px-4 py-3 font-mono text-[11px] text-white font-bold">${item.date}</td>
+        <td class="px-4 py-3">
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${badgeClass}">
+            ${textLabel}
+          </span>
+        </td>
+        <td class="px-4 py-3 text-right">
+          <button onclick="openAssetModal('${item.assetId}')" class="px-2.5 py-1 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-xs font-bold transition">
+            Inspect
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function filterExpiryType(type) {
+  if ($('expiryFilterCategory')) $('expiryFilterCategory').value = type;
+  renderExpiryTable();
 }
 
 function renderTickets() {
@@ -1153,16 +1963,112 @@ function renderAuditLogs() {
   `).join('');
 }
 
+// ----------------------------------------------------
+// Global Search Execution Engine
+// ----------------------------------------------------
+function executeGlobalSearch(q) {
+  const query = (q || '').toLowerCase().trim();
+  const container = $('searchResultsContainer');
+  if (!query) {
+    container.innerHTML = `<p class="text-slate-500 text-center py-6">Type a query to search across the live database.</p>`;
+    return;
+  }
+
+  const matchedUsers = state.users.filter(u => 
+    (u.name && u.name.toLowerCase().includes(query)) ||
+    (u.email && u.email.toLowerCase().includes(query)) ||
+    (u.phoneNumber && u.phoneNumber.includes(query)) ||
+    (u.phone && u.phone.includes(query)) ||
+    (u.uid && u.uid.toLowerCase().includes(query)) ||
+    (u.id && u.id.toLowerCase().includes(query))
+  );
+
+  const matchedAssets = state.assets.filter(a => 
+    (a.assetName && a.assetName.toLowerCase().includes(query)) ||
+    (a.name && a.name.toLowerCase().includes(query)) ||
+    (a.brandName && a.brandName.toLowerCase().includes(query)) ||
+    (a.registration && a.registration.toLowerCase().includes(query)) ||
+    (a.chassisNumber && a.chassisNumber.toLowerCase().includes(query)) ||
+    (a.serialNumber && a.serialNumber.toLowerCase().includes(query))
+  );
+
+  const matchedDocs = state.documents.filter(d =>
+    (d.label && d.label.toLowerCase().includes(query)) ||
+    (d.type && d.type.toLowerCase().includes(query)) ||
+    (d.invoiceOrPolicyNo && d.invoiceOrPolicyNo.toLowerCase().includes(query)) ||
+    (d.id && d.id.toLowerCase().includes(query))
+  );
+
+  if (!matchedUsers.length && !matchedAssets.length && !matchedDocs.length) {
+    container.innerHTML = `<p class="text-slate-500 text-center py-6">No matching records found for "${q}".</p>`;
+    return;
+  }
+
+  let html = '';
+  if (matchedUsers.length) {
+    html += `<div class="mb-3"><p class="text-[10px] uppercase font-bold text-brand-300 mb-1">Customers (${matchedUsers.length})</p>`;
+    html += matchedUsers.slice(0, 5).map(u => `
+      <div onclick="closeModal('searchModal'); openCustomerModal('${u.uid || u.id}');" class="p-2.5 rounded-xl border border-white/10 bg-slate-900/60 hover:bg-slate-800/60 cursor-pointer flex items-center justify-between transition">
+        <div>
+          <p class="font-bold text-white">${u.name || 'Asset Owner'}</p>
+          <p class="text-[11px] text-slate-400 font-mono">${u.phoneNumber || u.phone || u.email || u.uid || u.id}</p>
+        </div>
+        <span class="text-brand-300 font-bold text-xs">View &rarr;</span>
+      </div>
+    `).join('');
+    html += `</div>`;
+  }
+
+  if (matchedAssets.length) {
+    html += `<div class="mb-3"><p class="text-[10px] uppercase font-bold text-cyan-300 mb-1">Vaulted Assets (${matchedAssets.length})</p>`;
+    html += matchedAssets.slice(0, 5).map(a => `
+      <div onclick="closeModal('searchModal'); openAssetModal('${a.id}');" class="p-2.5 rounded-xl border border-white/10 bg-slate-900/60 hover:bg-slate-800/60 cursor-pointer flex items-center justify-between transition">
+        <div>
+          <p class="font-bold text-white">${a.assetName || a.name || 'Asset'} <span class="text-slate-400 font-normal">(${a.brandName || a.brand || '—'})</span></p>
+          <p class="text-[11px] text-slate-400 font-mono">Reg/Serial: ${a.registration || a.serialNumber || '—'}</p>
+        </div>
+        <span class="text-cyan-300 font-bold text-xs">View &rarr;</span>
+      </div>
+    `).join('');
+    html += `</div>`;
+  }
+
+  if (matchedDocs.length) {
+    html += `<div class="mb-3"><p class="text-[10px] uppercase font-bold text-violet-300 mb-1">Documents (${matchedDocs.length})</p>`;
+    html += matchedDocs.slice(0, 5).map(d => `
+      <div onclick="closeModal('searchModal'); openDocumentModal('${d.id}');" class="p-2.5 rounded-xl border border-white/10 bg-slate-900/60 hover:bg-slate-800/60 cursor-pointer flex items-center justify-between transition">
+        <div>
+          <p class="font-bold text-white uppercase">${d.type || 'Document'} <span class="text-slate-400 font-normal">(${d.label || d.id})</span></p>
+          <p class="text-[11px] text-slate-400 font-mono">Policy/Invoice: ${d.invoiceOrPolicyNo || '—'}</p>
+        </div>
+        <span class="text-violet-300 font-bold text-xs">View &rarr;</span>
+      </div>
+    `).join('');
+    html += `</div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+$('headerGlobalSearch')?.addEventListener('click', () => {
+  openModal('searchModal');
+  $('modalGlobalSearchInput').focus();
+});
+$('modalGlobalSearchInput')?.addEventListener('input', (e) => executeGlobalSearch(e.target.value));
+
 function exportDataCsv(type) {
   let rows = [];
   let filename = `assetdoctor_${type}_${Date.now()}.csv`;
 
   if (type === 'users') {
     rows = [['UID', 'Name', 'Email', 'Phone', 'City', 'Status']];
-    state.users.forEach(u => rows.push([u.id, u.name || '', u.email || '', u.phone || '', u.city || '', u.status || 'Active']));
+    state.users.forEach(u => rows.push([u.uid || u.id, u.name || '', u.email || '', u.phoneNumber || u.phone || '', u.address || u.city || '', u.status || 'Active']));
   } else if (type === 'assets') {
     rows = [['Asset ID', 'Name', 'Category', 'Brand', 'Reg/Serial', 'Owner UID', 'Health Score']];
-    state.assets.forEach(a => rows.push([a.id, a.name || a.assetName || '', a.category || '', a.brand || '', a.registrationNumber || a.regNo || '', a.uid || a.ownerUid || '', a.healthScore || '']));
+    state.assets.forEach(a => rows.push([a.id, a.assetName || a.name || '', a.categoryLabel || a.category || '', a.brandName || a.brand || '', a.registration || a.registrationNumber || '', a.ownerUid || a.uid || '', a.healthScore || '']));
+  } else if (type === 'expiry') {
+    rows = [['Asset ID', 'Asset Title', 'Category', 'Owner UID', 'Coverage Type', 'Expiry Date', 'Status']];
+    state.expiries.forEach(x => rows.push([x.assetId, x.assetTitle, x.category, x.ownerUid, x.type, x.date, x.status]));
   } else if (type === 'audit') {
     rows = [['Timestamp', 'Actor', 'Role', 'Action', 'Target', 'Reason']];
     state.auditLogs.forEach(l => rows.push([l.timestamp || '', l.actorId || '', l.actorRole || '', l.action || '', l.targetUserId || l.targetDocId || '', l.reason || '']));
@@ -1186,6 +2092,11 @@ $('btnRefresh').addEventListener('click', () => {
 });
 
 $('userSearchInput')?.addEventListener('input', renderUsers);
+$('assetSearchInput')?.addEventListener('input', renderAssets);
+$('documentSearchInput')?.addEventListener('input', renderDocuments);
+$('expiryFilterCategory')?.addEventListener('change', renderExpiryTable);
+$('expiryFilterStatus')?.addEventListener('change', renderExpiryTable);
+
 if (window.lucide) lucide.createIcons();
 </script>
 </body>

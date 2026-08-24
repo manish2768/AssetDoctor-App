@@ -152,7 +152,7 @@ service cloud.firestore {
     // ----------------------------------------------------
     match /auditLogs/{logId} {
       allow read: if isAdmin();
-      allow create: if isSignedIn();
+      allow create: if isSuperAdmin();
       allow update, delete: if false; // Strict immutability: No edits or deletes allowed
     }
 
