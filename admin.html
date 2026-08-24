@@ -91,8 +91,14 @@
           </div>
           <div>
             <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Password</label>
-            <input id="loginPassword" type="password" placeholder="••••••••" autocomplete="current-password" value=""
-              class="mt-1.5 w-full rounded-xl bg-slate-900/80 border border-white/10 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition" />
+            <div class="relative mt-1.5">
+              <input id="loginPassword" type="password" placeholder="••••••••" autocomplete="current-password" value=""
+                class="w-full rounded-xl bg-slate-900/80 border border-white/10 pl-3.5 pr-10 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition" />
+              <button id="btnTogglePassword" type="button" aria-label="Show password"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition p-1 focus:outline-none flex items-center justify-center">
+                <i id="passwordToggleIcon" data-lucide="eye" class="w-4 h-4"></i>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -743,6 +749,26 @@ $('btnSignIn').addEventListener('click', async () => {
 
 $('loginPassword').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') $('btnSignIn').click();
+});
+
+$('btnTogglePassword').addEventListener('click', (e) => {
+  e.preventDefault();
+  const pwdInput = $('loginPassword');
+  const icon = $('passwordToggleIcon');
+  const btn = $('btnTogglePassword');
+  const isMasked = pwdInput.type === 'password';
+
+  pwdInput.type = isMasked ? 'text' : 'password';
+  btn.setAttribute('aria-label', isMasked ? 'Hide password' : 'Show password');
+  
+  if (isMasked) {
+    icon.setAttribute('data-lucide', 'eye-off');
+  } else {
+    icon.setAttribute('data-lucide', 'eye');
+  }
+  if (window.lucide) {
+    lucide.createIcons();
+  }
 });
 
 $('btnLogoutSidebar').addEventListener('click', async () => {
