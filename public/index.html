@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#0B0E14" />
+    <meta name="description" content="AssetDoctor - Offline-First Smart Vault for Bills, Warranties, and FASTag Management" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="AssetDoctor" />
+    <meta name="google-site-verification" content="qjeON7Q8kUAbhE6uNwwbdHAdxlAgubzxYtnIJ6Z7cOE" />
+    
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/logo.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <title>AssetDoctor - Smart Care & Warranty Vault</title>
+    <!-- Google Tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-V4LESLP508"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-V4LESLP508');
+</script>
+    <script>
+      window.deferredPwaPrompt = null;
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        window.deferredPwaPrompt = e;
+      });
+
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js').then(
+            function(registration) {
+              console.log('ServiceWorker registered with scope: ', registration.scope);
+            },
+            function(err) {
+              console.warn('ServiceWorker registration failed: ', err);
+            }
+          );
+        });
+      }
+    </script>
+  </head>
+  <body class="bg-[#0B0E14] text-slate-100 antialiased selection:bg-[#10B981] selection:text-slate-950">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
