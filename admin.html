@@ -694,8 +694,7 @@ auth.onAuthStateChanged(async (user) => {
   try {
     const tokenResult = await user.getIdTokenResult(true);
     const claims = tokenResult.claims || {};
-    const userEmail = (user.email || '').toLowerCase().trim();
-    const isSuperAdmin = claims.super_admin === true || claims.admin === true || userEmail === 'manish2768@gmail.com';
+    const isSuperAdmin = claims.super_admin === true;
 
     if (!isSuperAdmin) {
       showAuthError('Access denied. Super Admin authorization required.');

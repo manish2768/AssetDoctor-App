@@ -7,7 +7,7 @@ rules_version = '2';
  * Security Principles:
  * - Public access is permanently disabled.
  * - Customer can read/write ONLY their own vaulted files (/users/{uid}/... and /vault_invoices/{uid}/...).
- * - Internal staff roles can read document scans for OCR inspection and support validation.
+ * - Super Admin can read document scans for OCR inspection and support validation.
  */
 
 service firebase.storage {
@@ -22,10 +22,7 @@ service firebase.storage {
     }
 
     function isAdmin() {
-      return isSignedIn() && (
-        request.auth.token.get('admin', false) == true ||
-        request.auth.token.get('role', '') in ['super_admin', 'admin', 'support_agent', 'ocr_reviewer', 'analytics_viewer']
-      );
+      return isSignedIn() && request.auth.token.get('super_admin', false) == true;
     }
 
     function isSafeContent() {

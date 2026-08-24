@@ -6,7 +6,7 @@ rules_version = '2';
  *
  * Architecture:
  * - Customer users access ONLY their own data (/users/{userId}/...).
- * - Internal staff access is gated by Firebase Auth custom claims (admin: true, or role: super_admin | admin | support_agent | ocr_reviewer | analytics_viewer).
+ * - Internal admin access is gated strictly by Firebase Auth custom claim (super_admin: true).
  * - Audit logs are append-only and strictly immutable.
  * - Admin credentials and administrative configuration are protected from public / customer access.
  */
@@ -30,11 +30,7 @@ service cloud.firestore {
     }
 
     function isSuperAdmin() {
-      return isSignedIn() && (
-        request.auth.token.get('super_admin', false) == true ||
-        request.auth.token.get('admin', false) == true ||
-        request.auth.token.get('email', '') == 'manish2768@gmail.com'
-      );
+      return isSignedIn() && request.auth.token.get('super_admin', false) == true;
     }
 
     function isAdmin() {
@@ -42,11 +38,11 @@ service cloud.firestore {
     }
 
     function isSupportAgent() {
-      return isSuperAdmin() || getRole() in ['admin', 'support_agent'];
+      return isSuperAdmin();
     }
 
     function isOcrReviewer() {
-      return isSuperAdmin() || getRole() in ['admin', 'ocr_reviewer'];
+      return isSuperAdmin();
     }
 
     function validEmail(email) {
