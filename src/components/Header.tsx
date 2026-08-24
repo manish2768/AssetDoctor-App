@@ -68,7 +68,7 @@ export const Header: React.FC<HeaderProps> = ({
                   Asset<span className="text-emerald-400">Doctor</span>
                 </h1>
                 <span className="text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  ServiVault V2.4
+                  ServiVault V2.5
                 </span>
               </div>
               <p className="text-xs text-slate-400 font-medium flex items-center gap-1.5 mt-0.5">

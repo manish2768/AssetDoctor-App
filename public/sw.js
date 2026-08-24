@@ -1,5 +1,5 @@
-// AssetDoctor Progressive Web App Service Worker V2.5
-const CACHE_NAME = 'assetdoctor-v2.5';
+// AssetDoctor Progressive Web App Service Worker V2.6
+const CACHE_NAME = 'assetdoctor-v2.6';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
