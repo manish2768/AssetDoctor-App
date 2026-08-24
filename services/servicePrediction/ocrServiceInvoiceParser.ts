@@ -153,31 +153,44 @@ export class OcrServiceInvoiceParser {
       }
     }
 
-    // 3. Extract Service Date
+    // 3. Extract Service Date (Supporting YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY, DD Month YYYY)
     const datePatterns = [
       /\b(\d{4}[-/]\d{2}[-/]\d{2})\b/, // YYYY-MM-DD
-      /\b(\d{2}[-/]\d{2}[-/]\d{4})\b/, // DD-MM-YYYY
+      /\b(\d{1,2}[-/]\d{1,2}[-/]\d{4})\b/, // DD/MM/YYYY or DD-MM-YYYY
       /\b(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})\b/i
     ];
 
     for (const pat of datePatterns) {
       const match = text.match(pat);
       if (match && match[1]) {
-        try {
-          const d = new Date(match[1]);
-          if (!isNaN(d.getTime())) {
-            const isoDate = d.toISOString().split('T')[0];
-            serviceDate = {
-              value: isoDate,
-              confidence: 0.94,
-              raw_text: match[0],
-              source: 'date_pattern_match',
-              verification_level: 'VERIFIED'
-            };
-            rawOcrSnippets.push(`Service Date: ${isoDate}`);
-            break;
-          }
-        } catch (_) {}
+        const rawDate = match[1];
+        let normalizedDate: string | undefined;
+
+        if (/^\d{4}[-/]\d{2}[-/]\d{2}$/.test(rawDate)) {
+          normalizedDate = rawDate.replace(/\//g, '-');
+        } else if (/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/.test(rawDate)) {
+          const [d, m, y] = rawDate.split(/[-/]/);
+          normalizedDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        } else {
+          try {
+            const d = new Date(rawDate);
+            if (!isNaN(d.getTime())) {
+              normalizedDate = d.toISOString().split('T')[0];
+            }
+          } catch (_) {}
+        }
+
+        if (normalizedDate) {
+          serviceDate = {
+            value: normalizedDate,
+            confidence: 0.94,
+            raw_text: match[0],
+            source: 'date_pattern_match',
+            verification_level: 'VERIFIED'
+          };
+          rawOcrSnippets.push(`Service Date: ${normalizedDate}`);
+          break;
+        }
       }
     }
 
@@ -209,30 +222,58 @@ export class OcrServiceInvoiceParser {
       }
     }
 
-    // 6. Extract Workshop / Service Center Name
-    const workshopMatch = text.match(/(?:workshop|dealer|service\s*center|center)\s*[:\-]?\s*([A-Z0-9\s.,&'-]{3,40})/i);
-    if (workshopMatch && workshopMatch[1]) {
-      workshopName = {
-        value: workshopMatch[1].trim(),
-        confidence: 0.86,
-        raw_text: workshopMatch[0],
-        source: 'workshop_name_pattern',
-        verification_level: 'VERIFIED'
-      };
-    }
-
-    // 7. Extract Total Amount
-    const totalMatch = text.match(/(?:total\s*amount|grand\s*total|net\s*amount|amount\s*paid|bill\s*amount|total)\s*[:\-]?\s*(?:₹|rs\.?|inr)?\s*([0-9,]+(?:\.[0-9]{2})?)/i);
-    if (totalMatch && totalMatch[1]) {
-      const parsedAmount = parseFloat(totalMatch[1].replace(/,/g, ''));
-      if (!isNaN(parsedAmount) && parsedAmount > 0) {
-        totalAmount = {
-          value: parsedAmount,
-          confidence: 0.93,
-          raw_text: totalMatch[0],
-          source: 'total_amount_pattern',
+    // 6. Extract Workshop / Service Center Name (single line only)
+    for (const line of lines) {
+      const workshopMatch = line.match(/(?:workshop|dealer|service\s*center|authorised\s*center)\s*[:\-]?\s*([A-Z0-9\s.,&'-]{3,40})/i);
+      if (workshopMatch && workshopMatch[1] && !workshopMatch[1].toLowerCase().includes('invoice') && !workshopMatch[1].toLowerCase().includes('date')) {
+        workshopName = {
+          value: workshopMatch[1].trim(),
+          confidence: 0.88,
+          raw_text: line,
+          source: 'workshop_name_pattern',
           verification_level: 'VERIFIED'
         };
+        break;
+      }
+    }
+
+    if (!workshopName && lines.length > 0) {
+      // Check top 2 header lines for automotive dealership / service center entity
+      for (let i = 0; i < Math.min(2, lines.length); i++) {
+        const line = lines[i];
+        if (/(?:pvt\s*ltd|ltd|motors|legends|auto|garage|service|dealership|workshop)/i.test(line) && !line.toLowerCase().includes('invoice')) {
+          workshopName = {
+            value: line.trim(),
+            confidence: 0.90,
+            raw_text: line,
+            source: 'header_dealer_entity',
+            verification_level: 'VERIFIED'
+          };
+          break;
+        }
+      }
+    }
+
+    // 7. Extract Total Amount (Higher priority to Net Total / Grand Total)
+    const totalPatterns = [
+      /(?:net\s*(?:total\s*)?amount|grand\s*total|bill\s*amount|total\s*amount|final\s*amount|amount\s*payable|amount\s*paid)\s*[:\-]?\s*(?:₹|rs\.?|inr)?\s*([0-9,]+(?:\.[0-9]{2})?)/i,
+      /(?:total)\s*[:\-]?\s*(?:₹|rs\.?|inr)?\s*([0-9,]+(?:\.[0-9]{2})?)/i
+    ];
+
+    for (const pat of totalPatterns) {
+      const totalMatch = text.match(pat);
+      if (totalMatch && totalMatch[1]) {
+        const parsedAmount = parseFloat(totalMatch[1].replace(/,/g, ''));
+        if (!isNaN(parsedAmount) && parsedAmount > 0) {
+          totalAmount = {
+            value: parsedAmount,
+            confidence: 0.93,
+            raw_text: totalMatch[0],
+            source: 'total_amount_pattern',
+            verification_level: 'VERIFIED'
+          };
+          break;
+        }
       }
     }
 
