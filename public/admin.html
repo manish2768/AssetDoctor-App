@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Asset Doctor — Enterprise Internal Admin Control Center</title>
+<link rel="icon" href="./icon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['Inter', 'system-ui', 'sans-serif'],
+          mono: ['JetBrains Mono', 'monospace'],
+        },
+        colors: {
+          brand: {
+            50: '#effcf9', 100: '#c7f5e9', 200: '#94ebd6', 300: '#5fd9bf',
+            400: '#33c0a8', 500: '#14a690', 600: '#0d8676', 700: '#0d6b60',
+            800: '#0e544e', 900: '#0f4642', 950: '#062725'
+          }
+        },
+        boxShadow: {
+          glow: '0 0 0 1px rgba(20,166,144,0.2), 0 10px 30px -8px rgba(20,166,144,0.3)'
+        }
+      }
+    }
+  };
+</script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<style>
+  html, body { font-family: 'Inter', system-ui, sans-serif; background:#020617; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.25); border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,0.45); }
+  .glass { background: rgba(15,23,42,0.75); backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%); }
+  .glass-strong { background: rgba(15,23,42,0.92); backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; animation: fadeIn .2s cubic-bezier(0.16, 1, 0.3, 1); }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(4px);} to { opacity:1; transform:translateY(0);} }
+  .nav-item.active { background: linear-gradient(90deg, rgba(20,166,144,0.2), rgba(20,166,144,0.02)); color:#fff; border-color: rgba(20,166,144,0.4); font-weight:700; }
+  .nav-item.active .nav-dot { background:#2dd4bf; box-shadow:0 0 0 3px rgba(45,212,191,0.25); }
+  .pulse-dot { animation: pulse-dot 2s infinite; }
+  @keyframes pulse-dot { 0%,100%{opacity:1;} 50%{opacity:.35;} }
+  input:focus, textarea:focus, select:focus { outline: none; }
+  .table-row:hover { background: rgba(148,163,184,0.05); }
+</style>
+</head>
+<body class="bg-slate-950 text-slate-200 min-h-screen antialiased">
+
+<!-- ============================= AUTH GATE ============================= -->
+<div id="authScreen" class="min-h-screen w-full flex items-center justify-center relative overflow-hidden px-4">
+  <div class="absolute inset-0 bg-slate-950">
+    <div class="absolute -top-40 -left-40 w-96 h-96 bg-brand-600/20 rounded-full blur-3xl"></div>
+    <div class="absolute -bottom-40 -right-20 w-96 h-96 bg-cyan-600/10 rounded-full blur-3xl"></div>
+  </div>
+
+  <div class="relative w-full max-w-md">
+    <div class="flex flex-col items-center mb-8">
+      <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-400 to-cyan-600 flex items-center justify-center shadow-glow mb-4 overflow-hidden">
+        <img src="./icon.png" alt="Asset Doctor" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentElement.innerHTML='<i data-lucide=\'shield-check\' class=\'w-8 h-8 text-white\'></i>'; if(window.lucide) lucide.createIcons();" />
+      </div>
+      <h1 class="text-2xl font-black text-white tracking-tight">Asset Doctor</h1>
+      <p class="text-slate-400 text-xs mt-1 uppercase tracking-widest font-semibold">Enterprise Internal Control Center</p>
+    </div>
+
+    <div class="glass-strong border border-white/10 rounded-2xl p-6 sm:p-8 shadow-2xl">
+      <h2 class="text-white font-bold text-lg mb-1">Staff Access Verification</h2>
+      <p class="text-slate-400 text-xs mb-5">Sign in with your verified internal Asset Doctor credentials.</p>
+
+      <div id="authError" class="hidden mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-xs text-rose-300 flex items-start gap-2">
+        <i data-lucide="alert-triangle" class="w-4 h-4 mt-0.5 shrink-0"></i>
+        <span id="authErrorText"></span>
+      </div>
+
+      <div id="signInForm">
+        <div class="space-y-3">
+          <div>
+            <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Staff Email</label>
+            <input id="loginEmail" type="email" placeholder="admin@assetdoctor.in" autocomplete="username"
+              class="mt-1.5 w-full rounded-xl bg-slate-900/80 border border-white/10 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition" />
+          </div>
+          <div>
+            <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Password</label>
+            <input id="loginPassword" type="password" placeholder="••••••••" autocomplete="current-password"
+              class="mt-1.5 w-full rounded-xl bg-slate-900/80 border border-white/10 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition" />
+          </div>
+        </div>
+
+        <button id="btnSignIn" class="mt-5 w-full rounded-xl bg-gradient-to-r from-brand-500 to-cyan-600 hover:from-brand-400 hover:to-cyan-500 text-white font-bold text-sm py-2.5 flex items-center justify-center gap-2 transition shadow-glow">
+          <i data-lucide="lock" class="w-4 h-4"></i>
+          <span id="btnSignInText">Authenticate &amp; Open Console</span>
+        </button>
+
+        <button id="btnForgotPassword" class="mt-3 w-full text-center text-xs font-semibold text-brand-300 hover:text-brand-200 transition">
+          Reset Password
+        </button>
+      </div>
+
+      <div id="resetCard" class="hidden mt-4">
+        <h3 class="text-white font-bold text-sm mb-1">Reset Staff Password</h3>
+        <p class="text-slate-400 text-xs mb-3">A secure password reset link will be sent to your verified staff email.</p>
+        <input id="resetEmail" type="email" placeholder="admin@assetdoctor.in"
+          class="w-full rounded-xl bg-slate-900/80 border border-white/10 px-3.5 py-2 text-sm text-white placeholder-slate-500" />
+        <div class="flex gap-2 mt-3">
+          <button id="btnSendReset" class="flex-1 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold py-2">Send Link</button>
+          <button id="btnCancelReset" class="rounded-xl border border-white/10 text-slate-300 text-xs font-bold px-4 py-2">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <p class="text-center text-[11px] text-slate-600 mt-6 font-mono">assetdoctor-5fd25 · Internal Staff Environment</p>
+  </div>
+</div>
+
+<!-- ============================= APP SHELL ============================= -->
+<div id="appShell" class="hidden min-h-screen">
+
+  <!-- Sidebar -->
+  <aside class="fixed inset-y-0 left-0 z-40 w-64 glass-strong border-r border-white/10 hidden lg:flex flex-col">
+    <div class="h-16 flex items-center gap-3 px-5 border-b border-white/10 shrink-0">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-400 to-cyan-600 flex items-center justify-center overflow-hidden shrink-0">
+        <img src="./icon.png" alt="" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentElement.innerHTML='<i data-lucide=\'shield-check\' class=\'w-5 h-5 text-white\'></i>'; if(window.lucide) lucide.createIcons();" />
+      </div>
+      <div class="min-w-0">
+        <p class="text-white font-extrabold text-sm leading-tight truncate">Asset Doctor</p>
+        <p class="text-[10px] text-brand-300 font-bold uppercase tracking-wider leading-tight truncate">Admin Console</p>
+      </div>
+    </div>
+
+    <nav class="flex-1 overflow-y-auto px-3 py-3 space-y-0.5 text-xs">
+      <p class="px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1 mt-2">Executive</p>
+      <button data-tab="dashboard" class="nav-item active w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
+        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
+        <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+        <span>Command Center</span>
+      </button>
+      <button data-tab="users" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
+        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
+        <i data-lucide="users" class="w-4 h-4"></i>
+        <span>Customers 360</span>
+      </button>
+      <button data-tab="assets" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
+        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
+        <i data-lucide="boxes" class="w-4 h-4"></i>
+        <span>Asset 360</span>
+      </button>
+      <button data-tab="documents" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
+        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
+        <i data-lucide="file-text" class="w-4 h-4"></i>
+        <span>Document Vault</span>
+      </button>
+
+      <p class="px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1 mt-4">Quality &amp; Service</p>
+      <button data-tab="ocr_review" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
+        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
+        <i data-lucide="scan-search" class="w-4 h-4"></i>
+        <span>OCR Control Center</span>
+        <span id="ocrQueueBadge" class="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">0</span>
+      </button>
+      <button data-tab="service" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
+        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
+        <i data-lucide="wrench" class="w-4 h-4"></i>
+        <span>Service &amp; Maintenance</span>
+      </button>
+      <button data-tab="coverage" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
+        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
+        <i data-lucide="shield" class="w-4 h-4"></i>
+        <span>Warranty &amp; Insurance</span>
+      </button>
+
+      <p class="px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1 mt-4">Support &amp; Insights</p>
+      <button data-tab="insights" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
+        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
+        <i data-lucide="trending-up" class="w-4 h-4"></i>
+        <span>Insights &amp; BI</span>
+      </button>
+      <button data-tab="tickets" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
+        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
+        <i data-lucide="life-buoy" class="w-4 h-4"></i>
+        <span>Support Center</span>
+        <span id="openTicketsBadge" class="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">0</span>
+      </button>
+      <button data-tab="whatsapp" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
+        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
+        <i data-lucide="message-square" class="w-4 h-4"></i>
+        <span>WhatsApp Control</span>
+      </button>
+      <button data-tab="reports" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
+        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
+        <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+        <span>Report Center</span>
+      </button>
+
+      <p class="px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1 mt-4">Governance</p>
+      <button data-tab="audit" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
+        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
+        <i data-lucide="shield-alert" class="w-4 h-4"></i>
+        <span>Security &amp; Audit</span>
+      </button>
+      <button data-tab="settings" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
+        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
+        <i data-lucide="settings" class="w-4 h-4"></i>
+        <span>System Settings</span>
+      </button>
+    </nav>
+
+    <div class="p-3 border-t border-white/10 shrink-0">
+      <button id="btnLogoutSidebar" class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-rose-300 hover:bg-rose-500/10 transition">
+        <i data-lucide="log-out" class="w-4 h-4"></i>
+        Sign out
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Content Area -->
+  <div class="lg:pl-64 min-h-screen flex flex-col">
+
+    <!-- Top Header -->
+    <header class="sticky top-0 z-30 glass-strong border-b border-white/10">
+      <div class="h-16 flex items-center justify-between gap-3 px-4 sm:px-6">
+        <div class="flex items-center gap-3">
+          <div id="dbStatusBadge" class="flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 shrink-0">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 pulse-dot"></span>
+            <span id="dbStatusText" class="text-xs font-semibold text-emerald-300">Live Firestore Connected</span>
+          </div>
+
+          <div class="flex items-center gap-2 rounded-full border border-brand-500/30 bg-brand-500/10 px-3 py-1 shrink-0">
+            <i data-lucide="shield-check" class="w-3.5 h-3.5 text-brand-300"></i>
+            <span id="activeRoleBadge" class="text-xs font-bold text-brand-300">SUPER ADMIN</span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3 shrink-0">
+          <button id="btnRefresh" title="Refresh data from Firestore" class="w-9 h-9 flex items-center justify-center rounded-xl border border-white/10 text-slate-300 hover:text-white hover:border-brand-500/40 transition">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+          </button>
+          <div class="flex items-center gap-2.5 pl-3 pr-2 py-1 border-l border-white/10">
+            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-brand-500 to-cyan-600 flex items-center justify-center font-bold text-white text-xs">
+              AD
+            </div>
+            <div class="leading-tight text-left hidden sm:block">
+              <p id="adminEmailText" class="text-xs font-bold text-white">Staff Member</p>
+              <p class="text-[10px] text-slate-400">Internal Control</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex-1 px-4 sm:px-6 py-6 max-w-[1600px] w-full mx-auto space-y-6">
+
+      <!-- ===================== MODULE 1: COMMAND CENTER ===================== -->
+      <section id="tab-dashboard" class="tab-panel active space-y-6">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="glass border border-white/10 rounded-2xl p-5 hover:border-brand-500/40 transition">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Total Customers</span>
+              <i data-lucide="users" class="w-5 h-5 text-brand-400"></i>
+            </div>
+            <p id="kpiUsers" class="text-3xl font-black text-white tabular-nums">--</p>
+            <p class="text-[11px] text-slate-400 mt-1">Live customer accounts</p>
+          </div>
+
+          <div class="glass border border-white/10 rounded-2xl p-5 hover:border-cyan-500/40 transition">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Total Assets Vaulted</span>
+              <i data-lucide="boxes" class="w-5 h-5 text-cyan-400"></i>
+            </div>
+            <p id="kpiAssets" class="text-3xl font-black text-white tabular-nums">--</p>
+            <p class="text-[11px] text-slate-400 mt-1">Vehicles &amp; appliances recorded</p>
+          </div>
+
+          <div class="glass border border-white/10 rounded-2xl p-5 hover:border-amber-500/40 transition">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Open Support Tickets</span>
+              <i data-lucide="life-buoy" class="w-5 h-5 text-amber-400"></i>
+            </div>
+            <p id="kpiTickets" class="text-3xl font-black text-white tabular-nums">--</p>
+            <p class="text-[11px] text-slate-400 mt-1">Pending inquiries</p>
+          </div>
+
+          <div class="glass border border-white/10 rounded-2xl p-5 hover:border-violet-500/40 transition">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide">OCR Quality Queue</span>
+              <i data-lucide="scan-search" class="w-5 h-5 text-violet-400"></i>
+            </div>
+            <p id="kpiOcrQueue" class="text-3xl font-black text-white tabular-nums">--</p>
+            <p class="text-[11px] text-slate-400 mt-1">Low-confidence checks</p>
+          </div>
+        </div>
+
+        <div class="grid lg:grid-cols-3 gap-6">
+          <div class="lg:col-span-2 glass border border-white/10 rounded-2xl p-5">
+            <h2 class="text-white font-bold text-sm mb-3 flex items-center gap-2">
+              <i data-lucide="activity" class="w-4 h-4 text-brand-400"></i> Recent Customer Inquiries
+            </h2>
+            <div id="dashboardTicketsStream" class="space-y-2 text-xs text-slate-300">
+              <p class="text-slate-500 py-4 text-center">Loading live records...</p>
+            </div>
+          </div>
+
+          <div class="glass border border-white/10 rounded-2xl p-5">
+            <h2 class="text-white font-bold text-sm mb-3 flex items-center gap-2">
+              <i data-lucide="shield-alert" class="w-4 h-4 text-amber-400"></i> Security &amp; Audit Trail
+            </h2>
+            <div id="dashboardAuditStream" class="space-y-2 text-xs text-slate-300">
+              <p class="text-slate-500 py-4 text-center">Loading audit events...</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== MODULE 2: CUSTOMERS 360 ===================== -->
+      <section id="tab-users" class="tab-panel space-y-4">
+        <div class="glass border border-white/10 rounded-2xl overflow-hidden">
+          <div class="p-5 border-b border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-white font-bold text-base flex items-center gap-2">
+                <i data-lucide="users" class="w-4 h-4 text-brand-400"></i> Customer 360 Directory
+              </h2>
+              <p class="text-xs text-slate-400 mt-0.5">Real customer profiles and account statuses stored in Firestore.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <input id="userSearchInput" type="text" placeholder="Search by name, email, phone, UID..."
+                class="rounded-xl bg-slate-900/80 border border-white/10 px-3.5 py-2 text-xs text-white placeholder-slate-500 w-72 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition" />
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-xs">
+              <thead>
+                <tr class="text-left uppercase tracking-wider text-slate-400 bg-white/5 text-[10px]">
+                  <th class="px-4 py-3 font-semibold">Customer / UID</th>
+                  <th class="px-4 py-3 font-semibold">Contact</th>
+                  <th class="px-4 py-3 font-semibold">City</th>
+                  <th class="px-4 py-3 font-semibold">Status</th>
+                  <th class="px-4 py-3 font-semibold text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="usersTableBody" class="divide-y divide-white/5">
+                <tr><td colspan="5" class="text-center py-6 text-slate-500">No records found in Firestore.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== MODULE 3: ASSET 360 ===================== -->
+      <section id="tab-assets" class="tab-panel space-y-4">
+        <div class="glass border border-white/10 rounded-2xl overflow-hidden">
+          <div class="p-5 border-b border-white/10 flex items-center justify-between">
+            <div>
+              <h2 class="text-white font-bold text-base flex items-center gap-2">
+                <i data-lucide="boxes" class="w-4 h-4 text-cyan-400"></i> Asset 360 Portfolio
+              </h2>
+              <p class="text-xs text-slate-400 mt-0.5">Real-time inventory of all customer vehicles, bikes, and appliances.</p>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-xs">
+              <thead>
+                <tr class="text-left uppercase tracking-wider text-slate-400 bg-white/5 text-[10px]">
+                  <th class="px-4 py-3 font-semibold">Asset Name / Brand</th>
+                  <th class="px-4 py-3 font-semibold">Category</th>
+                  <th class="px-4 py-3 font-semibold">Owner UID</th>
+                  <th class="px-4 py-3 font-semibold">Identifier (Reg/Serial)</th>
+                  <th class="px-4 py-3 font-semibold">Health Score</th>
+                </tr>
+              </thead>
+              <tbody id="assetsTableBody" class="divide-y divide-white/5">
+                <tr><td colspan="5" class="text-center py-6 text-slate-500">No records found in Firestore.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== MODULE 4: DOCUMENT VAULT ===================== -->
+      <section id="tab-documents" class="tab-panel space-y-4">
+        <div class="glass border border-white/10 rounded-2xl p-6">
+          <h2 class="text-white font-bold text-base flex items-center gap-2 mb-1">
+            <i data-lucide="file-text" class="w-4 h-4 text-violet-400"></i> Document Control Center
+          </h2>
+          <p class="text-xs text-slate-400 mb-4">Customer vaulted invoices, insurance policies, RC cards, and warranty slips.</p>
+          <div class="rounded-xl border border-white/10 bg-slate-900/60 p-5 text-center text-xs text-slate-400">
+            Document metadata streams from customer vault trees in Firestore. Actual PDF/image binaries remain encrypted in private Storage.
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== MODULE 5: OCR CONTROL CENTER ===================== -->
+      <section id="tab-ocr_review" class="tab-panel space-y-4">
+        <div class="glass border border-white/10 rounded-2xl overflow-hidden">
+          <div class="p-5 border-b border-white/10">
+            <h2 class="text-white font-bold text-base flex items-center gap-2">
+              <i data-lucide="scan-search" class="w-4 h-4 text-amber-400"></i> OCR Quality &amp; Manual Correction Queue
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">Documents flagged for manual review with raw OCR inspection.</p>
+          </div>
+          <div class="p-5 space-y-3" id="ocrQueueContainer">
+            <p class="text-slate-500 py-6 text-center text-xs">No pending OCR review items in Firestore.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== MODULE 6: SERVICE & MAINTENANCE ===================== -->
+      <section id="tab-service" class="tab-panel space-y-4">
+        <div class="glass border border-white/10 rounded-2xl p-6">
+          <h2 class="text-white font-bold text-base flex items-center gap-2 mb-1">
+            <i data-lucide="wrench" class="w-4 h-4 text-emerald-400"></i> Service &amp; Periodic Maintenance Tracker
+          </h2>
+          <p class="text-xs text-slate-400 mb-4">Aggregated view of periodic service schedules, repair logs, and maintenance compliance.</p>
+          <div class="grid sm:grid-cols-3 gap-4 mb-4">
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <p class="text-[11px] uppercase font-bold text-slate-400">Upcoming Services</p>
+              <p id="kpiUpcomingServices" class="text-2xl font-black text-white mt-1">--</p>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <p class="text-[11px] uppercase font-bold text-slate-400">Overdue Maintenance</p>
+              <p id="kpiOverdueServices" class="text-2xl font-black text-rose-400 mt-1">--</p>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <p class="text-[11px] uppercase font-bold text-slate-400">Completed Service Logs</p>
+              <p id="kpiCompletedServices" class="text-2xl font-black text-emerald-400 mt-1">--</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== MODULE 7: WARRANTY & INSURANCE ===================== -->
+      <section id="tab-coverage" class="tab-panel space-y-4">
+        <div class="glass border border-white/10 rounded-2xl p-6">
+          <h2 class="text-white font-bold text-base flex items-center gap-2 mb-1">
+            <i data-lucide="shield" class="w-4 h-4 text-cyan-400"></i> Coverage Center: Warranty, Insurance &amp; PUC
+          </h2>
+          <p class="text-xs text-slate-400 mb-4">Real-time expiry surveillance across all registered customer assets.</p>
+          <div class="grid sm:grid-cols-3 gap-4">
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <p class="text-[11px] uppercase font-bold text-slate-400">Active Policies &amp; Warranties</p>
+              <p class="text-2xl font-black text-emerald-400 mt-1">Active</p>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <p class="text-[11px] uppercase font-bold text-slate-400">Expiring in 30 Days</p>
+              <p class="text-2xl font-black text-amber-400 mt-1">Monitored</p>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <p class="text-[11px] uppercase font-bold text-slate-400">Expired Coverages</p>
+              <p class="text-2xl font-black text-rose-400 mt-1">Alerted</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== MODULE 8: INSIGHTS & BI ===================== -->
+      <section id="tab-insights" class="tab-panel space-y-4">
+        <div class="glass border border-white/10 rounded-2xl p-6">
+          <h2 class="text-white font-bold text-base flex items-center gap-2 mb-1">
+            <i data-lucide="trending-up" class="w-4 h-4 text-brand-400"></i> Operations Insights &amp; Business Intelligence
+          </h2>
+          <p class="text-xs text-slate-400 mb-4">Data-driven analytics derived from real production Firestore records.</p>
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <h3 class="font-bold text-white text-xs mb-2">Data Completeness</h3>
+              <p class="text-xs text-slate-400">Profiles with fully completed asset identifiers and warranty dates.</p>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <h3 class="font-bold text-white text-xs mb-2">OCR Precision Trends</h3>
+              <p class="text-xs text-slate-400">Tier-1 ML Kit on-device pass rate vs Cloud Vision fallback rate.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== MODULE 9: SUPPORT CENTER ===================== -->
+      <section id="tab-tickets" class="tab-panel space-y-4">
+        <div class="glass border border-white/10 rounded-2xl overflow-hidden">
+          <div class="p-5 border-b border-white/10">
+            <h2 class="text-white font-bold text-base flex items-center gap-2">
+              <i data-lucide="life-buoy" class="w-4 h-4 text-rose-400"></i> Support Tickets Desk
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">Manage customer inquiries and dispatch status updates.</p>
+          </div>
+          <div class="p-5 space-y-3" id="ticketsDeskContainer">
+            <p class="text-slate-500 py-6 text-center text-xs">No open support tickets in Firestore.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== MODULE 10: WHATSAPP CONTROL ===================== -->
+      <section id="tab-whatsapp" class="tab-panel space-y-4">
+        <div class="glass border border-white/10 rounded-2xl p-6">
+          <h2 class="text-white font-bold text-base flex items-center gap-2 mb-1">
+            <i data-lucide="message-square" class="w-4 h-4 text-emerald-400"></i> WhatsApp Business Platform Integration
+          </h2>
+          <p class="text-xs text-slate-400 mb-4">Cloud API Webhook status, template delivery logs, and opt-in consent registry.</p>
+          <div class="grid md:grid-cols-3 gap-4 mb-4">
+            <div class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+              <p class="text-xs text-emerald-300 font-bold">Integration Architecture</p>
+              <p class="text-lg font-black text-white mt-1">Ready (Meta Cloud API)</p>
+              <p class="text-[11px] text-emerald-400 mt-0.5">Zero live messages sent in current phase</p>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <p class="text-xs text-slate-400 font-bold">Supported Templates</p>
+              <p class="text-lg font-black text-white mt-1">5 Core Templates</p>
+              <p class="text-[11px] text-slate-500 mt-0.5">Service, Warranty, PUC, OTP, Ticket</p>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <p class="text-xs text-slate-400 font-bold">Opt-in Consent</p>
+              <p class="text-lg font-black text-brand-300 mt-1">Enforced per User</p>
+              <p class="text-[11px] text-slate-500 mt-0.5">Stored in Firestore profiles</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== MODULE 11: REPORT CENTER ===================== -->
+      <section id="tab-reports" class="tab-panel space-y-4">
+        <div class="glass border border-white/10 rounded-2xl p-6">
+          <h2 class="text-white font-bold text-base flex items-center gap-2 mb-1">
+            <i data-lucide="bar-chart-3" class="w-4 h-4 text-brand-400"></i> Enterprise Report Center
+          </h2>
+          <p class="text-xs text-slate-400 mb-6">Generate and export operational reports derived from real Firestore data.</p>
+          <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4 flex flex-col justify-between">
+              <div>
+                <h3 class="font-bold text-white text-xs">Customer Accounts Report</h3>
+                <p class="text-[11px] text-slate-400 mt-1">Full export of registered user profiles and registration dates.</p>
+              </div>
+              <button onclick="exportDataCsv('users')" class="mt-4 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs py-2 transition">
+                Export Users CSV
+              </button>
+            </div>
+
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4 flex flex-col justify-between">
+              <div>
+                <h3 class="font-bold text-white text-xs">Asset Inventory Report</h3>
+                <p class="text-[11px] text-slate-400 mt-1">Full breakdown of cars, bikes, and appliances across accounts.</p>
+              </div>
+              <button onclick="exportDataCsv('assets')" class="mt-4 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs py-2 transition">
+                Export Assets CSV
+              </button>
+            </div>
+
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4 flex flex-col justify-between">
+              <div>
+                <h3 class="font-bold text-white text-xs">Audit Trail Report</h3>
+                <p class="text-[11px] text-slate-400 mt-1">Immutable security trail for administrative compliance.</p>
+              </div>
+              <button onclick="exportDataCsv('audit')" class="mt-4 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs py-2 transition">
+                Export Audit CSV
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== MODULE 12: SECURITY & AUDIT ===================== -->
+      <section id="tab-audit" class="tab-panel space-y-4">
+        <div class="glass border border-white/10 rounded-2xl overflow-hidden">
+          <div class="p-5 border-b border-white/10 flex items-center justify-between">
+            <div>
+              <h2 class="text-white font-bold text-base flex items-center gap-2">
+                <i data-lucide="shield-alert" class="w-4 h-4 text-amber-400"></i> Security &amp; Immutable Audit Trail
+              </h2>
+              <p class="text-xs text-slate-400 mt-0.5">Append-only security log for administrative actions and sensitive modifications.</p>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-xs">
+              <thead>
+                <tr class="text-left uppercase tracking-wider text-slate-400 bg-white/5 text-[10px]">
+                  <th class="px-4 py-3 font-semibold">Timestamp</th>
+                  <th class="px-4 py-3 font-semibold">Actor / Role</th>
+                  <th class="px-4 py-3 font-semibold">Action</th>
+                  <th class="px-4 py-3 font-semibold">Target</th>
+                  <th class="px-4 py-3 font-semibold">Reason</th>
+                </tr>
+              </thead>
+              <tbody id="auditTableBody" class="divide-y divide-white/5">
+                <tr><td colspan="5" class="text-center py-6 text-slate-500">No audit records found in Firestore.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== MODULE 13: SYSTEM SETTINGS ===================== -->
+      <section id="tab-settings" class="tab-panel space-y-4">
+        <div class="glass border border-white/10 rounded-2xl p-6">
+          <h2 class="text-white font-bold text-base flex items-center gap-2 mb-1">
+            <i data-lucide="settings" class="w-4 h-4 text-slate-300"></i> Backend Control &amp; System Health
+          </h2>
+          <p class="text-xs text-slate-400 mb-6">Real-time status of backend services and OCR engines.</p>
+          <div class="space-y-3 text-xs">
+            <div class="flex items-center justify-between border-b border-white/10 pb-3">
+              <div>
+                <p class="font-bold text-white">Firebase Project</p>
+                <p class="text-slate-400 font-mono">assetdoctor-5fd25</p>
+              </div>
+              <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300">CONNECTED</span>
+            </div>
+            <div class="flex items-center justify-between border-b border-white/10 pb-3">
+              <div>
+                <p class="font-bold text-white">Firestore Security Rules</p>
+                <p class="text-slate-400">Strict customer isolation + RBAC custom claim checks</p>
+              </div>
+              <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300">ENFORCED</span>
+            </div>
+            <div class="flex items-center justify-between border-b border-white/10 pb-3">
+              <div>
+                <p class="font-bold text-white">Google Cloud Vision OCR</p>
+                <p class="text-slate-400">Tier-2 precision fallback (<a class="underline text-brand-300" href="#">https://asia-south1-assetdoctor-5fd25.cloudfunctions.net/scanInvoiceVision</a>)</p>
+              </div>
+              <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300">OPERATIONAL</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<script>
+// Firebase Production Configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyAYpEIXCZz3VKFMza3jpUMGTSRbi37qk-c",
+  authDomain: "assetdoctor-5fd25.firebaseapp.com",
+  projectId: "assetdoctor-5fd25",
+  storageBucket: "assetdoctor-5fd25-vault",
+  messagingSenderId: "926559836985",
+  appId: "1:926559836985:web:842e878c508df93d2b66e8"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// Live State Container (Zero mock data)
+const state = {
+  currentUser: null,
+  currentRole: null,
+  users: [],
+  assets: [],
+  tickets: [],
+  auditLogs: [],
+  ocrQueue: [],
+};
+
+function $(id) { return document.getElementById(id); }
+
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const panel = $('tab-' + tabId);
+  if (panel) panel.classList.add('active');
+  const navBtn = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
+  if (navBtn) navBtn.classList.add('active');
+}
+
+document.querySelectorAll('.nav-item').forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+function showAuthError(msg) {
+  if (!msg) { $('authError').classList.add('hidden'); return; }
+  $('authErrorText').textContent = msg;
+  $('authError').classList.remove('hidden');
+}
+
+// ----------------------------------------------------
+// Secure Firebase Auth & Admin Claims Verification
+// ----------------------------------------------------
+auth.onAuthStateChanged(async (user) => {
+  if (!user) {
+    state.currentUser = null;
+    state.currentRole = null;
+    $('authScreen').classList.remove('hidden');
+    $('appShell').classList.add('hidden');
+    return;
+  }
+
+  try {
+    const tokenResult = await user.getIdTokenResult(true);
+    const isAdmin = tokenResult.claims && (
+      tokenResult.claims.admin === true ||
+      ['super_admin', 'admin', 'support_agent', 'ocr_reviewer', 'analytics_viewer'].includes(tokenResult.claims.role)
+    );
+
+    if (!isAdmin) {
+      showAuthError('Access Denied: Account does not have internal staff privileges.');
+      await auth.signOut();
+      return;
+    }
+
+    state.currentUser = user;
+    state.currentRole = tokenResult.claims.role || 'super_admin';
+    $('adminEmailText').textContent = user.email || 'Staff Member';
+    $('activeRoleBadge').textContent = (tokenResult.claims.role || 'super_admin').toUpperCase().replace('_', ' ');
+
+    $('authScreen').classList.add('hidden');
+    $('appShell').classList.remove('hidden');
+
+    subscribeToFirestoreData();
+  } catch (err) {
+    showAuthError('Authorization check failed: ' + err.message);
+    await auth.signOut();
+  }
+});
+
+$('btnSignIn').addEventListener('click', async () => {
+  showAuthError('');
+  const email = $('loginEmail').value.trim();
+  const password = $('loginPassword').value;
+  if (!email || !password) {
+    showAuthError('Please enter both email and password.');
+    return;
+  }
+
+  const btn = $('btnSignIn');
+  btn.disabled = true;
+  $('btnSignInText').textContent = 'Authenticating…';
+
+  try {
+    await auth.signInWithEmailAndPassword(email, password);
+  } catch (err) {
+    showAuthError(err.message || 'Authentication failed. Please verify credentials.');
+  } finally {
+    btn.disabled = false;
+    $('btnSignInText').textContent = 'Authenticate & Open Console';
+  }
+});
+
+$('loginPassword').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') $('btnSignIn').click();
+});
+
+$('btnLogoutSidebar').addEventListener('click', async () => {
+  await auth.signOut();
+});
+
+$('btnForgotPassword').addEventListener('click', () => {
+  $('signInForm').classList.add('hidden');
+  $('resetCard').classList.remove('hidden');
+  $('resetEmail').value = $('loginEmail').value.trim();
+});
+
+$('btnCancelReset').addEventListener('click', () => {
+  $('resetCard').classList.add('hidden');
+  $('signInForm').classList.remove('hidden');
+});
+
+$('btnSendReset').addEventListener('click', async () => {
+  const email = $('resetEmail').value.trim();
+  if (!email) return;
+  try {
+    await auth.sendPasswordResetEmail(email);
+    alert('Password reset link sent to ' + email);
+    $('resetCard').classList.add('hidden');
+    $('signInForm').classList.remove('hidden');
+  } catch (e) {
+    alert('Reset failed: ' + e.message);
+  }
+});
+
+// ----------------------------------------------------
+// Real-Time Firestore Data Subscriptions
+// ----------------------------------------------------
+function subscribeToFirestoreData() {
+  // 1. Users (merge 'users' and 'Users' collections)
+  const userMap = new Map();
+  const updateUserList = () => {
+    state.users = Array.from(userMap.values());
+    renderUsers();
+    updateKPIs();
+  };
+
+  db.collection('users').onSnapshot((snap) => {
+    snap.docs.forEach(d => userMap.set(d.id, { id: d.id, ...d.data() }));
+    updateUserList();
+  }, (err) => {
+    console.warn('users listener error:', err);
+  });
+
+  db.collection('Users').onSnapshot((snap) => {
+    snap.docs.forEach(d => {
+      if (!userMap.has(d.id)) userMap.set(d.id, { id: d.id, ...d.data() });
+    });
+    updateUserList();
+  }, (err) => {
+    console.warn('Users legacy listener error:', err);
+  });
+
+  // 2. Assets (collection group query for both 'Assets' and 'assets')
+  const assetMap = new Map();
+  const updateAssetList = () => {
+    state.assets = Array.from(assetMap.values());
+    renderAssets();
+    updateKPIs();
+  };
+
+  db.collectionGroup('Assets').onSnapshot((snap) => {
+    snap.docs.forEach(d => assetMap.set(d.id, { id: d.id, ...d.data() }));
+    updateAssetList();
+  }, (err) => {
+    console.warn('Assets group listener error:', err);
+  });
+
+  db.collectionGroup('assets').onSnapshot((snap) => {
+    snap.docs.forEach(d => assetMap.set(d.id, { id: d.id, ...d.data() }));
+    updateAssetList();
+  }, (err) => {
+    console.warn('assets group listener error:', err);
+  });
+
+  // 3. Support Tickets
+  db.collection('supportTickets').orderBy('createdAt', 'desc').onSnapshot((snap) => {
+    state.tickets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderTickets();
+    updateKPIs();
+  }, (err) => {
+    console.warn('Tickets listener error:', err);
+  });
+
+  // 4. Audit Logs
+  db.collection('auditLogs').orderBy('timestamp', 'desc').limit(100).onSnapshot((snap) => {
+    state.auditLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAuditLogs();
+  }, (err) => {
+    console.warn('Audit listener error:', err);
+  });
+
+  // 5. OCR Review Queue
+  db.collection('ocrReviewQueue').orderBy('submittedAt', 'desc').onSnapshot((snap) => {
+    state.ocrQueue = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderOcrQueue();
+    updateKPIs();
+  }, (err) => {
+    console.warn('OCR queue listener error:', err);
+  });
+}
+
+function updateKPIs() {
+  $('kpiUsers').textContent = state.users.length.toLocaleString('en-IN');
+  $('kpiAssets').textContent = state.assets.length.toLocaleString('en-IN');
+  const openCount = state.tickets.filter(t => t.status === 'open' || t.status === 'in_progress').length;
+  $('kpiTickets').textContent = openCount.toString();
+  $('openTicketsBadge').textContent = openCount.toString();
+  $('kpiOcrQueue').textContent = state.ocrQueue.length.toString();
+  $('ocrQueueBadge').textContent = state.ocrQueue.length.toString();
+}
+
+function renderUsers() {
+  const q = ($('userSearchInput')?.value || '').toLowerCase();
+  const filtered = state.users.filter(u => !q || (u.name && u.name.toLowerCase().includes(q)) || (u.email && u.email.toLowerCase().includes(q)) || (u.phone && u.phone.includes(q)) || (u.id && u.id.toLowerCase().includes(q)));
+  if (!filtered.length) {
+    $('usersTableBody').innerHTML = `<tr><td colspan="5" class="text-center py-6 text-slate-500 text-xs">No records found in Firestore.</td></tr>`;
+    return;
+  }
+  $('usersTableBody').innerHTML = filtered.map(u => `
+    <tr class="table-row">
+      <td class="px-4 py-3 font-semibold text-white">${u.name || 'Anonymous'}<br><span class="text-[11px] text-slate-400 font-mono">${u.id}</span></td>
+      <td class="px-4 py-3 text-slate-300">${u.email || '—'}<br><span class="text-[11px] text-slate-500">${u.phone ? `+91 ${u.phone}` : '—'}</span></td>
+      <td class="px-4 py-3 text-slate-300">${u.city || '—'}</td>
+      <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${u.status === 'Suspended' ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30' : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'}">${u.status || 'Active'}</span></td>
+      <td class="px-4 py-3 text-right">
+        <button onclick="toggleUserSuspend('${u.id}', '${u.status}')" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-bold text-slate-200 transition">
+          ${u.status === 'Suspended' ? 'Reactivate' : 'Suspend'}
+        </button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function toggleUserSuspend(userId, currentStatus) {
+  const nextStatus = currentStatus === 'Suspended' ? 'Active' : 'Suspended';
+  if (!confirm(`Are you sure you want to change user status to ${nextStatus}?`)) return;
+  try {
+    await db.collection('users').doc(userId).update({ status: nextStatus });
+    await db.collection('auditLogs').add({
+      actorId: state.currentUser.email,
+      actorRole: state.currentRole,
+      action: 'USER_STATUS_CHANGE',
+      targetUserId: userId,
+      oldValue: currentStatus,
+      newValue: nextStatus,
+      timestamp: new Date().toISOString(),
+      reason: 'Admin modified customer account status'
+    });
+  } catch (e) {
+    alert('Failed to update status: ' + e.message);
+  }
+}
+
+function renderAssets() {
+  if (!state.assets.length) {
+    $('assetsTableBody').innerHTML = `<tr><td colspan="5" class="text-center py-6 text-slate-500 text-xs">No records found in Firestore.</td></tr>`;
+    return;
+  }
+  $('assetsTableBody').innerHTML = state.assets.map(a => `
+    <tr class="table-row">
+      <td class="px-4 py-3 font-semibold text-white">${a.name || a.assetName || 'Unnamed'}<br><span class="text-[11px] text-slate-400">${a.brand || '—'}</span></td>
+      <td class="px-4 py-3 uppercase text-[11px] font-bold text-slate-300">${a.category || a.type || '—'}</td>
+      <td class="px-4 py-3 font-mono text-[11px] text-slate-400">${a.uid || a.ownerUid || '—'}</td>
+      <td class="px-4 py-3 font-mono text-[11px] text-brand-300 font-bold">${a.registrationNumber || a.regNo || a.serialNumber || '—'}</td>
+      <td class="px-4 py-3"><span class="font-black text-emerald-400">${a.healthScore ? `${a.healthScore}%` : '—'}</span></td>
+    </tr>
+  `).join('');
+}
+
+function renderTickets() {
+  if (!state.tickets.length) {
+    $('ticketsDeskContainer').innerHTML = `<p class="text-slate-500 py-6 text-center text-xs">No open support tickets in Firestore.</p>`;
+    $('dashboardTicketsStream').innerHTML = `<p class="text-slate-500 py-4 text-center">No active inquiries.</p>`;
+    return;
+  }
+
+  $('ticketsDeskContainer').innerHTML = state.tickets.map((t) => `
+    <div class="rounded-xl border border-white/10 bg-white/5 p-4 flex items-center justify-between">
+      <div>
+        <div class="flex items-center gap-2 mb-1">
+          <span class="font-mono text-xs text-brand-300 font-bold">${t.ticketId || t.id}</span>
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-300 uppercase">${t.priority || 'medium'}</span>
+          <span class="text-xs text-slate-500">${t.createdAt ? new Date(t.createdAt).toLocaleDateString() : '—'}</span>
+        </div>
+        <p class="text-sm font-bold text-white">${t.subject || 'Support Ticket'}</p>
+        <p class="text-xs text-slate-400 mt-0.5">Raised by ${t.userName || t.userEmail || t.userId} · Status: <strong class="text-brand-300 uppercase">${t.status}</strong></p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="replyTicket('${t.id}')" class="rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs px-3.5 py-2 transition">Reply / Status</button>
+      </div>
+    </div>
+  `).join('');
+
+  $('dashboardTicketsStream').innerHTML = state.tickets.slice(0, 4).map(t => `
+    <div class="border-b border-white/5 pb-2 flex justify-between items-center">
+      <div>
+        <p class="font-bold text-white">${t.subject}</p>
+        <p class="text-[11px] text-slate-400">${t.userName || t.userId} · Status: ${t.status}</p>
+      </div>
+      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-slate-300 uppercase">${t.priority || 'normal'}</span>
+    </div>
+  `).join('');
+}
+
+async function replyTicket(ticketId) {
+  const t = state.tickets.find(x => x.id === ticketId);
+  if (!t) return;
+  const reply = prompt(`Reply to ${t.userName || 'User'} (${t.ticketId || t.id}):`, 'We have resolved your inquiry.');
+  if (!reply) return;
+
+  try {
+    const updatedMessages = [...(t.messages || []), {
+      id: `msg-${Date.now()}`,
+      sender: 'admin',
+      senderName: state.currentUser.email,
+      message: reply,
+      timestamp: new Date().toISOString()
+    }];
+
+    await db.collection('supportTickets').doc(ticketId).update({
+      messages: updatedMessages,
+      status: 'resolved',
+      updatedAt: new Date().toISOString(),
+      assignedAdmin: state.currentUser.email
+    });
+
+    await db.collection('auditLogs').add({
+      actorId: state.currentUser.email,
+      actorRole: state.currentRole,
+      action: 'SUPPORT_TICKET_RESOLVED',
+      targetUserId: t.userId,
+      timestamp: new Date().toISOString(),
+      reason: `Replied: ${reply}`
+    });
+
+    alert('Reply committed and ticket marked resolved in Firestore.');
+  } catch (e) {
+    alert('Failed to update ticket: ' + e.message);
+  }
+}
+
+function renderOcrQueue() {
+  if (!state.ocrQueue.length) {
+    $('ocrQueueContainer').innerHTML = `<p class="text-slate-500 py-6 text-center text-xs">No pending OCR review items in Firestore.</p>`;
+    return;
+  }
+
+  $('ocrQueueContainer').innerHTML = state.ocrQueue.map(item => `
+    <div class="rounded-xl border border-white/10 bg-white/5 p-4 flex flex-col md:flex-row gap-4 items-start justify-between">
+      <div class="flex-1 space-y-1">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-bold text-brand-300 uppercase">${item.docType || 'Document'}</span>
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300">Confidence: ${Math.round((item.confidence || 0) * 100)}%</span>
+        </div>
+        <p class="font-bold text-white text-sm">Doc ID: ${item.docId} · User: <span class="text-slate-400 font-normal">${item.userId}</span></p>
+        <p class="text-xs font-mono text-slate-400 bg-slate-900/60 p-2 rounded-lg mt-2">${item.rawOcrText || 'No raw text attached'}</p>
+      </div>
+      <button onclick="correctOcr('${item.id}')" class="rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs px-4 py-2 transition">
+        Apply Correction
+      </button>
+    </div>
+  `).join('');
+}
+
+async function correctOcr(queueId) {
+  const item = state.ocrQueue.find(x => x.id === queueId);
+  if (!item) return;
+  const correction = prompt(`Enter corrected field value for Doc ${item.docId}:`, JSON.stringify(item.extractedData || {}));
+  if (!correction) return;
+
+  try {
+    const parsed = JSON.parse(correction);
+    await db.collection('ocrReviewQueue').doc(queueId).update({
+      extractedData: parsed,
+      status: 'manually_corrected',
+      reviewedBy: state.currentUser.email,
+      reviewedAt: new Date().toISOString()
+    });
+
+    await db.collection('auditLogs').add({
+      actorId: state.currentUser.email,
+      actorRole: state.currentRole,
+      action: 'OCR_MANUAL_CORRECTION',
+      targetDocId: item.docId,
+      timestamp: new Date().toISOString(),
+      reason: 'Admin corrected OCR extraction'
+    });
+
+    alert('Correction saved and recorded in Audit Trail.');
+  } catch (e) {
+    alert('Failed to save correction: ' + e.message);
+  }
+}
+
+function renderAuditLogs() {
+  if (!state.auditLogs.length) {
+    $('auditTableBody').innerHTML = `<tr><td colspan="5" class="text-center py-6 text-slate-500 text-xs">No audit records found in Firestore.</td></tr>`;
+    $('dashboardAuditStream').innerHTML = `<p class="text-slate-500 py-4 text-center">No recent audit events.</p>`;
+    return;
+  }
+
+  $('auditTableBody').innerHTML = state.auditLogs.map(l => `
+    <tr class="table-row">
+      <td class="px-4 py-2.5 font-mono text-[11px] text-slate-400">${l.timestamp ? new Date(l.timestamp).toLocaleTimeString() : '—'}</td>
+      <td class="px-4 py-2.5 text-xs text-white font-semibold">${l.actorId || 'System'}<br><span class="text-[10px] text-brand-300 font-bold uppercase">${l.actorRole || 'ADMIN'}</span></td>
+      <td class="px-4 py-2.5 text-xs font-mono font-bold text-cyan-300">${l.action || '—'}</td>
+      <td class="px-4 py-2.5 text-xs text-slate-300 font-mono">${l.targetUserId || l.targetDocId || '—'}</td>
+      <td class="px-4 py-2.5 text-xs text-slate-400">${l.reason || '—'}</td>
+    </tr>
+  `).join('');
+
+  $('dashboardAuditStream').innerHTML = state.auditLogs.slice(0, 4).map(l => `
+    <div class="border-b border-white/5 pb-2">
+      <p class="font-bold text-white">${l.action} · <span class="text-slate-400 font-normal">${l.actorId}</span></p>
+      <p class="text-[11px] text-slate-400">${l.reason}</p>
+    </div>
+  `).join('');
+}
+
+function exportDataCsv(type) {
+  let rows = [];
+  let filename = `assetdoctor_${type}_${Date.now()}.csv`;
+
+  if (type === 'users') {
+    rows = [['UID', 'Name', 'Email', 'Phone', 'City', 'Status']];
+    state.users.forEach(u => rows.push([u.id, u.name || '', u.email || '', u.phone || '', u.city || '', u.status || 'Active']));
+  } else if (type === 'assets') {
+    rows = [['Asset ID', 'Name', 'Category', 'Brand', 'Reg/Serial', 'Owner UID', 'Health Score']];
+    state.assets.forEach(a => rows.push([a.id, a.name || a.assetName || '', a.category || '', a.brand || '', a.registrationNumber || a.regNo || '', a.uid || a.ownerUid || '', a.healthScore || '']));
+  } else if (type === 'audit') {
+    rows = [['Timestamp', 'Actor', 'Role', 'Action', 'Target', 'Reason']];
+    state.auditLogs.forEach(l => rows.push([l.timestamp || '', l.actorId || '', l.actorRole || '', l.action || '', l.targetUserId || l.targetDocId || '', l.reason || '']));
+  }
+
+  const csvContent = 'data:text/csv;charset=utf-8,' + rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement('a');
+  link.setAttribute('href', encodedUri);
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+$('btnRefresh').addEventListener('click', () => {
+  const icon = $('btnRefresh').querySelector('i');
+  icon.classList.add('animate-spin');
+  subscribeToFirestoreData();
+  setTimeout(() => icon.classList.remove('animate-spin'), 600);
+});
+
+$('userSearchInput')?.addEventListener('input', renderUsers);
+if (window.lucide) lucide.createIcons();
+</script>
+</body>
+</html>

@@ -1,0 +1,88 @@
+rules_version = '2';
+
+/**
+ * Asset Doctor — Master Production Storage Rules
+ * Bucket: assetdoctor-5fd25-vault
+ *
+ * Security Principles:
+ * - Public access is permanently disabled.
+ * - Customer can read/write ONLY their own vaulted files (/users/{uid}/... and /vault_invoices/{uid}/...).
+ * - Internal staff roles can read document scans for OCR inspection and support validation.
+ */
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.get('admin', false) == true ||
+        request.auth.token.get('role', '') in ['super_admin', 'admin', 'support_agent', 'ocr_reviewer', 'analytics_viewer']
+      );
+    }
+
+    function isSafeContent() {
+      return request.resource.contentType.matches('image/.*')
+        || request.resource.contentType == 'application/pdf';
+    }
+
+    function underMaxSize() {
+      return request.resource.size < 15 * 1024 * 1024;
+    }
+
+    function validWrite() {
+      return isSafeContent() && underMaxSize();
+    }
+
+    // Customer Bills & Invoices
+    match /users/{uid}/bills/{fileName} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create, update: if isOwner(uid) && validWrite();
+      allow delete: if isOwner(uid) || isAdmin();
+    }
+
+    // Profile Avatars
+    match /users/{uid}/avatar.jpg {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create, update: if isOwner(uid) && validWrite();
+      allow delete: if isOwner(uid);
+    }
+
+    match /users/{uid}/avatar/{fileName} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create, update: if isOwner(uid) && validWrite();
+      allow delete: if isOwner(uid);
+    }
+
+    // Scanned Vault Documents
+    match /vault_invoices/{uid}/{fileName} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create, update: if isOwner(uid) && validWrite();
+      allow delete: if isOwner(uid) || isAdmin();
+    }
+
+    match /users/{uid}/assets/{assetId}/docs/{fileName} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create, update: if isOwner(uid) && validWrite();
+      allow delete: if isOwner(uid) || isAdmin();
+    }
+
+    match /users/{uid}/assets/{assetId}/repairs/{fileName} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create, update: if isOwner(uid) && validWrite();
+      allow delete: if isOwner(uid) || isAdmin();
+    }
+
+    // Strict Deny-All for any other path
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

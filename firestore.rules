@@ -1,0 +1,200 @@
+rules_version = '2';
+
+/**
+ * Asset Doctor — Master Internal Backend & Firestore Security Rules
+ * Project: assetdoctor-5fd25
+ *
+ * Architecture:
+ * - Customer users access ONLY their own data (/users/{userId}/...).
+ * - Internal staff access is gated by Firebase Auth custom claims (admin: true, or role: super_admin | admin | support_agent | ocr_reviewer | analytics_viewer).
+ * - Audit logs are append-only and strictly immutable.
+ * - Admin credentials and administrative configuration are protected from public / customer access.
+ */
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ----------------------------------------------------
+    // Helper Functions
+    // ----------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function getRole() {
+      return request.auth.token.get('role', '');
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && (
+        request.auth.token.get('admin', false) == true ||
+        getRole() == 'super_admin'
+      );
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.get('admin', false) == true ||
+        getRole() in ['super_admin', 'admin', 'support_agent', 'ocr_reviewer', 'analytics_viewer']
+      );
+    }
+
+    function isSupportAgent() {
+      return isSuperAdmin() || getRole() in ['admin', 'support_agent'];
+    }
+
+    function isOcrReviewer() {
+      return isSuperAdmin() || getRole() in ['admin', 'ocr_reviewer'];
+    }
+
+    function validEmail(email) {
+      return email is string && email.size() < 320;
+    }
+
+    // ----------------------------------------------------
+    // 1. Customer User Profiles & Nested Vault Data
+    // ----------------------------------------------------
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if isOwner(userId) || isSuperAdmin() || (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'admin']));
+      allow delete: if isOwner(userId) || isSuperAdmin();
+
+      // Assets Subcollection
+      match /assets/{assetId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId) || isSuperAdmin() || getRole() == 'admin';
+        allow delete: if false; // Soft-delete only to preserve maintenance & audit history
+      }
+
+      // Documents Subcollection
+      match /documents/{documentId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId) || isSuperAdmin() || getRole() == 'admin';
+        allow delete: if isOwner(userId) || isSuperAdmin();
+      }
+
+      // Service Records Subcollection
+      match /serviceRecords/{recordId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId) || isSuperAdmin() || getRole() == 'admin';
+        allow delete: if isOwner(userId) || isSuperAdmin();
+      }
+
+      // Fallback wildcard for any other customer subcollections
+      match /{subCollection=**} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if isOwner(userId) || isSuperAdmin();
+      }
+    }
+
+    // Legacy uppercase /Users path support for seamless backwards compatibility
+    match /Users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if isOwner(userId) || isSuperAdmin();
+      allow delete: if isOwner(userId) || isSuperAdmin();
+
+      match /Assets/{assetId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update: if isOwner(userId) || isSuperAdmin();
+        allow delete: if false;
+
+        match /{subDoc=**} {
+          allow read: if isOwner(userId) || isAdmin();
+          allow write: if isOwner(userId) || isSuperAdmin();
+        }
+      }
+
+      match /{subDoc=**} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if isOwner(userId) || isSuperAdmin();
+      }
+    }
+
+    // ----------------------------------------------------
+    // 2. Support Tickets Center
+    // ----------------------------------------------------
+    match /supportTickets/{ticketId} {
+      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || isSupportAgent() || isAdmin();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if (isSignedIn() && resource.data.userId == request.auth.uid) || isSupportAgent() || isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    // ----------------------------------------------------
+    // 3. OCR Review Quality Queue
+    // ----------------------------------------------------
+    match /ocrReviewQueue/{reviewId} {
+      allow read: if isOcrReviewer() || isAdmin();
+      allow create: if isSignedIn();
+      allow update: if isOcrReviewer() || isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    // ----------------------------------------------------
+    // 4. Immutable Audit Logs (Append-Only)
+    // ----------------------------------------------------
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if false; // Strict immutability: No edits or deletes allowed
+    }
+
+    // ----------------------------------------------------
+    // 5. Internal Admin Staff Registry
+    // ----------------------------------------------------
+    match /adminUsers/{adminId} {
+      allow read: if isAdmin();
+      allow write: if isSuperAdmin();
+    }
+
+    // ----------------------------------------------------
+    // 6. System & API Settings
+    // ----------------------------------------------------
+    match /systemSettings/{settingId} {
+      allow read: if isAdmin();
+      allow write: if isSuperAdmin();
+    }
+
+    // ----------------------------------------------------
+    // 7. Communication Queues & Public Config
+    // ----------------------------------------------------
+    match /whatsappLogs/{msgId} {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /mail_queue/{jobId} {
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasAll(['to', 'template', 'status'])
+        && request.resource.data.status == 'pending'
+        && validEmail(request.resource.data.to)
+        && request.auth.token.email is string
+        && request.resource.data.to == request.auth.token.email;
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /feedback_reports/{reportId} {
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid;
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /app_config/{docId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    // ----------------------------------------------------
+    // Default Root Deny (Catch-All)
+    // ----------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
