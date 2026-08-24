@@ -66,8 +66,7 @@ async function setSuperAdmin(email = 'manish2768@gmail.com') {
     console.log(`[AUTH] Found user with UID: ${user.uid}`);
 
     const claims = {
-      super_admin: true,
-      admin: true
+      super_admin: true
     };
 
     await auth.setCustomUserClaims(user.uid, claims);
