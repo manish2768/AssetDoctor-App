@@ -630,25 +630,77 @@
       <!-- ===================== MODULE 9: WHATSAPP CONTROL ===================== -->
       <section id="tab-whatsapp" class="tab-panel space-y-4">
         <div class="glass border border-white/10 rounded-2xl p-6">
-          <h2 class="text-white font-bold text-base flex items-center gap-2 mb-1">
-            <i data-lucide="message-square" class="w-4 h-4 text-emerald-400"></i> WhatsApp Business Platform Integration
-          </h2>
-          <p class="text-xs text-slate-400 mb-4">Cloud API Webhook status, template delivery logs, and opt-in consent registry.</p>
-          <div class="grid md:grid-cols-3 gap-4 mb-4">
-            <div class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
-              <p class="text-xs text-emerald-300 font-bold">Integration Architecture</p>
-              <p class="text-lg font-black text-white mt-1">Ready (Meta Cloud API)</p>
-              <p class="text-[11px] text-emerald-400 mt-0.5">Production templates verified</p>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+            <div>
+              <h2 class="text-white font-bold text-base flex items-center gap-2">
+                <i data-lucide="message-square" class="w-4 h-4 text-emerald-400"></i> WhatsApp Business Automation Control
+              </h2>
+              <p class="text-xs text-slate-400 mt-0.5">Automated expiry reminders, transactional queue surveillance, and delivery intelligence.</p>
             </div>
-            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
-              <p class="text-xs text-slate-400 font-bold">Supported Templates</p>
-              <p class="text-lg font-black text-white mt-1">5 Core Templates</p>
-              <p class="text-[11px] text-slate-500 mt-0.5">Service, Warranty, PUC, OTP, Ticket</p>
+            <div class="flex items-center gap-2">
+              <span class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 pulse-dot"></span>
+                Automation Engine: <strong class="text-white">ACTIVE (IST)</strong>
+              </span>
             </div>
-            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
-              <p class="text-xs text-slate-400 font-bold">Opt-in Consent</p>
-              <p class="text-lg font-black text-brand-300 mt-1">Enforced per User</p>
-              <p class="text-[11px] text-slate-500 mt-0.5">Stored in Firestore profiles</p>
+          </div>
+
+          <!-- Queue Status Metrics Grid -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3 text-center">
+              <span class="text-[10px] text-slate-400 uppercase font-bold block">Queued</span>
+              <span id="kpiWQueue" class="text-xl font-black text-amber-300 mt-1 block tabular-nums">0</span>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3 text-center">
+              <span class="text-[10px] text-slate-400 uppercase font-bold block">Sent</span>
+              <span id="kpiWSent" class="text-xl font-black text-cyan-300 mt-1 block tabular-nums">0</span>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3 text-center">
+              <span class="text-[10px] text-slate-400 uppercase font-bold block">Delivered</span>
+              <span id="kpiWDelivered" class="text-xl font-black text-emerald-400 mt-1 block tabular-nums">0</span>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3 text-center">
+              <span class="text-[10px] text-slate-400 uppercase font-bold block">Read</span>
+              <span id="kpiWRead" class="text-xl font-black text-brand-300 mt-1 block tabular-nums">0</span>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3 text-center">
+              <span class="text-[10px] text-slate-400 uppercase font-bold block">Failed</span>
+              <span id="kpiWFailed" class="text-xl font-black text-rose-400 mt-1 block tabular-nums">0</span>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3 text-center">
+              <span class="text-[10px] text-slate-400 uppercase font-bold block">Skipped (Opt-Out)</span>
+              <span id="kpiWSkipped" class="text-xl font-black text-slate-400 mt-1 block tabular-nums">0</span>
+            </div>
+            <div class="rounded-xl border border-brand-500/30 bg-brand-500/10 p-3 text-center">
+              <span class="text-[10px] text-brand-300 uppercase font-bold block">Upcoming</span>
+              <span id="kpiWUpcoming" class="text-xl font-black text-white mt-1 block tabular-nums">0</span>
+            </div>
+          </div>
+
+          <!-- Notification Queue Table -->
+          <div class="rounded-xl border border-white/10 overflow-hidden">
+            <div class="p-3 bg-white/5 border-b border-white/10 flex items-center justify-between">
+              <h3 class="text-xs font-bold text-white flex items-center gap-2">
+                <i data-lucide="list-ordered" class="w-3.5 h-3.5 text-emerald-400"></i> Notification Queue Stream (/notification_queue)
+              </h3>
+              <span class="text-[10px] text-slate-400 font-mono">Real-time surveillance &amp; deduplication</span>
+            </div>
+            <div class="overflow-x-auto max-h-96">
+              <table class="min-w-full text-xs">
+                <thead>
+                  <tr class="text-left uppercase tracking-wider text-slate-400 bg-white/5 text-[10px]">
+                    <th class="px-4 py-2.5 font-semibold">Scheduled / Created</th>
+                    <th class="px-4 py-2.5 font-semibold">Recipient Phone / UID</th>
+                    <th class="px-4 py-2.5 font-semibold">Template Key</th>
+                    <th class="px-4 py-2.5 font-semibold">Asset / Context</th>
+                    <th class="px-4 py-2.5 font-semibold">Status</th>
+                    <th class="px-4 py-2.5 font-semibold text-right">Idempotency Key</th>
+                  </tr>
+                </thead>
+                <tbody id="notificationQueueTableBody" class="divide-y divide-white/5">
+                  <tr><td colspan="6" class="text-center py-6 text-slate-500 text-xs">No pending notifications in queue.</td></tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -1430,6 +1482,78 @@ function subscribeToFirestoreData() {
     console.error('[Firestore Error: ocrReviewQueue]', err.code, err.message);
     renderOcrQueue();
   });
+
+  // 8. Notification Queue (/notification_queue)
+  db.collection('notification_queue').orderBy('createdAt', 'desc').limit(50).onSnapshot((snap) => {
+    state.notifications = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderNotificationQueue();
+  }, (err) => {
+    console.warn('[Firestore: notification_queue]', err.message);
+    renderNotificationQueue();
+  });
+}
+
+function renderNotificationQueue() {
+  const items = state.notifications || [];
+  
+  const queuedCount = items.filter(x => x.status === 'queued').length;
+  const sentCount = items.filter(x => x.status === 'sent').length;
+  const deliveredCount = items.filter(x => x.status === 'delivered').length;
+  const readCount = items.filter(x => x.status === 'read').length;
+  const failedCount = items.filter(x => x.status === 'failed').length;
+  const skippedCount = items.filter(x => x.status === 'skipped').length;
+  const upcomingCount = (state.expiries || []).filter(x => x.status === 'EXP30' || x.status === 'EXP60').length;
+
+  if ($('kpiWQueue')) $('kpiWQueue').textContent = queuedCount.toString();
+  if ($('kpiWSent')) $('kpiWSent').textContent = sentCount.toString();
+  if ($('kpiWDelivered')) $('kpiWDelivered').textContent = deliveredCount.toString();
+  if ($('kpiWRead')) $('kpiWRead').textContent = readCount.toString();
+  if ($('kpiWFailed')) $('kpiWFailed').textContent = failedCount.toString();
+  if ($('kpiWSkipped')) $('kpiWSkipped').textContent = skippedCount.toString();
+  if ($('kpiWUpcoming')) $('kpiWUpcoming').textContent = upcomingCount.toString();
+
+  const tbody = $('notificationQueueTableBody');
+  if (!tbody) return;
+
+  if (!items.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-6 text-slate-500 text-xs">No pending notifications in queue.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = items.map(item => {
+    const statusBadge = item.status === 'delivered' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' :
+                        item.status === 'read' ? 'bg-brand-500/20 text-brand-300 border-brand-500/30' :
+                        item.status === 'sent' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' :
+                        item.status === 'queued' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
+                        item.status === 'skipped' ? 'bg-slate-700/50 text-slate-400 border-slate-600/30' :
+                        'bg-rose-500/20 text-rose-300 border-rose-500/30';
+
+    const timeStr = item.createdAt ? new Date(item.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '—';
+    const payload = item.payload || {};
+
+    return `
+      <tr class="table-row">
+        <td class="px-4 py-3 font-mono text-[11px] text-slate-400">${timeStr}</td>
+        <td class="px-4 py-3 font-mono text-white text-xs">
+          ${item.recipientPhone || '—'}<br>
+          <span class="text-[10px] text-slate-500">${item.userId}</span>
+        </td>
+        <td class="px-4 py-3 font-mono text-brand-300 text-xs font-bold">${item.templateKey}</td>
+        <td class="px-4 py-3 text-slate-300 text-xs">
+          ${payload.assetName ? `<strong class="text-white">${payload.assetName}</strong> (${payload.identifier || '—'})` : (payload.docLabel || payload.ticketId || '—')}
+        </td>
+        <td class="px-4 py-3">
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase ${statusBadge}">
+            ${item.status}
+          </span>
+          ${item.failureReason ? `<span class="block text-[9px] text-slate-500 mt-0.5">${item.failureReason}</span>` : ''}
+        </td>
+        <td class="px-4 py-3 text-right font-mono text-[10px] text-slate-500 truncate max-w-[140px]" title="${item.idempotencyKey}">
+          ${item.idempotencyKey}
+        </td>
+      </tr>
+    `;
+  }).join('');
 }
 
 // ----------------------------------------------------

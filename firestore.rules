@@ -182,12 +182,31 @@ service cloud.firestore {
     }
 
     // ----------------------------------------------------
-    // 8. Real-Time Customer Activity Stream
+    // 8. Real-Time Customer Activity & Operational Events
     // ----------------------------------------------------
     match /adminActivity/{eventId} {
       allow read: if isAdmin();
       allow create: if isSuperAdmin() || (isSignedIn() && request.resource.data.customerUid == request.auth.uid);
       allow update, delete: if isSuperAdmin();
+    }
+
+    match /operational_events/{eventId} {
+      allow read: if isAdmin();
+      allow create: if isSuperAdmin() || (isSignedIn() && request.resource.data.userId == request.auth.uid);
+      allow update, delete: if isSuperAdmin();
+    }
+
+    // ----------------------------------------------------
+    // 9. Notification Queue & Expiry Reminders
+    // ----------------------------------------------------
+    match /notification_queue/{notificationId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /notification_logs/{logId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create, update, delete: if isSuperAdmin();
     }
 
     match /mail_queue/{jobId} {
