@@ -217,6 +217,20 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    // ----------------------------------------------------
+    // 11. OEM Service Schedules & Service Records
+    // ----------------------------------------------------
+    match /oem_service_schedules/{scheduleId} {
+      allow read: if true; // Public catalog for schedule inspection
+      allow write: if isSuperAdmin();
+    }
+
+    match /service_records/{recordId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.ownerUid == request.auth.uid);
+      allow create: if isSuperAdmin() || (isSignedIn() && request.resource.data.ownerUid == request.auth.uid);
+      allow update, delete: if isSuperAdmin() || (isSignedIn() && resource.data.ownerUid == request.auth.uid);
+    }
+
     match /mail_queue/{jobId} {
       allow create: if isSignedIn()
         && request.resource.data.keys().hasAll(['to', 'template', 'status'])
