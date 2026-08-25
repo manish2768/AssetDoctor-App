@@ -48,39 +48,42 @@ export const PublicHomepageView: React.FC<PublicHomepageViewProps> = ({
   onOpenLoginModal
 }) => {
   return (
-    <div className="w-full space-y-24">
+    <div className="w-full space-y-16 sm:space-y-20 lg:space-y-24">
       {/* ============================================================ */}
       {/* 2. HERO SECTION */}
       {/* ============================================================ */}
-      <section className="text-center space-y-6 pt-4 sm:pt-8 max-w-4xl mx-auto">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-black uppercase tracking-wider font-mono shadow-sm">
+      <section className="text-center space-y-4 sm:space-y-6 pt-2 sm:pt-6 max-w-4xl mx-auto px-4">
+        {/* Eyebrow Badge */}
+        <div className="inline-flex items-center gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[11px] sm:text-xs font-bold uppercase tracking-wider font-mono shadow-sm">
           <Sparkles className="w-3.5 h-3.5" />
           <span>Universal Asset Intelligence Platform</span>
         </div>
 
-        <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white leading-[1.1]">
-          Everything you own. <br />
-          <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">
+        {/* Refined Balanced Headline */}
+        <h1 className="text-[32px] min-[390px]:text-[36px] sm:text-[46px] md:text-[52px] lg:text-[60px] xl:text-[68px] font-extrabold tracking-[-0.035em] text-white leading-[1.08] sm:leading-[1.04] lg:leading-[1.01] max-w-4xl mx-auto">
+          <span className="block text-white">Everything you own.</span>
+          <span className="block mt-1 sm:mt-1.5 bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">
             One intelligent place to manage it.
           </span>
         </h1>
 
-        <p className="text-sm sm:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed">
+        {/* Proportional Supporting Copy */}
+        <p className="text-sm sm:text-base lg:text-[17px] text-slate-300 max-w-2xl mx-auto leading-relaxed">
           Track, protect, maintain and understand every important asset you own. Universal lifecycle intelligence across vehicles, electronics, appliances, and business equipment.
         </p>
 
         {/* Hero Action Buttons */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1 sm:pt-2">
           <button
             onClick={onOpenVaultApp}
-            className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm transition-all cursor-pointer shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
+            className="w-full sm:w-auto px-6 sm:px-7 py-3 sm:py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm transition-all cursor-pointer shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
           >
             <span>Start Managing Your Assets</span>
             <ArrowRight className="w-4 h-4" />
           </button>
           <button
             onClick={() => onSelectTool('assets/explore')}
-            className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm transition-all cursor-pointer border border-slate-800 hover:border-slate-700 flex items-center justify-center gap-2"
+            className="w-full sm:w-auto px-6 sm:px-7 py-3 sm:py-3.5 rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm transition-all cursor-pointer border border-slate-800 hover:border-slate-700 flex items-center justify-center gap-2"
           >
             <span>Explore Asset Intelligence</span>
             <ChevronRight className="w-4 h-4 text-emerald-400" />
@@ -88,24 +91,24 @@ export const PublicHomepageView: React.FC<PublicHomepageViewProps> = ({
         </div>
 
         {/* Supported Asset Universe Pills */}
-        <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
-          <span className="px-3 py-1 rounded-xl bg-slate-900 border border-slate-800 text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center justify-center gap-2 pt-1 sm:pt-2">
+          <span className="px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800/80 text-[11px] font-bold text-slate-300 flex items-center gap-1.5 transition-colors">
             <Car className="w-3.5 h-3.5 text-emerald-400" />
             <span>Vehicles</span>
           </span>
-          <span className="px-3 py-1 rounded-xl bg-slate-900 border border-slate-800 text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+          <span className="px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800/80 text-[11px] font-bold text-slate-300 flex items-center gap-1.5 transition-colors">
             <Smartphone className="w-3.5 h-3.5 text-cyan-400" />
             <span>Electronics</span>
           </span>
-          <span className="px-3 py-1 rounded-xl bg-slate-900 border border-slate-800 text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+          <span className="px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800/80 text-[11px] font-bold text-slate-300 flex items-center gap-1.5 transition-colors">
             <Wrench className="w-3.5 h-3.5 text-teal-400" />
             <span>Home Appliances</span>
           </span>
-          <span className="px-3 py-1 rounded-xl bg-slate-900 border border-slate-800 text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+          <span className="px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800/80 text-[11px] font-bold text-slate-300 flex items-center gap-1.5 transition-colors">
             <Home className="w-3.5 h-3.5 text-amber-400" />
             <span>Solar & Energy</span>
           </span>
-          <span className="px-3 py-1 rounded-xl bg-slate-900 border border-slate-800 text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+          <span className="px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800/80 text-[11px] font-bold text-slate-300 flex items-center gap-1.5 transition-colors">
             <Layers className="w-3.5 h-3.5 text-purple-400" />
             <span>Business Assets</span>
           </span>
