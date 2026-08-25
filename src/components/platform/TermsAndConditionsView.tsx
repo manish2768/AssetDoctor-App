@@ -235,7 +235,7 @@ export const TermsAndConditionsView: React.FC<TermsAndConditionsViewProps> = ({ 
           </p>
           <div className="pt-2 text-xs font-mono text-slate-400 space-y-1">
             <p className="text-white font-bold">Asset Doctor Legal &amp; Governance</p>
-            <p>Email: <span className="text-cyan-400 font-bold">legal@assetdoctor.in</span></p>
+            <p>Email: <a href="mailto:support@assetdoctor.in" className="text-cyan-400 font-bold hover:underline">support@assetdoctor.in</a></p>
             <p>Entity: [Asset Doctor Project • India]</p>
           </div>
         </section>

@@ -349,6 +349,15 @@ export const AboutUsView: React.FC<AboutUsViewProps> = ({
             <ChevronRight className="w-4 h-4 text-emerald-400" />
           </button>
         </div>
+
+        <div className="pt-4 text-center">
+          <p className="text-xs text-slate-400">
+            Have questions or feedback for the builder? Email us at{' '}
+            <a href="mailto:support@assetdoctor.in" className="text-emerald-400 font-mono font-bold hover:underline">
+              support@assetdoctor.in
+            </a>
+          </p>
+        </div>
       </section>
     </div>
   );

@@ -247,7 +247,7 @@ export const PrivacyPolicyView: React.FC<PrivacyPolicyViewProps> = ({ onGoBack }
           </p>
           <div className="pt-2 text-xs font-mono text-slate-400 space-y-1">
             <p className="text-white font-bold">Asset Doctor Privacy &amp; Data Governance</p>
-            <p>Email: <span className="text-emerald-400 font-bold">privacy@assetdoctor.in</span></p>
+            <p>Email: <a href="mailto:support@assetdoctor.in" className="text-emerald-400 font-bold hover:underline">support@assetdoctor.in</a></p>
             <p>Location: India (Universal Platform)</p>
           </div>
         </section>

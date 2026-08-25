@@ -122,17 +122,173 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // Check route on mount
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const p = (window.location.pathname || '').toLowerCase().replace(/\/$/, '');
-      if (p === '/about') setActiveTab('about');
-      else if (p === '/privacy-policy') setActiveTab('privacy_policy');
-      else if (p === '/terms-and-conditions' || p === '/terms') setActiveTab('terms');
-      else if (p === '/contact') setActiveTab('contact');
-      else if (p === '/cookie-policy') setActiveTab('cookie_policy');
-      else if (p === '/vault' && currentUser) setActiveTab('my_vault');
+  // ----------------------------------------------------
+  // REAL SPA BROWSER ROUTING & HISTORY ARCHITECTURE
+  // ----------------------------------------------------
+  const ROUTE_CONFIGS: Record<string, { tab: PlatformTab; title: string; desc: string }> = {
+    '/': {
+      tab: 'home',
+      title: 'Asset Doctor — Universal Asset Intelligence & Lifecycle Platform',
+      desc: 'Know what you own, what it needs, what it\'s worth, and what to do next. Universal asset tracking, warranty alerts, and preventive maintenance across 7 asset categories.'
+    },
+    '/about': {
+      tab: 'about',
+      title: 'About Asset Doctor | Universal Asset Intelligence Platform',
+      desc: 'Discover the story behind Asset Doctor, the universal asset lifecycle intelligence platform created by Ashutosh Rai to understand, protect, and manage physical assets.'
+    },
+    '/contact': {
+      tab: 'contact',
+      title: 'Contact Asset Doctor',
+      desc: 'Get in touch with Asset Doctor. Submit product feedback, report technical issues, or inquire about business asset portfolio partnerships.'
+    },
+    '/privacy-policy': {
+      tab: 'privacy_policy',
+      title: 'Privacy Policy | Asset Doctor',
+      desc: 'Asset Doctor Privacy Policy: Learn how we protect your asset data, enforce automated PII scrubbing, and maintain client-side zero-advertiser data isolation.'
+    },
+    '/terms-and-conditions': {
+      tab: 'terms',
+      title: 'Terms & Conditions | Asset Doctor',
+      desc: 'Asset Doctor Terms and Conditions: User agreement, service capabilities, calculation heuristics, and intellectual property terms.'
+    },
+    '/terms': {
+      tab: 'terms',
+      title: 'Terms & Conditions | Asset Doctor',
+      desc: 'Asset Doctor Terms and Conditions: User agreement, service capabilities, calculation heuristics, and intellectual property terms.'
+    },
+    '/cookie-policy': {
+      tab: 'cookie_policy',
+      title: 'Cookie Policy | Asset Doctor',
+      desc: 'Learn how Asset Doctor uses essential local storage and privacy-scrubbed analytics without third-party advertising tracking cookies.'
+    },
+    '/tools': {
+      tab: 'tools_hub',
+      title: 'Free Asset Intelligence Tools Suite | Asset Doctor',
+      desc: 'Interactive calculators for repair vs replace, warranty expiration, depreciation, and maintenance tracking.'
+    },
+    '/tools/repair-or-replace': {
+      tab: 'repair_vs_replace',
+      title: 'Repair vs Replace Calculator | Asset Doctor',
+      desc: 'Make data-backed decisions on whether to repair or replace failing equipment.'
+    },
+    '/tools/maintenance-checker': {
+      tab: 'maintenance_checker',
+      title: 'Predictive Maintenance Checker | Asset Doctor',
+      desc: 'Check preventive maintenance intervals and upcoming service requirements.'
+    },
+    '/tools/asset-health-score': {
+      tab: 'health_score',
+      title: 'Asset Health Score Calculator | Asset Doctor',
+      desc: 'Audit the condition, reliability, and lifespan score of your physical assets.'
+    },
+    '/tools/document-analyzer': {
+      tab: 'invoice_analyzer',
+      title: 'Smart Document & Bill Analyzer OCR | Asset Doctor',
+      desc: 'Extract key purchase metadata, serial numbers, and warranty terms from invoices.'
+    },
+    '/tools/invoice-analyzer': {
+      tab: 'invoice_analyzer',
+      title: 'Smart Document & Bill Analyzer OCR | Asset Doctor',
+      desc: 'Extract key purchase metadata, serial numbers, and warranty terms from invoices.'
+    },
+    '/tools/asset-passport': {
+      tab: 'passport',
+      title: 'Digital Asset Passport | Asset Doctor',
+      desc: 'Complete immutable digital passport and lifecycle timeline for physical assets.'
+    },
+    '/knowledge': {
+      tab: 'knowledge_hub',
+      title: 'Asset Intelligence Knowledge Hub | Asset Doctor',
+      desc: 'Comprehensive maintenance schedules, warranty insights, and depreciation norms across 6 asset sectors.'
+    },
+    '/assets/explore': {
+      tab: 'asset_explorer',
+      title: 'Explore Your Asset Universe | Asset Doctor',
+      desc: 'Explore intelligence, depreciation models, and care schedules across all asset categories.'
+    },
+    '/vault': {
+      tab: 'my_vault',
+      title: 'My Asset Vault | Asset Doctor',
+      desc: 'Manage and protect your vaulted assets with offline-first synchronization.'
     }
+  };
+
+  const navigateToPath = (path: string, pushHistory: boolean = true) => {
+    const cleanPath = (path || '/').toLowerCase().replace(/\/$/, '') || '/';
+
+    let targetTab: PlatformTab = 'home';
+    let targetTitle = 'Asset Doctor — Universal Asset Intelligence & Lifecycle Platform';
+    let targetDesc = 'Know what you own, what it needs, what it\'s worth, and what to do next.';
+    let found = false;
+
+    if (ROUTE_CONFIGS[cleanPath]) {
+      const cfg = ROUTE_CONFIGS[cleanPath];
+      targetTab = cfg.tab;
+      targetTitle = cfg.title;
+      targetDesc = cfg.desc;
+      found = true;
+    } else if (cleanPath.startsWith('/knowledge/')) {
+      const sub = cleanPath.replace('/knowledge/', '');
+      let cat: KnowledgeCategory = 'VEHICLE';
+      if (sub === 'electronics') cat = 'ELECTRONICS';
+      else if (sub === 'home-appliances') cat = 'APPLIANCE';
+      else if (sub === 'solar-energy') cat = 'SOLAR';
+      else if (sub === 'business-assets') cat = 'BUSINESS';
+      setActiveKnowledgeCat(cat);
+      targetTab = 'knowledge_hub';
+      targetTitle = `${cat.charAt(0) + cat.slice(1).toLowerCase()} Asset Intelligence | Asset Doctor`;
+      targetDesc = `Comprehensive maintenance and lifecycle intelligence for ${cat.toLowerCase()} assets.`;
+      found = true;
+    } else if (cleanPath.startsWith('/assets/')) {
+      targetTab = 'asset_explorer';
+      targetTitle = 'Explore Your Asset Universe | Asset Doctor';
+      targetDesc = 'Explore asset intelligence, valuation, and care schedules.';
+      found = true;
+    } else if (cleanPath.startsWith('/tools/')) {
+      const slug = cleanPath.replace(/^\//, '');
+      const seoPage = SeoRegistry.getPage(slug);
+      if (seoPage) {
+        setActiveSeoSlug(slug);
+        targetTab = 'seo_page';
+        targetTitle = seoPage.title;
+        targetDesc = seoPage.metaDescription;
+        found = true;
+      }
+    }
+
+    if (!found && cleanPath !== '/') {
+      targetTab = 'not_found';
+      targetTitle = 'Page Not Found (404) | Asset Doctor';
+      targetDesc = 'The requested page could not be found.';
+    }
+
+    setActiveTab(targetTab);
+
+    if (typeof window !== 'undefined') {
+      if (pushHistory && window.location.pathname !== cleanPath) {
+        window.history.pushState({ path: cleanPath, tab: targetTab }, '', cleanPath);
+      }
+      document.title = targetTitle;
+      const metaDesc = document.querySelector('meta[name="description"]');
+      if (metaDesc) metaDesc.setAttribute('content', targetDesc);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  // Listen to browser Back/Forward & parse initial route on mount
+  useEffect(() => {
+    const handlePopState = () => {
+      if (typeof window !== 'undefined') {
+        navigateToPath(window.location.pathname, false);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      navigateToPath(window.location.pathname, false);
+    }
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   // Check guest migration on user login
@@ -147,28 +303,26 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
   }, [currentUser]);
 
   const handleNavigateToKnowledge = (cat?: KnowledgeCategory) => {
-    setActiveKnowledgeCat(cat);
-    setActiveTab('knowledge_hub');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (cat) {
+      setActiveKnowledgeCat(cat);
+      const slugMap: Record<KnowledgeCategory, string> = {
+        VEHICLE: 'vehicles',
+        ELECTRONICS: 'electronics',
+        APPLIANCE: 'home-appliances',
+        SOLAR: 'solar-energy',
+        BUSINESS: 'business-assets',
+        LIVING: 'vehicles'
+      };
+      navigateToPath(`/knowledge/${slugMap[cat] || 'vehicles'}`);
+    } else {
+      setActiveKnowledgeCat(undefined);
+      navigateToPath('/knowledge');
+    }
   };
 
   const handleNavigateToTool = (slug: string) => {
-    if (slug === 'tools/repair-or-replace') {
-      setActiveTab('repair_vs_replace');
-    } else if (slug === 'tools/maintenance-checker') {
-      setActiveTab('maintenance_checker');
-    } else if (slug === 'tools/asset-health-score') {
-      setActiveTab('health_score');
-    } else if (slug === 'tools/invoice-analyzer' || slug === 'tools/document-analyzer') {
-      setActiveTab('invoice_analyzer');
-    } else if (slug === 'tools/warranty-checker' || slug === 'tools/ownership-cost' || slug === 'tools/asset-depreciation') {
-      setActiveSeoSlug(slug);
-      setActiveTab('seo_page');
-    } else {
-      setActiveSeoSlug(slug);
-      setActiveTab('seo_page');
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const clean = slug.startsWith('tools/') ? `/${slug}` : `/tools/${slug.replace(/^\//, '')}`;
+    navigateToPath(clean);
   };
 
   // ----------------------------------------------------
@@ -345,7 +499,7 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
         {/* Center: Desktop Navigation Links */}
         <nav className="hidden lg:flex items-center gap-1 bg-slate-950/80 border border-slate-800/90 p-1 rounded-2xl text-xs font-bold">
           <button
-            onClick={() => setActiveTab('home')}
+            onClick={() => navigateToPath('/')}
             className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
               activeTab === 'home' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
             }`}
@@ -353,7 +507,7 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
             Home
           </button>
           <button
-            onClick={() => setActiveTab('tools_hub')}
+            onClick={() => navigateToPath('/tools')}
             className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
               activeTab === 'tools_hub' || activeTab === 'repair_vs_replace' || activeTab === 'maintenance_checker' || activeTab === 'health_score'
                 ? 'bg-emerald-500 text-slate-950 font-black shadow-md'
@@ -371,7 +525,7 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
             Knowledge Hub
           </button>
           <button
-            onClick={() => setActiveTab('asset_explorer')}
+            onClick={() => navigateToPath('/assets/explore')}
             className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
               activeTab === 'asset_explorer' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
             }`}
@@ -379,7 +533,7 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
             Explore Assets
           </button>
           <button
-            onClick={() => setActiveTab('invoice_analyzer')}
+            onClick={() => navigateToPath('/tools/document-analyzer')}
             className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
               activeTab === 'invoice_analyzer' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
             }`}
@@ -387,7 +541,7 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
             Bill Analyzer
           </button>
           <button
-            onClick={() => { setActiveTab('about'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+            onClick={() => navigateToPath('/about')}
             className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
               activeTab === 'about' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
             }`}
@@ -398,7 +552,7 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
           {/* Authenticated Customer Nav Tab */}
           {currentUser && (
             <button
-              onClick={() => setActiveTab('my_vault')}
+              onClick={() => navigateToPath('/vault')}
               className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
                 activeTab === 'my_vault' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-emerald-400 hover:text-white'
               }`}
@@ -438,7 +592,7 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
                   <button
                     onClick={() => {
                       setIsProfileMenuOpen(false);
-                      setActiveTab('my_vault');
+                      navigateToPath('/vault');
                     }}
                     className="w-full px-3 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-900 flex items-center gap-2 font-semibold transition cursor-pointer text-left"
                   >
@@ -499,7 +653,7 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
         {/* Mobile Navigation Bar */}
         <div className="flex lg:hidden items-center gap-1.5 overflow-x-auto pb-2 scrollbar-thin">
           <button
-            onClick={() => setActiveTab('home')}
+            onClick={() => navigateToPath('/')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${
               activeTab === 'home' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
             }`}
@@ -507,7 +661,7 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
             Home
           </button>
           <button
-            onClick={() => setActiveTab('tools_hub')}
+            onClick={() => navigateToPath('/tools')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${
               activeTab === 'tools_hub' || activeTab === 'repair_vs_replace' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
             }`}
@@ -523,7 +677,7 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
             Knowledge Hub
           </button>
           <button
-            onClick={() => setActiveTab('asset_explorer')}
+            onClick={() => navigateToPath('/assets/explore')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${
               activeTab === 'asset_explorer' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
             }`}
@@ -531,7 +685,7 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
             Explore Assets
           </button>
           <button
-            onClick={() => { setActiveTab('about'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+            onClick={() => navigateToPath('/about')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${
               activeTab === 'about' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
             }`}
@@ -540,7 +694,7 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
           </button>
           {currentUser && (
             <button
-              onClick={() => setActiveTab('my_vault')}
+              onClick={() => navigateToPath('/vault')}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${
                 activeTab === 'my_vault' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-emerald-400 border-slate-800'
               }`}
@@ -673,33 +827,33 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
 
           {activeTab === 'about' && (
             <AboutUsView
-              onOpenVaultApp={currentUser ? () => setActiveTab('my_vault') : () => setIsAuthModalOpen(true)}
-              onExploreAssets={() => { setActiveTab('asset_explorer'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-              onExploreTools={() => { setActiveTab('tools_hub'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              onOpenVaultApp={currentUser ? () => navigateToPath('/vault') : () => setIsAuthModalOpen(true)}
+              onExploreAssets={() => navigateToPath('/assets/explore')}
+              onExploreTools={() => navigateToPath('/tools')}
             />
           )}
 
           {activeTab === 'privacy_policy' && (
-            <PrivacyPolicyView onGoBack={() => { setActiveTab('home'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
+            <PrivacyPolicyView onGoBack={() => navigateToPath('/')} />
           )}
 
           {activeTab === 'terms' && (
-            <TermsAndConditionsView onGoBack={() => { setActiveTab('home'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
+            <TermsAndConditionsView onGoBack={() => navigateToPath('/')} />
           )}
 
           {activeTab === 'contact' && (
-            <ContactView onGoHome={() => { setActiveTab('home'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
+            <ContactView onGoHome={() => navigateToPath('/')} />
           )}
 
           {activeTab === 'cookie_policy' && (
-            <CookiePolicyView onGoBack={() => { setActiveTab('home'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
+            <CookiePolicyView onGoBack={() => navigateToPath('/')} />
           )}
 
           {activeTab === 'not_found' && (
             <NotFoundView
-              onGoHome={() => { setActiveTab('home'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-              onExploreTools={() => { setActiveTab('tools_hub'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-              onExploreAssets={() => { setActiveTab('asset_explorer'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              onGoHome={() => navigateToPath('/')}
+              onExploreTools={() => navigateToPath('/tools')}
+              onExploreAssets={() => navigateToPath('/assets/explore')}
             />
           )}
         </PlatformErrorBoundary>
@@ -736,14 +890,14 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
           existingAsset={duplicateModalState.existingAsset}
           onOpenExisting={(asset) => {
             setDuplicateModalState({ isOpen: false });
-            setActiveTab('my_vault');
+            navigateToPath('/vault');
             if (onSelectAsset) onSelectAsset(asset);
           }}
           onCreateAnother={async () => {
             if (duplicateModalState.candidate && currentUser?.uid) {
               await MobileAssetService.saveAsset(duplicateModalState.candidate, currentUser.uid);
               setDuplicateModalState({ isOpen: false });
-              showToast(`Created duplicate asset copy in Vault!`, 'View Vault', () => setActiveTab('my_vault'));
+              showToast(`Created duplicate asset copy in Vault!`, 'View Vault', () => navigateToPath('/vault'));
             }
           }}
           reason={duplicateModalState.reason}
@@ -753,8 +907,35 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
       {/* 6. Global Trust & Platform Footer */}
       <GlobalTrustFooter
         onNavigateTab={(tab) => {
-          setActiveTab(tab as PlatformTab);
-          window.scrollTo({ top: 0, behavior: 'smooth' });
+          if (tab.startsWith('/')) {
+            navigateToPath(tab);
+          } else if (tab === 'home') {
+            navigateToPath('/');
+          } else if (tab === 'about') {
+            navigateToPath('/about');
+          } else if (tab === 'contact') {
+            navigateToPath('/contact');
+          } else if (tab === 'privacy_policy') {
+            navigateToPath('/privacy-policy');
+          } else if (tab === 'terms') {
+            navigateToPath('/terms-and-conditions');
+          } else if (tab === 'cookie_policy') {
+            navigateToPath('/cookie-policy');
+          } else if (tab === 'my_vault') {
+            navigateToPath('/vault');
+          } else if (tab === 'tools_hub') {
+            navigateToPath('/tools');
+          } else if (tab === 'asset_explorer') {
+            navigateToPath('/assets/explore');
+          } else if (tab === 'knowledge_hub') {
+            navigateToPath('/knowledge');
+          } else if (tab === 'invoice_analyzer') {
+            navigateToPath('/tools/document-analyzer');
+          } else if (tab === 'passport') {
+            navigateToPath('/tools/asset-passport');
+          } else {
+            navigateToPath(`/${tab}`);
+          }
         }}
         onSelectTool={handleNavigateToTool}
       />

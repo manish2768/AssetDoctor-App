@@ -212,7 +212,6 @@ export function MaintenanceScreen({ route, navigation }) {
   };
 
   return (
-  return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}

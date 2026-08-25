@@ -255,7 +255,9 @@ export const ContactView: React.FC<ContactViewProps> = ({ onGoHome }) => {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-white">General &amp; Support Inquiries</h3>
-                <p className="text-xs text-slate-400 font-mono">support@assetdoctor.in</p>
+                <a href="mailto:support@assetdoctor.in" className="text-xs text-emerald-400 font-mono font-bold hover:underline">
+                  support@assetdoctor.in
+                </a>
               </div>
             </div>
             <p className="text-xs text-slate-300 leading-relaxed">
@@ -270,7 +272,9 @@ export const ContactView: React.FC<ContactViewProps> = ({ onGoHome }) => {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-white">Business &amp; P2B Partnerships</h3>
-                <p className="text-xs text-slate-400 font-mono">partnerships@assetdoctor.in</p>
+                <a href="mailto:support@assetdoctor.in" className="text-xs text-cyan-400 font-mono font-bold hover:underline">
+                  support@assetdoctor.in
+                </a>
               </div>
             </div>
             <p className="text-xs text-slate-300 leading-relaxed">
@@ -285,7 +289,9 @@ export const ContactView: React.FC<ContactViewProps> = ({ onGoHome }) => {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-white">Privacy &amp; Data Rights</h3>
-                <p className="text-xs text-slate-400 font-mono">privacy@assetdoctor.in</p>
+                <a href="mailto:support@assetdoctor.in" className="text-xs text-indigo-400 font-mono font-bold hover:underline">
+                  support@assetdoctor.in
+                </a>
               </div>
             </div>
             <p className="text-xs text-slate-300 leading-relaxed">

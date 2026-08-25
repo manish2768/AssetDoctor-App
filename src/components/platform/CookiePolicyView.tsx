@@ -98,7 +98,7 @@ export const CookiePolicyView: React.FC<CookiePolicyViewProps> = ({ onGoBack }) 
         <section className="space-y-3 p-5 rounded-2xl bg-slate-900/60 border border-white/10">
           <h2 className="text-lg font-bold text-white">5. Contact Information</h2>
           <p className="text-xs text-slate-300">
-            For questions regarding our storage practices, contact <span className="text-emerald-400 font-mono font-bold">privacy@assetdoctor.in</span>.
+            For questions regarding our storage practices, contact <a href="mailto:support@assetdoctor.in" className="text-emerald-400 font-mono font-bold hover:underline">support@assetdoctor.in</a>.
           </p>
         </section>
       </div>
