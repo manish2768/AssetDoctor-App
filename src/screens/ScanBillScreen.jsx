@@ -12,7 +12,6 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
-  Alert,
   ScrollView,
   Dimensions,
 } from 'react-native';
@@ -41,6 +40,7 @@ import {
 } from '../utils/billParser';
 import { useAuth } from '../context/AuthProvider';
 import { useAssets } from '../context/AssetProvider';
+import { useUiFeedback } from '../context/UiFeedbackProvider';
 import { ScanErrorBoundary } from '../components/ScanErrorBoundary';
 import { ReviewAssetModal } from '../components/ReviewAssetModal';
 import { openReviewInvoice, navigationRef, safeNavigate } from '../navigation/navActions';
@@ -76,18 +76,10 @@ function friendlyCaptureMessage(error) {
   }
 }
 
-/** Log + optional Alert — never rethrow (keeps ScanBillScreen alive). */
-function reportScanError(error, { alertTitle = 'Scan failed', showAlert = true } = {}) {
+/** Log scan errors — prefer inline lastError over native Alert. */
+function reportScanError(error) {
   console.error('[ScanBillScreen Error]:', error);
-  const msg = friendlyCaptureMessage(error);
-  if (showAlert) {
-    try {
-      Alert.alert(alertTitle, msg, [{ text: 'OK' }]);
-    } catch (alertErr) {
-      console.error('[ScanBillScreen Error]:', alertErr);
-    }
-  }
-  return msg;
+  return friendlyCaptureMessage(error);
 }
 
 /**
@@ -436,10 +428,11 @@ async function safeLaunchLibraryAsync() {
 function ScanBillScreenInner({ navigation }) {
   const { user } = useAuth();
   const { assets } = useAssets();
+  const ui = useUiFeedback();
   // TODO: RE-ENABLE AUTH REQUIREMENT BEFORE PRODUCTION — isAuthenticated gate removed for scan testing
   const [cameraPermission, setCameraPermission] = useState('loading'); // loading|granted|denied|undetermined
   const [processing, setProcessing] = useState(false);
-  const [processLabel, setProcessLabel] = useState('Detecting document…');
+  const [processLabel, setProcessLabel] = useState('Reading document…');
   const [lastError, setLastError] = useState('');
   const [autoArmed, setAutoArmed] = useState(false);
   const [reviewPayload, setReviewPayload] = useState(null);
@@ -507,14 +500,14 @@ function ScanBillScreenInner({ navigation }) {
       const result = await ensureCameraPermission();
       setCameraPermission(result.granted ? 'granted' : 'denied');
       if (!result.granted) {
-        Alert.alert(
-          'Camera permission needed',
-          'Asset Doctor needs camera access to scan invoices. You can enable it in Settings.',
-          [
-            { text: 'Not now', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => openAppSettings() },
-          ],
-        );
+        setLastError('Camera permission is required to scan invoices.');
+        const openSettings = await ui.confirm({
+          title: 'Camera permission needed',
+          message: 'Asset Doctor needs camera access to scan invoices. You can enable it in Settings.',
+          confirmLabel: 'Open Settings',
+          cancelLabel: 'Not now',
+        });
+        if (openSettings) openAppSettings();
       }
       return result.granted;
     } catch (error) {
@@ -522,18 +515,18 @@ function ScanBillScreenInner({ navigation }) {
       setLastError(friendlyCaptureMessage(error));
       return false;
     }
-  }, []);
+  }, [ui]);
 
   const processImageWithGemini = useCallback(
     async (uri) => {
       if (!uri) {
         setLastError('Could not capture image. Please try again.');
-        Alert.alert('Scan failed', 'Could not capture image. Please try again.');
+        setProcessLabel('Failed');
         return;
       }
       setProcessing(true);
       setLastError('');
-      setProcessLabel('Optimizing image…');
+      setProcessLabel('Uploading…');
       Haptics.tap();
 
       let optimizedUri = uri;
@@ -541,7 +534,7 @@ function ScanBillScreenInner({ navigation }) {
       try {
         // Compress BEFORE OCR — width 1000 @ 0.5 JPEG (+ base64 for Vision/Gemini)
         try {
-          setProcessLabel('Optimizing image…');
+          setProcessLabel('Processing…');
           const compressedImage = await prepareScanImage(uri);
           optimizedUri = compressedImage?.uri || uri;
           optimizedBase64 = compressedImage?.base64 || null;
@@ -565,15 +558,12 @@ function ScanBillScreenInner({ navigation }) {
           });
           if (!quality.ok) {
             setProcessing(false);
-            setProcessLabel('');
-            setLastError(quality.message || 'Bill is unclear.');
+            setProcessLabel('Failed');
             const tips = (quality.tips || []).slice(0, 5).map((t) => `• ${t}`).join('\n');
-            Alert.alert(
-              'Image quality too low',
+            setLastError(
               `${quality.message || 'Image quality is too low to read this document clearly.'}${
-                tips ? `\n\n${tips}` : ''
-              }`,
-              [{ text: 'Retake Photo', style: 'default' }],
+                tips ? `\n${tips}` : ''
+              }\nTap Scan document to retake.`,
             );
             Haptics.error();
             return;
@@ -582,7 +572,7 @@ function ScanBillScreenInner({ navigation }) {
           console.warn('[ScanBill] quality gate skipped', qErr?.message || qErr);
         }
 
-        setProcessLabel('Reading invoice…');
+        setProcessLabel('Reading document…');
         let ocr = null;
         let ocrFailed = false;
         let ocrFailMessage = '';
@@ -604,8 +594,7 @@ function ScanBillScreenInner({ navigation }) {
             ocrErr?.message || 'Could not auto-fill details, please enter manually';
         }
 
-        setProcessLabel('Identifying document type…');
-        setProcessLabel('Extracting details…');
+        setProcessLabel('Extracting information…');
         // brief pause before match label for UX sequencing
         setProcessLabel('Matching with your assets…');
 
@@ -798,18 +787,12 @@ function ScanBillScreenInner({ navigation }) {
         });
 
         if (ocrFailed) {
+          setProcessLabel('Review required');
           setLastError(ocrFailMessage);
-          Alert.alert(
-            'Manual Review',
-            'Could not auto-fill details, please enter manually',
-            [{ text: 'OK' }],
-          );
         } else if (mappedInvoice.needsManualReview) {
-          Alert.alert(
-            'Manual Review',
-            `OCR confidence ${Math.round(mappedInvoice.confidence || 0)}% — please verify fields before saving.`,
-            [{ text: 'Review' }],
-          );
+          setProcessLabel('Review required');
+        } else {
+          setProcessLabel('Completed');
         }
       } catch (error) {
         // Last-resort: STILL navigate to Review with empty fields — NEVER Home
@@ -829,11 +812,8 @@ function ScanBillScreenInner({ navigation }) {
           ocrFailed: true,
           hasOcrError: true,
         });
-        Alert.alert(
-          'Manual entry',
-          'Could not auto-fill details, please enter manually',
-          [{ text: 'OK' }],
-        );
+        setProcessLabel('Failed');
+        setLastError('Could not auto-fill details, please enter manually');
       } finally {
         setProcessing(false);
         setPendingImageUri('');
@@ -855,14 +835,13 @@ function ScanBillScreenInner({ navigation }) {
       if (!uri) {
         capturing.current = false;
         setLastError('Could not capture image. Please try again.');
-        Alert.alert('Scan failed', 'Could not capture image. Please try again.');
+        setProcessLabel('Failed');
         return;
       }
       setPendingImageUri(uri);
       setProcessing(true);
-      setProcessLabel('Preparing image…');
-      // Meaningful OCR progress (never generic "Loading…")
-      setProcessLabel('Detecting document…');
+      setProcessLabel('Uploading…');
+      setProcessLabel('Processing…');
       setLastError('');
       Haptics.tap();
 
@@ -883,11 +862,8 @@ function ScanBillScreenInner({ navigation }) {
               ocrFailed: true,
               hasOcrError: true,
             });
-            Alert.alert(
-              'Manual entry',
-              'Could not auto-fill details, please enter manually',
-              [{ text: 'OK' }],
-            );
+            setProcessLabel('Failed');
+            setLastError('Could not auto-fill details, please enter manually');
             setProcessing(false);
             setPendingImageUri('');
             capturing.current = false;
@@ -919,14 +895,13 @@ function ScanBillScreenInner({ navigation }) {
         startedRef.current = false;
         setAutoArmed(false);
         setLastError('Camera permission is required to scan invoices.');
-        Alert.alert(
-          'Camera permission needed',
-          'Enable Camera in Settings to scan invoices.',
-          [
-            { text: 'Not now', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => openAppSettings() },
-          ],
-        );
+        const openSettings = await ui.confirm({
+          title: 'Camera permission needed',
+          message: 'Enable Camera in Settings to scan invoices.',
+          confirmLabel: 'Open Settings',
+          cancelLabel: 'Not now',
+        });
+        if (openSettings) openAppSettings();
         return;
       }
 
@@ -938,7 +913,7 @@ function ScanBillScreenInner({ navigation }) {
         console.error('[ScanBillScreen Error]:', captureErr);
         const fallback = await safeLaunchCameraAsync();
         if (fallback.error && !fallback.canceled) {
-          const msg = reportScanError(fallback.error, { alertTitle: 'Could not capture image' });
+          const msg = reportScanError(fallback.error);
           capturing.current = false;
           startedRef.current = false;
           setAutoArmed(false);
@@ -981,7 +956,7 @@ function ScanBillScreenInner({ navigation }) {
       capturing.current = false;
       startedRef.current = false;
       setAutoArmed(false);
-      const msg = reportScanError(error, { alertTitle: 'Could not capture image' });
+      const msg = reportScanError(error);
       setLastError(msg);
       Haptics.error();
     }
@@ -991,6 +966,7 @@ function ScanBillScreenInner({ navigation }) {
     processing,
     cameraPermission,
     requestCameraAccess,
+    ui,
   ]);
 
   const launchGalleryPicker = useCallback(async () => {
@@ -1008,14 +984,13 @@ function ScanBillScreenInner({ navigation }) {
         capturing.current = false;
         startedRef.current = false;
         setLastError('Photo library permission is required to browse invoices.');
-        Alert.alert(
-          'Photos permission needed',
-          'Enable Photos access in Settings to import invoices from Gallery.',
-          [
-            { text: 'Not now', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => openAppSettings() },
-          ],
-        );
+        const openSettings = await ui.confirm({
+          title: 'Photos permission needed',
+          message: 'Enable Photos access in Settings to import invoices from Gallery.',
+          confirmLabel: 'Open Settings',
+          cancelLabel: 'Not now',
+        });
+        if (openSettings) openAppSettings();
         return;
       }
 
@@ -1026,7 +1001,7 @@ function ScanBillScreenInner({ navigation }) {
         console.error('[ScanBillScreen Error]:', pickErr);
         const fallback = await safeLaunchLibraryAsync();
         if (fallback.error && !fallback.canceled) {
-          const msg = reportScanError(fallback.error, { alertTitle: 'Could not open gallery' });
+          const msg = reportScanError(fallback.error);
           capturing.current = false;
           startedRef.current = false;
           setLastError(msg);
@@ -1038,7 +1013,7 @@ function ScanBillScreenInner({ navigation }) {
       if (!uri) {
         const direct = await safeLaunchLibraryAsync();
         if (direct.error && !direct.canceled) {
-          const msg = reportScanError(direct.error, { alertTitle: 'Could not open gallery' });
+          const msg = reportScanError(direct.error);
           capturing.current = false;
           startedRef.current = false;
           setLastError(msg);
@@ -1060,10 +1035,7 @@ function ScanBillScreenInner({ navigation }) {
         compressedUri = compressedImage?.uri || uri;
       } catch (compressErr) {
         console.error('[ScanBillScreen Error]:', compressErr);
-        Alert.alert(
-          'Image processing failed',
-          'Could not compress this photo. Trying original image…',
-        );
+        setLastError('Could not compress this photo. Trying original image…');
         compressedUri = uri;
       }
 
@@ -1072,11 +1044,11 @@ function ScanBillScreenInner({ navigation }) {
     } catch (error) {
       capturing.current = false;
       startedRef.current = false;
-      const msg = reportScanError(error, { alertTitle: 'Could not open gallery' });
+      const msg = reportScanError(error);
       setLastError(msg);
       Haptics.error();
     }
-  }, [clearAutoTimers, scheduleOcrAfterPaint, processing]);
+  }, [clearAutoTimers, scheduleOcrAfterPaint, processing, ui]);
 
   const startAutoFocusCapture = useCallback(() => {
     // TODO: RE-ENABLE AUTH REQUIREMENT BEFORE PRODUCTION

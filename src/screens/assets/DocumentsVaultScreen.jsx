@@ -60,7 +60,10 @@ function resolveDocStatus(item) {
   if (item.offlineCached) return { label: 'Offline', icon: '📴', tone: 'muted' };
   if (item.processing) return { label: 'Processing', icon: '⏳', tone: 'info' };
   if (item.expired) return { label: 'Expired', icon: '⏰', tone: 'danger' };
-  return { label: 'Saved', icon: '✓', tone: 'success' };
+  if (item.status === 'pending' || item.fieldStatus === 'pending') {
+    return { label: 'Pending', icon: '…', tone: 'muted' };
+  }
+  return { label: 'Pending', icon: '…', tone: 'muted' };
 }
 
 function formatDocDate(item) {

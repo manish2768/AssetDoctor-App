@@ -12,6 +12,8 @@ import {
   ScrollView,
   ActivityIndicator,
   Image,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -463,9 +465,15 @@ export function AddAssetScreen({ navigation, route }) {
   };
 
   return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+    >
     <ScrollView
       style={styles.root}
       contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}
+      keyboardShouldPersistTaps="handled"
     >      <Text style={styles.title}>
         {isEdit ? 'Edit Asset' : openScanner ? 'Scan → Auto-Vault' : 'Add Asset'}
       </Text>
@@ -818,6 +826,7 @@ export function AddAssetScreen({ navigation, route }) {
         }}
       />
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

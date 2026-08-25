@@ -314,6 +314,8 @@ export default function App() {
             onOpenAppVault={() => setCurrentAppView('vault')}
             onOpenLoginModal={() => setIsLoginModalOpen(true)}
             currentUser={auth.currentUser}
+            onOpenAddAsset={() => setIsAddModalOpen(true)}
+            onSelectAsset={(asset) => setSelectedAsset(asset)}
           />
         </PlatformErrorBoundary>
       ) : (

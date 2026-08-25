@@ -13,6 +13,7 @@ import {
   Linking,
   Platform,
   Share,
+  KeyboardAvoidingView,
 } from 'react-native';
 import Constants from 'expo-constants';
 
@@ -157,6 +158,11 @@ export function ReportIssueScreen({ route, navigation }) {
 
   return (
     <Screen>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+      >
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}
         keyboardShouldPersistTaps="handled"
@@ -234,6 +240,7 @@ export function ReportIssueScreen({ route, navigation }) {
           {BRAND.supportWhatsApp ? `\nWhatsApp: +${BRAND.supportWhatsApp}` : ''}
         </Text>
       </ScrollView>
+      </KeyboardAvoidingView>
     </Screen>
   );
 }

@@ -1373,10 +1373,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   summaryCell: {
-    width: '14.28%',
-    minWidth: 48,
+    flexGrow: 1,
+    flexBasis: '22%',
+    minWidth: 72,
+    maxWidth: '50%',
     alignItems: 'center',
-    paddingVertical: 4,
+    paddingVertical: 6,
   },
   summaryValue: {
     color: COLORS.text,
@@ -1385,7 +1387,7 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     color: COLORS.muted,
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: '600',
     marginTop: 2,
     textAlign: 'center',

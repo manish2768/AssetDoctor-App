@@ -96,13 +96,13 @@ export function SmartAssetListCard({ asset, onPress, onLongPress, style }) {
             { backgroundColor: colors.infoSoft || colors.surfaceMuted },
           ]}
         >
-          <Text style={[TYPE.caption, { color: colors.primary, fontWeight: '700' }]} numberOfLines={1}>
+          <Text style={[TYPE.caption, { color: colors.primary, fontWeight: '700' }]} numberOfLines={2}>
             {nextLine}
           </Text>
         </View>
       ) : (
-        <Text style={[TYPE.micro, { color: colors.textMuted, marginTop: 10 }]}>
-          No urgent action
+        <Text style={[TYPE.caption, { color: colors.textMuted, marginTop: 10 }]}>
+          Maintenance schedule unavailable
         </Text>
       )}
     </Pressable>
@@ -115,6 +115,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     padding: SPACING.md,
     marginBottom: SPACING.sm,
+    minHeight: 44,
   },
   top: {
     flexDirection: 'row',
@@ -128,6 +129,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: RADIUS.sm,
+    minHeight: 36,
+    justifyContent: 'center',
   },
 });
 

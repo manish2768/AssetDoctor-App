@@ -207,7 +207,17 @@ export function MaintenanceScreen({ route, navigation }) {
   };
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.content}>
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+    >
+      <ScrollView
+        style={styles.root}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
       <Text style={styles.title}>Service & Maintenance</Text>
       <Text style={styles.sub}>
         {asset.icon || '📦'} {asset.assetName}
@@ -378,7 +388,20 @@ export function MaintenanceScreen({ route, navigation }) {
           </Pressable>
         </View>
       ) : null}
-    </ScrollView>
+      </ScrollView>
+      <CompleteMaintenanceSheet
+        visible={Boolean(completeTarget)}
+        title={completeTarget?.title}
+        subtitle={
+          completeTarget?.title
+            ? `“${completeTarget.title}” — choose how this maintenance was completed:`
+            : undefined
+        }
+        onClose={() => setCompleteTarget(null)}
+        onCompletedInApp={finishInApp}
+        onCompletedElsewhere={finishElsewhere}
+      />
+    </KeyboardAvoidingView>
   );
 }
 
@@ -438,8 +461,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.neonBlue,
     borderRadius: 10,
-    paddingVertical: 10,
+    paddingVertical: 12,
+    minHeight: HIT.min,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   dangerBtn: { backgroundColor: 'rgba(244,63,94,0.85)' },
   smallBtnText: { color: '#fff', fontWeight: '700', fontSize: 12 },
