@@ -1,0 +1,159 @@
+{
+  "expo": {
+    "name": "Asset Doctor",
+    "slug": "asset-doctor",
+    "version": "1.0.61",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "assetdoctor",
+    "icon": "./assets/icon.png",
+    "runtimeVersion": "1.0.0",
+    "updates": {
+      "url": "https://u.expo.dev/d15d0121-3ec1-409a-a511-d90360543b14",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
+    "android": {
+      "package": "com.assetdoctor.app",
+      "versionCode": 116,
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#050A0F"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ],
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.READ_CONTACTS",
+        "android.permission.WRITE_CONTACTS",
+        "android.permission.READ_SMS",
+        "android.permission.RECEIVE_SMS",
+        "android.permission.SEND_SMS",
+        "android.permission.READ_CALL_LOG",
+        "android.permission.WRITE_CALL_LOG",
+        "android.permission.READ_PHONE_STATE",
+        "android.permission.CALL_PHONE"
+      ]
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.assetdoctor.app",
+      "icon": "./assets/icon.png",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Asset Doctor needs the camera to scan household bills and vehicle documents.",
+        "NSPhotoLibraryUsageDescription": "Asset Doctor needs photo access for invoices, RC, PUC, insurance and warranty documents.",
+        "NSUserNotificationsUsageDescription": "Asset Doctor sends reminders before warranty, PUC and insurance expiry."
+      }
+    },
+    "plugins": [
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
+      "@react-native-firebase/crashlytics",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.926559836985-1jschm7e172vqo2rav99oif3uoq93ftq"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          },
+          "android": {
+            "minSdkVersion": 24,
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "enableMinifyInReleaseBuilds": true,
+            "extraProguardRules": "-keep class com.google.firebase.auth.** { *; }\n-keep class com.google.android.gms.internal.firebase-auth-api.** { *; }\n-keep class com.google.android.gms.internal.firebase_auth.** { *; }\n-keep class com.google.firebase.FirebaseApp { *; }\n-dontwarn com.google.firebase.auth.**\n-keepattributes Signature\n-keepattributes *Annotation*"
+          }
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#050A0F",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 220,
+          "resizeMode": "contain"
+        }
+      ],
+      "expo-updates",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#2563EB"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Asset Doctor to access your photos for household and vehicle documents.",
+          "cameraPermission": "Allow Asset Doctor to capture invoices, RC, PUC, insurance and warranty documents.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "react-native-document-scanner-plugin",
+        {
+          "cameraPermission": "Allow Asset Doctor to scan invoices, RC, PUC, insurance and warranty documents."
+        }
+      ],
+      "expo-sharing",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Asset Doctor uses Face ID to unlock your vault with the same security as your phone lock."
+        }
+      ],
+      "expo-font",
+      "expo-secure-store",
+      [
+        "expo-dev-client",
+        {
+          "launchMode": "most-recent",
+          "defaultLaunchURL": "http://127.0.0.1:8081",
+          "android": {
+            "launchMode": "most-recent",
+            "defaultLaunchURL": "http://127.0.0.1:8081",
+            "embeddedBundle": true
+          },
+          "embeddedBundle": true,
+          "skipOnboarding": true,
+          "showMenuAtLaunch": false
+        }
+      ]
+    ],
+    "extra": {
+      "tagline": "Protect, Track & Save: The Smart Asset Vault",
+      "creator": "Crafted by Ashutosh (14)",
+      "emailProvider": "resend",
+      "googleWebClientId": "926559836985-1jschm7e172vqo2rav99oif3uoq93ftq.apps.googleusercontent.com",
+      "androidPackage": "com.assetdoctor.app",
+      "iosBundleIdentifier": "com.assetdoctor.app",
+      "playStoreUrl": "https://play.google.com/store/apps/details?id=com.assetdoctor.app",
+      "eas": {
+        "projectId": "d15d0121-3ec1-409a-a511-d90360543b14"
+      }
+    },
+    "owner": "hansgeetglobals-team"
+  }
+}

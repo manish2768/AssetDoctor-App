@@ -224,6 +224,29 @@ export const OCRScannerModal: React.FC<OCRScannerModalProps> = ({
   };
 
   const triggerScan = async (payload: { base64Image?: string; mimeType?: string; sampleType?: string }) => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setIsScanning(true);
+      setScanStep('Document saved. OCR will start when internet connection is restored.');
+      try {
+        const offlineDocId = `doc_offline_${Date.now()}`;
+        const queueKey = 'assetdoctor_offline_docs';
+        const existing = JSON.parse(localStorage.getItem(queueKey) || '[]');
+        existing.push({
+          id: offlineDocId,
+          status: 'PENDING_PROCESSING',
+          createdAt: new Date().toISOString(),
+          notice: 'Document saved. OCR will start when internet connection is restored.'
+        });
+        localStorage.setItem(queueKey, JSON.stringify(existing));
+      } catch (_) {}
+      setTimeout(() => {
+        setIsScanning(false);
+        setHasScanned(false);
+        handleClose();
+      }, 1000);
+      return;
+    }
+
     setIsScanning(true);
     setHasScanned(false);
 

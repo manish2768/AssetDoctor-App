@@ -42,9 +42,9 @@ export class MobileServiceHistoryService {
    */
   public static calculatePrediction(asset: Asset, records?: ServiceRecord[]): NextServicePredictionResult {
     const serviceHistory = records || this.getCachedRecords(asset.id);
-    return predictNextServiceDue(asset, serviceHistory, {
+    return predictNextServiceDue(asset, serviceHistory as any, {
       referenceDateIST: new Date()
-    });
+    }) as any;
   }
 
   /**
@@ -100,7 +100,7 @@ export class MobileServiceHistoryService {
           });
 
           this.cacheRecords(asset.id, liveRecords, userId);
-          const prediction = predictNextServiceDue(asset, liveRecords, { referenceDateIST: new Date() });
+          const prediction = predictNextServiceDue(asset, liveRecords as any, { referenceDateIST: new Date() }) as any;
           onUpdate(liveRecords, prediction);
         },
         (error) => {

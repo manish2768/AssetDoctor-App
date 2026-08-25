@@ -21,6 +21,7 @@ interface HeaderProps {
   onOpenSplashScreen?: () => void;
   onExportVault: () => void;
   onScrollToAlerts: () => void;
+  onNavigateToPlatform?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -116,8 +117,10 @@ export const Header: React.FC<HeaderProps> = ({
               className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900/80 border border-slate-800 text-[10px] font-mono cursor-pointer hover:border-emerald-500/40"
               title="Click to view offline storage & sync queue"
             >
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span className="text-slate-300 font-bold">Cloud Synced</span>
+              <span className={`w-2 h-2 rounded-full ${typeof navigator !== 'undefined' && !navigator.onLine ? 'bg-rose-500 animate-pulse' : 'bg-emerald-400 animate-pulse'}`}></span>
+              <span className="text-slate-300 font-bold">
+                {typeof navigator !== 'undefined' && !navigator.onLine ? 'Offline' : 'All changes synced'}
+              </span>
             </div>
           </div>
 
@@ -130,8 +133,19 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center flex-wrap gap-2">
-          
+        <div className="flex items-center gap-2 flex-wrap">
+
+          {onNavigateToPlatform && (
+            <button
+              onClick={onNavigateToPlatform}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold transition-all cursor-pointer"
+              title="Return to Public Asset Intelligence Platform & Tools"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Platform Tools</span>
+            </button>
+          )}
+
           {/* Sign In / Forgot Password Button */}
           {onOpenLoginModal && (
             <button

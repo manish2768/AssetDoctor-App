@@ -1,7 +1,7 @@
 {
-  "short_name": "AssetDoctor",
-  "name": "AssetDoctor - Smart Care & Warranty Vault",
-  "description": "Smart Care & Warranty Vault for home assets, bills, and warranties with offline IndexedDB storage.",
+  "short_name": "Asset Doctor",
+  "name": "Asset Doctor",
+  "description": "Asset Doctor — Protect, Track & Save: The Smart Asset Vault with Offline-First Persistence.",
   "icons": [
     {
       "src": "/logo.png",

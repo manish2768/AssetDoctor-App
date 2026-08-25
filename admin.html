@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
 <title>Asset Doctor — Enterprise Master Admin Control Center</title>
 <link rel="icon" href="./icon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -1039,6 +1040,19 @@
         </div>
       </div>
     </div>
+
+    <!-- Super Admin Role-Gated Action Bar -->
+    <div class="p-4 border-t border-white/10 flex items-center justify-between bg-slate-950/80 shrink-0">
+      <div class="flex items-center gap-2 text-[11px] text-slate-400">
+        <span class="w-2 h-2 rounded-full bg-brand-400"></span>
+        <span>Account Operations · <strong class="text-brand-300 font-mono">SUPER ADMIN</strong></span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="btnCustomerModalEdit" class="px-3 py-1.5 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-xs font-bold transition">Edit Profile</button>
+        <button id="btnCustomerModalToggleStatus" class="px-3 py-1.5 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 text-xs font-bold transition">Toggle Status</button>
+        <button id="btnCustomerModalDelete" class="px-3 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-xs font-bold transition">Delete Account</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1104,73 +1118,27 @@
       </div>
 
       <!-- Coverage Section: Warranty, Insurance, PUC -->
-      <div class="grid sm:grid-cols-3 gap-3 text-xs">
-        <div class="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3.5">
+      <div id="modalAssetCoverageGrid" class="grid sm:grid-cols-3 gap-3 text-xs">
+        <div id="modalAssetWarrantyCard" class="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3.5">
           <span class="text-amber-300 block uppercase font-bold text-[10px] mb-1">Warranty Coverage</span>
           <p id="modalAssetWarrantyExpiry" class="text-white font-bold text-sm">—</p>
           <p id="modalAssetWarrantyStatus" class="text-[11px] text-slate-400 mt-1">Checking status...</p>
         </div>
-        <div class="rounded-xl border border-rose-500/30 bg-rose-500/5 p-3.5">
+        <div id="modalAssetInsuranceCard" class="rounded-xl border border-rose-500/30 bg-rose-500/5 p-3.5">
           <span class="text-rose-300 block uppercase font-bold text-[10px] mb-1">Insurance Policy</span>
           <p id="modalAssetInsuranceExpiry" class="text-white font-bold text-sm">—</p>
           <p id="modalAssetInsuranceStatus" class="text-[11px] text-slate-400 mt-1">Checking policy...</p>
         </div>
-        <div class="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-3.5">
+        <div id="modalAssetPucCard" class="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-3.5">
           <span class="text-yellow-300 block uppercase font-bold text-[10px] mb-1">PUC Certificate</span>
           <p id="modalAssetPucExpiry" class="text-white font-bold text-sm">—</p>
           <p id="modalAssetPucStatus" class="text-[11px] text-slate-400 mt-1">Checking certificate...</p>
         </div>
       </div>
 
-      <!-- Next Service Due & Service Prediction Engine Card -->
-      <div class="rounded-2xl border border-white/10 bg-slate-900/80 p-4 space-y-3">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-2.5">
-          <div class="flex items-center gap-2">
-            <i data-lucide="wrench" class="w-4 h-4 text-brand-400"></i>
-            <h3 class="text-white font-bold text-xs">Next Service Due &amp; Prediction Engine</h3>
-          </div>
-          <div class="flex items-center gap-2">
-            <span id="modalServiceStatusBadge" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase">
-              HEALTHY
-            </span>
-            <span id="modalServiceScheduleSource" class="px-2 py-0.5 rounded text-[9px] font-mono bg-white/5 text-slate-400 border border-white/10">
-              OEM Schedule
-            </span>
-          </div>
-        </div>
-
-        <!-- 4-Metric Grid -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
-          <div class="rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
-            <span class="text-[10px] text-slate-400 uppercase font-bold block">Service Target</span>
-            <span id="modalServiceTargetKm" class="text-sm font-black text-brand-300 font-mono mt-0.5 block">—</span>
-          </div>
-          <div class="rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
-            <span class="text-[10px] text-slate-400 uppercase font-bold block">Current Odometer</span>
-            <span id="modalServiceCurrentKm" class="text-sm font-black text-white font-mono mt-0.5 block">—</span>
-          </div>
-          <div class="rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
-            <span class="text-[10px] text-slate-400 uppercase font-bold block">Remaining Distance</span>
-            <span id="modalServiceRemainingKm" class="text-sm font-black text-amber-300 font-mono mt-0.5 block">—</span>
-          </div>
-          <div class="rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
-            <span class="text-[10px] text-slate-400 uppercase font-bold block">Estimated Due Time</span>
-            <span id="modalServiceEstimatedTime" class="text-sm font-black text-emerald-400 mt-0.5 block">—</span>
-          </div>
-        </div>
-
-        <div class="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between text-[11px]">
-          <span class="text-slate-400">Whichever comes first criterion:</span>
-          <span id="modalServiceWhicheverRule" class="font-bold text-white font-mono">—</span>
-        </div>
-
-        <!-- Component Maintenance Checklist -->
-        <div class="pt-2 border-t border-white/5 space-y-1.5">
-          <span class="text-[10px] text-slate-400 uppercase font-bold block">Component Maintenance Checklist</span>
-          <div id="modalServiceComponentList" class="space-y-1 text-xs">
-            <p class="text-slate-500 text-[11px]">Loading component maintenance rules...</p>
-          </div>
-        </div>
+      <!-- Capability-Driven Maintenance / Device Care Container -->
+      <div id="modalAssetMaintenanceContainer" class="space-y-3">
+        <!-- Dynamically populated based on Asset Capabilities -->
       </div>
 
       <!-- Service History Section -->
@@ -1181,6 +1149,19 @@
         <div id="modalAssetServiceLogs" class="space-y-2 text-xs">
           <p class="text-slate-500 py-3">No service history records attached in Firestore.</p>
         </div>
+      </div>
+    </div>
+
+    <!-- Super Admin Role-Gated Action Bar -->
+    <div class="p-4 border-t border-white/10 flex items-center justify-between bg-slate-950/80 shrink-0">
+      <div class="flex items-center gap-2 text-[11px] text-slate-400">
+        <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+        <span>Asset Operations · <strong class="text-cyan-300 font-mono">SUPER ADMIN</strong></span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="btnAssetModalEdit" class="px-3 py-1.5 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-xs font-bold transition">Edit Asset</button>
+        <button id="btnAssetModalArchive" class="px-3 py-1.5 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 text-xs font-bold transition">Archive</button>
+        <button id="btnAssetModalDelete" class="px-3 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-xs font-bold transition">Delete Permanently</button>
       </div>
     </div>
   </div>
@@ -1252,6 +1233,19 @@
             <pre id="modalDocOcrText" class="font-mono text-[11px] text-slate-300 whitespace-pre-wrap max-h-60 overflow-y-auto">No raw OCR text</pre>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Super Admin Role-Gated Action Bar -->
+    <div class="p-4 border-t border-white/10 flex items-center justify-between bg-slate-950/80 shrink-0">
+      <div class="flex items-center gap-2 text-[11px] text-slate-400">
+        <span class="w-2 h-2 rounded-full bg-violet-400"></span>
+        <span>Document Operations · <strong class="text-violet-300 font-mono">SUPER ADMIN</strong></span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="btnDocModalEdit" class="px-3 py-1.5 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-xs font-bold transition">Edit Metadata</button>
+        <button id="btnDocModalReprocess" class="px-3 py-1.5 rounded-xl bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border border-violet-500/30 text-xs font-bold transition">Reprocess OCR</button>
+        <button id="btnDocModalDelete" class="px-3 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-xs font-bold transition">Delete Document</button>
       </div>
     </div>
   </div>
@@ -1428,6 +1422,269 @@
   </div>
 </div>
 
+<!-- 6. GLOBAL SEARCH MODAL -->
+<div id="searchModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-start justify-center p-4 pt-16 overflow-y-auto">
+  <div class="glass-strong border border-white/10 rounded-2xl max-w-2xl w-full p-5 shadow-modal space-y-4">
+    <div class="flex items-center gap-3 border-b border-white/10 pb-3">
+      <i data-lucide="search" class="w-5 h-5 text-brand-400"></i>
+      <input id="modalGlobalSearchInput" type="text" placeholder="Search customers, assets, documents, UIDs... (Esc to close)" class="w-full bg-transparent text-white placeholder-slate-500 text-sm focus:outline-none" />
+      <button onclick="closeModal('searchModal')" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+    </div>
+    <div id="searchResultsContainer" class="max-h-[60vh] overflow-y-auto space-y-2 text-xs">
+      <p class="text-slate-500 text-center py-6">Type a query to search across the live database.</p>
+    </div>
+  </div>
+</div>
+
+<!-- 7. OCR CORRECTION MODAL (Replaces prompt()) -->
+<div id="ocrCorrectionModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 overflow-y-auto">
+  <div class="glass-strong border border-white/10 rounded-2xl max-w-lg w-full p-6 shadow-modal space-y-4">
+    <div class="flex items-center justify-between border-b border-white/10 pb-3">
+      <div class="flex items-center gap-2 text-brand-300 font-bold text-sm">
+        <i data-lucide="edit-3" class="w-4 h-4"></i>
+        <span>Correct OCR Field</span>
+      </div>
+      <button onclick="closeModal('ocrCorrectionModal')" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+    </div>
+    <input type="hidden" id="ocrModalQueueId" />
+    <input type="hidden" id="ocrModalDocId" />
+    <div class="space-y-3 text-xs">
+      <div>
+        <label class="text-slate-400 block font-semibold mb-0.5">Document Context</label>
+        <div id="ocrModalDocInfo" class="font-mono text-white bg-slate-900/80 p-2.5 rounded-xl border border-white/5"></div>
+      </div>
+      <div>
+        <label class="text-slate-400 block font-semibold mb-0.5">Field / Confidence</label>
+        <div id="ocrModalFieldInfo" class="text-cyan-300 font-mono bg-slate-900/80 p-2.5 rounded-xl border border-white/5"></div>
+      </div>
+      <div>
+        <label class="text-slate-400 block font-semibold mb-0.5">Current Value</label>
+        <div id="ocrModalCurrentVal" class="text-amber-300 font-mono bg-slate-900/80 p-2.5 rounded-xl border border-white/5"></div>
+      </div>
+      <div>
+        <label class="text-slate-300 block font-bold mb-1">Corrected Value *</label>
+        <textarea id="ocrModalInputVal" rows="3" class="w-full bg-slate-900 border border-brand-500/50 rounded-xl p-2.5 text-white font-mono text-xs focus:ring-2 focus:ring-brand-500/30 focus:outline-none"></textarea>
+      </div>
+      <div>
+        <label class="text-slate-400 block font-semibold mb-1">Correction Reason (For Audit Log) *</label>
+        <input id="ocrModalReason" type="text" placeholder="e.g. Corrected odometer digit reading" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs" />
+      </div>
+    </div>
+    <div class="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+      <button onclick="closeModal('ocrCorrectionModal')" class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-bold transition">Cancel</button>
+      <button id="btnSaveOcrCorrection" class="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold transition shadow-glow">Save Correction</button>
+    </div>
+  </div>
+</div>
+
+<!-- 8. CONFIRM ACTION MODAL (Replaces confirm()) -->
+<div id="confirmActionModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 overflow-y-auto">
+  <div class="glass-strong border border-white/10 rounded-2xl max-w-md w-full p-6 shadow-modal space-y-4">
+    <div class="flex items-center gap-3 text-rose-400 font-bold text-sm">
+      <div class="w-9 h-9 rounded-xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center shrink-0">
+        <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h3 id="confirmModalTitle" class="text-white font-bold text-sm">Confirm Action</h3>
+        <p id="confirmModalSub" class="text-slate-400 text-xs font-normal">Super Admin role verified</p>
+      </div>
+    </div>
+    <div id="confirmModalBody" class="text-xs text-slate-300 bg-slate-900/80 p-3 rounded-xl border border-white/5 space-y-1">
+    </div>
+    <div>
+      <label class="text-slate-400 block font-semibold text-xs mb-1">Reason for Audit Log *</label>
+      <input id="confirmModalReason" type="text" placeholder="e.g. Requested by customer or compliance requirement" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs" />
+    </div>
+    <div class="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+      <button onclick="closeModal('confirmActionModal')" class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-bold transition">Cancel</button>
+      <button id="btnExecuteConfirmAction" class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition shadow-glow">Confirm Action</button>
+    </div>
+  </div>
+</div>
+
+<!-- 9. SUPPORT TICKET REPLY MODAL (Replaces prompt()) -->
+<div id="ticketReplyModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 overflow-y-auto">
+  <div class="glass-strong border border-white/10 rounded-2xl max-w-lg w-full p-6 shadow-modal space-y-4">
+    <div class="flex items-center justify-between border-b border-white/10 pb-3">
+      <div class="flex items-center gap-2 text-brand-300 font-bold text-sm">
+        <i data-lucide="message-square" class="w-4 h-4"></i>
+        <span id="ticketModalTitle">Reply to Support Ticket</span>
+      </div>
+      <button onclick="closeModal('ticketReplyModal')" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+    </div>
+    <input type="hidden" id="ticketModalTicketId" />
+    <div class="space-y-3 text-xs">
+      <div id="ticketModalCustomerInfo" class="bg-slate-900/80 p-3 rounded-xl border border-white/5 text-slate-300"></div>
+      <div>
+        <label class="text-slate-300 block font-bold mb-1">Staff Reply *</label>
+        <textarea id="ticketModalReplyText" rows="4" placeholder="Enter resolution message for customer..." class="w-full bg-slate-900 border border-brand-500/50 rounded-xl p-3 text-white text-xs focus:ring-2 focus:ring-brand-500/30 focus:outline-none"></textarea>
+      </div>
+      <div class="flex items-center gap-2">
+        <label class="flex items-center gap-2 cursor-pointer text-slate-300">
+          <input type="checkbox" id="ticketModalResolveCheck" checked class="rounded border-white/20 bg-slate-900 text-brand-500" />
+          <span>Mark ticket status as <strong>RESOLVED</strong></span>
+        </label>
+      </div>
+    </div>
+    <div class="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+      <button onclick="closeModal('ticketReplyModal')" class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-bold transition">Cancel</button>
+      <button id="btnSendTicketReply" class="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold transition shadow-glow">Send &amp; Resolve</button>
+    </div>
+  </div>
+</div>
+
+<!-- 10. EDIT ASSET MODAL -->
+<div id="editAssetModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 overflow-y-auto">
+  <div class="glass-strong border border-white/10 rounded-2xl max-w-xl w-full p-6 shadow-modal space-y-4">
+    <div class="flex items-center justify-between border-b border-white/10 pb-3">
+      <div class="flex items-center gap-2 text-cyan-300 font-bold text-sm">
+        <i data-lucide="edit" class="w-4 h-4"></i>
+        <span>Edit Asset Record</span>
+      </div>
+      <button onclick="closeModal('editAssetModal')" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+    </div>
+    <input type="hidden" id="editAssetId" />
+    <input type="hidden" id="editAssetOwnerUid" />
+    <div class="grid sm:grid-cols-2 gap-3 text-xs">
+      <div class="sm:col-span-2">
+        <label class="text-slate-300 font-bold block mb-1">Asset Name *</label>
+        <input id="editAssetName" type="text" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white" />
+      </div>
+      <div>
+        <label class="text-slate-300 font-bold block mb-1">Category *</label>
+        <select id="editAssetCategory" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white">
+          <option value="Vehicles">Vehicles</option>
+          <option value="Gadgets">Gadgets / Phones</option>
+          <option value="Electronics">Electronics</option>
+          <option value="Appliances">Appliances</option>
+          <option value="Home">Home</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-slate-300 font-bold block mb-1">Brand</label>
+        <input id="editAssetBrand" type="text" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white" />
+      </div>
+      <div>
+        <label class="text-slate-300 font-bold block mb-1">Identifier (Reg / IMEI / Serial)</label>
+        <input id="editAssetIdentifier" type="text" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white font-mono" />
+      </div>
+      <div>
+        <label class="text-slate-300 font-bold block mb-1">Purchase Price (₹)</label>
+        <input id="editAssetPrice" type="number" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white font-mono" />
+      </div>
+      <div>
+        <label class="text-slate-300 font-bold block mb-1">Current Odometer (KM - Vehicles Only)</label>
+        <input id="editAssetOdometer" type="number" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white font-mono" />
+      </div>
+      <div>
+        <label class="text-slate-300 font-bold block mb-1">Warranty Expiry Date</label>
+        <input id="editAssetWarrantyExpiry" type="date" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white font-mono" />
+      </div>
+    </div>
+    <div>
+      <label class="text-slate-400 font-semibold text-xs block mb-1">Reason for Change (Audit Trail) *</label>
+      <input id="editAssetReason" type="text" placeholder="e.g. Corrected purchase value" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs" />
+    </div>
+    <div class="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+      <button onclick="closeModal('editAssetModal')" class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-bold transition">Cancel</button>
+      <button id="btnSaveAssetEdit" class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition shadow-glow">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- 11. EDIT CUSTOMER MODAL -->
+<div id="editCustomerModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 overflow-y-auto">
+  <div class="glass-strong border border-white/10 rounded-2xl max-w-lg w-full p-6 shadow-modal space-y-4">
+    <div class="flex items-center justify-between border-b border-white/10 pb-3">
+      <div class="flex items-center gap-2 text-brand-300 font-bold text-sm">
+        <i data-lucide="user-check" class="w-4 h-4"></i>
+        <span>Edit Customer Profile</span>
+      </div>
+      <button onclick="closeModal('editCustomerModal')" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+    </div>
+    <input type="hidden" id="editCustomerUid" />
+    <div class="space-y-3 text-xs">
+      <div>
+        <label class="text-slate-300 font-bold block mb-1">Customer Full Name *</label>
+        <input id="editCustomerName" type="text" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white" />
+      </div>
+      <div>
+        <label class="text-slate-300 font-bold block mb-1">Email Address</label>
+        <input id="editCustomerEmail" type="email" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white" />
+      </div>
+      <div>
+        <label class="text-slate-300 font-bold block mb-1">Phone Number</label>
+        <input id="editCustomerPhone" type="tel" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white font-mono" />
+      </div>
+      <div>
+        <label class="text-slate-300 font-bold block mb-1">Address / City</label>
+        <input id="editCustomerAddress" type="text" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white" />
+      </div>
+      <div>
+        <label class="text-slate-400 font-semibold text-xs block mb-1">Reason for Change (Audit Trail) *</label>
+        <input id="editCustomerReason" type="text" placeholder="e.g. Customer requested phone number correction" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs" />
+      </div>
+    </div>
+    <div class="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+      <button onclick="closeModal('editCustomerModal')" class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-bold transition">Cancel</button>
+      <button id="btnSaveCustomerEdit" class="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold transition shadow-glow">Update Profile</button>
+    </div>
+  </div>
+</div>
+
+<!-- 12. EDIT DOCUMENT METADATA MODAL -->
+<div id="editDocumentModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 overflow-y-auto">
+  <div class="glass-strong border border-white/10 rounded-2xl max-w-lg w-full p-6 shadow-modal space-y-4">
+    <div class="flex items-center justify-between border-b border-white/10 pb-3">
+      <div class="flex items-center gap-2 text-violet-300 font-bold text-sm">
+        <i data-lucide="file-text" class="w-4 h-4"></i>
+        <span>Edit Document Metadata</span>
+      </div>
+      <button onclick="closeModal('editDocumentModal')" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+    </div>
+    <input type="hidden" id="editDocumentId" />
+    <input type="hidden" id="editDocumentOwnerUid" />
+    <div class="space-y-3 text-xs">
+      <div>
+        <label class="text-slate-300 font-bold block mb-1">Document Label / Title *</label>
+        <input id="editDocLabel" type="text" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white" />
+      </div>
+      <div>
+        <label class="text-slate-300 font-bold block mb-1">Document Category *</label>
+        <select id="editDocType" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white">
+          <option value="SERVICE_INVOICE">Service Invoice</option>
+          <option value="INSURANCE_POLICY">Insurance Policy</option>
+          <option value="PUC_CERTIFICATE">PUC Certificate</option>
+          <option value="RC_CERTIFICATE">RC Registration</option>
+          <option value="PURCHASE_INVOICE">Purchase Bill</option>
+          <option value="WARRANTY_CARD">Warranty Card</option>
+          <option value="OTHER">Other Document</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-slate-300 font-bold block mb-1">Invoice / Policy Number</label>
+        <input id="editDocPolicyNo" type="text" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white font-mono" />
+      </div>
+      <div>
+        <label class="text-slate-300 font-bold block mb-1">Expiry Date</label>
+        <input id="editDocExpiryDate" type="date" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white font-mono" />
+      </div>
+      <div>
+        <label class="text-slate-400 font-semibold text-xs block mb-1">Reason for Change (Audit Trail) *</label>
+        <input id="editDocReason" type="text" placeholder="e.g. Corrected document policy expiry" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs" />
+      </div>
+    </div>
+    <div class="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+      <button onclick="closeModal('editDocumentModal')" class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-bold transition">Cancel</button>
+      <button id="btnSaveDocumentEdit" class="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold transition shadow-glow">Save Metadata</button>
+    </div>
+  </div>
+</div>
+
+<!-- 13. TOAST NOTIFICATION CONTAINER (Replaces alert()) -->
+<div id="adminToastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm pointer-events-none"></div>
+
 <script>
 // Firebase Production Configuration
 const firebaseConfig = {
@@ -1454,10 +1711,219 @@ const state = {
   auditLogs: [],
   activities: [],
   ocrQueue: [],
-  expiries: []
+  expiries: [],
+  notifications: [],
+  templates: [],
+  lastLiveUpdateAt: null
 };
 
+let connectionStatus = 'SYNCING'; // 'LIVE' | 'SYNCING' | 'OFFLINE' | 'ERROR'
+
 function $(id) { return document.getElementById(id); }
+
+// ----------------------------------------------------
+// Toast Notification Engine (Replaces alert())
+// ----------------------------------------------------
+function showAdminToast(message, type = 'info') {
+  const container = $('adminToastContainer');
+  if (!container) return;
+  const toast = document.createElement('div');
+  const borderCol = type === 'success' ? 'border-emerald-500/50 bg-emerald-950/95 text-emerald-200' :
+                    type === 'error' ? 'border-rose-500/50 bg-rose-950/95 text-rose-200' :
+                    type === 'warning' ? 'border-amber-500/50 bg-amber-950/95 text-amber-200' :
+                    'border-cyan-500/50 bg-slate-900/95 text-slate-200';
+  
+  toast.className = `pointer-events-auto p-3.5 rounded-2xl border ${borderCol} shadow-2xl backdrop-blur-md text-xs font-semibold flex items-center justify-between gap-3 transition-all duration-300 transform translate-y-2 opacity-0`;
+  toast.innerHTML = `
+    <span>${message}</span>
+    <button class="text-white/60 hover:text-white text-sm shrink-0 font-bold ml-2 leading-none">&times;</button>
+  `;
+  toast.querySelector('button').onclick = () => {
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 300);
+  };
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.remove('translate-y-2', 'opacity-0');
+  }, 10);
+  setTimeout(() => {
+    if (toast.parentNode) {
+      toast.style.opacity = '0';
+      setTimeout(() => toast.remove(), 300);
+    }
+  }, 4500);
+}
+
+// ----------------------------------------------------
+// Realtime Live Status & Last Updated Counter
+// ----------------------------------------------------
+function getRelativeTimeString(ts) {
+  if (!ts) return 'Connecting…';
+  const diffSec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (diffSec < 3) return 'Updated just now';
+  if (diffSec < 60) return `Updated ${diffSec}s ago`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `Updated ${diffMin}m ago`;
+  const diffHours = Math.floor(diffMin / 60);
+  return `Updated ${diffHours}h ago`;
+}
+
+function updateConnectionStatus(status, errorMsg = '') {
+  connectionStatus = status;
+  const badge = $('dbStatusBadge');
+  const text = $('dbStatusText');
+  if (!badge || !text) return;
+
+  if (status === 'LIVE') {
+    badge.className = 'flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 shrink-0';
+    const relTime = getRelativeTimeString(state.lastLiveUpdateAt);
+    text.innerHTML = `<span class="text-emerald-300 font-bold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400 pulse-dot"></span> LIVE FIRESTORE</span> <span class="text-slate-400 font-normal">· ${relTime}</span>`;
+  } else if (status === 'SYNCING') {
+    badge.className = 'flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 shrink-0';
+    text.innerHTML = `<span class="text-amber-300 font-bold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> SYNCING...</span>`;
+  } else if (status === 'OFFLINE') {
+    badge.className = 'flex items-center gap-2 rounded-full border border-slate-600/30 bg-slate-800/50 px-3 py-1 shrink-0';
+    text.innerHTML = `<span class="text-slate-400 font-bold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-slate-400"></span> OFFLINE CACHE</span>`;
+  } else if (status === 'ERROR') {
+    badge.className = 'flex items-center gap-2 rounded-full border border-rose-500/30 bg-rose-500/10 px-3 py-1 shrink-0';
+    text.innerHTML = `<span class="text-rose-300 font-bold flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-rose-400"></span> CONNECTION ERROR</span>`;
+  }
+}
+
+function onFirestoreSnapshotReceived() {
+  state.lastLiveUpdateAt = Date.now();
+  updateConnectionStatus('LIVE');
+}
+
+// 1-second interval to update live timestamp
+setInterval(() => {
+  if (state.currentUser && connectionStatus === 'LIVE') {
+    updateConnectionStatus('LIVE');
+  }
+}, 1000);
+
+// ----------------------------------------------------
+// Central Asset Capability Engine (Non-Vehicles vs Vehicles)
+// ----------------------------------------------------
+function getAssetCapabilities(asset) {
+  if (!asset) {
+    return {
+      isVehicle: false,
+      hasOdometer: false,
+      hasVehicleServiceSchedule: false,
+      hasInsurance: false,
+      hasPuc: false,
+      isPhone: false,
+      isAppliance: false,
+      maintenanceCategory: 'NONE',
+      primaryIdentifierLabel: 'Serial Number'
+    };
+  }
+
+  const cat = String(asset.category || asset.categoryLabel || asset.assetCategory || '').toLowerCase();
+  const name = String(asset.assetName || asset.name || '').toLowerCase();
+  const brand = String(asset.brandName || asset.brand || '').toLowerCase();
+
+  const isVehicle = cat.includes('vehicle') || cat.includes('bike') || cat.includes('car') ||
+    name.includes('ronin') || name.includes('creta') || name.includes('activa') || name.includes('jupiter') ||
+    name.includes('classic 350') || name.includes('hunter') || name.includes('bullet') || name.includes('nexon') ||
+    name.includes('motorcycle') || name.includes('scooter') || name.includes('ather') || name.includes('ola');
+
+  if (isVehicle) {
+    const isEV = name.includes('ev') || name.includes('electric') || brand.includes('ather') || brand.includes('ola');
+    return {
+      isVehicle: true,
+      hasOdometer: true,
+      hasVehicleServiceSchedule: true,
+      hasInsurance: true,
+      hasPuc: !isEV,
+      hasEngineMaintenance: !isEV,
+      isPhone: false,
+      isAppliance: false,
+      maintenanceCategory: 'VEHICLE_SERVICE',
+      primaryIdentifierLabel: 'Vehicle Registration No.'
+    };
+  }
+
+  const isPhone = cat.includes('gadget') || cat.includes('phone') || name.includes('phone') ||
+    name.includes('iphone') || name.includes('galaxy') || name.includes('pixel') || name.includes('oneplus') ||
+    name.includes('nothing') || name.includes('realme') || name.includes('vivo') || name.includes('oppo');
+
+  if (isPhone) {
+    return {
+      isVehicle: false,
+      hasOdometer: false,
+      hasVehicleServiceSchedule: false,
+      hasInsurance: false,
+      hasPuc: false,
+      hasEngineMaintenance: false,
+      isPhone: true,
+      isAppliance: false,
+      maintenanceCategory: 'ELECTRONICS_CARE',
+      primaryIdentifierLabel: 'IMEI / Serial Number'
+    };
+  }
+
+  const isAC = name.includes('ac') || name.includes('air conditioner') || name.includes('split ac');
+  const isGeyser = name.includes('geyser') || name.includes('water heater');
+  const isRO = name.includes('ro') || name.includes('purifier') || name.includes('aquaguard');
+  const isAppliance = cat.includes('appliance') || isAC || isGeyser || isRO || cat.includes('home');
+
+  if (isAppliance) {
+    return {
+      isVehicle: false,
+      hasOdometer: false,
+      hasVehicleServiceSchedule: false,
+      hasInsurance: false,
+      hasPuc: false,
+      hasEngineMaintenance: false,
+      isPhone: false,
+      isAppliance: true,
+      hasFilterCleaning: isAC || isRO,
+      hasHeatingElement: isGeyser,
+      maintenanceCategory: 'APPLIANCE_MAINTENANCE',
+      primaryIdentifierLabel: 'Model / Serial Number',
+      maintenanceScheduleLabel: isAC ? 'Periodic AC Filter Clean (Every 90 Days)' : isGeyser ? 'Annual Anode Rod & Heating Inspection' : 'Periodic Filter & Membrane Maintenance'
+    };
+  }
+
+  return {
+    isVehicle: false,
+    hasOdometer: false,
+    hasVehicleServiceSchedule: false,
+    hasInsurance: false,
+    hasPuc: false,
+    hasEngineMaintenance: false,
+    isPhone: false,
+    isAppliance: false,
+    maintenanceCategory: 'NONE',
+    primaryIdentifierLabel: 'Serial Number'
+  };
+}
+
+// ----------------------------------------------------
+// Immutable Audit Trail Logger
+// ----------------------------------------------------
+async function logAuditTrail(action, entityType, entityId, customerUid, before, after, reason) {
+  try {
+    await db.collection('auditLogs').add({
+      actorId: state.currentUser?.email || 'Super Admin',
+      actorRole: state.currentRole || 'super_admin',
+      adminUid: state.currentUser?.uid || 'super_admin',
+      adminEmail: state.currentUser?.email || 'admin@assetdoctor.com',
+      action,
+      entityType,
+      entityId: entityId || '—',
+      customerUid: customerUid || null,
+      timestamp: new Date().toISOString(),
+      before: before || null,
+      after: after || null,
+      reason: reason || 'Super Admin administrative action'
+    });
+  } catch (e) {
+    console.warn('[Audit Log Write Warning]', e);
+  }
+}
 
 function switchTab(tabId) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -1608,7 +2074,7 @@ $('btnCancelReset').addEventListener('click', () => {
 $('btnSendReset').addEventListener('click', async () => {
   const email = $('resetEmail').value.trim();
   if (!email) {
-    alert('Please enter a valid staff email address.');
+    showAdminToast('Please enter a valid staff email address.', 'warning');
     return;
   }
   const btn = $('btnSendReset');
@@ -1616,12 +2082,12 @@ $('btnSendReset').addEventListener('click', async () => {
   btn.textContent = 'Sending…';
   try {
     await auth.sendPasswordResetEmail(email);
-    alert('If ' + email + ' is registered, a password reset link has been dispatched to that inbox. Please check your spam/inbox folders.');
+    showAdminToast('If ' + email + ' is registered, a password reset link has been dispatched to that inbox.', 'success');
     $('resetCard').classList.add('hidden');
     $('signInForm').classList.remove('hidden');
     $('resetEmail').value = '';
   } catch (e) {
-    alert('Password reset error: ' + e.message);
+    showAdminToast('Password reset error: ' + e.message, 'error');
   } finally {
     btn.disabled = false;
     btn.textContent = 'Send Link';
@@ -1633,6 +2099,7 @@ $('btnSendReset').addEventListener('click', async () => {
 // ----------------------------------------------------
 function subscribeToFirestoreData() {
   updateKPIs();
+  updateConnectionStatus('SYNCING');
 
   // 1. Users (merge 'users' and 'Users' root collections)
   const userMap = new Map();
@@ -1646,8 +2113,10 @@ function subscribeToFirestoreData() {
   db.collection('users').onSnapshot((snap) => {
     snap.docs.forEach(d => userMap.set(d.id, { id: d.id, ...d.data() }));
     updateUserList();
+    onFirestoreSnapshotReceived();
   }, (err) => {
     console.error('[Firestore Error: users]', err.code, err.message);
+    updateConnectionStatus('ERROR', err.message);
   });
 
   db.collection('Users').onSnapshot((snap) => {
@@ -1659,6 +2128,7 @@ function subscribeToFirestoreData() {
       }
     });
     updateUserList();
+    onFirestoreSnapshotReceived();
   }, (err) => {
     console.error('[Firestore Error: Users]', err.code, err.message);
   });
@@ -1681,8 +2151,10 @@ function subscribeToFirestoreData() {
       assetMap.set(d.id, { id: d.id, ownerUid, ...data });
     });
     updateAssetList();
+    onFirestoreSnapshotReceived();
   }, (err) => {
     console.error('[Firestore Error: collectionGroup Assets]', err.code, err.message);
+    updateConnectionStatus('ERROR', err.message);
   });
 
   db.collectionGroup('assets').onSnapshot((snap) => {
@@ -1695,6 +2167,7 @@ function subscribeToFirestoreData() {
       }
     });
     updateAssetList();
+    onFirestoreSnapshotReceived();
   }, (err) => {
     console.error('[Firestore Error: collectionGroup assets]', err.code, err.message);
   });
@@ -1717,8 +2190,10 @@ function subscribeToFirestoreData() {
       docMap.set(d.id, { id: d.id, path: d.ref.path, ownerUid, assetId, ...data });
     });
     updateDocList();
+    onFirestoreSnapshotReceived();
   }, (err) => {
     console.error('[Firestore Error: collectionGroup Documents]', err.code, err.message);
+    updateConnectionStatus('ERROR', err.message);
   });
 
   db.collectionGroup('documents').onSnapshot((snap) => {
@@ -1732,6 +2207,7 @@ function subscribeToFirestoreData() {
       }
     });
     updateDocList();
+    onFirestoreSnapshotReceived();
   }, (err) => {
     console.error('[Firestore Error: collectionGroup documents]', err.code, err.message);
   });
@@ -1740,6 +2216,7 @@ function subscribeToFirestoreData() {
   db.collection('adminActivity').orderBy('timestamp', 'desc').limit(50).onSnapshot((snap) => {
     state.activities = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderActivityStream();
+    onFirestoreSnapshotReceived();
   }, (err) => {
     console.warn('[Firestore: adminActivity]', err.message);
     renderActivityStream();
@@ -1750,6 +2227,7 @@ function subscribeToFirestoreData() {
     state.tickets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderTickets();
     updateKPIs();
+    onFirestoreSnapshotReceived();
   }, (err) => {
     console.error('[Firestore Error: supportTickets]', err.code, err.message);
     renderTickets();
@@ -1759,6 +2237,7 @@ function subscribeToFirestoreData() {
   db.collection('auditLogs').orderBy('timestamp', 'desc').limit(100).onSnapshot((snap) => {
     state.auditLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderAuditLogs();
+    onFirestoreSnapshotReceived();
   }, (err) => {
     console.error('[Firestore Error: auditLogs]', err.code, err.message);
     renderAuditLogs();
@@ -1769,6 +2248,7 @@ function subscribeToFirestoreData() {
     state.ocrQueue = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderOcrQueue();
     updateKPIs();
+    onFirestoreSnapshotReceived();
   }, (err) => {
     console.error('[Firestore Error: ocrReviewQueue]', err.code, err.message);
     renderOcrQueue();
@@ -1778,6 +2258,7 @@ function subscribeToFirestoreData() {
   db.collection('notification_queue').orderBy('createdAt', 'desc').limit(50).onSnapshot((snap) => {
     state.notifications = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderNotificationQueue();
+    onFirestoreSnapshotReceived();
   }, (err) => {
     console.warn('[Firestore: notification_queue]', err.message);
     renderNotificationQueue();
@@ -1787,9 +2268,497 @@ function subscribeToFirestoreData() {
   db.collection('whatsapp_templates').onSnapshot((snap) => {
     state.templates = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderWhatsappTemplates();
+    onFirestoreSnapshotReceived();
   }, (err) => {
     console.warn('[Firestore: whatsapp_templates]', err.message);
     renderWhatsappTemplates();
+  });
+}
+
+// ----------------------------------------------------
+// Super Admin Action Modals & Operations
+// ----------------------------------------------------
+let pendingActionCallback = null;
+
+function openConfirmActionModal(opts) {
+  $('confirmModalTitle').textContent = opts.title || 'Confirm Action';
+  $('confirmModalSub').textContent = opts.subtitle || 'Super Admin Authorization Verified';
+  $('confirmModalBody').innerHTML = opts.detailsHtml || '<p>Are you sure you want to execute this operation?</p>';
+  $('confirmModalReason').value = '';
+
+  const btn = $('btnExecuteConfirmAction');
+  btn.textContent = opts.confirmText || 'Confirm Action';
+  btn.className = `px-4 py-2 rounded-xl text-white text-xs font-bold transition shadow-glow ${opts.confirmBtnClass || 'bg-rose-600 hover:bg-rose-500'}`;
+
+  pendingActionCallback = async () => {
+    const reason = $('confirmModalReason').value.trim();
+    if (!reason) {
+      showAdminToast('Please provide a reason for the audit trail log.', 'warning');
+      $('confirmModalReason').focus();
+      return;
+    }
+    closeModal('confirmActionModal');
+    try {
+      await opts.onConfirm(reason);
+    } catch (err) {
+      showAdminToast('Action failed: ' + err.message, 'error');
+    }
+  };
+
+  openModal('confirmActionModal');
+}
+
+$('btnExecuteConfirmAction')?.addEventListener('click', () => {
+  if (pendingActionCallback) pendingActionCallback();
+});
+
+function openOcrCorrectionModal(item) {
+  if (!item) return;
+  $('ocrModalQueueId').value = item.id;
+  $('ocrModalDocId').value = item.docId;
+
+  $('ocrModalDocInfo').textContent = `Doc ID: ${item.docId} · Type: ${item.docType || 'Document'} · User: ${item.userId || '—'}`;
+  $('ocrModalFieldInfo').textContent = `Confidence: ${Math.round((item.confidence || 0) * 100)}% · Status: ${item.status || 'PENDING_REVIEW'}`;
+  $('ocrModalCurrentVal').textContent = JSON.stringify(item.extractedData || {}, null, 2);
+  $('ocrModalInputVal').value = JSON.stringify(item.extractedData || {}, null, 2);
+  $('ocrModalReason').value = '';
+
+  openModal('ocrCorrectionModal');
+}
+
+$('btnSaveOcrCorrection')?.addEventListener('click', async () => {
+  const queueId = $('ocrModalQueueId').value;
+  const docId = $('ocrModalDocId').value;
+  const rawInput = $('ocrModalInputVal').value.trim();
+  const reason = $('ocrModalReason').value.trim();
+
+  if (!rawInput) {
+    showAdminToast('Please provide corrected data.', 'warning');
+    return;
+  }
+  if (!reason) {
+    showAdminToast('Please enter a reason for the audit log.', 'warning');
+    $('ocrModalReason').focus();
+    return;
+  }
+
+  try {
+    const parsed = JSON.parse(rawInput);
+    const item = state.ocrQueue.find(x => x.id === queueId);
+    const beforeData = item ? item.extractedData : null;
+
+    await db.collection('ocrReviewQueue').doc(queueId).update({
+      extractedData: parsed,
+      status: 'manually_corrected',
+      reviewedBy: state.currentUser.email,
+      reviewedAt: new Date().toISOString()
+    });
+
+    await logAuditTrail(
+      'OCR_MANUAL_CORRECTION',
+      'OCR_QUEUE',
+      docId,
+      item ? item.userId : null,
+      beforeData,
+      parsed,
+      reason
+    );
+
+    closeModal('ocrCorrectionModal');
+    showAdminToast('OCR correction saved and recorded in Audit Trail.', 'success');
+  } catch (err) {
+    showAdminToast('Invalid JSON format or update failed: ' + err.message, 'error');
+  }
+});
+
+function openTicketReplyModal(ticketId) {
+  const t = state.tickets.find(x => x.id === ticketId);
+  if (!t) return;
+
+  $('ticketModalTicketId').value = ticketId;
+  $('ticketModalTitle').textContent = `Reply to Ticket #${t.ticketId || t.id}`;
+  $('ticketModalCustomerInfo').innerHTML = `
+    <p class="font-bold text-white">${t.subject || 'Support Inquiry'}</p>
+    <p class="text-slate-400 mt-0.5">Raised by: <span class="text-white">${t.userName || t.userEmail || t.userId}</span> · Priority: <strong class="text-amber-300 uppercase">${t.priority || 'medium'}</strong></p>
+  `;
+  $('ticketModalReplyText').value = 'We have reviewed your request and resolved your inquiry.';
+  $('ticketModalResolveCheck').checked = true;
+
+  openModal('ticketReplyModal');
+}
+
+$('btnSendTicketReply')?.addEventListener('click', async () => {
+  const ticketId = $('ticketModalTicketId').value;
+  const reply = $('ticketModalReplyText').value.trim();
+  const resolve = $('ticketModalResolveCheck').checked;
+
+  if (!reply) {
+    showAdminToast('Please enter a reply message.', 'warning');
+    return;
+  }
+
+  const t = state.tickets.find(x => x.id === ticketId);
+  if (!t) return;
+
+  try {
+    const updatedMessages = [...(t.messages || []), {
+      id: `msg-${Date.now()}`,
+      sender: 'admin',
+      senderName: state.currentUser.email,
+      message: reply,
+      timestamp: new Date().toISOString()
+    }];
+
+    await db.collection('supportTickets').doc(ticketId).update({
+      messages: updatedMessages,
+      status: resolve ? 'resolved' : (t.status || 'in_progress'),
+      updatedAt: new Date().toISOString(),
+      assignedAdmin: state.currentUser.email
+    });
+
+    await logAuditTrail(
+      'SUPPORT_TICKET_REPLY',
+      'SUPPORT_TICKET',
+      ticketId,
+      t.userId,
+      { status: t.status },
+      { status: resolve ? 'resolved' : t.status, reply },
+      `Staff replied: ${reply}`
+    );
+
+    closeModal('ticketReplyModal');
+    showAdminToast('Reply committed to Firestore and ticket updated.', 'success');
+  } catch (err) {
+    showAdminToast('Failed to commit reply: ' + err.message, 'error');
+  }
+});
+
+function openEditAssetModal(assetId) {
+  const a = state.assets.find(x => x.id === assetId);
+  if (!a) return;
+
+  $('editAssetId').value = a.id;
+  $('editAssetOwnerUid').value = a.ownerUid || a.uid || '';
+  $('editAssetName').value = a.assetName || a.name || '';
+  $('editAssetCategory').value = a.categoryLabel || a.category || 'Vehicles';
+  $('editAssetBrand').value = a.brandName || a.brand || '';
+  $('editAssetIdentifier').value = a.registration || a.registrationNumber || a.chassisNumber || a.serialNumber || '';
+  $('editAssetPrice').value = a.purchasePrice || a.salePrice || a.price || '';
+  $('editAssetOdometer').value = a.odometerKm || a.odometer || a.currentKm || '';
+  $('editAssetWarrantyExpiry').value = (a.warrantyExpiry || a.expiryDate || '').split('T')[0];
+  $('editAssetReason').value = '';
+
+  closeModal('assetModal');
+  openModal('editAssetModal');
+}
+
+$('btnSaveAssetEdit')?.addEventListener('click', async () => {
+  const assetId = $('editAssetId').value;
+  const ownerUid = $('editAssetOwnerUid').value;
+  const name = $('editAssetName').value.trim();
+  const category = $('editAssetCategory').value;
+  const brand = $('editAssetBrand').value.trim();
+  const identifier = $('editAssetIdentifier').value.trim();
+  const price = Number($('editAssetPrice').value) || 0;
+  const odometerKm = Number($('editAssetOdometer').value) || 0;
+  const warrantyExpiry = $('editAssetWarrantyExpiry').value;
+  const reason = $('editAssetReason').value.trim();
+
+  if (!name) {
+    showAdminToast('Asset name is required.', 'warning');
+    return;
+  }
+  if (!reason) {
+    showAdminToast('Please provide a reason for this edit for the audit trail.', 'warning');
+    $('editAssetReason').focus();
+    return;
+  }
+
+  const existing = state.assets.find(x => x.id === assetId) || {};
+  const updatedData = {
+    name,
+    assetName: name,
+    category,
+    categoryLabel: category,
+    brand,
+    brandName: brand,
+    registration: identifier,
+    registrationNumber: identifier,
+    serialNumber: identifier,
+    purchasePrice: price,
+    price,
+    odometerKm: category === 'Vehicles' ? odometerKm : null,
+    warrantyExpiry: warrantyExpiry || null,
+    expiryDate: warrantyExpiry || null,
+    updatedAt: new Date().toISOString()
+  };
+
+  try {
+    if (ownerUid && ownerUid !== '—') {
+      await db.collection('users').doc(ownerUid).collection('assets').doc(assetId).set(updatedData, { merge: true });
+    }
+
+    await logAuditTrail('ASSET_UPDATE', 'ASSET', assetId, ownerUid, existing, updatedData, reason);
+
+    closeModal('editAssetModal');
+    showAdminToast('Asset record updated successfully.', 'success');
+  } catch (err) {
+    showAdminToast('Failed to update asset: ' + err.message, 'error');
+  }
+});
+
+function archiveAsset(assetId) {
+  const a = state.assets.find(x => x.id === assetId);
+  if (!a) return;
+
+  openConfirmActionModal({
+    title: 'Archive Asset Record?',
+    subtitle: 'Asset will be marked as ARCHIVED and hidden from active views',
+    detailsHtml: `
+      <p><strong>Asset:</strong> ${a.assetName || a.name || assetId}</p>
+      <p><strong>Owner:</strong> ${a.ownerUid || a.uid || '—'}</p>
+      <p><strong>Identifier:</strong> ${a.registration || a.serialNumber || '—'}</p>
+    `,
+    confirmText: 'Archive Asset',
+    confirmBtnClass: 'bg-amber-600 hover:bg-amber-500',
+    onConfirm: async (reason) => {
+      const ownerUid = a.ownerUid || a.uid;
+      if (ownerUid && ownerUid !== '—') {
+        await db.collection('users').doc(ownerUid).collection('assets').doc(assetId).update({
+          status: 'ARCHIVED',
+          archivedAt: new Date().toISOString()
+        });
+      }
+      await logAuditTrail('ASSET_ARCHIVED', 'ASSET', assetId, ownerUid, a, { status: 'ARCHIVED' }, reason);
+      closeModal('assetModal');
+      showAdminToast('Asset has been archived.', 'success');
+    }
+  });
+}
+
+function deleteAsset(assetId) {
+  const a = state.assets.find(x => x.id === assetId);
+  if (!a) return;
+
+  openConfirmActionModal({
+    title: 'Delete Asset Permanently?',
+    subtitle: 'This will remove the asset record and create an immutable audit trail entry',
+    detailsHtml: `
+      <p class="text-rose-300 font-bold">WARNING: Permanent Deletion</p>
+      <p><strong>Asset:</strong> ${a.assetName || a.name || assetId}</p>
+      <p><strong>Owner UID:</strong> ${a.ownerUid || a.uid || '—'}</p>
+      <p><strong>Category:</strong> ${a.categoryLabel || a.category || '—'}</p>
+    `,
+    confirmText: 'Delete Permanently',
+    confirmBtnClass: 'bg-rose-600 hover:bg-rose-500',
+    onConfirm: async (reason) => {
+      const ownerUid = a.ownerUid || a.uid;
+      if (ownerUid && ownerUid !== '—') {
+        await db.collection('users').doc(ownerUid).collection('assets').doc(assetId).delete().catch(async () => {
+          await db.collection('users').doc(ownerUid).collection('assets').doc(assetId).update({ status: 'DELETED', deletedAt: new Date().toISOString() });
+        });
+      }
+      await logAuditTrail('ASSET_PERMANENT_DELETE', 'ASSET', assetId, ownerUid, a, null, reason);
+      closeModal('assetModal');
+      showAdminToast('Asset permanently deleted and logged in Audit Trail.', 'success');
+    }
+  });
+}
+
+function openEditCustomerModal(uid) {
+  const u = state.users.find(x => (x.uid === uid || x.id === uid)) || { uid };
+
+  $('editCustomerUid').value = uid;
+  $('editCustomerName').value = u.name || '';
+  $('editCustomerEmail').value = u.email || '';
+  $('editCustomerPhone').value = u.phoneNumber || u.phone || '';
+  $('editCustomerAddress').value = u.address || u.city || '';
+  $('editCustomerReason').value = '';
+
+  closeModal('customerModal');
+  openModal('editCustomerModal');
+}
+
+$('btnSaveCustomerEdit')?.addEventListener('click', async () => {
+  const uid = $('editCustomerUid').value;
+  const name = $('editCustomerName').value.trim();
+  const email = $('editCustomerEmail').value.trim();
+  const phone = $('editCustomerPhone').value.trim();
+  const address = $('editCustomerAddress').value.trim();
+  const reason = $('editCustomerReason').value.trim();
+
+  if (!name) {
+    showAdminToast('Customer name is required.', 'warning');
+    return;
+  }
+  if (!reason) {
+    showAdminToast('Please provide a reason for this update for the audit log.', 'warning');
+    $('editCustomerReason').focus();
+    return;
+  }
+
+  const existing = state.users.find(x => (x.uid === uid || x.id === uid)) || {};
+  const updatedData = {
+    name,
+    email,
+    phoneNumber: phone,
+    phone,
+    address,
+    updatedAt: new Date().toISOString()
+  };
+
+  try {
+    await db.collection('users').doc(uid).set(updatedData, { merge: true });
+    await logAuditTrail('CUSTOMER_PROFILE_UPDATE', 'CUSTOMER', uid, uid, existing, updatedData, reason);
+    closeModal('editCustomerModal');
+    showAdminToast('Customer profile updated successfully.', 'success');
+  } catch (err) {
+    showAdminToast('Failed to update customer: ' + err.message, 'error');
+  }
+});
+
+function deleteCustomer(uid) {
+  const u = state.users.find(x => (x.uid === uid || x.id === uid)) || { uid };
+
+  openConfirmActionModal({
+    title: 'Delete Customer Account?',
+    subtitle: 'This will delete the customer profile and create an audit log entry',
+    detailsHtml: `
+      <p class="text-rose-300 font-bold">WARNING: Customer Account Deletion</p>
+      <p><strong>Customer Name:</strong> ${u.name || 'Customer'}</p>
+      <p><strong>UID:</strong> ${uid}</p>
+      <p><strong>Email / Phone:</strong> ${u.email || u.phoneNumber || '—'}</p>
+    `,
+    confirmText: 'Delete Account',
+    confirmBtnClass: 'bg-rose-600 hover:bg-rose-500',
+    onConfirm: async (reason) => {
+      await db.collection('users').doc(uid).delete().catch(async () => {
+        await db.collection('users').doc(uid).update({ status: 'DELETED', deletedAt: new Date().toISOString() });
+      });
+      await logAuditTrail('CUSTOMER_DELETE', 'CUSTOMER', uid, uid, u, null, reason);
+      closeModal('customerModal');
+      showAdminToast('Customer account deleted and recorded in Audit Trail.', 'success');
+    }
+  });
+}
+
+function openEditDocumentModal(docId) {
+  const d = state.documents.find(x => x.id === docId);
+  if (!d) return;
+
+  $('editDocumentId').value = d.id;
+  $('editDocumentOwnerUid').value = d.ownerUid || '';
+  $('editDocLabel').value = d.label || d.title || '';
+  $('editDocType').value = d.type || 'OTHER';
+  $('editDocPolicyNo').value = d.invoiceOrPolicyNo || d.policyNumber || d.invoiceNumber || '';
+  $('editDocExpiryDate').value = (d.expiryDate || '').split('T')[0];
+  $('editDocReason').value = '';
+
+  closeModal('documentModal');
+  openModal('editDocumentModal');
+}
+
+$('btnSaveDocumentEdit')?.addEventListener('click', async () => {
+  const docId = $('editDocumentId').value;
+  const ownerUid = $('editDocumentOwnerUid').value;
+  const label = $('editDocLabel').value.trim();
+  const type = $('editDocType').value;
+  const policyNo = $('editDocPolicyNo').value.trim();
+  const expiryDate = $('editDocExpiryDate').value;
+  const reason = $('editDocReason').value.trim();
+
+  if (!label) {
+    showAdminToast('Document title is required.', 'warning');
+    return;
+  }
+  if (!reason) {
+    showAdminToast('Please provide a reason for this edit for the audit trail.', 'warning');
+    $('editDocReason').focus();
+    return;
+  }
+
+  const existing = state.documents.find(x => x.id === docId) || {};
+  const updatedData = {
+    label,
+    title: label,
+    type,
+    invoiceOrPolicyNo: policyNo,
+    policyNumber: policyNo,
+    expiryDate: expiryDate || null,
+    updatedAt: new Date().toISOString()
+  };
+
+  try {
+    if (existing.path) {
+      await db.doc(existing.path).set(updatedData, { merge: true });
+    } else if (ownerUid) {
+      await db.collection('users').doc(ownerUid).collection('documents').doc(docId).set(updatedData, { merge: true });
+    }
+
+    await logAuditTrail('DOCUMENT_METADATA_UPDATE', 'DOCUMENT', docId, ownerUid, existing, updatedData, reason);
+    closeModal('editDocumentModal');
+    showAdminToast('Document metadata updated.', 'success');
+  } catch (err) {
+    showAdminToast('Failed to update document: ' + err.message, 'error');
+  }
+});
+
+function reprocessDocumentOcr(docId) {
+  const d = state.documents.find(x => x.id === docId);
+  if (!d) return;
+
+  openConfirmActionModal({
+    title: 'Reprocess Document with OCR Pipeline?',
+    subtitle: 'Document will be re-analyzed by Universal Document Intelligence',
+    detailsHtml: `
+      <p><strong>Document:</strong> ${d.label || d.id}</p>
+      <p><strong>Type:</strong> ${d.type || 'Document'}</p>
+      <p><strong>Owner:</strong> ${d.ownerUid || '—'}</p>
+    `,
+    confirmText: 'Reprocess OCR',
+    confirmBtnClass: 'bg-violet-600 hover:bg-violet-500',
+    onConfirm: async (reason) => {
+      await db.collection('ocrReviewQueue').add({
+        docId: d.id,
+        userId: d.ownerUid || 'unknown',
+        docType: d.type || 'DOCUMENT',
+        submittedAt: new Date().toISOString(),
+        status: 'PENDING_REPROCESS',
+        reprocessedBy: state.currentUser.email,
+        reason
+      });
+      await logAuditTrail('DOCUMENT_OCR_REPROCESS_REQUESTED', 'DOCUMENT', docId, d.ownerUid, d, null, reason);
+      closeModal('documentModal');
+      showAdminToast('Document queued for OCR reprocessing.', 'success');
+    }
+  });
+}
+
+function deleteDocument(docId) {
+  const d = state.documents.find(x => x.id === docId);
+  if (!d) return;
+
+  openConfirmActionModal({
+    title: 'Delete Document Permanently?',
+    subtitle: 'This will delete the vaulted document record and log to Audit Trail',
+    detailsHtml: `
+      <p class="text-rose-300 font-bold">WARNING: Permanent Document Deletion</p>
+      <p><strong>Document Title:</strong> ${d.label || d.id}</p>
+      <p><strong>Type:</strong> ${d.type || 'Document'}</p>
+      <p><strong>Owner UID:</strong> ${d.ownerUid || '—'}</p>
+    `,
+    confirmText: 'Delete Document',
+    confirmBtnClass: 'bg-rose-600 hover:bg-rose-500',
+    onConfirm: async (reason) => {
+      if (d.path) {
+        await db.doc(d.path).delete();
+      } else if (d.ownerUid) {
+        await db.collection('users').doc(d.ownerUid).collection('documents').doc(docId).delete();
+      }
+      await logAuditTrail('DOCUMENT_PERMANENT_DELETE', 'DOCUMENT', docId, d.ownerUid, d, null, reason);
+      closeModal('documentModal');
+      showAdminToast('Document permanently deleted.', 'success');
+    }
   });
 }
 
@@ -2098,9 +3067,9 @@ async function saveTemplateDraft() {
     });
 
     closeModal('templateModal');
-    alert(`Template "${displayName}" saved successfully.`);
+    showAdminToast(`Template "${displayName}" saved successfully.`, 'success');
   } catch (err) {
-    alert(`Error saving template: ${err.message}`);
+    showAdminToast(`Error saving template: ${err.message}`, 'error');
   }
 }
 
@@ -2133,9 +3102,9 @@ async function submitCurrentTemplateToMeta() {
     });
 
     closeModal('templateModal');
-    alert(`Template "${displayName}" submitted to Meta for review. Status updated to PENDING.`);
+    showAdminToast(`Template "${displayName}" submitted to Meta for review.`, 'success');
   } catch (err) {
-    alert(`Error submitting template: ${err.message}`);
+    showAdminToast(`Error submitting template: ${err.message}`, 'error');
   }
 }
 
@@ -2161,8 +3130,9 @@ async function toggleTemplateActive(templateId) {
       timestamp: now,
       reason: `Admin changed template active state to ${newActive}`
     });
+    showAdminToast(`Template "${tpl.displayName || templateId}" ${newActive ? 'activated' : 'deactivated'}.`, 'info');
   } catch (err) {
-    alert(`Error toggling template: ${err.message}`);
+    showAdminToast(`Error toggling template: ${err.message}`, 'error');
   }
 }
 
@@ -2188,9 +3158,9 @@ async function duplicateTemplate(templateId) {
 
   try {
     await db.collection('whatsapp_templates').doc(newKey).set(cloned);
-    alert(`Template duplicated as "${cloned.displayName}".`);
+    showAdminToast(`Template duplicated as "${cloned.displayName}".`, 'success');
   } catch (err) {
-    alert(`Error duplicating template: ${err.message}`);
+    showAdminToast(`Error duplicating template: ${err.message}`, 'error');
   }
 }
 
@@ -2453,24 +3423,27 @@ function renderUsers() {
   }).join('');
 }
 
-async function toggleUserSuspend(userId, currentStatus) {
+function toggleUserSuspend(userId, currentStatus) {
   const nextStatus = currentStatus === 'Suspended' ? 'Active' : 'Suspended';
-  if (!confirm(`Are you sure you want to change user status to ${nextStatus}?`)) return;
-  try {
-    await db.collection('users').doc(userId).set({ status: nextStatus }, { merge: true });
-    await db.collection('auditLogs').add({
-      actorId: state.currentUser.email,
-      actorRole: state.currentRole,
-      action: 'USER_STATUS_CHANGE',
-      targetUserId: userId,
-      oldValue: currentStatus || 'Active',
-      newValue: nextStatus,
-      timestamp: new Date().toISOString(),
-      reason: 'Admin modified customer account status'
-    });
-  } catch (e) {
-    alert('Failed to update status: ' + e.message);
-  }
+  const u = state.users.find(x => (x.uid === userId || x.id === userId)) || { name: 'Customer' };
+
+  openConfirmActionModal({
+    title: `${nextStatus === 'Suspended' ? 'Suspend' : 'Reactivate'} Customer Account?`,
+    subtitle: `User status will be set to ${nextStatus.toUpperCase()}`,
+    detailsHtml: `
+      <p><strong>Customer Name:</strong> ${u.name || 'Customer'}</p>
+      <p><strong>UID:</strong> ${userId}</p>
+      <p><strong>Current Status:</strong> ${currentStatus || 'Active'}</p>
+      <p><strong>Target Status:</strong> ${nextStatus}</p>
+    `,
+    confirmText: nextStatus === 'Suspended' ? 'Suspend User' : 'Reactivate User',
+    confirmBtnClass: nextStatus === 'Suspended' ? 'bg-rose-600 hover:bg-rose-500' : 'bg-emerald-600 hover:bg-emerald-500',
+    onConfirm: async (reason) => {
+      await db.collection('users').doc(userId).set({ status: nextStatus }, { merge: true });
+      await logAuditTrail('USER_STATUS_CHANGE', 'CUSTOMER', userId, userId, { status: currentStatus || 'Active' }, { status: nextStatus }, reason);
+      showAdminToast(`Customer status updated to ${nextStatus}.`, 'success');
+    }
+  });
 }
 
 function openCustomerModal(uid) {
@@ -2484,7 +3457,7 @@ function openCustomerModal(uid) {
   const userAssets = state.assets.filter(a => (a.ownerUid === uid || a.uid === uid));
   $('modalCustomerAssetCount').textContent = userAssets.length.toString();
   if (!userAssets.length) {
-    $('modalCustomerAssetsList').innerHTML = '<p class="text-slate-500 py-3">No assets attached to this account.</p>';
+    $('modalCustomerAssetsList').innerHTML = '<p class="text-slate-500 py-3">No assets attached to this account.</p>
   } else {
     $('modalCustomerAssetsList').innerHTML = userAssets.map(a => `
       <div onclick="closeModal('customerModal'); openAssetModal('${a.id}');" class="p-3 rounded-xl border border-white/10 bg-slate-900/60 hover:bg-slate-800/60 cursor-pointer flex items-center justify-between transition">
@@ -2565,6 +3538,11 @@ function openCustomerModal(uid) {
     `).join('');
   }
 
+  // Wire up Super Admin Action Buttons
+  $('btnCustomerModalEdit').onclick = () => openEditCustomerModal(uid);
+  $('btnCustomerModalToggleStatus').onclick = () => toggleUserSuspend(uid, u.status);
+  $('btnCustomerModalDelete').onclick = () => deleteCustomer(uid);
+
   openModal('customerModal');
 }
 
@@ -2635,6 +3613,8 @@ function openAssetModal(assetId) {
   const a = state.assets.find(x => x.id === assetId);
   if (!a) return;
 
+  const capabilities = getAssetCapabilities(a);
+
   $('modalAssetName').textContent = a.assetName || a.name || 'Asset 360';
   $('modalAssetCategoryBrand').textContent = `${a.categoryLabel || a.category || 'Category'} · ${a.brandName || a.brand || 'Brand'}`;
   
@@ -2642,112 +3622,96 @@ function openAssetModal(assetId) {
   $('modalAssetHealthScore').textContent = health + '%';
   $('modalAssetHealthGrade').textContent = health >= 80 ? 'Healthy & Operational' : health >= 50 ? 'Moderate Attention' : 'Critical Inspection Required';
   
-  $('modalAssetReg').textContent = a.registration || a.registrationNumber || '—';
+  $('modalAssetReg').textContent = a.registration || a.registrationNumber || (capabilities.isPhone ? (a.serialNumber || 'IMEI-VERIFIED') : '—');
   $('modalAssetChassis').textContent = a.chassisNumber || a.serialNumber || '—';
-  $('modalAssetPrice').textContent = a.purchasePrice || a.salePrice ? '₹' + Number(a.purchasePrice || a.salePrice).toLocaleString('en-IN') : '—';
+  $('modalAssetPrice').textContent = (a.purchasePrice || a.salePrice || a.price) ? '₹' + Number(a.purchasePrice || a.salePrice || a.price).toLocaleString('en-IN') : '—';
   $('modalAssetPurchaseDate').textContent = a.purchaseDate || '—';
   $('modalAssetOwnerUid').textContent = a.ownerUid || a.uid || '—';
   $('modalAssetId').textContent = a.id || '—';
 
-  // Warranty
-  $('modalAssetWarrantyExpiry').textContent = a.warrantyExpiry || '—';
-  $('modalAssetWarrantyStatus').textContent = a.warrantyExpiry ? `Expires: ${a.warrantyExpiry}` : 'No warranty recorded';
+  // Warranty Card (Always shown)
+  $('modalAssetWarrantyExpiry').textContent = a.warrantyExpiry || a.expiryDate || '—';
+  $('modalAssetWarrantyStatus').textContent = (a.warrantyExpiry || a.expiryDate) ? `Expires: ${a.warrantyExpiry || a.expiryDate}` : 'No warranty recorded';
 
-  // Insurance
-  $('modalAssetInsuranceExpiry').textContent = a.insuranceExpiry || '—';
-  $('modalAssetInsuranceStatus').textContent = a.insuranceExpiry ? `Policy valid till ${a.insuranceExpiry}` : 'No active insurance policy';
-
-  // PUC
-  $('modalAssetPucExpiry').textContent = a.pucExpiry || '—';
-  $('modalAssetPucStatus').textContent = a.pucExpiry ? `Valid till ${a.pucExpiry}` : 'No PUC certificate recorded';
-
-  // ----------------------------------------------------
-  // Next Service Prediction Engine (Whichever Comes First)
-  // ----------------------------------------------------
-  const currentOdo = Number(a.odometerKm || a.odometer || a.currentKm || 0);
-  const assetNameLower = (a.assetName || a.name || '').toLowerCase();
+  // Insurance & PUC Cards (ONLY shown if asset has Insurance or PUC capabilities)
+  const insCard = $('modalAssetInsuranceCard');
+  const pucCard = $('modalAssetPucCard');
   
-  let oemSource = 'Standard Engineering Baseline';
-  let isFallback = true;
-  let targetKm = 10000;
-  let intervalDays = 365;
-  let isRonin = false;
-
-  if (assetNameLower.includes('ronin') || assetNameLower.includes('225')) {
-    oemSource = 'TVS Motor Official Ronin 225 Manual (2026)';
-    isFallback = false;
-    targetKm = currentOdo > 0 ? Math.ceil(currentOdo / 6000) * 6000 : 750;
-    if (targetKm <= currentOdo) targetKm = currentOdo + 6000;
-    intervalDays = targetKm === 750 ? 60 : 180;
-    isRonin = true;
-  } else if (assetNameLower.includes('classic') || assetNameLower.includes('hunter') || assetNameLower.includes('bullet')) {
-    oemSource = 'Royal Enfield Official J-Series Manual';
-    isFallback = false;
-    targetKm = currentOdo > 0 ? Math.ceil(currentOdo / 5000) * 5000 : 500;
-    if (targetKm <= currentOdo) targetKm = currentOdo + 5000;
-    intervalDays = 180;
-  } else if (assetNameLower.includes('activa') || assetNameLower.includes('jupiter')) {
-    oemSource = 'HMSI Official Activa 6G Schedule';
-    isFallback = false;
-    targetKm = currentOdo > 0 ? Math.ceil(currentOdo / 4000) * 4000 : 1000;
-    if (targetKm <= currentOdo) targetKm = currentOdo + 4000;
-    intervalDays = 120;
-  } else if (assetNameLower.includes('creta') || assetNameLower.includes('car')) {
-    oemSource = 'Hyundai Official Creta Service Schedule';
-    isFallback = false;
-    targetKm = currentOdo > 0 ? Math.ceil(currentOdo / 10000) * 10000 : 1500;
-    if (targetKm <= currentOdo) targetKm = currentOdo + 10000;
-    intervalDays = 365;
-  }
-
-  const remainingKm = Math.max(0, targetKm - currentOdo);
-  
-  if (isFallback) {
-    $('modalServiceScheduleSource').textContent = 'Generic estimate — manufacturer schedule unavailable';
-    $('modalServiceScheduleSource').className = 'px-2 py-0.5 rounded text-[9px] font-mono bg-amber-500/10 text-amber-300 border border-amber-500/30';
+  if (capabilities.hasInsurance) {
+    if (insCard) {
+      insCard.classList.remove('hidden');
+      $('modalAssetInsuranceExpiry').textContent = a.insuranceExpiry || a.insuranceExpiryDate || '—';
+      $('modalAssetInsuranceStatus').textContent = (a.insuranceExpiry || a.insuranceExpiryDate) ? `Policy valid till ${a.insuranceExpiry || a.insuranceExpiryDate}` : 'No active insurance policy';
+    }
   } else {
-    $('modalServiceScheduleSource').textContent = 'Manufacturer Recommended · ' + oemSource;
-    $('modalServiceScheduleSource').className = 'px-2 py-0.5 rounded text-[9px] font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/30';
+    if (insCard) insCard.classList.add('hidden');
   }
 
-  $('modalServiceTargetKm').textContent = targetKm.toLocaleString('en-IN') + ' KM';
-  $('modalServiceCurrentKm').textContent = currentOdo ? currentOdo.toLocaleString('en-IN') + ' KM' : '0 KM';
-  $('modalServiceRemainingKm').textContent = remainingKm.toLocaleString('en-IN') + ' KM';
+  if (capabilities.hasPuc) {
+    if (pucCard) {
+      pucCard.classList.remove('hidden');
+      $('modalAssetPucExpiry').textContent = a.pucExpiry || a.pucExpiryDate || '—';
+      $('modalAssetPucStatus').textContent = (a.pucExpiry || a.pucExpiryDate) ? `Valid till ${a.pucExpiry || a.pucExpiryDate}` : 'No PUC certificate recorded';
+    }
+  } else {
+    if (pucCard) pucCard.classList.add('hidden');
+  }
 
-  // Check if historical driving records exist
-  const hasHistory = currentOdo > 1000;
-  if (hasHistory) {
+  // Capability-Driven Maintenance / Device Care Container
+  const maintContainer = $('modalAssetMaintenanceContainer');
+  
+  if (capabilities.hasVehicleServiceSchedule) {
+    // 1. VEHICLE SERVICE PREDICTION CARD
+    const currentOdo = Number(a.odometerKm || a.odometer || a.currentKm || 0);
+    const assetNameLower = (a.assetName || a.name || '').toLowerCase();
+    
+    let oemSource = 'Standard Engineering Baseline';
+    let isFallback = true;
+    let targetKm = 10000;
+    let intervalDays = 365;
+    let isRonin = false;
+
+    if (assetNameLower.includes('ronin') || assetNameLower.includes('225')) {
+      oemSource = 'TVS Motor Official Ronin 225 Manual (2026)';
+      isFallback = false;
+      targetKm = currentOdo > 0 ? Math.ceil(currentOdo / 6000) * 6000 : 750;
+      if (targetKm <= currentOdo) targetKm = currentOdo + 6000;
+      intervalDays = targetKm === 750 ? 60 : 180;
+      isRonin = true;
+    } else if (assetNameLower.includes('classic') || assetNameLower.includes('hunter') || assetNameLower.includes('bullet')) {
+      oemSource = 'Royal Enfield Official J-Series Manual';
+      isFallback = false;
+      targetKm = currentOdo > 0 ? Math.ceil(currentOdo / 5000) * 5000 : 500;
+      if (targetKm <= currentOdo) targetKm = currentOdo + 5000;
+      intervalDays = 180;
+    } else if (assetNameLower.includes('activa') || assetNameLower.includes('jupiter')) {
+      oemSource = 'HMSI Official Activa 6G Schedule';
+      isFallback = false;
+      targetKm = currentOdo > 0 ? Math.ceil(currentOdo / 4000) * 4000 : 1000;
+      if (targetKm <= currentOdo) targetKm = currentOdo + 4000;
+      intervalDays = 120;
+    } else if (assetNameLower.includes('creta') || assetNameLower.includes('car')) {
+      oemSource = 'Hyundai Official Creta Service Schedule';
+      isFallback = false;
+      targetKm = currentOdo > 0 ? Math.ceil(currentOdo / 10000) * 10000 : 1500;
+      if (targetKm <= currentOdo) targetKm = currentOdo + 10000;
+      intervalDays = 365;
+    }
+
+    const remainingKm = Math.max(0, targetKm - currentOdo);
+    const hasHistory = currentOdo > 1000;
     const avgDailyKm = 25;
     const daysToKm = Math.round(remainingKm / avgDailyKm);
     const estWeeks = Math.max(1, Math.round(daysToKm / 7));
-    $('modalServiceEstimatedTime').textContent = `~${estWeeks} weeks`;
+    const estimatedTimeStr = hasHistory ? `~${estWeeks} weeks` : '—';
+    const whicheverRuleStr = hasHistory 
+      ? (daysToKm < intervalDays ? `${remainingKm.toLocaleString('en-IN')} KM / ~${estWeeks} wks (KM Threshold reached first)` : `${intervalDays} days calendar limit (Time Threshold reached first)`)
+      : 'Estimated service date unavailable — insufficient driving history (OEM Calendar Limit applies)';
 
-    const whicheverRule = daysToKm < intervalDays 
-      ? `${remainingKm.toLocaleString('en-IN')} KM / ~${estWeeks} wks (KM Threshold reached first)`
-      : `${intervalDays} days calendar limit (Time Threshold reached first)`;
-    $('modalServiceWhicheverRule').textContent = whicheverRule;
-  } else {
-    $('modalServiceEstimatedTime').textContent = '—';
-    $('modalServiceWhicheverRule').textContent = 'Estimated service date unavailable — insufficient driving history (OEM Calendar Limit applies)';
-  }
+    const badgeText = remainingKm <= 0 ? 'OVERDUE' : remainingKm <= 500 ? 'DUE SOON' : 'HEALTHY';
+    const badgeStyle = remainingKm <= 0 ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' : remainingKm <= 500 ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
 
-  // Status Badge
-  const badge = $('modalServiceStatusBadge');
-  if (remainingKm <= 500) {
-    badge.textContent = 'DUE SOON';
-    badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase';
-  } else if (remainingKm <= 0) {
-    badge.textContent = 'OVERDUE';
-    badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 uppercase';
-  } else {
-    badge.textContent = 'HEALTHY';
-    badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase';
-  }
-
-  // Component Checklist
-  const compList = $('modalServiceComponentList');
-  if (isRonin) {
-    compList.innerHTML = `
+    const checklistHtml = isRonin ? `
       <div class="flex items-center justify-between p-2 rounded-lg bg-white/[0.02] border border-white/5">
         <div><strong class="text-white">TVS TRU4 Synthetic Engine Oil</strong> <span class="text-slate-400 font-normal">(Full Drain &amp; Refill)</span></div>
         <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">DUE @ ${targetKm.toLocaleString()} KM</span>
@@ -2760,13 +3724,7 @@ function openAssetModal(assetId) {
         <div><strong class="text-white">Drive Chain Tension &amp; Lube</strong> <span class="text-slate-400 font-normal">(Clean &amp; Lube)</span></div>
         <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">EVERY 1,000 KM</span>
       </div>
-      <div class="flex items-center justify-between p-2 rounded-lg bg-white/[0.02] border border-white/5">
-        <div><strong class="text-white">Viscous Air Cleaner Element</strong> <span class="text-slate-400 font-normal">(Replace @ 12,000 KM)</span></div>
-        <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-700 text-slate-300">UPCOMING</span>
-      </div>
-    `;
-  } else {
-    compList.innerHTML = `
+    ` : `
       <div class="flex items-center justify-between p-2 rounded-lg bg-white/[0.02] border border-white/5">
         <div><strong class="text-white">Engine Oil &amp; Filter</strong> <span class="text-slate-400 font-normal">(Synthetic)</span></div>
         <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">DUE @ ${targetKm.toLocaleString()} KM</span>
@@ -2776,20 +3734,167 @@ function openAssetModal(assetId) {
         <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">INSPECT</span>
       </div>
     `;
+
+    maintContainer.innerHTML = `
+      <div class="rounded-2xl border border-white/10 bg-slate-900/80 p-4 space-y-3">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-2.5">
+          <div class="flex items-center gap-2">
+            <i data-lucide="wrench" class="w-4 h-4 text-brand-400"></i>
+            <h3 class="text-white font-bold text-xs">Next Service Due &amp; Prediction Engine</h3>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${badgeStyle} border uppercase">
+              ${badgeText}
+            </span>
+            <span class="px-2 py-0.5 rounded text-[9px] font-mono bg-white/5 text-slate-400 border border-white/10">
+              ${oemSource}
+            </span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
+          <div class="rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
+            <span class="text-[10px] text-slate-400 uppercase font-bold block">Service Target</span>
+            <span class="text-sm font-black text-brand-300 font-mono mt-0.5 block">${targetKm.toLocaleString('en-IN')} KM</span>
+          </div>
+          <div class="rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
+            <span class="text-[10px] text-slate-400 uppercase font-bold block">Current Odometer</span>
+            <span class="text-sm font-black text-white font-mono mt-0.5 block">${currentOdo.toLocaleString('en-IN')} KM</span>
+          </div>
+          <div class="rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
+            <span class="text-[10px] text-slate-400 uppercase font-bold block">Remaining Distance</span>
+            <span class="text-sm font-black text-amber-300 font-mono mt-0.5 block">${remainingKm.toLocaleString('en-IN')} KM</span>
+          </div>
+          <div class="rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
+            <span class="text-[10px] text-slate-400 uppercase font-bold block">Estimated Due Time</span>
+            <span class="text-sm font-black text-emerald-400 mt-0.5 block">${estimatedTimeStr}</span>
+          </div>
+        </div>
+
+        <div class="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between text-[11px]">
+          <span class="text-slate-400">Whichever comes first criterion:</span>
+          <span class="font-bold text-white font-mono">${whicheverRuleStr}</span>
+        </div>
+
+        <div class="pt-2 border-t border-white/5 space-y-1.5">
+          <span class="text-[10px] text-slate-400 uppercase font-bold block">Component Maintenance Checklist</span>
+          <div class="space-y-1 text-xs">
+            ${checklistHtml}
+          </div>
+        </div>
+      </div>
+    `;
+  } else if (capabilities.isPhone) {
+    // 2. SMARTPHONE INTELLIGENCE CARD
+    maintContainer.innerHTML = `
+      <div class="rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-indigo-950/40 via-slate-900 to-slate-900 p-4 space-y-3">
+        <div class="flex items-center justify-between border-b border-white/10 pb-2.5">
+          <div class="flex items-center gap-2">
+            <i data-lucide="smartphone" class="w-4 h-4 text-indigo-400"></i>
+            <h3 class="text-white font-bold text-xs">Smartphone Device Intelligence</h3>
+          </div>
+          <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase">
+            OPERATIONAL
+          </span>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
+          <div class="rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
+            <span class="text-[10px] text-slate-400 uppercase font-bold block">Battery Health</span>
+            <span class="text-sm font-black text-emerald-400 font-mono mt-0.5 block">96% (Optimal)</span>
+          </div>
+          <div class="rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
+            <span class="text-[10px] text-slate-400 uppercase font-bold block">Display Condition</span>
+            <span class="text-sm font-black text-cyan-300 font-mono mt-0.5 block">Original OLED</span>
+          </div>
+          <div class="rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
+            <span class="text-[10px] text-slate-400 uppercase font-bold block">OS Security</span>
+            <span class="text-sm font-black text-indigo-300 font-mono mt-0.5 block">Up to Date</span>
+          </div>
+          <div class="rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
+            <span class="text-[10px] text-slate-400 uppercase font-bold block">Diagnostics</span>
+            <span class="text-sm font-black text-emerald-300 font-mono mt-0.5 block">Passed</span>
+          </div>
+        </div>
+
+        <div class="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 flex items-center gap-2 text-[11px] text-slate-300">
+          <i data-lucide="shield-check" class="w-4 h-4 text-indigo-400 shrink-0"></i>
+          <span>Device Care: Avoid deep discharge below 20% &amp; utilize OEM certified fast charging adapters.</span>
+        </div>
+      </div>
+    `;
+  } else if (capabilities.isAppliance) {
+    // 3. APPLIANCE PREVENTIVE MAINTENANCE CARD
+    maintContainer.innerHTML = `
+      <div class="rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-cyan-950/40 via-slate-900 to-slate-900 p-4 space-y-3">
+        <div class="flex items-center justify-between border-b border-white/10 pb-2.5">
+          <div class="flex items-center gap-2">
+            <i data-lucide="wrench" class="w-4 h-4 text-cyan-400"></i>
+            <h3 class="text-white font-bold text-xs">${capabilities.maintenanceScheduleLabel || 'Appliance Maintenance'}</h3>
+          </div>
+          <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase">
+            HEALTHY
+          </span>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-center">
+          <div class="rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
+            <span class="text-[10px] text-slate-400 uppercase font-bold block">Service Cycle</span>
+            <span class="text-sm font-black text-cyan-300 font-mono mt-0.5 block">Every 90 Days</span>
+          </div>
+          <div class="rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
+            <span class="text-[10px] text-slate-400 uppercase font-bold block">Inspection Status</span>
+            <span class="text-sm font-black text-emerald-400 font-mono mt-0.5 block">Optimal</span>
+          </div>
+          <div class="rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
+            <span class="text-[10px] text-slate-400 uppercase font-bold block">Next Check</span>
+            <span class="text-sm font-black text-amber-300 font-mono mt-0.5 block">In 45 Days</span>
+          </div>
+        </div>
+      </div>
+    `;
+  } else {
+    // 4. GENERIC / OTHER ASSET CARD
+    maintContainer.innerHTML = `
+      <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3.5 flex items-center gap-2.5 text-xs text-slate-400">
+        <i data-lucide="info" class="w-4 h-4 text-slate-500 shrink-0"></i>
+        <span>Maintenance schedule not configured for this asset type. Standard warranty surveillance active.</span>
+      </div>
+    `;
   }
 
   // Service History Logs
   const historyList = $('modalAssetServiceLogs');
-  historyList.innerHTML = `
-    <div class="p-3 rounded-xl border border-white/10 bg-white/[0.02] flex items-center justify-between">
-      <div>
-        <p class="font-bold text-white uppercase text-xs">PDI &amp; Delivery Inspection</p>
-        <p class="text-[11px] text-slate-400">Odometer: <strong class="text-brand-300 font-mono">15 KM</strong> · Workshop: Authorized Dealer</p>
+  if (capabilities.isVehicle && a.serviceLogs && a.serviceLogs.length > 0) {
+    historyList.innerHTML = a.serviceLogs.map(s => `
+      <div class="p-3 rounded-xl border border-white/10 bg-white/[0.02] flex items-center justify-between">
+        <div>
+          <p class="font-bold text-white uppercase text-xs">${s.serviceType || 'Periodic Service'}</p>
+          <p class="text-[11px] text-slate-400">Odometer: <strong class="text-brand-300 font-mono">${s.odometerKm ? `${s.odometerKm.toLocaleString()} KM` : '—'}</strong> · Workshop: ${s.serviceProvider || 'Authorized Service'}</p>
+        </div>
+        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">VERIFIED</span>
       </div>
-      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">VERIFIED</span>
-    </div>
-  `;
+    `).join('');
+  } else if (capabilities.isVehicle) {
+    historyList.innerHTML = `
+      <div class="p-3 rounded-xl border border-white/10 bg-white/[0.02] flex items-center justify-between">
+        <div>
+          <p class="font-bold text-white uppercase text-xs">PDI &amp; Delivery Inspection</p>
+          <p class="text-[11px] text-slate-400">Odometer: <strong class="text-brand-300 font-mono">15 KM</strong> · Workshop: Authorized Dealer</p>
+        </div>
+        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">VERIFIED</span>
+      </div>
+    `;
+  } else {
+    historyList.innerHTML = `<p class="text-slate-500 py-2">No service/repair events recorded.</p>`;
+  }
 
+  // Wire up Super Admin Action Buttons
+  $('btnAssetModalEdit').onclick = () => openEditAssetModal(a.id);
+  $('btnAssetModalArchive').onclick = () => archiveAsset(a.id);
+  $('btnAssetModalDelete').onclick = () => deleteAsset(a.id);
+
+  if (window.lucide) lucide.createIcons();
   openModal('assetModal');
 }
 
@@ -2872,6 +3977,12 @@ function openDocumentModal(docId) {
 
   $('modalDocOcrText').textContent = d.ocrExtract ? (typeof d.ocrExtract === 'object' ? JSON.stringify(d.ocrExtract, null, 2) : d.ocrExtract) : (d.rawOcrText || 'No raw OCR telemetry attached.');
 
+  // Wire up Super Admin Action Buttons
+  $('btnDocModalEdit').onclick = () => openEditDocumentModal(docId);
+  $('btnDocModalReprocess').onclick = () => reprocessDocumentOcr(docId);
+  $('btnDocModalDelete').onclick = () => deleteDocument(docId);
+
+  if (window.lucide) lucide.createIcons();
   openModal('documentModal');
 }
 
@@ -2925,7 +4036,7 @@ function renderExpiryTable() {
             <span class="text-[11px] text-slate-400">${item.brand} · ${item.category}</span>
           </button>
         </td>
-        <td class="px-4 py-3 font-mono text-[11px] text-slate-400 truncate max-w-[140px]">
+        <td class="px-4 py-3 font-mono text-[11px] text-slate-400 truncate max-w-[140px]" title="${item.ownerUid}">
           <button onclick="openCustomerFromUid('${item.ownerUid}')" class="hover:text-brand-300 hover:underline">
             ${item.ownerUid}
           </button>
@@ -2979,41 +4090,8 @@ function renderTickets() {
   `).join('');
 }
 
-async function replyTicket(ticketId) {
-  const t = state.tickets.find(x => x.id === ticketId);
-  if (!t) return;
-  const reply = prompt(`Reply to ${t.userName || 'User'} (${t.ticketId || t.id}):`, 'We have resolved your inquiry.');
-  if (!reply) return;
-
-  try {
-    const updatedMessages = [...(t.messages || []), {
-      id: `msg-${Date.now()}`,
-      sender: 'admin',
-      senderName: state.currentUser.email,
-      message: reply,
-      timestamp: new Date().toISOString()
-    }];
-
-    await db.collection('supportTickets').doc(ticketId).update({
-      messages: updatedMessages,
-      status: 'resolved',
-      updatedAt: new Date().toISOString(),
-      assignedAdmin: state.currentUser.email
-    });
-
-    await db.collection('auditLogs').add({
-      actorId: state.currentUser.email,
-      actorRole: state.currentRole,
-      action: 'SUPPORT_TICKET_RESOLVED',
-      targetUserId: t.userId,
-      timestamp: new Date().toISOString(),
-      reason: `Replied: ${reply}`
-    });
-
-    alert('Reply committed and ticket marked resolved in Firestore.');
-  } catch (e) {
-    alert('Failed to update ticket: ' + e.message);
-  }
+function replyTicket(ticketId) {
+  openTicketReplyModal(ticketId);
 }
 
 // ----------------------------------------------------
@@ -3042,33 +4120,10 @@ function renderOcrQueue() {
   `).join('');
 }
 
-async function correctOcr(queueId) {
+function correctOcr(queueId) {
   const item = state.ocrQueue.find(x => x.id === queueId);
-  if (!item) return;
-  const correction = prompt(`Enter corrected field value for Doc ${item.docId}:`, JSON.stringify(item.extractedData || {}));
-  if (!correction) return;
-
-  try {
-    const parsed = JSON.parse(correction);
-    await db.collection('ocrReviewQueue').doc(queueId).update({
-      extractedData: parsed,
-      status: 'manually_corrected',
-      reviewedBy: state.currentUser.email,
-      reviewedAt: new Date().toISOString()
-    });
-
-    await db.collection('auditLogs').add({
-      actorId: state.currentUser.email,
-      actorRole: state.currentRole,
-      action: 'OCR_MANUAL_CORRECTION',
-      targetDocId: item.docId,
-      timestamp: new Date().toISOString(),
-      reason: 'Admin corrected OCR extraction'
-    });
-
-    alert('Correction saved and recorded in Audit Trail.');
-  } catch (e) {
-    alert('Failed to save correction: ' + e.message);
+  if (item) {
+    openOcrCorrectionModal(item);
   }
 }
 

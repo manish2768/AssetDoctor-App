@@ -1,5 +1,5 @@
-// AssetDoctor Progressive Web App Service Worker V2.6
-const CACHE_NAME = 'assetdoctor-v2.6';
+// AssetDoctor Progressive Web App Service Worker V2.8
+const CACHE_NAME = 'assetdoctor-v2.8-live-pwa';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -20,7 +20,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activate Event - Clean up old caches
+// Activate Event - Clean up old caches immediately
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keyList) => {
@@ -36,14 +36,40 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch Event - Stale-While-Revalidate with Offline Fallback
+// Fetch Event - Network-First for Navigation / HTML, Stale-While-Revalidate for Static Assets
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
-  
-  const url = new URL(event.request.url);
-  // Do not cache backend API calls or Firestore websockets
-  if (url.pathname.startsWith('/api/') || url.hostname.includes('firestore.googleapis.com')) return;
 
+  const url = new URL(event.request.url);
+  // Do not cache backend API calls, Auth endpoints, or Firestore streams
+  if (
+    url.pathname.startsWith('/api/') ||
+    url.hostname.includes('firestore.googleapis.com') ||
+    url.hostname.includes('identitytoolkit.googleapis.com') ||
+    url.hostname.includes('securetoken.googleapis.com')
+  ) {
+    return;
+  }
+
+  // Network-First for Navigation / HTML pages (Guarantees live Firestore Admin UI)
+  if (event.request.mode === 'navigate' || event.request.destination === 'document' || url.pathname.endsWith('.html')) {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const copy = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          return caches.match(event.request).then((cached) => cached || caches.match('/index.html'));
+        })
+    );
+    return;
+  }
+
+  // Stale-While-Revalidate for Static Assets (CSS, JS, Fonts, Icons)
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       const fetchPromise = fetch(event.request)
@@ -60,12 +86,7 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         })
-        .catch(() => {
-          if (cachedResponse) return cachedResponse;
-          if (event.request.mode === 'navigate') {
-            return caches.match('/index.html');
-          }
-        });
+        .catch(() => cachedResponse);
 
       return cachedResponse || fetchPromise;
     })

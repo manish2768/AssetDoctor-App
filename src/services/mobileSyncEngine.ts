@@ -260,7 +260,7 @@ class MobileSyncEngine {
       try {
         const snap = await getDoc(docRef);
         if (snap.exists()) {
-          const serverData = snap.data();
+          const serverData = snap.data() as any;
           const serverUpdatedAt = serverData.updatedAt || serverData.lastModified;
           const localUpdatedAt = payload.updatedAt || payload.lastModified;
 

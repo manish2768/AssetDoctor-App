@@ -3,14 +3,20 @@ import { AssetDoctorLogo } from './AssetDoctorLogo';
 import { Shield, Sparkles, CheckCircle2, Lock, ArrowRight, Activity, Wrench, FileText } from 'lucide-react';
 
 interface SplashScreenProps {
-  onFinish: () => void;
+  onFinish?: () => void;
+  onComplete?: () => void;
   autoCloseTimeoutMs?: number;
 }
 
 export const SplashScreen: React.FC<SplashScreenProps> = ({
   onFinish,
+  onComplete,
   autoCloseTimeoutMs = 3200,
 }) => {
+  const handleFinish = () => {
+    if (onFinish) onFinish();
+    if (onComplete) onComplete();
+  };
   const [progress, setProgress] = useState(12);
   const [currentStatus, setCurrentStatus] = useState('Initializing AssetDoctor Vault Engine...');
   const [isCompleted, setIsCompleted] = useState(false);
@@ -124,7 +130,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
         {/* Complete Action Button */}
         {isCompleted && (
           <button
-            onClick={onFinish}
+            onClick={handleFinish}
             className="mt-4 px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-black text-sm shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center gap-2 animate-bounce"
           >
             <CheckCircle2 className="w-5 h-5" />

@@ -11,6 +11,7 @@ import type {
   UsageProfile
 } from './types.ts';
 import { matchOemSchedule } from './oemDatabase.ts';
+import { getAssetCapabilities } from '../../src/utils/assetCapabilities.ts';
 
 export interface PredictionOptions {
   referenceDateIST?: Date;
@@ -151,11 +152,88 @@ export function predictNextServiceDue(
   const refDate = options?.referenceDateIST || new Date();
   const refDateStr = refDate.toISOString().split('T')[0];
 
-  const schedule: OemServiceSchedule = matchOemSchedule(asset);
-  const isSevere = Boolean(options?.usageProfile === 'SEVERE' || asset.usageProfile === 'SEVERE');
+  // 1. Normalize Asset Odometer & Fields
+  const rawOdo = typeof asset.odometerKm === 'number' ? asset.odometerKm :
+                 typeof asset.currentOdometer === 'number' ? asset.currentOdometer :
+                 typeof asset.currentKm === 'number' ? asset.currentKm :
+                 typeof asset.currentKM === 'number' ? asset.currentKM :
+                 typeof asset.mileage === 'number' ? asset.mileage :
+                 parseFloat(asset.odometerKm || asset.currentOdometer || asset.currentKm || asset.currentKM || asset.mileage || '0') || 0;
 
-  // Filter verified service records
-  const verifiedRecords = [...serviceRecords]
+  const normalizedAsset = {
+    ...asset,
+    odometerKm: rawOdo,
+    currentOdometer: rawOdo
+  };
+
+  const capabilities = getAssetCapabilities(normalizedAsset);
+  if (!capabilities.hasVehicleServiceSchedule) {
+    return {
+      assetId: normalizedAsset.id || 'unknown',
+      assetName: normalizedAsset.assetName || normalizedAsset.name || 'Asset',
+      category: normalizedAsset.categoryLabel || normalizedAsset.category || 'General',
+      identifier: normalizedAsset.serialNumber || normalizedAsset.imei || '—',
+      serviceNumber: 0,
+      serviceLabel: 'Maintenance schedule not configured',
+      currentOdometerKm: 0,
+      oemTargetKm: 0,
+      oemTargetCalendarDate: 'N/A',
+      oemIntervalKm: 0,
+      oemIntervalDays: 0,
+      remainingKm: 0,
+      remainingDays: 0,
+      avgDailyKm: null,
+      avgMonthlyKm: null,
+      hasDrivingHistory: false,
+      projectedKmThresholdDate: null,
+      finalEstimatedDueDate: 'N/A',
+      whicheverComesFirstCriterion: capabilities.serviceDueUnavailableNotice || 'Maintenance schedule not configured for this asset type',
+      whicheverReasonType: 'INSUFFICIENT_HISTORY',
+      estimatedDaysToReachKm: null,
+      estimatedWeeks: null,
+      status: 'GREEN',
+      statusLabel: 'HEALTHY',
+      predictionConfidence: 'INSUFFICIENT_HISTORY',
+      hasOdometerAnomaly: false,
+      scheduleSource: 'None',
+      scheduleSourceType: 'GENERIC_FALLBACK',
+      scheduleVersion: 'N/A',
+      scheduleLabel: 'Maintenance schedule not configured',
+      isFirstService: false,
+      severeUsageActive: false,
+      componentChecklist: [],
+      calculatedAt: new Date().toISOString(),
+      targetKm: 0,
+      estimatedDueDate: 'N/A',
+      finalDueDate: 'N/A',
+      currentOdometer: 0,
+      lastServiceOdometer: 0,
+      serviceIntervalKm: 0,
+      serviceIntervalDays: 0,
+      scheduleUnavailableOffline: true,
+      offlineNotice: capabilities.serviceDueUnavailableNotice || 'Maintenance schedule not configured for this asset type'
+    };
+  }
+
+  const schedule: OemServiceSchedule = matchOemSchedule(normalizedAsset);
+  const isSevere = Boolean(options?.usageProfile === 'SEVERE' || normalizedAsset.usageProfile === 'SEVERE');
+
+  // 2. Normalize and filter verified service records
+  const normalizedRecords: ServiceRecord[] = (serviceRecords || []).map(r => {
+    const odo = typeof r.odometerKm === 'number' ? r.odometerKm :
+                typeof r.odometer === 'number' ? r.odometer :
+                typeof (r as any).serviceOdometer === 'number' ? (r as any).serviceOdometer :
+                parseFloat(r.odometerKm || r.odometer || (r as any).serviceOdometer || '0') || 0;
+    const isVer = r.verificationStatus === 'VERIFIED' || r.verificationStatus === undefined || r.verificationStatus === 'verified' || (r as any).isVerified === true;
+    return {
+      ...r,
+      odometerKm: odo,
+      odometer: odo,
+      verificationStatus: isVer ? 'VERIFIED' : r.verificationStatus
+    } as ServiceRecord;
+  });
+
+  const verifiedRecords = normalizedRecords
     .filter(r => r.verificationStatus === 'VERIFIED')
     .sort((a, b) => (a.serviceDate > b.serviceDate ? 1 : a.serviceDate < b.serviceDate ? -1 : 0));
 
@@ -176,7 +254,7 @@ export function predictNextServiceDue(
     isFirstService = true;
     serviceNumber = 1;
     serviceLabel = schedule.serviceSteps[0]?.label || '1st Service (Break-in Check)';
-    lastServiceDate = asset.purchaseDate ? asset.purchaseDate.split('T')[0] : refDateStr;
+    lastServiceDate = normalizedAsset.purchaseDate ? normalizedAsset.purchaseDate.split('T')[0] : refDateStr;
     lastServiceOdometerKm = 0;
     oemIntervalKm = schedule.firstServiceRule.intervalKm;
     oemIntervalDays = schedule.firstServiceRule.intervalDays;
@@ -208,13 +286,13 @@ export function predictNextServiceDue(
   // Official OEM Targets (Unmodified)
   const oemTargetKm = lastServiceOdometerKm + oemIntervalKm;
   const oemTargetCalendarDate = addDaysToDateString(lastServiceDate, oemIntervalDays);
-  const currentOdometerKm = Math.max(asset.odometerKm || 0, lastServiceOdometerKm);
+  const currentOdometerKm = Math.max(normalizedAsset.odometerKm || 0, lastServiceOdometerKm);
   const remainingKm = Math.max(0, oemTargetKm - currentOdometerKm);
   const remainingDays = diffDaysBetweenDates(refDateStr, oemTargetCalendarDate);
 
   // Calculate Velocity & Projected KM Threshold Date
   const { avgDailyKm, avgMonthlyKm, confidence, hasOdometerAnomaly, odometerAnomalyReason } = calculateDrivingVelocity(
-    asset,
+    normalizedAsset,
     verifiedRecords,
     refDateStr
   );
@@ -330,11 +408,21 @@ export function predictNextServiceDue(
     scheduleSourceType: schedule.sourceType,
     scheduleVersion: schedule.sourceVersion,
     scheduleLabel,
-    
     isFirstService,
     severeUsageActive,
     severeUsageNote,
     componentChecklist,
-    calculatedAt: new Date().toISOString()
+    calculatedAt: new Date().toISOString(),
+
+    // Canonical compatibility aliases
+    targetKm: oemTargetKm,
+    estimatedDueDate: finalEstimatedDueDate,
+    finalDueDate: finalEstimatedDueDate,
+    currentOdometer: currentOdometerKm,
+    lastServiceOdometer: lastServiceOdometerKm,
+    serviceIntervalKm: oemIntervalKm,
+    serviceIntervalDays: oemIntervalDays,
+    scheduleUnavailableOffline: schedule.sourceType === 'GENERIC_FALLBACK',
+    offlineNotice: schedule.sourceType === 'GENERIC_FALLBACK' ? 'Service schedule unavailable offline. Will update when connected.' : undefined
   };
 }

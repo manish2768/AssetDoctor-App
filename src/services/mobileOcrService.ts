@@ -240,9 +240,9 @@ export class MobileOcrService {
             serviceDate: ext.serviceData.serviceDate?.value || new Date().toISOString().split('T')[0],
             odometerKm: odoValue,
             serviceType: ext.serviceData.serviceType?.value || 'periodic_maintenance',
-            invoiceNumber: ext.serviceData.invoiceNumber?.value,
-            serviceCenter: ext.serviceData.workshopName?.value,
-            cost: ext.serviceData.totalAmount?.value,
+            invoiceNumber: ext.serviceData.invoiceNumber?.value || undefined,
+            serviceCenter: ext.serviceData.workshopName?.value || undefined,
+            cost: ext.serviceData.totalAmount?.value ?? undefined,
             ocrConfidence: odoConf,
             verificationStatus: odoConf >= 0.85 ? 'VERIFIED' : 'NEEDS_REVIEW'
           };
@@ -259,16 +259,16 @@ export class MobileOcrService {
       }
 
       const extractedResult: ReceiptScanResult = {
-        vendor: ext.serviceData?.workshopName?.value || ext.insuranceData?.insurerName?.value || ext.purchaseData?.sellerName?.value,
+        vendor: ext.serviceData?.workshopName?.value || ext.insuranceData?.insurerName?.value || ext.purchaseData?.sellerName?.value || undefined,
         purchaseDate: ext.serviceData?.serviceDate?.value || ext.insuranceData?.policyStartDate?.value || ext.purchaseData?.invoiceDate?.value || new Date().toISOString().split('T')[0],
         totalAmount: ext.serviceData?.totalAmount?.value || ext.insuranceData?.premiumAmount?.value || ext.purchaseData?.finalAmount?.value || 0,
         documentType: classification.documentType,
-        odometerKm: ext.serviceData?.odometerKm?.value,
+        odometerKm: ext.serviceData?.odometerKm?.value ?? undefined,
         odometerConfidence: ext.serviceData?.odometerKm?.confidence,
-        vehicleRegistration: ext.serviceData?.vehicleRegistration?.value || ext.rcData?.registrationNumber?.value,
-        serviceDate: ext.serviceData?.serviceDate?.value,
-        invoiceNumber: ext.serviceData?.invoiceNumber?.value || ext.purchaseData?.invoiceNumber?.value,
-        workshopName: ext.serviceData?.workshopName?.value,
+        vehicleRegistration: ext.serviceData?.vehicleRegistration?.value || ext.rcData?.registrationNumber?.value || undefined,
+        serviceDate: ext.serviceData?.serviceDate?.value || undefined,
+        invoiceNumber: ext.serviceData?.invoiceNumber?.value || ext.purchaseData?.invoiceNumber?.value || undefined,
+        workshopName: ext.serviceData?.workshopName?.value || undefined,
         verificationStatus: hasLowConfidence ? 'NEEDS_REVIEW' : 'VERIFIED',
         items: []
       };

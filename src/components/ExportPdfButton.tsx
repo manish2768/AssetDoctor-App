@@ -21,10 +21,9 @@ export const ExportPdfButton: React.FC<ExportPdfButtonProps> = ({ assets, userNa
   const handleExportPDF = () => {
     setIsExporting(true);
 
-    // ब्राउज़र की नेटिव प्रिंट विंडो खोलना
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
-      alert("कृपया ब्राउज़र के Pop-up Blocker को Allow करें");
+      console.warn("Pop-up blocked by browser settings");
       setIsExporting(false);
       return;
     }

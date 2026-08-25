@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { Asset, WarrantyStatus } from '../types';
 import { formatINR, generateWhatsAppShareUrl, getBrandServiceHotline, calculateResaleValue, calculateExpiryDays } from '../utils/assetUtils';
+import { getAssetCapabilities } from '../utils/assetCapabilities';
 
 interface AssetCardProps {
   asset: Asset;
@@ -124,6 +125,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({
   const whatsAppUrl = generateWhatsAppShareUrl(asset);
   const hotline = getBrandServiceHotline(asset.brand, asset.category, asset.name);
   const resale = calculateResaleValue(asset);
+  const capabilities = getAssetCapabilities(asset);
 
   return (
     <div
@@ -179,8 +181,8 @@ export const AssetCard: React.FC<AssetCardProps> = ({
           </div>
         </div>
 
-        {/* Vehicle Specific Compliance Badges (Insurance & PUC) */}
-        {(asset.category === 'Vehicles' || asset.insuranceExpiryDate || asset.pucExpiryDate) && (
+        {/* Vehicle Specific Compliance Badges (Insurance & PUC) — Rendered ONLY for Vehicles */}
+        {(capabilities.hasInsurance || capabilities.hasPuc) && (asset.insuranceExpiryDate || asset.pucExpiryDate) && (
           <div className="mb-3 p-2.5 rounded-2xl bg-slate-950/90 border border-slate-800/80 flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-1.5 text-xs text-slate-300 font-bold">
               <Car className="w-3.5 h-3.5 text-cyan-400" />

@@ -175,10 +175,17 @@ export interface NextServicePredictionResult {
   scheduleVersion: string;
   scheduleLabel: string; // "Manufacturer Recommended" vs "Generic estimate — manufacturer schedule unavailable"
   
-  isFirstService: boolean;
-  severeUsageActive: boolean;
-  severeUsageNote?: string;
-  
   componentChecklist: ComponentChecklistItem[];
   calculatedAt: string;
+
+  // Canonical compatibility aliases
+  targetKm?: number;
+  estimatedDueDate?: string;
+  finalDueDate?: string;
+  currentOdometer?: number;
+  lastServiceOdometer?: number;
+  serviceIntervalKm?: number;
+  serviceIntervalDays?: number;
+  scheduleUnavailableOffline?: boolean;
+  offlineNotice?: string;
 }

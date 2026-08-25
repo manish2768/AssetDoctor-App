@@ -1,0 +1,18 @@
+# Asset Doctor — robots.txt
+# Controls search engine crawler indexing across public asset intelligence tools and private areas.
+
+User-agent: *
+Allow: /
+Allow: /tools/
+Allow: /assets/
+Allow: /knowledge/
+Allow: /passport/
+
+# Protect Admin & API from public crawling
+Disallow: /admin
+Disallow: /admin.html
+Disallow: /api/
+Disallow: /_next/
+Disallow: /dist/
+
+Sitemap: https://assetdoctor.in/sitemap.xml

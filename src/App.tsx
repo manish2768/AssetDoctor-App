@@ -27,10 +27,12 @@ import { SAMPLE_ASSETS, loadDemoAssets } from './services/sampleAssets';
 import { Asset, MetricSummary } from './types';
 import { getProcessedInitialAssets, calculateExpiryDays } from './utils/assetUtils';
 import { CheckCircle2, Camera, Sparkles } from 'lucide-react';
+import { PublicPlatformView } from './components/platform/PublicPlatformView';
 
 const STORAGE_KEY = 'assetdoctor_servivault_assets';
 
 export default function App() {
+  const [currentAppView, setCurrentAppView] = useState<'platform' | 'vault'>('platform');
   const [currentUserId, setCurrentUserId] = useState<string>(() => {
     return auth.currentUser?.uid || 'guest_user';
   });
@@ -78,6 +80,7 @@ export default function App() {
 
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [claimAsset, setClaimAsset] = useState<Asset | null>(null);
+  const [deleteTargetAsset, setDeleteTargetAsset] = useState<Asset | null>(null);
   const [activeStatusFilter, setActiveStatusFilter] = useState<'all' | 'active' | 'expiring_soon' | 'expired'>('all');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -203,13 +206,20 @@ export default function App() {
     await MobileAssetService.saveAsset(newAsset, currentUserId);
   };
 
-  const handleDeleteAsset = async (id: string) => {
+  const handleDeleteAsset = (id: string) => {
     const target = assets.find((a) => a.id === id);
-    if (confirm(`Are you sure you want to remove ${target?.name || 'this asset'} from AssetDoctor Vault?`)) {
-      setAssets((prev) => prev.filter((item) => item.id !== id));
-      await MobileAssetService.deleteAsset(id, currentUserId);
-      showToast('Asset deleted from vault.');
+    if (target) {
+      setDeleteTargetAsset(target);
     }
+  };
+
+  const confirmDeleteAsset = async () => {
+    if (!deleteTargetAsset) return;
+    const id = deleteTargetAsset.id;
+    setAssets((prev) => prev.filter((item) => item.id !== id));
+    await MobileAssetService.deleteAsset(id, currentUserId);
+    setDeleteTargetAsset(null);
+    showToast('Asset deleted from vault.');
   };
 
   const handleLoadDemoAssets = async () => {
@@ -294,80 +304,91 @@ export default function App() {
         </div>
       )}
 
-      {/* Top Fixed Header */}
-      <Header
-        totalValuation={metrics.totalValuation}
-        totalAssetsCount={metrics.totalAssets}
-        expiringSoonCount={metrics.expiringSoonCount}
-        userPhone={userPhone}
-        userEmail={userEmail}
-        userLocation={userLocation}
-        onOpenOCR={() => setIsOCRModalOpen(true)}
-        onOpenAddModal={() => setIsAddModalOpen(true)}
-        onOpenEmergencyModal={() => setIsEmergencyModalOpen(true)}
-        onOpenUpdatePhoneModal={() => setIsUpdatePhoneModalOpen(true)}
-        onOpenUpdateEmailModal={() => setIsUpdateEmailModalOpen(true)}
-        onOpenLoginModal={() => setIsLoginModalOpen(true)}
-        onOpenAccountSettingsModal={() => setIsAccountSettingsModalOpen(true)}
-        onOpenWarrantyAlertsModal={() => setIsWarrantyAlertsModalOpen(true)}
-        onOpenSplashScreen={() => setShowSplash(true)}
-        onExportVault={handleExportVault}
-        onScrollToAlerts={handleScrollToAlerts}
-      />
-
-      {/* Main App Container */}
-      <main className="max-w-7xl mx-auto px-4 lg:px-8 py-6 space-y-6">
-        
-        {/* Metric Cards */}
-        <MetricCards
-          metrics={metrics}
-          onSelectFilter={(filter) => setActiveStatusFilter(filter)}
+      {currentAppView === 'platform' ? (
+        <PublicPlatformView
+          onOpenAppVault={() => setCurrentAppView('vault')}
+          onOpenLoginModal={() => setIsLoginModalOpen(true)}
+          currentUser={auth.currentUser}
         />
-
-        {/* 7-Day Expiring Soon Alert Banner */}
-        <ExpiringAlertBanner
-          expiringAssets={expiringAssets}
-          onSelectAsset={(asset) => setSelectedAsset(asset)}
-          onScrollToVault={() => {
-            const el = document.getElementById('asset-vault-section');
-            if (el) el.scrollIntoView({ behavior: 'smooth' });
-          }}
-        />
-
-        {/* Dynamic Warranty Expiry Widget */}
-        <WarrantyExpiryWidget
-          assets={assets}
-          onSelectAsset={(asset) => setSelectedAsset(asset)}
-          onAddAssetClick={() => setIsAddModalOpen(true)}
-        />
-
-        {/* Main Vault Grid View with Category Filters, Search, and Status Tabs */}
-        <section id="asset-vault-section">
-          <AssetVaultGrid
-            assets={assets}
-            activeFilter={activeStatusFilter}
-            onFilterChange={setActiveStatusFilter}
-            onSelectAsset={(asset) => setSelectedAsset(asset)}
-            onDeleteAsset={handleDeleteAsset}
+      ) : (
+        <>
+          {/* Top Fixed Header */}
+          <Header
+            totalValuation={metrics.totalValuation}
+            totalAssetsCount={metrics.totalAssets}
+            expiringSoonCount={metrics.expiringSoonCount}
+            userPhone={userPhone}
+            userEmail={userEmail}
+            userLocation={userLocation}
+            onOpenOCR={() => setIsOCRModalOpen(true)}
             onOpenAddModal={() => setIsAddModalOpen(true)}
-            onOpenOCRModal={() => setIsOCRModalOpen(true)}
+            onOpenEmergencyModal={() => setIsEmergencyModalOpen(true)}
+            onOpenUpdatePhoneModal={() => setIsUpdatePhoneModalOpen(true)}
+            onOpenUpdateEmailModal={() => setIsUpdateEmailModalOpen(true)}
+            onOpenLoginModal={() => setIsLoginModalOpen(true)}
+            onOpenAccountSettingsModal={() => setIsAccountSettingsModalOpen(true)}
+            onOpenWarrantyAlertsModal={() => setIsWarrantyAlertsModalOpen(true)}
+            onOpenSplashScreen={() => setShowSplash(true)}
+            onExportVault={handleExportVault}
+            onScrollToAlerts={handleScrollToAlerts}
+            onNavigateToPlatform={() => setCurrentAppView('platform')}
           />
-        </section>
 
-        {/* Authorized Brand Support Directory & Customer Care Call Centre */}
-        <BrandSupportDirectory
-          onOpenClaim={(brandName) => {
-            const matchedAsset = assets.find((a) => a.brand?.toLowerCase() === brandName.toLowerCase());
-            if (matchedAsset) {
-              setClaimAsset(matchedAsset);
-            } else if (assets.length > 0) {
-              setClaimAsset(assets[0]);
-            } else {
-              showToast(`No assets saved under brand "${brandName}" yet.`);
-            }
-          }}
-        />
-      </main>
+          {/* Main App Container */}
+          <main className="max-w-7xl mx-auto px-4 lg:px-8 py-6 space-y-6">
+            
+            {/* Metric Cards */}
+            <MetricCards
+              metrics={metrics}
+              onSelectFilter={(filter) => setActiveStatusFilter(filter)}
+            />
+
+            {/* 7-Day Expiring Soon Alert Banner */}
+            <ExpiringAlertBanner
+              expiringAssets={expiringAssets}
+              onSelectAsset={(asset) => setSelectedAsset(asset)}
+              onScrollToVault={() => {
+                const el = document.getElementById('asset-vault-section');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+            />
+
+            {/* Dynamic Warranty Expiry Widget */}
+            <WarrantyExpiryWidget
+              assets={assets}
+              onSelectAsset={(asset) => setSelectedAsset(asset)}
+              onAddAssetClick={() => setIsAddModalOpen(true)}
+            />
+
+            {/* Main Vault Grid View with Category Filters, Search, and Status Tabs */}
+            <section id="asset-vault-section">
+              <AssetVaultGrid
+                assets={assets}
+                activeFilter={activeStatusFilter}
+                onFilterChange={setActiveStatusFilter}
+                onSelectAsset={(asset) => setSelectedAsset(asset)}
+                onDeleteAsset={handleDeleteAsset}
+                onOpenAddModal={() => setIsAddModalOpen(true)}
+                onOpenOCRModal={() => setIsOCRModalOpen(true)}
+              />
+            </section>
+
+            {/* Authorized Brand Support Directory & Customer Care Call Centre */}
+            <BrandSupportDirectory
+              onOpenClaim={(brandName) => {
+                const matchedAsset = assets.find((a) => a.brand?.toLowerCase() === brandName.toLowerCase());
+                if (matchedAsset) {
+                  setClaimAsset(matchedAsset);
+                } else if (assets.length > 0) {
+                  setClaimAsset(assets[0]);
+                } else {
+                  showToast(`No assets saved under brand "${brandName}" yet.`);
+                }
+              }}
+            />
+          </main>
+        </>
+      )}
 
       {/* Modal Dialogs */}
       {selectedAsset && (
@@ -471,6 +492,31 @@ export default function App() {
           onClose={() => setSavedModalOpen(false)}
           assetDetails={lastSavedAsset}
         />
+      )}
+
+      {deleteTargetAsset && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+            <h3 className="text-lg font-bold text-white">Delete Vaulted Asset?</h3>
+            <p className="text-sm text-slate-300">
+              Are you sure you want to remove <strong className="text-white">{deleteTargetAsset.name}</strong> from AssetDoctor Vault? This action will remove local and synced records.
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setDeleteTargetAsset(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteAsset}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-600/30 transition"
+              >
+                Delete Asset
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showSplash && (

@@ -80,6 +80,17 @@ export class MobileAssetService {
   }
 
   /**
+   * Canonical & Compatibility Wrappers for Local Asset Persistence
+   */
+  public static setLocalAssetData(userId: string, assets: Asset[]): void {
+    this.cacheAssets(assets, userId);
+  }
+
+  public static getLocalAssetData(userId: string): Asset[] {
+    return this.getCachedAssets(userId);
+  }
+
+  /**
    * Subscribe to Real-Time Assets (Firestore + Local Fallback)
    */
   public static subscribeUserAssets(

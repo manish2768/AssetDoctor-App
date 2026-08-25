@@ -1,0 +1,63 @@
+{
+  "project_info": {
+    "project_number": "926559836985",
+    "project_id": "assetdoctor-5fd25",
+    "storage_bucket": "assetdoctor-5fd25.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:926559836985:android:842e878c508df93d2b66e8",
+        "android_client_info": {
+          "package_name": "com.assetdoctor.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "926559836985-8h8qb7eg35s480h66kqgcrifn2pe445i.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.assetdoctor.app",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "926559836985-id3jot1l56b18c23eoluv3sgpnau2m2l.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.assetdoctor.app",
+            "certificate_hash": "1d0183195ac7b16e9b8dc914816488a8253e9d5b"
+          }
+        },
+        {
+          "client_id": "926559836985-lfhjoqlrpbbhtj6p3hlkbo2jd7drb80k.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.assetdoctor.app",
+            "certificate_hash": "db44ec44e56829a5917871d1797d6aac1c9b09a8"
+          }
+        },
+        {
+          "client_id": "926559836985-1jschm7e172vqo2rav99oif3uoq93ftq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAYpEIXCZz3VKFMza3jpUMGTSRbi37qk-c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "926559836985-1jschm7e172vqo2rav99oif3uoq93ftq.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

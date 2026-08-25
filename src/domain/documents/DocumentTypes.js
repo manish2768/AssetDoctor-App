@@ -1,0 +1,13 @@
+/** Extensible document type identifiers — schema-driven extraction. */
+export const DOCUMENT_TYPE = Object.freeze({
+  INVOICE: 'INVOICE',
+  INSURANCE_POLICY: 'INSURANCE_POLICY',
+  PUC: 'PUC',
+  SERVICE_BILL: 'SERVICE_BILL',
+  WARRANTY_CARD: 'WARRANTY_CARD',
+  PURCHASE_RECEIPT: 'PURCHASE_RECEIPT',
+  REGISTRATION_DOCUMENT: 'REGISTRATION_DOCUMENT',
+  OTHER: 'OTHER',
+});
+
+export default DOCUMENT_TYPE;

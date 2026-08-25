@@ -1,0 +1,73 @@
+{
+  "cli": {
+    "version": ">= 21.4.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "channel": "development",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_EMAIL_PROVIDER": "resend",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "assetdoctor-5fd25",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyAYpEIXCZz3VKFMza3jpUMGTSRbi37qk-c",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "assetdoctor-5fd25.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "assetdoctor-5fd25-vault",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "926559836985",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:926559836985:android:842e878c508df93d2b66e8",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "926559836985-1jschm7e172vqo2rav99oif3uoq93ftq.apps.googleusercontent.com"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview",
+      "autoIncrement": true,
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_EMAIL_PROVIDER": "resend",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "assetdoctor-5fd25",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyAYpEIXCZz3VKFMza3jpUMGTSRbi37qk-c",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "assetdoctor-5fd25.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "assetdoctor-5fd25-vault",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "926559836985",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:926559836985:android:842e878c508df93d2b66e8",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "926559836985-1jschm7e172vqo2rav99oif3uoq93ftq.apps.googleusercontent.com"
+      }
+    },
+    "production": {
+      "channel": "production",
+      "distribution": "store",
+      "autoIncrement": false,
+      "credentialsSource": "remote",
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_EMAIL_PROVIDER": "resend",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "assetdoctor-5fd25",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyAYpEIXCZz3VKFMza3jpUMGTSRbi37qk-c",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "assetdoctor-5fd25.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "assetdoctor-5fd25-vault",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "926559836985",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:926559836985:android:842e878c508df93d2b66e8",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "926559836985-1jschm7e172vqo2rav99oif3uoq93ftq.apps.googleusercontent.com",
+        "EXPO_PUBLIC_OCR_VISION_URL": "https://asia-south1-assetdoctor-5fd25.cloudfunctions.net/scanInvoiceVision",
+        "EXPO_PUBLIC_FUNCTIONS_REGION": "asia-south1"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    }
+  }
+}

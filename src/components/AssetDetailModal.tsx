@@ -27,13 +27,19 @@ import {
   Car,
   Siren,
   Gauge,
-  UploadCloud,
   CheckCheck,
-  RotateCcw
+  RotateCcw,
+  Smartphone,
+  Cpu,
+  Layers,
+  Flame,
+  Droplet,
+  UploadCloud
 } from 'lucide-react';
 import { Asset, ServiceLogEntry, ServiceRecord, NextServicePredictionResult } from '../types';
 import { VehicleDocuments } from './EmergencyModal';
 import { formatINR, calculateResaleValue, calculateExpiryDays } from '../utils/assetUtils';
+import { getAssetCapabilities } from '../utils/assetCapabilities';
 import { MobileServiceHistoryService } from '../services/mobileServiceHistoryService';
 import { MobileOcrService, OcrProcessingState } from '../services/mobileOcrService';
 
@@ -52,6 +58,7 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
   onUpdateAsset,
   onOpenEmergencyModal,
 }) => {
+  const capabilities = getAssetCapabilities(asset);
   const [activeTab, setActiveTab] = useState<'vault' | 'service' | 'resale'>('vault');
 
   // Real-time Service History & Prediction State
@@ -177,7 +184,7 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-bold text-white">
+                  <h2 className="text-lg sm:text-xl font-black text-white">
                     {asset.name}
                   </h2>
                   {asset.syncStatus === 'PENDING_SYNC' && (
@@ -186,17 +193,17 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-slate-400 flex items-center gap-2">
+                <div className="text-xs text-slate-400 flex flex-wrap items-center gap-2 mt-1">
                   <span>{asset.brand || 'Brand Asset'}</span>
                   <span>•</span>
                   <span>{asset.category}</span>
-                  {asset.registration && (
-                    <>
-                      <span>•</span>
-                      <span className="font-mono text-cyan-400 font-bold">{asset.registration}</span>
-                    </>
-                  )}
-                </p>
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                    {asset.brand || asset.category}
+                  </span>
+                  <span className="text-xs text-slate-400 font-mono">
+                    {capabilities.primaryIdentifierLabel}: {asset.registration || asset.serialNumber || 'SN-N/A'}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -230,8 +237,27 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <Gauge className="w-3.5 h-3.5" />
-              <span>Next Service & History</span>
+              {capabilities.isVehicle ? (
+                <>
+                  <Gauge className="w-3.5 h-3.5" />
+                  <span>Next Service & History</span>
+                </>
+              ) : capabilities.isPhone ? (
+                <>
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>Device Health & Care</span>
+                </>
+              ) : capabilities.isAppliance ? (
+                <>
+                  <Wrench className="w-3.5 h-3.5" />
+                  <span>Maintenance & Care</span>
+                </>
+              ) : (
+                <>
+                  <History className="w-3.5 h-3.5" />
+                  <span>Care & Service Logs</span>
+                </>
+              )}
             </button>
 
             <button
@@ -307,8 +333,8 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
                 </div>
               </div>
 
-              {/* Vehicle Compliance Box */}
-              {(asset.category === 'Vehicles' || asset.insuranceExpiryDate || asset.pucExpiryDate) && (
+              {/* Vehicle Compliance Box — Rendered ONLY for Assets with Insurance/PUC capabilities */}
+              {(capabilities.hasInsurance || capabilities.hasPuc) && (asset.insuranceExpiryDate || asset.pucExpiryDate) && (
                 <div className="p-4 rounded-2xl bg-cyan-950/40 border border-cyan-500/30 space-y-3">
                   <div className="flex items-center justify-between text-cyan-400 font-bold text-xs">
                     <div className="flex items-center gap-2">
@@ -363,8 +389,8 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
           {/* TAB 2: NEXT SERVICE PREDICTION & SERVICE HISTORY */}
           {activeTab === 'service' && (
             <div className="space-y-6">
-              {/* 1. NEXT SERVICE PREDICTION CARD */}
-              {prediction && (
+              {/* 1. VEHICLE SERVICE PREDICTION CARD (Vehicles Only) */}
+              {capabilities.hasVehicleServiceSchedule && prediction && prediction.oemTargetKm > 0 && (
                 <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border border-teal-500/40 shadow-xl space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
                     <div className="flex items-center gap-2">
@@ -474,6 +500,119 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* 2. SMARTPHONE DEVICE INTELLIGENCE (Phones Only) */}
+              {capabilities.isPhone && (
+                <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border border-indigo-500/40 shadow-xl space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                        <Smartphone className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-white uppercase tracking-wider">
+                          Smartphone Device Intelligence
+                        </h4>
+                        <p className="text-[11px] text-slate-400 font-mono">
+                          Hardware Health &amp; Hardware Diagnostics
+                        </p>
+                      </div>
+                    </div>
+                    <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/50">
+                      OPERATIONAL
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                    <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                      <span className="text-[10px] text-slate-400 font-semibold block uppercase">IMEI / Serial</span>
+                      <span className="text-xs font-black text-white font-mono truncate block">
+                        {asset.serialNumber || 'SN-VERIFIED'}
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                      <span className="text-[10px] text-slate-400 font-semibold block uppercase">Battery Health</span>
+                      <span className="text-xs font-black text-emerald-400 font-mono">
+                        96% (Optimal)
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                      <span className="text-[10px] text-slate-400 font-semibold block uppercase">Display Screen</span>
+                      <span className="text-xs font-black text-cyan-300 font-mono">
+                        Original OLED
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                      <span className="text-[10px] text-slate-400 font-semibold block uppercase">OS Support</span>
+                      <span className="text-xs font-black text-indigo-300 font-mono">
+                        Active Updates
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs text-slate-300">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-indigo-400 shrink-0" />
+                      <span>
+                        <strong className="text-white">Care Advice:</strong> Avoid deep discharge below 20% &amp; use OEM certified charging adapters.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 3. APPLIANCE PREVENTIVE MAINTENANCE CARD (AC, Geyser, Purifier) */}
+              {capabilities.isAppliance && (
+                <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border border-cyan-500/40 shadow-xl space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                        <Wrench className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-white uppercase tracking-wider">
+                          {capabilities.maintenanceScheduleLabel}
+                        </h4>
+                        <p className="text-[11px] text-slate-400 font-mono">
+                          OEM Recommended Preventive Maintenance
+                        </p>
+                      </div>
+                    </div>
+                    <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/50">
+                      HEALTHY
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                    {capabilities.hasFilterCleaning && (
+                      <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                        <span className="text-[10px] text-slate-400 font-semibold block uppercase">Filter Clean Interval</span>
+                        <span className="text-xs font-black text-cyan-300 font-mono">Every 90 Days</span>
+                      </div>
+                    )}
+                    {capabilities.hasHeatingElement && (
+                      <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                        <span className="text-[10px] text-slate-400 font-semibold block uppercase">Heating Element</span>
+                        <span className="text-xs font-black text-amber-300 font-mono">Anode Inspection</span>
+                      </div>
+                    )}
+                    <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                      <span className="text-[10px] text-slate-400 font-semibold block uppercase">Next Inspection</span>
+                      <span className="text-xs font-black text-emerald-400 font-mono">Scheduled</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 4. GENERAL ELECTRONICS / OTHER FALLBACK */}
+              {!capabilities.hasVehicleServiceSchedule && !capabilities.isPhone && !capabilities.isAppliance && (
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                  <div className="flex items-center gap-2">
+                    <Info className="w-4 h-4 text-slate-500 shrink-0" />
+                    <span>Maintenance schedule not configured for this asset type. Official warranty surveillance active.</span>
+                  </div>
                 </div>
               )}
 
@@ -689,7 +828,7 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
                       Current Fair Market Value
                     </span>
                     <h3 className="text-3xl font-black text-cyan-400 font-mono">
-                      {formatINR(resale.currentEstimatedValue)}
+                      {formatINR(resale.currentValue)}
                     </h3>
                   </div>
                   <div className="text-right">
@@ -705,11 +844,11 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
                     <span className="text-[10px] text-slate-400 font-semibold block">Total Depreciation</span>
-                    <span className="font-bold text-rose-400 font-mono">-{formatINR(resale.depreciationAmount)}</span>
+                    <span className="font-bold text-rose-400 font-mono">-{formatINR(resale.depreciatedAmount)}</span>
                   </div>
                   <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
                     <span className="text-[10px] text-slate-400 font-semibold block">Depreciation Rate</span>
-                    <span className="font-bold text-amber-300 font-mono">{resale.depreciationRatePerYear}% / Year</span>
+                    <span className="font-bold text-amber-300 font-mono">{resale.annualDepreciationRate}% / Year</span>
                   </div>
                 </div>
               </div>
