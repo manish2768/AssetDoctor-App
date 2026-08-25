@@ -19,6 +19,10 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
 
   const placeholderExamples = [
+    'Is there a recall for my car?',
+    'What is the warranty for this phone?',
+    'When should I clean my AC filter?',
+    'What is the maintenance schedule?',
     'my AC filter is due',
     'TVS Ronin service schedule',
     'Samsung AC filter cleaning',
@@ -37,7 +41,9 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
     { label: 'phone warranty', type: 'tool', target: 'tools/warranty-checker' },
     { label: 'should I repair my washing machine', type: 'tool', target: 'tools/repair-or-replace' },
     { label: 'how much is my old laptop worth', type: 'tool', target: 'tools/depreciation-calculator' },
-    { label: 'what documents should I keep for my car', type: 'tool', target: 'tools/document-expiry' }
+    { label: 'what documents should I keep for my car', type: 'tool', target: 'tools/document-expiry' },
+    { label: 'Is there a recall for my car?', type: 'tool', target: 'tools/service-due-calculator' },
+    { label: 'What is the maintenance schedule?', type: 'tool', target: 'tools/maintenance-checker' }
   ];
 
   // Rotate placeholder every 3.5 seconds

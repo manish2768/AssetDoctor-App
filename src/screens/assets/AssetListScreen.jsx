@@ -167,14 +167,14 @@ export function AssetListScreen({ navigation }) {
         }
         ListEmptyComponent={
           <EmptyState
-            icon="📦"
-            title={loading ? 'Loading assets…' : query || filter !== 'all' ? 'No matches' : 'No assets yet'}
+            icon="🏠"
+            title={loading ? 'Loading assets…' : query || filter !== 'all' ? 'No matches' : 'Your assets deserve a home'}
             message={
               query || filter !== 'all'
                 ? 'Try a different search or filter.'
-                : 'Add your first asset to start tracking documents, service, expenses and health.'
+                : 'Add a vehicle, phone, appliance, or equipment to start tracking health and documents.'
             }
-            ctaLabel={!query && filter === 'all' && !loading ? '+ Add Asset' : undefined}
+            ctaLabel={!query && filter === 'all' && !loading ? 'Add Your First Asset' : undefined}
             onCta={
               !query && filter === 'all' && !loading
                 ? () => navigation.navigate('AddAsset')

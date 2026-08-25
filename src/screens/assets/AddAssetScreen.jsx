@@ -443,7 +443,7 @@ export function AddAssetScreen({ navigation, route }) {
         <Text style={styles.scanHint}>{scanHint}</Text>
       ) : null}
 
-      <Text style={styles.section}>Category</Text>
+      <Text style={styles.section}>What are you adding?</Text>
       {CATEGORY_GROUPS.map((group) => (
         <View key={group} style={styles.categoryGroup}>
           <Text style={styles.groupLabel}>{group}</Text>

@@ -288,16 +288,30 @@ export function DocumentsVaultScreen({ route, navigation }) {
         renderSectionHeader={({ section }) => (
           <Text style={styles.sectionTitle}>{section.title}</Text>
         )}
-        renderItem={({ item }) => (
+        renderItem={({ item }) => {
+          const statusLabel = item.needsReview
+            ? 'Needs Review'
+            : item.verified || item.fieldStatus === 'verified'
+              ? 'Verified'
+              : item.pendingSync
+                ? 'Pending'
+                : item.offlineCached
+                  ? 'Offline'
+                  : item.processing
+                    ? 'Processing'
+                    : item.expired
+                      ? 'Expired'
+                      : 'Saved';
+          return (
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
               <Text style={styles.docTitle}>{item.label || item.type}</Text>
               <Text style={styles.docMeta} numberOfLines={1}>
-                {item.offlineCached
-                  ? 'Available offline'
-                  : item.pendingSync
-                    ? 'Waiting to sync'
-                    : 'Cloud document'}
+                {statusLabel}
+                {item.createdAt || item.uploadedAt
+                  ? ` · ${String(item.createdAt || item.uploadedAt).slice(0, 10)}`
+                  : ''}
+                {item.expiryDate ? ` · Exp ${String(item.expiryDate).slice(0, 10)}` : ''}
               </Text>
             </View>
             <Pressable
@@ -317,7 +331,8 @@ export function DocumentsVaultScreen({ route, navigation }) {
               <Text style={styles.delete}>Delete</Text>
             </Pressable>
           </View>
-        )}
+          );
+        }}
       />
 
       <Pressable onPress={() => navigation?.navigate?.('AssetPassport', { assetId })}>

@@ -36,6 +36,7 @@ export {
 
 export { ConfirmDialog } from '../components/ConfirmDialog';
 export { HealthScoreExplain } from '../components/HealthScoreExplain';
+export { SmartActionCard } from '../components/SmartActionCard';
 
 export {
   INTELLIGENCE_FIELDS,
