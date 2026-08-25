@@ -31,6 +31,7 @@ import { Asset, MetricSummary } from './types';
 import { getProcessedInitialAssets, calculateExpiryDays } from './utils/assetUtils';
 import { CheckCircle2, Camera, Sparkles } from 'lucide-react';
 import { PublicPlatformView } from './components/platform/PublicPlatformView';
+import { PlatformErrorBoundary } from './components/platform/PlatformErrorBoundary';
 
 const STORAGE_KEY = 'assetdoctor_servivault_assets';
 
@@ -308,11 +309,13 @@ export default function App() {
       )}
 
       {currentAppView === 'platform' ? (
-        <PublicPlatformView
-          onOpenAppVault={() => setCurrentAppView('vault')}
-          onOpenLoginModal={() => setIsLoginModalOpen(true)}
-          currentUser={auth.currentUser}
-        />
+        <PlatformErrorBoundary>
+          <PublicPlatformView
+            onOpenAppVault={() => setCurrentAppView('vault')}
+            onOpenLoginModal={() => setIsLoginModalOpen(true)}
+            currentUser={auth.currentUser}
+          />
+        </PlatformErrorBoundary>
       ) : (
         <>
           {/* Top Fixed Header */}

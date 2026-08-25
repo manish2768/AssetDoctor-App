@@ -34,6 +34,7 @@ import { AssetPassportPreview } from './AssetPassportPreview';
 import { SeoToolPageTemplate } from './SeoToolPageTemplate';
 import { SeoRegistry } from '../../platform/seo/seoRegistry';
 import { KnowledgeCategory } from '../../platform/knowledge/knowledgeHubData';
+import { PlatformErrorBoundary } from './PlatformErrorBoundary';
 
 interface PublicPlatformViewProps {
   onOpenAppVault: () => void;
@@ -239,71 +240,73 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
         </div>
 
         {/* Dynamic Route View Switcher */}
-        {activeTab === 'home' && (
-          <PublicHomepageView
-            onSelectTool={handleNavigateToTool}
-            onSelectKnowledge={(id) => handleNavigateToKnowledge()}
-            onOpenVaultApp={onOpenAppVault}
-            onOpenLoginModal={onOpenLoginModal}
-          />
-        )}
+        <PlatformErrorBoundary>
+          {activeTab === 'home' && (
+            <PublicHomepageView
+              onSelectTool={handleNavigateToTool}
+              onSelectKnowledge={(id) => handleNavigateToKnowledge()}
+              onOpenVaultApp={onOpenAppVault}
+              onOpenLoginModal={onOpenLoginModal}
+            />
+          )}
 
-        {activeTab === 'tools_hub' && (
-          <UniversalDailyToolsHub
-            onSaveToVault={onOpenAppVault}
-          />
-        )}
+          {activeTab === 'tools_hub' && (
+            <UniversalDailyToolsHub
+              onSaveToVault={onOpenAppVault}
+            />
+          )}
 
-        {activeTab === 'repair_vs_replace' && (
-          <div className="space-y-6">
-            <RepairVsReplaceTool onSaveToVault={onOpenAppVault} />
-          </div>
-        )}
+          {activeTab === 'repair_vs_replace' && (
+            <div className="space-y-6">
+              <RepairVsReplaceTool onSaveToVault={onOpenAppVault} />
+            </div>
+          )}
 
-        {activeTab === 'maintenance_checker' && (
-          <div className="space-y-6">
-            <MaintenanceCheckerTool onSaveToVault={onOpenAppVault} />
-          </div>
-        )}
+          {activeTab === 'maintenance_checker' && (
+            <div className="space-y-6">
+              <MaintenanceCheckerTool onSaveToVault={onOpenAppVault} />
+            </div>
+          )}
 
-        {activeTab === 'health_score' && (
-          <div className="space-y-6">
-            <AssetHealthScoreTool onSaveToVault={onOpenAppVault} />
-          </div>
-        )}
+          {activeTab === 'health_score' && (
+            <div className="space-y-6">
+              <AssetHealthScoreTool onSaveToVault={onOpenAppVault} />
+            </div>
+          )}
 
-        {activeTab === 'invoice_analyzer' && (
-          <div className="space-y-6">
-            <SmartDocumentAnalyzerTool />
-          </div>
-        )}
+          {activeTab === 'invoice_analyzer' && (
+            <div className="space-y-6">
+              <SmartDocumentAnalyzerTool />
+            </div>
+          )}
 
-        {activeTab === 'knowledge_hub' && (
-          <SmartKnowledgeHub
-            initialCategory={activeKnowledgeCat}
-            onSelectCalculator={(slug) => handleNavigateToTool(slug)}
-            onOpenVaultApp={onOpenAppVault}
-          />
-        )}
+          {activeTab === 'knowledge_hub' && (
+            <SmartKnowledgeHub
+              initialCategory={activeKnowledgeCat}
+              onSelectCalculator={(slug) => handleNavigateToTool(slug)}
+              onOpenVaultApp={onOpenAppVault}
+            />
+          )}
 
-        {activeTab === 'asset_explorer' && (
-          <ExploreYourAsset
-            onSelectKnowledge={(id) => handleNavigateToKnowledge()}
-            onSelectTool={(slug) => handleNavigateToTool(slug)}
-          />
-        )}
+          {activeTab === 'asset_explorer' && (
+            <ExploreYourAsset
+              onSelectKnowledge={(id) => handleNavigateToKnowledge()}
+              onSelectTool={(slug) => handleNavigateToTool(slug)}
+            />
+          )}
 
-        {activeTab === 'passport' && (
-          <AssetPassportPreview />
-        )}
+          {activeTab === 'passport' && (
+            <AssetPassportPreview />
+          )}
 
-        {activeTab === 'seo_page' && (
-          <SeoToolPageTemplate
-            pageDefinition={SeoRegistry.getPage(activeSeoSlug) || SeoRegistry.getPage('tools/warranty-checker')!}
-            onNavigateToTool={handleNavigateToTool}
-            onOpenApp={onOpenAppVault}
-          />
-        )}
+          {activeTab === 'seo_page' && (
+            <SeoToolPageTemplate
+              pageDefinition={SeoRegistry.getPage(activeSeoSlug) || SeoRegistry.getPage('tools/warranty-checker')!}
+              onNavigateToTool={handleNavigateToTool}
+              onOpenApp={onOpenAppVault}
+            />
+          )}
+        </PlatformErrorBoundary>
       </main>
 
       {/* 3. Global Platform Footer */}

@@ -145,7 +145,7 @@ export const DailyReturnEngine: React.FC<DailyReturnEngineProps> = ({
 
         {/* Action Items List */}
         <div className="space-y-3">
-          {summary.actions.map((action) => (
+          {(summary.actionItems || []).map((action) => (
             <div
               key={action.id}
               className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
@@ -178,8 +178,8 @@ export const DailyReturnEngine: React.FC<DailyReturnEngineProps> = ({
                   {action.description}
                 </p>
                 <div className="flex items-center gap-4 text-[11px] text-slate-400 font-mono pt-1">
-                  <span>Due: {action.dueDate}</span>
-                  {action.estimatedCostInr ? <span>Estimated Cost: ₹{action.estimatedCostInr.toLocaleString('en-IN')}</span> : null}
+                  <span>{action.dueText || 'Action Recommended'}</span>
+                  {action.provenance ? <span className="text-slate-500">• {action.provenance}</span> : null}
                 </div>
               </div>
 
@@ -191,7 +191,7 @@ export const DailyReturnEngine: React.FC<DailyReturnEngineProps> = ({
                   }}
                   className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-emerald-500/20"
                 >
-                  <span>Take Action</span>
+                  <span>{action.primaryActionLabel || 'Take Action'}</span>
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
