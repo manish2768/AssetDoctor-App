@@ -39,19 +39,19 @@ export function VaultHomeScreen({ navigation }) {
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}>
         <Text style={styles.title}>Document Vault</Text>
         <Text style={styles.sub}>
-          Insurance, RC, PUC, warranty, invoices and service reports — by household folder
+          Keep warranties, invoices, service bills and ownership papers in one secure place
         </Text>
 
         {!loading && !(assets || []).length ? (
           <GlassCard style={{ marginBottom: 14 }}>
             <Text style={{ color: COLORS.text, fontWeight: '800', fontSize: 16 }}>
-              No documents yet
+              Keep your important documents in one secure place
             </Text>
             <Text style={{ color: COLORS.muted, marginTop: 8, lineHeight: 20 }}>
-              Add your first asset to start tracking documents, service, expenses and health.
+              Add an asset, then scan purchase bills, warranty cards, or service records.
             </Text>
             <GlassButton
-              title="+ Add Asset"
+              title="Add Your First Asset"
               style={{ marginTop: 14 }}
               onPress={() =>
                 requireAuth({
@@ -59,6 +59,19 @@ export function VaultHomeScreen({ navigation }) {
                   navigation,
                   message: 'Sign in to add assets to your vault.',
                   onAuthed: () => navigation.navigate('AddAsset'),
+                })
+              }
+            />
+            <GlassButton
+              title="Scan Document"
+              variant="ghost"
+              style={{ marginTop: 8 }}
+              onPress={() =>
+                requireAuth({
+                  isAuthenticated,
+                  navigation,
+                  message: 'Sign in to scan documents.',
+                  onAuthed: () => navigation.getParent()?.navigate?.('ScanBill'),
                 })
               }
             />

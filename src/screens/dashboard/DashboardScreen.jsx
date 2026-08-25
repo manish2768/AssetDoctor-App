@@ -68,9 +68,11 @@ import { OfflineVaultCache } from '../../services/offline/OfflineVaultCache';
 import { buildUpcomingSummary } from '../../services/notifications/notificationRules';
 import { evaluatePortfolioNotifications } from '../../services/notifications/notificationRules';
 import { unreadCount as getUnreadNotificationCount } from '../../services/health/notificationCenter';
-import { QuickActionGrid, SectionHeader } from '../../components/ui/DesignSystem';
+import { QuickActionGrid, SectionHeader, EmptyState } from '../../components/ui/DesignSystem';
 import { SmartAssetListCard } from '../../components/ui/SmartAssetListCard';
+import { SmartActionCard } from '../../components/SmartActionCard';
 import { useResponsiveLayout } from '../../utils/responsive';
+import { resolvePrimaryNextAction } from '../../utils/nextActionUi';
 
 function formatRupee(amount) {
   const n = Number(amount) || 0;
@@ -532,24 +534,89 @@ export function DashboardScreen({ navigation }) {
           }}
         />
 
-        {/* Compact asset summary */}
+        <SectionHeader
+          title="What needs attention"
+          subtitle={
+            todaysActions.length
+              ? 'Critical and upcoming actions across your assets'
+              : 'You’re all caught up'
+          }
+          actionLabel={todaysActions.length ? 'Alerts' : undefined}
+          onAction={
+            todaysActions.length
+              ? () => {
+                  navigation?.navigate?.('NotificationCenter');
+                }
+              : undefined
+          }
+        />
+        {todaysActions.length ? (
+          todaysActions.map((action) => {
+            const next = action.assetId
+              ? resolvePrimaryNextAction(
+                  activeAssets.find((a) => (a.assetId || a.id) === action.assetId) || {},
+                )
+              : null;
+            return (
+              <SmartActionCard
+                key={action.alertId || `${action.rank}-${action.title}`}
+                title={action.title}
+                why={action.message}
+                metric={next?.metric}
+                priority={action.priority}
+                ctaLabel={action.assetId ? 'Open asset' : 'View'}
+                onPress={() => {
+                  if (action.assetId) {
+                    navigation.navigate('AssetPassport', { assetId: action.assetId });
+                  } else {
+                    navigation?.navigate?.('NotificationCenter');
+                  }
+                }}
+              />
+            );
+          })
+        ) : activeAssets.length ? (
+          <EmptyState
+            icon="✓"
+            title="You're all caught up"
+            message="No critical warranties, services, or documents need attention right now."
+            style={{ marginBottom: 12 }}
+          />
+        ) : (
+          <EmptyState
+            icon="🏠"
+            title="Your assets deserve a home"
+            message="Add your first vehicle, phone, appliance, or equipment to unlock health and reminders."
+            ctaLabel="Add Your First Asset"
+            onCta={goManual}
+            style={{ marginBottom: 12 }}
+          />
+        )}
+
+        {/* Compact asset summary — hide zero vehicle/PUC bias */}
         <View style={styles.summaryStrip}>
-          {(isCompact
-            ? [
-                { label: 'Assets', value: activeAssets.length },
-                { label: 'Vehicles', value: folderCounts.vehicle || 0 },
-                { label: 'Home', value: (folderCounts.appliances || 0) + (folderCounts.gadgets || 0) },
-                { label: 'Expiring', value: (upcomingSummary?.insurance || 0) + (upcomingSummary?.warranty || 0) + (upcomingSummary?.puc || 0) || expiredCount },
-              ]
-            : [
-                { label: 'Assets', value: activeAssets.length },
-                { label: 'Vehicles', value: folderCounts.vehicle || 0 },
-                { label: 'Appliances', value: folderCounts.appliances || 0 },
-                { label: 'Gadgets', value: folderCounts.gadgets || 0 },
-                { label: 'Docs', value: folderCounts.documents || 0 },
-                { label: 'Services', value: upcomingSummary?.service ?? 0 },
-                { label: 'Expiring', value: (upcomingSummary?.insurance || 0) + (upcomingSummary?.warranty || 0) + (upcomingSummary?.puc || 0) || expiredCount },
-              ]
+          {(
+            [
+              { label: 'Assets', value: activeAssets.length },
+              folderCounts.vehicle
+                ? { label: 'Vehicles', value: folderCounts.vehicle }
+                : null,
+              (folderCounts.appliances || 0) + (folderCounts.gadgets || 0)
+                ? {
+                    label: 'Home',
+                    value: (folderCounts.appliances || 0) + (folderCounts.gadgets || 0),
+                  }
+                : null,
+              {
+                label: 'Expiring',
+                value:
+                  (upcomingSummary?.warranty || 0) +
+                    (upcomingSummary?.service || 0) +
+                    (folderCounts.vehicle
+                      ? (upcomingSummary?.insurance || 0) + (upcomingSummary?.puc || 0)
+                      : 0) || expiredCount,
+              },
+            ].filter(Boolean)
           ).map((cell) => (
             <View
               key={cell.label}
@@ -851,7 +918,9 @@ export function DashboardScreen({ navigation }) {
             <Text style={styles.featureIcon}>🔔</Text>
             <Text style={styles.featureTitle}>Expiry Alerts</Text>
             <Text style={styles.featureValue}>{urgentBanners.length || 0}</Text>
-            <Text style={styles.featureSub}>PUC · Insurance</Text>
+            <Text style={styles.featureSub}>
+              {folderCounts.vehicle ? 'Insurance · Warranty · PUC' : 'Warranty · Service · Docs'}
+            </Text>
           </Pressable>
         </View>
         <Pressable
@@ -865,8 +934,17 @@ export function DashboardScreen({ navigation }) {
             Upcoming {notifUnread > 0 ? `· 🔔 ${notifUnread}` : ''}
           </Text>
           <Text style={styles.sectionSub}>
-            Insurance {upcomingSummary.insurance} · Service {upcomingSummary.service} · Warranty{' '}
-            {upcomingSummary.warranty} · PUC {upcomingSummary.puc} · Expired {upcomingSummary.expired}
+            {[
+              upcomingSummary.warranty ? `Warranty ${upcomingSummary.warranty}` : null,
+              upcomingSummary.service ? `Service ${upcomingSummary.service}` : null,
+              folderCounts.vehicle && upcomingSummary.insurance
+                ? `Insurance ${upcomingSummary.insurance}`
+                : null,
+              folderCounts.vehicle && upcomingSummary.puc ? `PUC ${upcomingSummary.puc}` : null,
+              upcomingSummary.expired ? `Expired ${upcomingSummary.expired}` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ') || 'Nothing urgent'}
           </Text>
         </Pressable>
         {householdHealth.totalAssets > 0 ? (
@@ -878,37 +956,7 @@ export function DashboardScreen({ navigation }) {
             </Text>
           </View>
         ) : null}
-        {todaysActions.length ? (
-          <View style={styles.sectionBlock}>
-            <Text style={styles.sectionTitle}>Today&apos;s asset actions</Text>
-            {todaysActions.map((action) => (
-              <Pressable
-                key={action.alertId || `${action.rank}-${action.title}`}
-                style={styles.urgentCard}
-                onPress={() => {
-                  Haptics.tap();
-                  if (action.assetId) {
-                    navigation.navigate('AssetPassport', { assetId: action.assetId });
-                  } else {
-                    Alert.alert(action.title, action.message);
-                  }
-                }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.urgentTitle} numberOfLines={1}>
-                    {action.rank}. {action.title}
-                  </Text>
-                  <Text style={styles.urgentSub} numberOfLines={2}>
-                    {action.message}
-                  </Text>
-                </View>
-                <View style={styles.urgentPill}>
-                  <Text style={styles.urgentPillText}>{action.priority}</Text>
-                </View>
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
+        {/* Today's actions rendered above under "What needs attention" */}
         {/* Action row */}
         <View style={styles.actionRow}>
           <Pressable

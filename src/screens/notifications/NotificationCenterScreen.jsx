@@ -1,5 +1,6 @@
 /**
- * STEP 9 — Notification Center
+ * STEP 9 — Notification Center / Alerts (mobile UI polish)
+ * Groups: Today · This Week · Upcoming. Uses existing NotificationEngine only.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -7,7 +8,7 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  SectionList,
   Pressable,
   RefreshControl,
 } from 'react-native';
@@ -18,7 +19,9 @@ import { useAssets } from '../../context/AssetProvider';
 import { NotificationEngine } from '../../services/notifications/NotificationEngine';
 import { NOTIFICATION_STATUS } from '../../services/notifications/notificationTypes';
 import { Haptics } from '../../services/haptics';
-import { COLORS } from '../../theme/branding';
+import { useThemeColors } from '../../context/ThemeProvider';
+import { RADIUS, SPACING, TYPE, HIT } from '../../theme/tokens';
+import { EmptyState, StatusBadge } from '../../components/ui/DesignSystem';
 
 const TABS = [
   { id: 'all', label: 'All' },
@@ -28,14 +31,51 @@ const TABS = [
 ];
 
 function priorityMeta(p) {
-  if (p === 'CRITICAL') return { color: '#DC2626', label: 'Critical' };
-  if (p === 'HIGH') return { color: '#F97316', label: 'High' };
-  if (p === 'MEDIUM') return { color: '#EAB308', label: 'Medium' };
-  return { color: '#22C55E', label: 'Normal' };
+  if (p === 'CRITICAL') return { tone: 'error', label: 'Critical' };
+  if (p === 'HIGH') return { tone: 'warning', label: 'Important' };
+  if (p === 'MEDIUM') return { tone: 'info', label: 'Attention' };
+  return { tone: 'neutral', label: 'Info' };
+}
+
+function itemTime(item) {
+  const raw =
+    item.dueAt ||
+    item.scheduledFor ||
+    item.createdAt ||
+    item.updatedAt ||
+    item.timestamp ||
+    null;
+  const t = raw ? new Date(raw).getTime() : NaN;
+  return Number.isFinite(t) ? t : Date.now();
+}
+
+function groupAlerts(items = []) {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const todayEnd = start.getTime() + 86400000;
+  const weekEnd = start.getTime() + 7 * 86400000;
+  const today = [];
+  const week = [];
+  const upcoming = [];
+  for (const item of items) {
+    const t = itemTime(item);
+    if (t < todayEnd) today.push(item);
+    else if (t < weekEnd) week.push(item);
+    else upcoming.push(item);
+  }
+  const sections = [];
+  if (today.length) sections.push({ title: 'Today', data: today });
+  if (week.length) sections.push({ title: 'This Week', data: week });
+  if (upcoming.length) sections.push({ title: 'Upcoming', data: upcoming });
+  if (!sections.length && items.length) {
+    sections.push({ title: 'Alerts', data: items });
+  }
+  return sections;
 }
 
 export function NotificationCenterScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const colors = useThemeColors();
   const { user } = useAuth();
   const { assets } = useAssets();
   const [tab, setTab] = useState('all');
@@ -90,21 +130,14 @@ export function NotificationCenterScreen({ navigation }) {
     load().catch(() => {});
   };
 
-  const empty = useMemo(
-    () => (
-      <View style={styles.empty}>
-        <Text style={styles.emptyTitle}>No notifications</Text>
-        <Text style={styles.emptySub}>
-          Expiry, service, and health alerts will appear here.
-        </Text>
-      </View>
-    ),
-    [],
-  );
+  const sections = useMemo(() => groupAlerts(items), [items]);
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + 8 }]}>
-      <Text style={styles.heading}>Notifications</Text>
+    <View style={[styles.root, { paddingTop: insets.top + 8, backgroundColor: colors.background }]}>
+      <Text style={[TYPE.h1, { color: colors.text, paddingHorizontal: 16 }]}>Alerts</Text>
+      <Text style={[TYPE.caption, { color: colors.textMuted, paddingHorizontal: 16, marginTop: 4 }]}>
+        Actionable reminders for the assets you own
+      </Text>
       <View style={styles.tabs}>
         {TABS.map((t) => (
           <Pressable
@@ -113,61 +146,93 @@ export function NotificationCenterScreen({ navigation }) {
               Haptics.tap();
               setTab(t.id);
             }}
-            style={[styles.tab, tab === t.id && styles.tabOn]}
+            style={[
+              styles.tab,
+              {
+                backgroundColor: tab === t.id ? colors.infoSoft : colors.surfaceMuted,
+                borderColor: tab === t.id ? colors.secondary : colors.border,
+              },
+            ]}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === t.id }}
           >
-            <Text style={[styles.tabText, tab === t.id && styles.tabTextOn]}>{t.label}</Text>
+            <Text
+              style={[
+                TYPE.caption,
+                {
+                  color: tab === t.id ? colors.secondary : colors.textMuted,
+                  fontWeight: '700',
+                },
+              ]}
+            >
+              {t.label}
+            </Text>
           </Pressable>
         ))}
       </View>
-      <FlatList
-        data={items}
+      <SectionList
+        sections={sections}
         keyExtractor={(item) => item.alertId || item.notificationId}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        ListEmptyComponent={empty}
-        contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: 16 }}
+        ListEmptyComponent={
+          <EmptyState
+            icon="✓"
+            title="You're all caught up"
+            message="Expiry, service, and warranty alerts will appear here when something needs attention."
+            style={{ marginHorizontal: 16, marginTop: 24 }}
+          />
+        }
+        contentContainerStyle={{ paddingBottom: 48, paddingHorizontal: 16 }}
+        renderSectionHeader={({ section }) => (
+          <Text style={[TYPE.label, { color: colors.textMuted, marginTop: 16, marginBottom: 8 }]}>
+            {section.title}
+          </Text>
+        )}
         renderItem={({ item }) => {
           const unread =
             item.status === NOTIFICATION_STATUS.UNREAD ||
             item.status === 'SCHEDULED' ||
             item.status === 'SENT' ||
             !item.status;
+          const meta = priorityMeta(item.priority);
           return (
             <Pressable
-              style={styles.card}
+              style={[
+                styles.card,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: unread ? colors.borderAccent || colors.border : colors.border,
+                },
+              ]}
               onPress={() => openItem(item)}
               accessibilityRole="button"
-              accessibilityLabel={`${priorityMeta(item.priority).label} priority. ${item.title || 'Asset reminder'}`}
+              accessibilityLabel={`${meta.label}. ${item.title || 'Asset reminder'}`}
             >
-              <View style={styles.priorityCol}>
-                <View
-                  style={[styles.dot, { backgroundColor: priorityMeta(item.priority).color }]}
-                />
-                <Text
-                  style={[styles.priorityText, { color: priorityMeta(item.priority).color }]}
-                >
-                  {priorityMeta(item.priority).label}
-                </Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.title, unread && styles.titleUnread]} numberOfLines={2}>
+              <View style={styles.cardTop}>
+                <Text style={[TYPE.bodyStrong, { color: colors.text, flex: 1 }]} numberOfLines={2}>
                   {item.title || 'Asset reminder'}
                 </Text>
-                <Text style={styles.body} numberOfLines={2}>
-                  {item.body}
-                </Text>
-                <Text style={styles.meta}>
-                  {item.notificationType || item.category || 'Alert'}
-                  {item.daysLeft != null ? ` · ${item.daysLeft}d` : ''}
-                </Text>
+                <StatusBadge label={meta.label} tone={meta.tone} />
               </View>
-              <Pressable
-                onPress={() => dismissItem(item)}
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel="Dismiss notification"
-              >
-                <Text style={styles.dismiss}>Dismiss</Text>
-              </Pressable>
+              {item.body || item.message ? (
+                <Text style={[TYPE.caption, { color: colors.textMuted, marginTop: 6 }]} numberOfLines={3}>
+                  {item.body || item.message}
+                </Text>
+              ) : null}
+              <View style={styles.cardActions}>
+                <Text style={[TYPE.micro, { color: colors.primary, fontWeight: '700' }]}>
+                  Open asset →
+                </Text>
+                <Pressable
+                  onPress={() => dismissItem(item)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Mark as read"
+                  style={{ minHeight: HIT.min, justifyContent: 'center' }}
+                >
+                  <Text style={[TYPE.micro, { color: colors.textMuted }]}>Dismiss</Text>
+                </Pressable>
+              </View>
             </Pressable>
           );
         }}
@@ -177,47 +242,35 @@ export function NotificationCenterScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.bg || '#F8FAFC' },
-  heading: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: COLORS.text || '#0F172A',
-    paddingHorizontal: 16,
-    marginBottom: 10,
-  },
-  tabs: { flexDirection: 'row', paddingHorizontal: 12, marginBottom: 8, gap: 6 },
-  tab: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: '#E2E8F0',
-  },
-  tabOn: { backgroundColor: COLORS.primary || '#0F766E' },
-  tabText: { fontSize: 12, fontWeight: '700', color: '#475569' },
-  tabTextOn: { color: '#fff' },
-  card: {
+  root: { flex: 1 },
+  tabs: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#E2E8F0',
-    minHeight: 64,
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  priorityCol: { alignItems: 'center', width: 52, paddingTop: 2 },
-  dot: { width: 10, height: 10, borderRadius: 5 },
-  priorityText: { fontSize: 9, fontWeight: '800', marginTop: 4, textTransform: 'uppercase' },
-  title: { fontSize: 14, fontWeight: '600', color: '#334155' },
-  titleUnread: { fontWeight: '800', color: '#0F172A' },
-  body: { fontSize: 12, color: '#64748B', marginTop: 2 },
-  meta: { fontSize: 11, color: '#94A3B8', marginTop: 4 },
-  dismiss: { fontSize: 11, fontWeight: '700', color: '#94A3B8' },
-  empty: { padding: 40, alignItems: 'center' },
-  emptyTitle: { fontWeight: '800', fontSize: 16, color: '#0F172A' },
-  emptySub: { marginTop: 6, color: '#64748B', textAlign: 'center' },
+  tab: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    minHeight: 36,
+    justifyContent: 'center',
+  },
+  card: {
+    borderWidth: 1,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+  },
+  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  cardActions: {
+    marginTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
 });
 
 export default NotificationCenterScreen;

@@ -20,7 +20,6 @@ import { COLORS } from '../../theme/branding';
 import { Haptics } from '../../services/haptics';
 import { calculateHealthScore } from '../../utils/healthScore';
 import { formatDateIN } from '../../utils/dates';
-import { getAssetFolderType } from '../../utils/assetFolders';
 import { getExpiryTone } from '../../utils/warrantyStatus';
 import { ValuationBlock } from '../../components/ValuationBlock';
 import { WarrantyBadge } from '../../components/WarrantyBadge';
@@ -37,6 +36,12 @@ import { cleanAssetDisplayName } from '../../utils/displayAssetName';
 import { computeGadgetSmartMetrics } from '../../utils/gadgetSmartMetrics';
 import { HealthScoreExplain } from '../../components/HealthScoreExplain';
 import { vaultCopyForAsset } from '../../design-system/assetIntelligenceSchema';
+import { resolveAssetCapabilities } from '../../services/assets/assetCapabilities';
+import { SmartActionCard } from '../../components/SmartActionCard';
+import {
+  categoryHealthFactors,
+  resolvePrimaryNextAction,
+} from '../../utils/nextActionUi';
 
 export function AssetPassportScreen({ route, navigation }) {
   const assetId = route?.params?.assetId;
@@ -59,7 +64,8 @@ export function AssetPassportScreen({ route, navigation }) {
   }
 
   const health = calculateHealthScore(asset);
-  const isVehicle = getAssetFolderType(asset) === 'vehicle';
+  const caps = resolveAssetCapabilities(asset);
+  const isVehicle = caps.supportsOdometer === true;
   const support = resolveSupportContact(asset);
   const pucTone = getExpiryTone(asset.pucExpiry, { urgentDays: 15 });
   const insuranceTone = getExpiryTone(asset.insuranceExpiry, { urgentDays: 30 });
@@ -67,6 +73,14 @@ export function AssetPassportScreen({ route, navigation }) {
   const serviceTone = getExpiryTone(asset.nextServiceDue, { urgentDays: 15 });
   const vehicleSpecs = isVehicle ? getVehicleSpecs(asset) : null;
   const maintenanceAlert = evaluateMaintenanceVsValue(asset);
+  const nextAction = resolvePrimaryNextAction(asset);
+  const healthFactors = categoryHealthFactors(asset, health);
+  const showTracker =
+    caps.supportsServiceHistory ||
+    caps.supportsInsurance ||
+    caps.supportsPUC ||
+    !!asset.nextServiceDue ||
+    !!asset.warrantyExpiry;
 
   const onEmergencyShare = async () => {
     Haptics.tap();
@@ -235,10 +249,13 @@ export function AssetPassportScreen({ route, navigation }) {
           />
         ) : null}
         {!asset.warrantyExpiry &&
-        !asset.insuranceExpiry &&
-        !asset.pucExpiry &&
+        !(caps.supportsInsurance && asset.insuranceExpiry) &&
+        !(caps.supportsPUC && asset.pucExpiry) &&
         !asset.nextServiceDue ? (
-          <Text style={styles.demoNote}>Add warranty / insurance / PUC dates to track coverage.</Text>
+          <Text style={styles.demoNote}>
+            Add warranty{caps.supportsInsurance ? ' / insurance' : ''}
+            {caps.supportsPUC ? ' / PUC' : ''} dates to track coverage.
+          </Text>
         ) : null}
       </View>
 
@@ -248,6 +265,42 @@ export function AssetPassportScreen({ route, navigation }) {
           <Text style={styles.demoNote}>{maintenanceAlert.message}</Text>
         </View>
       ) : null}
+
+      {nextAction ? (
+        <SmartActionCard
+          title={nextAction.title}
+          why={nextAction.why}
+          metric={nextAction.metric}
+          priority={nextAction.priority}
+          ctaLabel={nextAction.ctaLabel}
+          onPress={() => {
+            Haptics.tap();
+            if (/service|filter|maintenance/i.test(nextAction.title)) {
+              navigation?.navigate?.('Maintenance', {
+                assetId: asset.assetId || asset.id,
+              });
+            } else if (/document|review/i.test(nextAction.title)) {
+              navigation?.navigate?.('DocumentsVault', {
+                assetId: asset.assetId || asset.id,
+              });
+            }
+          }}
+          style={{ marginBottom: 12 }}
+        />
+      ) : null}
+
+      <View style={styles.panel}>
+        <HealthScoreExplain
+          score={health.score}
+          label={health.band || health.grade}
+          factors={healthFactors}
+          footnote={
+            (health.why || health.tips || []).length
+              ? (health.why || health.tips).slice(0, 2).join(' · ')
+              : undefined
+          }
+        />
+      </View>
 
       <View style={styles.panel}>
         <Text style={styles.panelTitle}>Valuation</Text>
@@ -263,10 +316,10 @@ export function AssetPassportScreen({ route, navigation }) {
         </Pressable>
       </View>
 
-      {isVehicle || asset.nextServiceDue || asset.pucExpiry || asset.insuranceExpiry ? (
+      {showTracker ? (
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>
-            {isVehicle ? 'Vehicle Tracker · PUC & Service' : 'Service Tracker'}
+            {isVehicle ? 'Maintenance & compliance' : 'Maintenance & warranty'}
           </Text>
           {isVehicle && vehicleSpecs?.rawRegistration ? (
             <IndiaNumberPlate registration={vehicleSpecs.rawRegistration} style={{ marginBottom: 12 }} />
@@ -279,7 +332,7 @@ export function AssetPassportScreen({ route, navigation }) {
               style={{ marginBottom: 10 }}
             />
           ) : null}
-          {isVehicle || asset.pucExpiry ? (
+          {caps.supportsPUC ? (
             <View style={styles.trackerRow}>
               <Text style={styles.trackerLabel}>PUC Expiry</Text>
               <Text style={[styles.trackerValue, { color: pucTone.color }]}>
@@ -287,7 +340,7 @@ export function AssetPassportScreen({ route, navigation }) {
               </Text>
             </View>
           ) : null}
-          {isVehicle || asset.insuranceExpiry ? (
+          {caps.supportsInsurance ? (
             <View style={styles.trackerRow}>
               <Text style={styles.trackerLabel}>Insurance Expiry</Text>
               <Text style={[styles.trackerValue, { color: insuranceTone.color }]}>
@@ -303,13 +356,19 @@ export function AssetPassportScreen({ route, navigation }) {
               </Text>
             </View>
           ) : null}
-          <View style={styles.trackerRow}>
-            <Text style={styles.trackerLabel}>Next Service Date</Text>
-            <Text style={[styles.trackerValue, { color: serviceTone.color }]}>
-              {formatDateIN(asset.nextServiceDue)} · {serviceTone.label}
-            </Text>
-          </View>
-          {isVehicle ? (
+          {caps.supportsServiceHistory || asset.nextServiceDue ? (
+            <View style={styles.trackerRow}>
+              <Text style={styles.trackerLabel}>
+                {String(asset.categoryId || '').toLowerCase() === 'ac'
+                  ? 'Filter / service date'
+                  : 'Next Service Date'}
+              </Text>
+              <Text style={[styles.trackerValue, { color: serviceTone.color }]}>
+                {formatDateIN(asset.nextServiceDue)} · {serviceTone.label}
+              </Text>
+            </View>
+          ) : null}
+          {caps.supportsOdometer ? (
             <>
               <View style={styles.trackerRow}>
                 <Text style={styles.trackerLabel}>Odometer</Text>
@@ -327,7 +386,7 @@ export function AssetPassportScreen({ route, navigation }) {
               </View>
               <SpecAccordion
                 title="Vehicle Specs"
-                defaultOpen
+                defaultOpen={false}
                 rows={[
                   { label: 'RTO', value: vehicleSpecs?.rto },
                   { label: 'Fuel Norms', value: vehicleSpecs?.fuelNorm },
@@ -362,35 +421,6 @@ export function AssetPassportScreen({ route, navigation }) {
         >
           <Text style={styles.folderCtaText}>Open categorised Documents Vault →</Text>
         </Pressable>
-      </View>
-
-      <View style={styles.panel}>
-        <HealthScoreExplain
-          score={health.score}
-          label={health.band || health.grade}
-          factors={health.explainFactors || []}
-          footnote={
-            (health.why || health.tips || []).length
-              ? (health.why || health.tips).slice(0, 2).join(' · ')
-              : undefined
-          }
-        />
-        {health.breakdown ? (
-          <>
-            <Text style={[styles.panelTitle, { marginTop: 10, fontSize: 13 }]}>Health breakdown</Text>
-            {Object.values(health.breakdown).map((row) => (
-              <Text key={row.label} style={styles.tip}>
-                {row.label}: {row.earned}/{row.max}
-              </Text>
-            ))}
-          </>
-        ) : null}
-        {health.service?.message ? (
-          <Text style={[styles.tip, { marginTop: 8 }]}>
-            Next: {health.service.recommended ? 'Recommended — ' : ''}
-            {health.service.message}
-          </Text>
-        ) : null}
       </View>
 
       <Pressable style={styles.supportCard} onPress={onCallSupport}>

@@ -99,10 +99,10 @@ export const DailyReturnEngine: React.FC<DailyReturnEngineProps> = ({
           <span>Daily Action Engine</span>
         </div>
         <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
-          What Should I Do Today?
+          Your Assets Have Things to Tell You.
         </h2>
         <p className="text-xs sm:text-sm text-slate-400">
-          Proactive maintenance tasks, impending warranty deadlines, and operational decisions across your assets.
+          Actionable maintenance countdowns, impending warranty deadlines, and operational decisions evaluated in real-time.
         </p>
       </div>
 
@@ -201,14 +201,14 @@ export const DailyReturnEngine: React.FC<DailyReturnEngineProps> = ({
 
         {/* Bottom CTA */}
         <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-          <p className="text-slate-400">
-            Want Asset Doctor to calculate these actions automatically for all your assets?
+          <p className="text-slate-300 font-semibold">
+            Want Asset Doctor to remember this result?
           </p>
           <button
             onClick={onOpenVault}
-            className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+            className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black flex items-center gap-1.5 cursor-pointer self-start sm:self-auto shadow-md shadow-emerald-500/20 transition-all"
           >
-            <span>Save Assets in Encrypted Vault</span>
+            <span>Save to Asset Doctor</span>
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>

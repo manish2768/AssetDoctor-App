@@ -199,7 +199,7 @@ export const ExploreYourAsset: React.FC<ExploreYourAssetProps> = ({
           <span>Universal Asset Universe</span>
         </div>
         <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
-          Explore Your Asset
+          Everything You Own, Understood.
         </h2>
         <p className="text-xs sm:text-sm text-slate-400">
           Everything you need to maintain, protect, and maximize value for every category of physical asset you own.

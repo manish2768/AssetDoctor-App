@@ -19,21 +19,25 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
 
   const placeholderExamples = [
+    'my AC filter is due',
     'TVS Ronin service schedule',
     'Samsung AC filter cleaning',
-    'iPhone battery health',
-    'RO membrane replacement',
-    'Refrigerator maintenance',
-    'Solar inverter battery care'
+    'when should I service my bike',
+    'phone warranty check',
+    'should I repair my washing machine',
+    'how much is my old laptop worth',
+    'what documents should I keep for my car'
   ];
 
   const suggestionChips = [
     { label: 'TVS Ronin service', type: 'knowledge', target: 'kn-tvs-ronin-225' },
-    { label: 'Honda Activa maintenance', type: 'tool', target: 'tools/maintenance-checker' },
     { label: 'iPhone battery health', type: 'knowledge', target: 'kn-apple-iphone-15-16' },
-    { label: 'AC filter cleaning', type: 'knowledge', target: 'kn-daikin-inverter-ac' },
-    { label: 'Laptop warranty', type: 'knowledge', target: 'kn-dell-latitude-enterprise' },
-    { label: 'Repair or replace', type: 'tool', target: 'tools/repair-or-replace' }
+    { label: 'my AC filter is due', type: 'knowledge', target: 'kn-daikin-inverter-ac' },
+    { label: 'when should I service my bike', type: 'tool', target: 'tools/service-due-calculator' },
+    { label: 'phone warranty', type: 'tool', target: 'tools/warranty-checker' },
+    { label: 'should I repair my washing machine', type: 'tool', target: 'tools/repair-or-replace' },
+    { label: 'how much is my old laptop worth', type: 'tool', target: 'tools/depreciation-calculator' },
+    { label: 'what documents should I keep for my car', type: 'tool', target: 'tools/document-expiry' }
   ];
 
   // Rotate placeholder every 3.5 seconds
@@ -57,16 +61,19 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
 
   // Match system tools
   const tools = [
-    { name: 'Repair vs. Replace Calculator', slug: 'tools/repair-or-replace', desc: 'Should you repair it or buy a new one?' },
-    { name: 'Warranty Expiry Checker', slug: 'tools/warranty-checker', desc: 'Find warranty coverage & statutory rights' },
-    { name: 'Maintenance Checker', slug: 'tools/maintenance-checker', desc: 'Authoritative OEM service countdown' },
+    { name: 'Repair vs. Replace Calculator', slug: 'tools/repair-or-replace', desc: 'Should you repair it or buy a new one? Evaluate repair quote vs equity' },
+    { name: 'Warranty Expiry Checker', slug: 'tools/warranty-checker', desc: 'Find warranty coverage & statutory claim deadlines' },
+    { name: 'Service Due Calculator', slug: 'tools/service-due-calculator', desc: 'Dual-gated periodic service countdown (KM vs Months)' },
+    { name: 'Maintenance Interval Checker', slug: 'tools/maintenance-checker', desc: 'Authoritative OEM preventative service matrix' },
+    { name: 'Asset Depreciation Calculator', slug: 'tools/depreciation-calculator', desc: 'Declining balance WDV & straight line value loss' },
     { name: 'Asset Health Score', slug: 'tools/asset-health-score', desc: '100-point transparent health audit' },
-    { name: 'Total Cost of Ownership (TCO)', slug: 'tools/ownership-cost', desc: 'Real lifetime ownership cost' },
+    { name: 'Total Cost of Ownership (TCO)', slug: 'tools/ownership-cost', desc: 'Real lifetime ownership cost (fuel, service, insurance)' },
+    { name: 'Document Expiry Tracker', slug: 'tools/document-expiry', desc: 'Compliance deadlines for Insurance, PUC & AMC' },
     { name: 'Bill & Invoice Analyzer', slug: 'tools/invoice-analyzer', desc: 'OCR service bill & document parser' }
   ];
 
   const matchedTools = query.trim().length > 1
-    ? tools.filter(t => t.name.toLowerCase().includes(query.toLowerCase()) || t.desc.toLowerCase().includes(query.toLowerCase()) || t.slug.includes(query.toLowerCase()))
+    ? tools.filter(t => t.name.toLowerCase().includes(query.toLowerCase()) || t.desc.toLowerCase().includes(query.toLowerCase()) || t.slug.includes(query.toLowerCase()) || query.toLowerCase().includes('repair') || query.toLowerCase().includes('worth') || query.toLowerCase().includes('service') || query.toLowerCase().includes('warranty') || query.toLowerCase().includes('document'))
     : [];
 
   const handleSelectChip = (chip: typeof suggestionChips[0]) => {

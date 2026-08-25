@@ -1,5 +1,5 @@
 /**
- * Intelligent asset list card — shows type-relevant fields only.
+ * Intelligent asset list card — category-aware health + one next action.
  */
 
 import React, { useMemo } from 'react';
@@ -13,20 +13,15 @@ import { buildSmartAssetCard } from '../../services/assets/smartAssetCard';
 import { getAssetHealthStatus } from '../../utils/assetHealthStatus';
 import { calculateHealthScore } from '../../utils/healthScore';
 import { Haptics } from '../../services/haptics';
-import { daysUntil } from '../../utils/dates';
+import {
+  assetCategoryChip,
+  primaryNextActionLine,
+} from '../../utils/nextActionUi';
 
 function healthTone(score) {
   if (score >= 80) return 'success';
   if (score >= 55) return 'warning';
   return 'error';
-}
-
-function serviceLine(asset) {
-  const d = daysUntil(asset.nextServiceDue);
-  if (d == null) return null;
-  if (d < 0) return { label: 'Service', value: 'Overdue', tone: 'error' };
-  if (d <= 15) return { label: 'Next service', value: `${d}d`, tone: 'warning' };
-  return { label: 'Next service', value: String(asset.nextServiceDue).slice(0, 10), tone: 'info' };
 }
 
 export function SmartAssetListCard({ asset, onPress, onLongPress, style }) {
@@ -47,17 +42,15 @@ export function SmartAssetListCard({ asset, onPress, onLongPress, style }) {
     }
   }, [asset]);
 
-  const lines = useMemo(() => {
-    const out = [...(smart.lines || [])];
-    const svc = serviceLine(asset);
-    if (svc && !out.some((l) => /service/i.test(l.label))) {
-      out.unshift(svc);
-    }
-    return out.slice(0, 3);
-  }, [smart.lines, asset]);
+  const nextLine = useMemo(() => primaryNextActionLine(asset), [asset]);
+  const family = useMemo(() => assetCategoryChip(asset), [asset]);
+  const brandModel = [asset.brandName || asset.brand, asset.model]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
 
   const category =
-    asset.categoryLabel || asset.category || smart.assetCategory || 'Asset';
+    asset.categoryLabel || asset.category || family || smart.assetCategory || 'Asset';
 
   return (
     <Pressable
@@ -76,50 +69,42 @@ export function SmartAssetListCard({ asset, onPress, onLongPress, style }) {
         style,
       ]}
       accessibilityRole="button"
-      accessibilityLabel={`${smart.title}, ${category}, health ${score}`}
+      accessibilityLabel={`${smart.title}, ${category}, health ${score}${nextLine ? `, ${nextLine}` : ''}`}
     >
       <View style={styles.top}>
-        <CategoryIcon name={asset.categoryId || asset.icon || 'other'} size={40} />
+        <CategoryIcon name={asset.categoryId || asset.icon || 'other'} size={44} />
         <View style={styles.meta}>
           <Text style={[TYPE.bodyStrong, { color: colors.text }]} numberOfLines={1}>
             {smart.title}
           </Text>
           <Text style={[TYPE.caption, { color: colors.textMuted, marginTop: 2 }]} numberOfLines={1}>
-            {[category, smart.locationPath || smart.subtitle].filter(Boolean).join(' · ')}
+            {[category, brandModel || smart.subtitle].filter(Boolean).join(' · ')}
           </Text>
         </View>
-        <StatusBadge
-          label={healthStatus?.label || `${score}`}
-          tone={healthTone(score)}
-          icon="♥"
-        />
-      </View>
-      {lines.length ? (
-        <View style={styles.lines}>
-          {lines.map((line) => (
-            <View key={`${line.label}-${line.value}`} style={styles.lineRow}>
-              <Text style={[TYPE.micro, { color: colors.textMuted }]}>{line.label}</Text>
-              <Text
-                style={[
-                  TYPE.caption,
-                  {
-                    color:
-                      line.tone === 'warn' || line.tone === 'error'
-                        ? colors.warning
-                        : line.tone === 'ok'
-                          ? colors.success
-                          : colors.text,
-                    fontWeight: '600',
-                  },
-                ]}
-                numberOfLines={1}
-              >
-                {line.value}
-              </Text>
-            </View>
-          ))}
+        <View style={styles.scoreWrap}>
+          <Text style={[TYPE.metric, { color: colors.text, fontSize: 20 }]}>{score}</Text>
+          <StatusBadge
+            label={healthStatus?.label || (score >= 80 ? 'Healthy' : 'Check')}
+            tone={healthTone(score)}
+          />
         </View>
-      ) : null}
+      </View>
+      {nextLine ? (
+        <View
+          style={[
+            styles.next,
+            { backgroundColor: colors.infoSoft || colors.surfaceMuted },
+          ]}
+        >
+          <Text style={[TYPE.caption, { color: colors.primary, fontWeight: '700' }]} numberOfLines={1}>
+            {nextLine}
+          </Text>
+        </View>
+      ) : (
+        <Text style={[TYPE.micro, { color: colors.textMuted, marginTop: 10 }]}>
+          No urgent action
+        </Text>
+      )}
     </Pressable>
   );
 }
@@ -131,20 +116,18 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     marginBottom: SPACING.sm,
   },
-  top: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  meta: { flex: 1, minWidth: 0 },
-  lines: {
-    marginTop: SPACING.sm,
-    gap: 6,
-    paddingTop: SPACING.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(100,116,139,0.25)',
-  },
-  lineRow: {
+  top: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
+  },
+  meta: { flex: 1, minWidth: 0 },
+  scoreWrap: { alignItems: 'flex-end', gap: 4 },
+  next: {
+    marginTop: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: RADIUS.sm,
   },
 });
 
