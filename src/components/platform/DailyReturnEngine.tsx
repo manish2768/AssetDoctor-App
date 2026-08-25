@@ -11,200 +11,208 @@ import {
   DollarSign,
   Smartphone,
   Car,
-  Wind
+  Wind,
+  Sun,
+  Plus,
+  Zap,
+  Activity,
+  Layers
 } from 'lucide-react';
 import { actionEngine, ActionItem } from '../../platform/intelligence/actionEngine';
 import { createUniversalAsset, UniversalAssetModel } from '../../platform/core/universalAssetSchema';
 
 interface DailyReturnEngineProps {
   customAssets?: UniversalAssetModel[];
-  onActionClick?: (action: ActionItem) => void;
+  onActionClick?: (action: any) => void;
+  onOpenVault?: () => void;
 }
 
 export const DailyReturnEngine: React.FC<DailyReturnEngineProps> = ({
   customAssets,
-  onActionClick
+  onActionClick,
+  onOpenVault
 }) => {
-  // Built-in demonstration sample portfolio for instant visitor intelligence
-  const samplePortfolio: UniversalAssetModel[] = [
-    createUniversalAsset({
-      assetId: 'sample-car',
-      name: 'TVS Ronin 225',
-      category: 'VEHICLE',
-      brand: 'TVS',
-      model: 'Ronin Base',
-      purchasePrice: 154000,
-      primaryIdentifier: 'MH-02-EV-9999',
-      categoryData: {
-        odometerKm: 5800,
-        nextServiceKm: 6000
-      },
-      warranty: {
-        hasWarranty: true,
-        warrantyStatus: 'ACTIVE',
-        expiryDate: '2027-02-15'
-      }
-    }),
-    createUniversalAsset({
-      assetId: 'sample-ac',
-      name: 'Daikin 1.5 Ton Inverter AC',
-      category: 'APPLIANCE',
-      brand: 'Daikin',
-      purchasePrice: 42000,
-      primaryIdentifier: 'SN-DKN-882910',
-      categoryData: {
-        daysSinceLastFilterClean: 98
-      },
-      warranty: {
-        hasWarranty: true,
-        warrantyStatus: 'ACTIVE',
-        expiryDate: '2026-09-01'
-      }
-    }),
-    createUniversalAsset({
-      assetId: 'sample-laptop',
-      name: 'MacBook Air M2',
-      category: 'ELECTRONICS',
-      brand: 'Apple',
-      purchasePrice: 99000,
-      primaryIdentifier: 'C02GF998MD6T',
-      warranty: {
-        hasWarranty: true,
-        warrantyStatus: 'EXPIRING_SOON',
-        expiryDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-      }
-    })
+  const [selectedScenario, setSelectedScenario] = useState<string>('vehicle_service');
+
+  const scenarios = [
+    {
+      id: 'vehicle_service',
+      label: 'Vehicle (5,500 KM)',
+      icon: <Car className="w-3.5 h-3.5" />,
+      assetName: 'Vehicle Maintenance Cycle',
+      category: 'VEHICLE' as const,
+      categoryData: { odometerKm: 5500, nextServiceKm: 6000 },
+      warranty: { hasWarranty: true, warrantyStatus: 'ACTIVE' as const }
+    },
+    {
+      id: 'ac_summer',
+      label: 'Split AC (Pre-Summer)',
+      icon: <Wind className="w-3.5 h-3.5" />,
+      assetName: 'Inverter Split AC',
+      category: 'APPLIANCE' as const,
+      categoryData: { daysSinceLastFilterClean: 92 },
+      warranty: { hasWarranty: true, warrantyStatus: 'ACTIVE' as const }
+    },
+    {
+      id: 'phone_battery',
+      label: 'Smartphone (2 Yrs)',
+      icon: <Smartphone className="w-3.5 h-3.5" />,
+      assetName: 'Smartphone Hardware',
+      category: 'ELECTRONICS' as const,
+      categoryData: { batteryHealthPercent: 78 },
+      warranty: { hasWarranty: true, warrantyStatus: 'EXPIRING_SOON' as const, expiryDate: new Date(Date.now() + 18 * 86400000).toISOString().split('T')[0] }
+    },
+    {
+      id: 'solar_ups',
+      label: 'Solar & Inverter Battery',
+      icon: <Sun className="w-3.5 h-3.5" />,
+      assetName: 'Tubular Inverter Battery',
+      category: 'HOME' as const,
+      categoryData: { daysSinceDistilledWaterCheck: 75 },
+      warranty: { hasWarranty: true, warrantyStatus: 'ACTIVE' as const }
+    }
   ];
 
-  const assetsToEvaluate = customAssets && customAssets.length > 0 ? customAssets : samplePortfolio;
-  const summary = actionEngine.generateActionsForAssets(assetsToEvaluate);
-  const [completedIds, setCompletedIds] = useState<string[]>([]);
+  const currentScenario = scenarios.find(s => s.id === selectedScenario) || scenarios[0];
 
-  const handleMarkDone = (actionId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setCompletedIds(prev => [...prev, actionId]);
-  };
+  // Evaluate action items
+  const activeAsset: UniversalAssetModel = (customAssets && customAssets.length > 0)
+    ? customAssets[0]
+    : createUniversalAsset({
+        assetId: `scenario-${currentScenario.id}`,
+        name: currentScenario.assetName,
+        category: currentScenario.category,
+        categoryData: currentScenario.categoryData,
+        warranty: currentScenario.warranty
+      });
 
-  const getUrgencyBadge = (urgency: ActionItem['urgency']) => {
-    switch (urgency) {
-      case 'CRITICAL':
-        return 'bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse';
-      case 'HIGH':
-        return 'bg-amber-500/20 text-amber-300 border-amber-500/40';
-      case 'MEDIUM':
-        return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40';
-      default:
-        return 'bg-slate-800 text-slate-300 border-slate-700';
-    }
-  };
+  const summary = actionEngine.generateActionsForAssets(
+    customAssets && customAssets.length > 0 ? customAssets : [activeAsset]
+  );
 
   return (
-    <div className="w-full rounded-3xl bg-gradient-to-b from-slate-900 via-slate-900/90 to-slate-950 border border-slate-800/80 p-6 sm:p-8 shadow-2xl space-y-6">
-      {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-              <Sparkles className="w-4 h-4" />
-            </span>
-            <span className="text-xs font-black uppercase text-emerald-400 tracking-wider">
-              Universal Action Engine
-            </span>
-          </div>
-          <h2 className="text-xl sm:text-2xl font-black text-white mt-1">
-            What Should I Do Today?
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-            Real-time prioritized maintenance, warranty, and lifecycle actions across your entire asset portfolio.
-          </p>
+    <section className="w-full space-y-6">
+      {/* Section Header */}
+      <div className="text-center max-w-3xl mx-auto space-y-2">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-black uppercase tracking-wider font-mono">
+          <Zap className="w-3.5 h-3.5" />
+          <span>Daily Action Engine</span>
         </div>
-
-        <div className="flex items-center gap-3 self-start sm:self-auto">
-          <div className="px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-center">
-            <span className="text-[10px] uppercase font-bold text-slate-500 block">Pending</span>
-            <span className="text-lg font-black text-white font-mono">
-              {summary.totalActions - completedIds.length}
-            </span>
-          </div>
-          <div className="px-3.5 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-center">
-            <span className="text-[10px] uppercase font-bold text-amber-400 block">High Priority</span>
-            <span className="text-lg font-black text-amber-300 font-mono">
-              {summary.highCount + summary.criticalCount}
-            </span>
-          </div>
-        </div>
+        <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
+          What Should I Do Today?
+        </h2>
+        <p className="text-xs sm:text-sm text-slate-400">
+          Proactive maintenance tasks, impending warranty deadlines, and operational decisions across your assets.
+        </p>
       </div>
 
-      {/* Action Cards List */}
-      <div className="space-y-3">
-        {summary.actionItems.map((action) => {
-          const isDone = completedIds.includes(action.id);
-          if (isDone) return null;
+      {/* Scenario Selector for Anonymous Visitors */}
+      {(!customAssets || customAssets.length === 0) && (
+        <div className="flex items-center justify-center gap-2 overflow-x-auto pb-2 scrollbar-thin max-w-3xl mx-auto">
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider hidden sm:inline-block font-mono">
+            Simulate Asset:
+          </span>
+          {scenarios.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setSelectedScenario(s.id)}
+              className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 border ${
+                selectedScenario === s.id
+                  ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400 shadow-md shadow-emerald-500/20'
+                  : 'bg-slate-900/90 text-slate-400 border-slate-800 hover:text-white'
+              }`}
+            >
+              {s.icon}
+              <span>{s.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
-          return (
+      {/* Action Cards Container */}
+      <div className="max-w-5xl mx-auto rounded-3xl bg-slate-900/90 border border-slate-800 p-6 sm:p-8 space-y-5 shadow-2xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-black text-white">Recommended High-Impact Actions</span>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-emerald-400 font-bold">
+              {summary.totalActions} Active
+            </span>
+          </div>
+          <span className="text-[11px] text-slate-400">
+            {customAssets && customAssets.length > 0 ? 'Live vault records' : 'Interactive lifecycle simulation'}
+          </span>
+        </div>
+
+        {/* Action Items List */}
+        <div className="space-y-3">
+          {summary.actions.map((action) => (
             <div
               key={action.id}
-              onClick={() => onActionClick && onActionClick(action)}
-              className="p-4 sm:p-5 rounded-2xl bg-slate-950/80 border border-slate-800/90 hover:border-emerald-500/40 hover:bg-slate-900/60 transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
+              className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                action.urgency === 'CRITICAL'
+                  ? 'bg-rose-950/20 border-rose-500/40 hover:border-rose-500/60'
+                  : action.urgency === 'HIGH'
+                  ? 'bg-amber-950/20 border-amber-500/40 hover:border-amber-500/60'
+                  : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+              }`}
             >
-              <div className="flex items-start gap-3.5">
-                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-emerald-400 group-hover:scale-105 transition-transform shrink-0">
-                  {action.actionType === 'WARRANTY' && <ShieldAlert className="w-5 h-5 text-amber-400" />}
-                  {action.actionType === 'MAINTENANCE' && <Wrench className="w-5 h-5 text-emerald-400" />}
-                  {action.actionType === 'INSPECTION' && <Smartphone className="w-5 h-5 text-cyan-400" />}
-                  {action.actionType !== 'WARRANTY' && action.actionType !== 'MAINTENANCE' && action.actionType !== 'INSPECTION' && <FileText className="w-5 h-5 text-indigo-400" />}
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-black text-white">{action.title}</span>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${getUrgencyBadge(action.urgency)}`}>
-                      {action.dueText}
-                    </span>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase font-mono">
-                      {action.brand} • {action.category}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-300 leading-relaxed max-w-2xl">
-                    {action.description}
-                  </p>
-                  <span className="text-[10px] text-slate-500 font-mono block pt-0.5">
-                    Source: {action.provenance}
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase font-mono border ${
+                    action.urgency === 'CRITICAL'
+                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                      : action.urgency === 'HIGH'
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                  }`}>
+                    {action.urgency} Priority
                   </span>
+                  <span className="text-[11px] font-bold text-slate-400">
+                    {action.category}
+                  </span>
+                </div>
+                <h4 className="text-sm sm:text-base font-black text-white">
+                  {action.title}
+                </h4>
+                <p className="text-xs text-slate-300 leading-relaxed max-w-2xl">
+                  {action.description}
+                </p>
+                <div className="flex items-center gap-4 text-[11px] text-slate-400 font-mono pt-1">
+                  <span>Due: {action.dueDate}</span>
+                  {action.estimatedCostInr ? <span>Estimated Cost: ₹{action.estimatedCostInr.toLocaleString('en-IN')}</span> : null}
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+              <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0">
                 <button
-                  onClick={(e) => handleMarkDone(action.id, e)}
-                  className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-300 border border-slate-800 hover:border-emerald-500/30 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                  onClick={() => {
+                    if (onActionClick) onActionClick(action);
+                    else if (onOpenVault) onOpenVault();
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-emerald-500/20"
                 >
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Done</span>
-                </button>
-                <button
-                  onClick={() => onActionClick && onActionClick(action)}
-                  className="px-4 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black transition-all cursor-pointer flex items-center gap-1 shadow-lg shadow-emerald-500/20"
-                >
-                  <span>{action.primaryActionLabel}</span>
+                  <span>Take Action</span>
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
-          );
-        })}
+          ))}
+        </div>
 
-        {summary.actionItems.length === completedIds.length && (
-          <div className="text-center py-8 space-y-2">
-            <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
-            <h4 className="text-sm font-bold text-white">All Caught Up!</h4>
-            <p className="text-xs text-slate-400">
-              No outstanding maintenance or warranty actions required today.
-            </p>
-          </div>
-        )}
+        {/* Bottom CTA */}
+        <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <p className="text-slate-400">
+            Want Asset Doctor to calculate these actions automatically for all your assets?
+          </p>
+          <button
+            onClick={onOpenVault}
+            className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+          >
+            <span>Save Assets in Encrypted Vault</span>
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
       </div>
-    </div>
+    </section>
   );
 };

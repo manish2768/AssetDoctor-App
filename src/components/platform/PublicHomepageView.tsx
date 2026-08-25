@@ -17,13 +17,22 @@ import {
   Key,
   ShieldCheck,
   Zap,
-  Repeat
+  Repeat,
+  HelpCircle,
+  FileSearch,
+  Activity,
+  QrCode
 } from 'lucide-react';
 import { UniversalSearchBar } from './UniversalSearchBar';
 import { PublicToolsGrid } from './tools/PublicToolsGrid';
+import { DailyReturnEngine } from './DailyReturnEngine';
+import { SmartDocumentAnalyzerTool } from './SmartDocumentAnalyzerTool';
 import { RepairVsReplaceTool } from './RepairVsReplaceTool';
+import { AssetHealthScoreTool } from './tools/AssetHealthScoreTool';
+import { AssetPassportPreview } from './AssetPassportPreview';
 import { ExploreYourAsset } from './tools/ExploreYourAsset';
 import { SmartKnowledgeHub } from './knowledge/SmartKnowledgeHub';
+import { PlatformFaqSection } from './PlatformFaqSection';
 
 interface PublicHomepageViewProps {
   onSelectTool: (toolSlug: string) => void;
@@ -39,7 +48,7 @@ export const PublicHomepageView: React.FC<PublicHomepageViewProps> = ({
   onOpenLoginModal
 }) => {
   return (
-    <div className="w-full space-y-20">
+    <div className="w-full space-y-24">
       {/* ============================================================ */}
       {/* 2. HERO SECTION */}
       {/* ============================================================ */}
@@ -57,10 +66,28 @@ export const PublicHomepageView: React.FC<PublicHomepageViewProps> = ({
         </h1>
 
         <p className="text-sm sm:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed">
-          Asset Doctor helps people understand, maintain, and protect their cars, bikes, phones, laptops, home appliances, solar systems, and valuable household assets.
+          Universal asset tracking, maintenance intelligence, warranty protection, document intelligence and lifecycle insights for everything you own.
         </p>
 
-        {/* Supported Asset Universe Badges */}
+        {/* Hero Action Buttons */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+          <button
+            onClick={() => onSelectTool('assets/explore')}
+            className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm transition-all cursor-pointer shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
+          >
+            <span>Explore Your Asset</span>
+            <ChevronRight className="w-4 h-4" />
+          </button>
+          <button
+            onClick={onOpenVaultApp}
+            className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm transition-all cursor-pointer border border-slate-800 hover:border-slate-700 flex items-center justify-center gap-2"
+          >
+            <span>Open My Vault</span>
+            <ArrowRight className="w-4 h-4 text-emerald-400" />
+          </button>
+        </div>
+
+        {/* Supported Asset Universe Pills */}
         <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
           <span className="px-3 py-1 rounded-xl bg-slate-900 border border-slate-800 text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
             <Car className="w-3.5 h-3.5 text-emerald-400" />
@@ -82,7 +109,7 @@ export const PublicHomepageView: React.FC<PublicHomepageViewProps> = ({
       </section>
 
       {/* ============================================================ */}
-      {/* 3 & 4. UNIVERSAL ASSET SEARCH & TRENDING CHIPS */}
+      {/* 3 & 4. SMART SEARCH & TRENDING QUESTIONS */}
       {/* ============================================================ */}
       <section className="w-full">
         <UniversalSearchBar
@@ -92,14 +119,41 @@ export const PublicHomepageView: React.FC<PublicHomepageViewProps> = ({
       </section>
 
       {/* ============================================================ */}
-      {/* 5. FREE ASSET TOOLS (6 INTERACTIVE CARDS) */}
+      {/* 5. UNIVERSAL ASSET CATEGORIES */}
+      {/* ============================================================ */}
+      <section className="w-full">
+        <ExploreYourAsset
+          onSelectKnowledge={onSelectKnowledge}
+          onSelectTool={onSelectTool}
+        />
+      </section>
+
+      {/* ============================================================ */}
+      {/* 6. FREE INTELLIGENT TOOLS */}
       {/* ============================================================ */}
       <section className="w-full">
         <PublicToolsGrid onSelectTool={onSelectTool} />
       </section>
 
       {/* ============================================================ */}
-      {/* 6. REPAIR VS REPLACE FEATURED UTILITY */}
+      {/* 7. WHAT SHOULD I DO TODAY? */}
+      {/* ============================================================ */}
+      <section className="w-full">
+        <DailyReturnEngine
+          onOpenVault={onOpenVaultApp}
+          onActionClick={() => onOpenVaultApp()}
+        />
+      </section>
+
+      {/* ============================================================ */}
+      {/* 8. DOCUMENT INTELLIGENCE */}
+      {/* ============================================================ */}
+      <section className="w-full">
+        <SmartDocumentAnalyzerTool onSaveToVault={onOpenVaultApp} />
+      </section>
+
+      {/* ============================================================ */}
+      {/* 9. REPAIR VS REPLACE FEATURE */}
       {/* ============================================================ */}
       <section className="w-full space-y-4">
         <div className="text-center max-w-2xl mx-auto space-y-1.5">
@@ -110,46 +164,40 @@ export const PublicHomepageView: React.FC<PublicHomepageViewProps> = ({
             Repair or Replace Calculator
           </h2>
           <p className="text-xs sm:text-sm text-slate-400">
-            Compare repair costs against current asset equity using the standard 50% economic rule.
+            Compare repair quotes against asset depreciation and remaining lifespan using the 50% economic rule.
           </p>
         </div>
         <RepairVsReplaceTool onSaveToVault={onOpenVaultApp} />
       </section>
 
       {/* ============================================================ */}
-      {/* 7. EXPLORE YOUR ASSET CATEGORIES */}
+      {/* 10. ASSET HEALTH SCORE */}
       {/* ============================================================ */}
       <section className="w-full">
-        <ExploreYourAsset
-          onSelectKnowledge={onSelectKnowledge}
-          onSelectTool={onSelectTool}
-        />
+        <AssetHealthScoreTool onSaveToVault={onOpenVaultApp} />
       </section>
 
       {/* ============================================================ */}
-      {/* 8. KNOWLEDGE HUB */}
+      {/* 11. ASSET PASSPORT */}
       {/* ============================================================ */}
       <section className="w-full">
-        <SmartKnowledgeHub
-          onSelectCalculator={onSelectTool}
-          onOpenVaultApp={onOpenVaultApp}
-        />
+        <AssetPassportPreview onOpenVault={onOpenVaultApp} />
       </section>
 
       {/* ============================================================ */}
-      {/* 9. HOW ASSET DOCTOR WORKS (3-STEP VISUAL MICRO-GUIDE) */}
+      {/* 12. HOW ASSET DOCTOR WORKS (3-STEP VISUAL MICRO-GUIDE) */}
       {/* ============================================================ */}
       <section className="w-full max-w-5xl mx-auto space-y-6">
         <div className="text-center max-w-2xl mx-auto space-y-2">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-black uppercase tracking-wider font-mono">
             <Zap className="w-3.5 h-3.5" />
-            <span>Effortless Asset Management</span>
+            <span>Effortless Asset Intelligence</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-black text-white">
             How Asset Doctor Works
           </h2>
           <p className="text-xs sm:text-sm text-slate-400">
-            Three simple steps to complete lifecycle intelligence and automated warranty reminders.
+            Three simple steps to complete lifecycle intelligence and proactive reminders.
           </p>
         </div>
 
@@ -160,7 +208,7 @@ export const PublicHomepageView: React.FC<PublicHomepageViewProps> = ({
             </div>
             <h3 className="text-base font-black text-white">1. Add Your Asset</h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Add your car, bike, smartphone, AC, or home living assets in seconds. No complex setup required.
+              Add your car, bike, smartphone, AC, washing machine, solar inverter, or living assets in seconds.
             </p>
           </div>
 
@@ -170,7 +218,7 @@ export const PublicHomepageView: React.FC<PublicHomepageViewProps> = ({
             </div>
             <h3 className="text-base font-black text-white">2. Scan & Understand</h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Scan purchase bills, service cards, or warranty documents. Our OCR extracts terms and dates automatically.
+              Scan purchase bills, service cards, or warranty documents. Our OCR extracts terms, taxes, and dates automatically.
             </p>
           </div>
 
@@ -187,86 +235,104 @@ export const PublicHomepageView: React.FC<PublicHomepageViewProps> = ({
       </section>
 
       {/* ============================================================ */}
-      {/* 10. REPEAT UTILITY STRATEGY: USEFUL EVERY TIME YOU NEED IT */}
+      {/* 13. KNOWLEDGE HUB / GUIDES */}
       {/* ============================================================ */}
-      <section className="w-full max-w-5xl mx-auto rounded-3xl bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 border border-slate-800 p-8 sm:p-10 space-y-6 shadow-2xl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2 max-w-xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-black uppercase tracking-wider font-mono">
-              <Repeat className="w-3.5 h-3.5" />
-              <span>Repeat Daily Utility</span>
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-black text-white">
-              Useful Every Time You Need It
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Return whenever you have a new asset, repair quote, service bill, warranty question, or maintenance checklist. No login required to run calculations.
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-3">
-            <button
-              onClick={() => onSelectTool('tools/repair-or-replace')}
-              className="px-5 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-all cursor-pointer border border-slate-700 text-center"
-            >
-              Repair Decision Tool
-            </button>
-            <button
-              onClick={onOpenVaultApp}
-              className="px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs transition-all cursor-pointer shadow-lg shadow-emerald-500/20 text-center flex items-center justify-center gap-2"
-            >
-              <span>Open My Vault</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+      <section className="w-full">
+        <SmartKnowledgeHub
+          onSelectCalculator={onSelectTool}
+          onOpenVaultApp={onOpenVaultApp}
+        />
       </section>
 
       {/* ============================================================ */}
-      {/* 11. SECURITY & ZERO-KNOWLEDGE PRIVACY */}
+      {/* 14. FAQ ACCORDION SECTION */}
       {/* ============================================================ */}
-      <section className="w-full max-w-5xl mx-auto space-y-6">
-        <div className="text-center max-w-2xl mx-auto space-y-1.5">
-          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 font-mono">
-            Enterprise Grade Security
-          </span>
-          <h2 className="text-2xl font-black text-white">
-            Your Assets. Your Private Encrypted Vault.
-          </h2>
-          <p className="text-xs text-slate-400">
-            Strict client-side encryption and zero advertiser data sharing.
-          </p>
+      <section className="w-full">
+        <PlatformFaqSection />
+      </section>
+
+      {/* ============================================================ */}
+      {/* 15. CTA & SECURITY */}
+      {/* ============================================================ */}
+      <section className="w-full max-w-5xl mx-auto space-y-8">
+        {/* Repeat Utility Banner */}
+        <div className="rounded-3xl bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 border border-slate-800 p-8 sm:p-10 space-y-6 shadow-2xl">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="space-y-2 max-w-xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-black uppercase tracking-wider font-mono">
+                <Repeat className="w-3.5 h-3.5" />
+                <span>Repeat Daily Utility</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-black text-white">
+                Useful Every Time You Need It
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                Return whenever you have a new asset, repair quote, service bill, warranty question, or maintenance checklist. No login required to run calculations.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => onSelectTool('tools/repair-or-replace')}
+                className="px-5 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-all cursor-pointer border border-slate-700 text-center"
+              >
+                Repair Decision Tool
+              </button>
+              <button
+                onClick={onOpenVaultApp}
+                className="px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs transition-all cursor-pointer shadow-lg shadow-emerald-500/20 text-center flex items-center justify-center gap-2"
+              >
+                <span>Open My Vault</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-          <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-              <Key className="w-4 h-4" />
-            </div>
-            <h4 className="font-bold text-white text-sm">Client-Side Vault Encryption</h4>
-            <p className="text-slate-400 leading-relaxed">
-              Your sensitive documents and serial numbers are stored with AES-256 military-grade encryption keys.
+        {/* Security & Privacy */}
+        <div className="space-y-6">
+          <div className="text-center max-w-2xl mx-auto space-y-1.5">
+            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 font-mono">
+              Enterprise Grade Security
+            </span>
+            <h2 className="text-2xl font-black text-white">
+              Your Assets. Your Private Encrypted Vault.
+            </h2>
+            <p className="text-xs text-slate-400">
+              Strict client-side encryption and zero advertiser data sharing.
             </p>
           </div>
 
-          <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
-            <div className="w-9 h-9 rounded-xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400">
-              <EyeOff className="w-4 h-4" />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+            <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                <Key className="w-4 h-4" />
+              </div>
+              <h4 className="font-bold text-white text-sm">Client-Side Vault Encryption</h4>
+              <p className="text-slate-400 leading-relaxed">
+                Your sensitive documents and serial numbers are stored with AES-256 military-grade encryption keys.
+              </p>
             </div>
-            <h4 className="font-bold text-white text-sm">Zero Advertiser Sharing</h4>
-            <p className="text-slate-400 leading-relaxed">
-              We never sell your asset details, purchase history, or contact records to third-party advertisers.
-            </p>
-          </div>
 
-          <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
-            <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-              <ShieldCheck className="w-4 h-4" />
+            <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+              <div className="w-9 h-9 rounded-xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400">
+                <EyeOff className="w-4 h-4" />
+              </div>
+              <h4 className="font-bold text-white text-sm">Zero Advertiser Sharing</h4>
+              <p className="text-slate-400 leading-relaxed">
+                We never sell your asset details, purchase history, or contact records to third-party advertisers.
+              </p>
             </div>
-            <h4 className="font-bold text-white text-sm">DPDP & GDPR Compliant</h4>
-            <p className="text-slate-400 leading-relaxed">
-              Full data portability, single-click export, and permanent right-to-be-forgotten deletion controls.
-            </p>
+
+            <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+              <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <h4 className="font-bold text-white text-sm">DPDP & GDPR Compliant</h4>
+              <p className="text-slate-400 leading-relaxed">
+                Full data portability, single-click export, and permanent right-to-be-forgotten deletion controls.
+              </p>
+            </div>
           </div>
         </div>
       </section>

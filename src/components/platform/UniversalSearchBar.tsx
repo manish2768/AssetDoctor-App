@@ -19,12 +19,12 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
 
   const placeholderExamples = [
-    'How often should I service my bike?',
-    'When should I clean my AC filter?',
-    'Is my phone still under warranty?',
-    'Should I repair or replace my washing machine?',
-    'How much does this car cost to maintain?',
-    'What documents should I keep for my TV?'
+    'TVS Ronin service schedule',
+    'Samsung AC filter cleaning',
+    'iPhone battery health',
+    'RO membrane replacement',
+    'Refrigerator maintenance',
+    'Solar inverter battery care'
   ];
 
   const suggestionChips = [

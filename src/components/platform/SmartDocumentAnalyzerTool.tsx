@@ -11,27 +11,42 @@ import {
   Tag,
   Car,
   Smartphone,
-  Wrench
+  Wrench,
+  HelpCircle,
+  Plus
 } from 'lucide-react';
 import { DocumentRegistry } from '../../platform/documents/documentRegistry';
 
-export const SmartDocumentAnalyzerTool: React.FC = () => {
-  const [sampleType, setSampleType] = useState<'service_bill' | 'insurance_policy' | 'phone_invoice'>('service_bill');
+interface SmartDocumentAnalyzerToolProps {
+  onSaveToVault?: () => void;
+}
+
+export const SmartDocumentAnalyzerTool: React.FC<SmartDocumentAnalyzerToolProps> = ({ onSaveToVault }) => {
+  const [sampleType, setSampleType] = useState<'service_bill' | 'insurance_policy' | 'phone_invoice' | 'ac_installation'>('service_bill');
   const [isProcessing, setIsProcessing] = useState(false);
   const [extractedData, setExtractedData] = useState<any>(null);
+  const [customFileSelected, setCustomFileSelected] = useState<string | null>(null);
 
   const samplePayloads = {
     service_bill: {
-      text: `TVS MOTOR COMPANY AUTHORIZED SERVICE CENTER\nJob Card No: JC-2026-9902\nDate: 12-Feb-2026\nVehicle Reg: MH-02-EV-9999 (TVS Ronin 225)\nOdometer: 6,120 KM\nDescription: 2nd Periodic Maintenance (6,000 KM Milestone)\nItems:\n- TVS TRU4 Synthetic 10W-30 Oil (1.2L): Rs 650.00\n- Oil Filter Element: Rs 120.00\n- Chain Clean & Lube: Rs 150.00\n- Periodic Labour Charges: Rs 450.00\nTotal Amount: Rs 1,370.00\nNext Service Due: 12,000 KM or 180 Days`,
-      type: 'SERVICE_INVOICE'
+      text: `AUTHORIZED AUTOMOTIVE SERVICE CENTER\nJob Card No: JC-2026-9902\nDate: 12-Feb-2026\nVehicle: 225cc Motorcycle\nRegistration: MH-02-XX-4829\nOdometer: 6,120 KM\nDescription: Periodic Maintenance (6,000 KM Milestone)\nItems:\n- Synthetic 10W-30 Oil (1.2L): Rs 650.00\n- Oil Filter Element: Rs 120.00\n- Chain Clean & Synthetic Lube: Rs 150.00\n- Periodic Labour Charges: Rs 450.00\nTotal Amount: Rs 1,370.00\nNext Service Due: 12,000 KM or 180 Days`,
+      type: 'SERVICE_INVOICE',
+      isVehicle: true
     },
     insurance_policy: {
-      text: `HDFC ERGO GENERAL INSURANCE COMPANY LTD.\nMotor Comprehensive Policy Schedule\nPolicy No: 2311-8902-8829-00\nInsured: Ashutosh\nVehicle Make/Model: Royal Enfield Classic 350\nReg No: DL-01-AB-1234\nPolicy Period: 01-Jan-2026 to 31-Dec-2026\nIDV (Insured Declared Value): Rs 1,85,000\nOwn Damage Premium: Rs 2,450.00\nThird Party Liability: Rs 1,366.00\nTotal Premium Paid: Rs 4,502.88 (Incl. 18% GST)`,
-      type: 'INSURANCE_POLICY'
+      text: `NATIONAL GENERAL INSURANCE COMPANY\nMotor Comprehensive Policy Schedule\nPolicy No: 2311-8902-8829-00\nInsured: Policyholder Record\nVehicle: 350cc Cruiser Motorcycle\nRegistration: DL-01-XX-9182\nPolicy Period: 01-Jan-2026 to 31-Dec-2026\nIDV (Insured Declared Value): Rs 1,85,000\nOwn Damage Premium: Rs 2,450.00\nThird Party Liability: Rs 1,366.00\nTotal Premium Paid: Rs 4,502.88 (Incl. 18% GST)`,
+      type: 'INSURANCE_POLICY',
+      isVehicle: true
     },
     phone_invoice: {
-      text: `RELIANCE RETAIL DIGITAL LIMITED\nTax Invoice / Cash Memo\nInvoice No: MUM-RET-2026-11829\nDate: 10-Jan-2026\nGSTIN: 27AAACR1234F1Z5\nItem: Apple iPhone 16 Pro 128GB Black Titanium\nIMEI: 359281098273615\nSerial No: HGF98201K\nHSN: 85171200\nNet Amount: Rs 1,01,610.17\nCGST 9%: Rs 9,144.91\nSGST 9%: Rs 9,144.91\nFinal Total: Rs 1,19,900.00\nStandard Manufacturer Warranty: 12 Months`,
-      type: 'PURCHASE_INVOICE'
+      text: `DIGITAL RETAIL ELECTRONICS LIMITED\nTax Purchase Invoice / Cash Memo\nInvoice No: RET-2026-11829\nDate: 10-Jan-2026\nGSTIN: 27AAACR1234F1Z5\nItem: Flagship 5G Smartphone 256GB\nIMEI: 359281098273615\nSerial No: HGF98201K\nNet Amount: Rs 76,186.44\nGST 18%: Rs 13,713.56\nFinal Total: Rs 89,900.00\nStandard Manufacturer Warranty: 12 Months`,
+      type: 'PURCHASE_INVOICE',
+      isVehicle: false
+    },
+    ac_installation: {
+      text: `CLIMATE APPLIANCES & HVAC SOLUTIONS\nInstallation & Handover Invoice\nInvoice No: AC-INST-2026-4401\nDate: 20-Mar-2026\nItem: 1.5 Ton 5-Star Inverter Split AC\nOutdoor Serial: DKN-ODU-882910\nIndoor Serial: DKN-IDU-882911\nCompressor Warranty: 10 Years\nPCB Inverter Warranty: 5 Years\nComprehensive Warranty: 1 Year\nTotal Paid: Rs 44,500.00`,
+      type: 'PURCHASE_INVOICE',
+      isVehicle: false
     }
   };
 
@@ -49,204 +64,243 @@ export const SmartDocumentAnalyzerTool: React.FC = () => {
 
       if (sampleType === 'service_bill') {
         parsedEntities = {
-          documentType: 'Service Invoice',
-          vehicleRegistration: 'MH-02-EV-9999',
-          odometerKm: 6120,
-          totalAmount: '₹1,370',
-          nextServiceTarget: '12,000 KM / 180 Days',
-          workshop: 'TVS Authorized Service Center',
-          invoiceDate: '12-Feb-2026'
+          documentType: 'Periodic Service Invoice',
+          statusBadge: 'VERIFIED',
+          vendor: 'Authorized Dealership Service Center',
+          invoiceDate: '12-Feb-2026',
+          invoiceNumber: 'JC-2026-9902',
+          asset: '225cc Motorcycle',
+          totalAmount: '₹1,370 (Incl. Taxes)',
+          odometerKm: '6,120 KM',
+          nextServiceMilestone: '12,000 KM / 180 Days',
+          isVehicle: true
         };
         intelligenceInsights = [
-          'Odometer KM (6,120 KM) successfully reconciled against previous asset telemetry (3,400 KM)',
-          'Next service milestone automatically stepped to 12,000 KM',
-          'TVS TRU4 Synthetic engine oil replacement verified against OEM specifications'
+          'Odometer KM (6,120 KM) verified from service job sheet.',
+          'Next scheduled service milestone calculated at 12,000 KM or 180 days.',
+          'Synthetic engine oil replacement and filter drain confirmed.'
         ];
       } else if (sampleType === 'insurance_policy') {
         parsedEntities = {
-          documentType: 'Insurance Policy Certificate',
+          documentType: 'Comprehensive Motor Insurance Policy',
+          statusBadge: 'VERIFIED',
+          vendor: 'National General Insurance Co.',
           policyNumber: '2311-8902-8829-00',
-          insurer: 'HDFC ERGO General Insurance',
-          vehicleRegistration: 'DL-01-AB-1234',
+          asset: '350cc Cruiser Motorcycle',
           idvAmount: '₹1,85,000',
-          expiryDate: '31-Dec-2026'
+          totalAmount: '₹4,502.88',
+          expiryDate: '31-Dec-2026',
+          isVehicle: true
         };
         intelligenceInsights = [
-          'Comprehensive policy active until 31-Dec-2026',
-          'IDV (₹1,85,000) matched with fair market depreciation curve (92% retained)',
-          'Zero deductible claim assistant profile activated'
+          'Comprehensive Own Damage & Third Party coverage active through 31-Dec-2026.',
+          'Insured Declared Value (₹1,85,000) verified against vehicle depreciation curve.',
+          'Zero deductible cashless claim protocol eligible.'
+        ];
+      } else if (sampleType === 'phone_invoice') {
+        parsedEntities = {
+          documentType: 'GST Retail Purchase Invoice',
+          statusBadge: 'VERIFIED',
+          vendor: 'Digital Retail Electronics Ltd. (GSTIN: 27AAACR1234F1Z5)',
+          invoiceDate: '10-Jan-2026',
+          invoiceNumber: 'RET-2026-11829',
+          asset: 'Flagship 5G Smartphone 256GB',
+          totalAmount: '₹89,900.00 (Incl. 18% GST)',
+          serialOrImei: 'IMEI: 359281098273615 / SN: HGF98201K',
+          warrantyTerms: '12 Months Limited Manufacturer Hardware Warranty',
+          expiryDate: '09-Jan-2027',
+          isVehicle: false
+        };
+        intelligenceInsights = [
+          'Official GST invoice verified with verified merchant GSTIN.',
+          '1-Year manufacturer warranty active through 09-Jan-2027.',
+          'IMEI cataloged for safe CEIR blocking and warranty claim proof.'
         ];
       } else {
         parsedEntities = {
-          documentType: 'Tax Purchase Invoice',
-          product: 'Apple iPhone 16 Pro 128GB',
-          imei: '359281098273615',
-          serialNumber: 'HGF98201K',
-          purchasePrice: '₹1,19,900',
-          vendorGstin: '27AAACR1234F1Z5 (Verified)',
-          warrantyExpiry: '09-Jan-2027'
+          documentType: 'Appliance Tax Invoice & Warranty Record',
+          statusBadge: 'VERIFIED',
+          vendor: 'Climate Appliances & HVAC Solutions',
+          invoiceDate: '20-Mar-2026',
+          invoiceNumber: 'AC-INST-2026-4401',
+          asset: '1.5 Ton Inverter Split AC',
+          totalAmount: '₹44,500.00',
+          serialOrImei: 'Outdoor: DKN-ODU-882910 | Indoor: DKN-IDU-882911',
+          warrantyTerms: '10 Yrs Compressor + 5 Yrs Inverter PCB + 1 Yr Comprehensive',
+          isVehicle: false
         };
         intelligenceInsights = [
-          'Valid GSTIN and official retail invoice verified',
-          '1-Year Apple limited hardware warranty active through 09-Jan-2027',
-          'IMEI registered for device diagnostics & resale valuation tracking'
+          '10-Year compressor and 5-Year PCB warranty terms extracted.',
+          'Multi-unit serials (Indoor + Outdoor) categorized for maintenance tracking.',
+          'Initial seasonal filter cleaning scheduled in 90 days.'
         ];
       }
 
       setExtractedData({
         classifiedType: def?.displayName || classified.typeCode,
         confidence: classified.confidence,
+        statusBadge: parsedEntities.statusBadge || 'VERIFIED',
         entities: parsedEntities,
         insights: intelligenceInsights
       });
       setIsProcessing(false);
-    }, 450);
+    }, 700);
   };
 
   return (
-    <div className="w-full rounded-3xl bg-slate-900/90 border border-slate-800 p-6 sm:p-8 shadow-2xl space-y-6">
-      {/* Tool Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-              <Zap className="w-4 h-4" />
-            </span>
-            <span className="text-xs font-black uppercase text-cyan-400 tracking-wider">
-              Free Intelligent Tool
-            </span>
-          </div>
-          <h2 className="text-xl sm:text-2xl font-black text-white mt-1">
-            Smart Document & Bill Analyzer
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-            Test universal OCR and entity extraction across service bills, insurance schedules, and retail invoices.
-          </p>
+    <div className="w-full max-w-5xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="text-center max-w-3xl mx-auto space-y-2">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-500/10 border border-sky-500/30 text-sky-400 text-xs font-black uppercase tracking-wider font-mono">
+          <UploadCloud className="w-3.5 h-3.5" />
+          <span>Universal OCR Document Intelligence</span>
         </div>
+        <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+          Bill & Invoice Analyzer
+        </h2>
+        <p className="text-xs sm:text-sm text-slate-400">
+          Extract line items, taxes, warranty clauses, service intervals, and odometer readings from any bill or invoice.
+        </p>
       </div>
 
-      {/* Sample Document Selectors */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => { setSampleType('service_bill'); setExtractedData(null); }}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 border ${
-            sampleType === 'service_bill'
-              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
-              : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
-          }`}
-        >
-          <Car className="w-3.5 h-3.5" />
-          <span>Automotive Service Bill</span>
-        </button>
-
-        <button
-          onClick={() => { setSampleType('insurance_policy'); setExtractedData(null); }}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 border ${
-            sampleType === 'insurance_policy'
-              ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
-              : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
-          }`}
-        >
-          <ShieldCheck className="w-3.5 h-3.5" />
-          <span>Vehicle Insurance Policy</span>
-        </button>
-
-        <button
-          onClick={() => { setSampleType('phone_invoice'); setExtractedData(null); }}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 border ${
-            sampleType === 'phone_invoice'
-              ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50'
-              : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
-          }`}
-        >
-          <Smartphone className="w-3.5 h-3.5" />
-          <span>Electronics Tax Invoice</span>
-        </button>
-      </div>
-
-      {/* Interactive Document Preview Box */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left: Raw Document Text */}
-        <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
-              Document Text Stream
-            </span>
-            <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
-              Ready for Extraction
-            </span>
+      {/* Main Container */}
+      <div className="rounded-3xl bg-slate-900/90 border border-slate-800 p-6 sm:p-8 space-y-6 shadow-2xl">
+        {/* Sample Document Type Switcher */}
+        <div className="space-y-3">
+          <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            Select Document Archetype or Test Sample
+          </label>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <button
+              onClick={() => { setSampleType('service_bill'); setExtractedData(null); }}
+              className={`p-3 rounded-2xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                sampleType === 'service_bill' ? 'bg-sky-500/20 text-sky-300 border-sky-500/50' : 'bg-slate-950 text-slate-400 border-slate-800'
+              }`}
+            >
+              <Car className="w-3.5 h-3.5" />
+              <span>Vehicle Service Bill</span>
+            </button>
+            <button
+              onClick={() => { setSampleType('insurance_policy'); setExtractedData(null); }}
+              className={`p-3 rounded-2xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                sampleType === 'insurance_policy' ? 'bg-sky-500/20 text-sky-300 border-sky-500/50' : 'bg-slate-950 text-slate-400 border-slate-800'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Insurance Policy</span>
+            </button>
+            <button
+              onClick={() => { setSampleType('phone_invoice'); setExtractedData(null); }}
+              className={`p-3 rounded-2xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                sampleType === 'phone_invoice' ? 'bg-sky-500/20 text-sky-300 border-sky-500/50' : 'bg-slate-950 text-slate-400 border-slate-800'
+              }`}
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>Phone Invoice</span>
+            </button>
+            <button
+              onClick={() => { setSampleType('ac_installation'); setExtractedData(null); }}
+              className={`p-3 rounded-2xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                sampleType === 'ac_installation' ? 'bg-sky-500/20 text-sky-300 border-sky-500/50' : 'bg-slate-950 text-slate-400 border-slate-800'
+              }`}
+            >
+              <Wrench className="w-3.5 h-3.5" />
+              <span>Appliance Invoice</span>
+            </button>
           </div>
+        </div>
 
-          <pre className="p-3.5 rounded-xl bg-slate-900 border border-slate-800/80 text-xs font-mono text-slate-300 leading-relaxed overflow-x-auto whitespace-pre-wrap max-h-60">
-            {samplePayloads[sampleType].text}
-          </pre>
-
+        {/* Upload / Test Box */}
+        <div className="p-6 rounded-2xl bg-slate-950 border border-dashed border-slate-700 text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-sky-400">
+            <FileText className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <h4 className="text-sm font-bold text-white">
+              {customFileSelected || `Ready to analyze: ${sampleType.replace('_', ' ').toUpperCase()}`}
+            </h4>
+            <p className="text-xs text-slate-400">
+              Drop any service bill, warranty card, or purchase invoice (PDF, JPG, PNG).
+            </p>
+          </div>
           <button
             onClick={handleRunAnalysis}
             disabled={isProcessing}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+            className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-teal-500 hover:from-sky-400 hover:to-teal-400 text-slate-950 font-black text-xs transition-all cursor-pointer inline-flex items-center gap-2 shadow-lg shadow-sky-500/20 disabled:opacity-50"
           >
             {isProcessing ? (
-              <span>Analyzing Document Intelligence...</span>
+              <span>Extracting Document Fields...</span>
             ) : (
               <>
-                <Sparkles className="w-4 h-4" />
-                <span>Extract Document Intelligence</span>
+                <Zap className="w-3.5 h-3.5" />
+                <span>Run Document OCR Analysis</span>
               </>
             )}
           </button>
         </div>
 
-        {/* Right: Extracted Intelligence Results */}
-        <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-4">
-          <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider block">
-            Extracted Entities & Telemetry
-          </span>
-
-          {extractedData ? (
-            <div className="space-y-4 animate-fadeIn">
-              <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Classified Document</span>
-                  <span className="text-xs font-black text-emerald-300">{extractedData.classifiedType}</span>
-                </div>
-                <span className="text-xs font-mono font-bold text-emerald-400">
-                  {Math.round(extractedData.confidence * 100)}% Confidence
-                </span>
+        {/* Extracted Structured Data Results */}
+        {extractedData && (
+          <div className="space-y-6 animate-fade-in">
+            {/* Header Status */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black uppercase text-slate-400">Extracted Document:</span>
+                <span className="text-xs font-black text-white">{extractedData.classifiedType}</span>
               </div>
+              <div className="flex items-center gap-2 font-mono text-[10px]">
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-black">
+                  {extractedData.statusBadge}
+                </span>
+                <span className="text-slate-500">Confidence: {Math.round(extractedData.confidence * 100)}%</span>
+              </div>
+            </div>
 
-              {/* Entity Grid */}
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {Object.entries(extractedData.entities).map(([key, val]) => (
-                  <div key={key} className="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 font-semibold block capitalize">
+            {/* Extracted Fields Table */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              {Object.entries(extractedData.entities)
+                .filter(([k]) => k !== 'isVehicle' && k !== 'statusBadge')
+                .map(([key, val]) => (
+                  <div key={key} className="p-3 rounded-xl bg-slate-950 border border-slate-800/80 space-y-0.5">
+                    <span className="text-[10px] font-mono text-slate-500 uppercase block">
                       {key.replace(/([A-Z])/g, ' $1')}
                     </span>
-                    <span className="font-bold text-white font-mono">{String(val)}</span>
+                    <span className="font-bold text-slate-200 block truncate">{String(val)}</span>
                   </div>
                 ))}
-              </div>
+            </div>
 
-              {/* Action Insights */}
-              <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
-                <span className="text-[10px] font-bold text-teal-400 uppercase tracking-wider block">
-                  Automated Intelligence Actions
-                </span>
-                {extractedData.insights.map((ins: string, idx: number) => (
-                  <div key={idx} className="flex items-start gap-2 text-xs text-slate-300">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                    <span>{ins}</span>
+            {/* Intelligence Insights */}
+            <div className="space-y-2">
+              <span className="text-[10px] font-black uppercase text-sky-400 tracking-wider block">
+                Lifecycle & Intelligence Insights
+              </span>
+              <div className="space-y-1.5 text-xs text-slate-300">
+                {extractedData.insights.map((insight: string, idx: number) => (
+                  <div key={idx} className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-sky-400 shrink-0 mt-0.5" />
+                    <span>{insight}</span>
                   </div>
                 ))}
               </div>
             </div>
-          ) : (
-            <div className="h-60 flex flex-col items-center justify-center text-center p-6 border border-dashed border-slate-800 rounded-2xl text-slate-500 text-xs space-y-2">
-              <FileText className="w-8 h-8 text-slate-600" />
-              <p>Click &quot;Extract Document Intelligence&quot; to parse structured fields and triggers.</p>
+
+            {/* Save to Vault CTA */}
+            <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h4 className="text-sm font-black text-white">Save This Record to Asset Doctor</h4>
+                <p className="text-xs text-slate-400">Vaulted documents remain encrypted and accessible offline anytime.</p>
+              </div>
+              <button
+                onClick={onSaveToVault}
+                className="px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Save to Asset Doctor Vault</span>
+              </button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
