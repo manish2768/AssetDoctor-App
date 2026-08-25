@@ -184,6 +184,81 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
               if (res.moduleId) setActiveTab('asset_explorer');
             }} />
           </div>
+
+          {/* 3-Step Universal Intelligence Micro-Guide */}
+          <div className="pt-8 max-w-5xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
+              {/* Step 1 */}
+              <div className="p-5 rounded-2xl bg-gradient-to-b from-slate-900/80 to-slate-950/80 border border-slate-800/80 hover:border-emerald-500/30 transition-all duration-300 group shadow-lg">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
+                    Step 01
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
+                    <Layers className="w-4 h-4" />
+                  </div>
+                </div>
+                <h3 className="text-sm font-black text-white group-hover:text-emerald-300 transition-colors">
+                  1. Add Your Asset
+                </h3>
+                <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                  Add your car, bike, phone, AC, appliance, electronics or any other valuable asset.
+                </p>
+                <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-slate-800/60">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-slate-400 border border-slate-800">Vehicles</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-slate-400 border border-slate-800">Phones</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-slate-400 border border-slate-800">Appliances</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-slate-400 border border-slate-800">Home Living</span>
+                </div>
+              </div>
+
+              {/* Step 2 */}
+              <div className="p-5 rounded-2xl bg-gradient-to-b from-slate-900/80 to-slate-950/80 border border-slate-800/80 hover:border-teal-500/30 transition-all duration-300 group shadow-lg">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20 font-mono">
+                    Step 02
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-teal-500/10 flex items-center justify-center text-teal-400 group-hover:scale-110 transition-transform">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                </div>
+                <h3 className="text-sm font-black text-white group-hover:text-teal-300 transition-colors">
+                  2. Scan & Understand
+                </h3>
+                <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                  Upload invoices, warranty, insurance, service records and important documents.
+                </p>
+                <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-slate-800/60">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-slate-400 border border-slate-800">OCR Extraction</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-slate-400 border border-slate-800">GST Invoice</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-slate-400 border border-slate-800">Warranty Card</span>
+                </div>
+              </div>
+
+              {/* Step 3 */}
+              <div className="p-5 rounded-2xl bg-gradient-to-b from-slate-900/80 to-slate-950/80 border border-slate-800/80 hover:border-cyan-500/30 transition-all duration-300 group shadow-lg">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-mono">
+                    Step 03
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 group-hover:scale-110 transition-transform">
+                    <Activity className="w-4 h-4" />
+                  </div>
+                </div>
+                <h3 className="text-sm font-black text-white group-hover:text-cyan-300 transition-colors">
+                  3. Stay Ahead
+                </h3>
+                <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                  Asset Doctor tracks maintenance, documents, expiry dates, health and important reminders.
+                </p>
+                <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-slate-800/60">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-slate-400 border border-slate-800">Service Due</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-slate-400 border border-slate-800">Health Score</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-slate-400 border border-slate-800">Repair Decision</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 

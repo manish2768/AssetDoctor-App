@@ -1,25 +1,28 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 import { Header } from './components/Header';
 import { MetricCards } from './components/MetricCards';
 import { ExpiringAlertBanner } from './components/ExpiringAlertBanner';
 import { AssetVaultGrid } from './components/AssetVaultGrid';
-import { OCRScannerModal } from './components/OCRScannerModal';
-import { AssetDetailModal } from './components/AssetDetailModal';
-import { WarrantyClaimModal } from './components/WarrantyClaimModal';
-import { AddAssetModal } from './components/AddAssetModal';
-import { EmergencyContactModal } from './components/EmergencyContactModal';
-import { UpdatePhoneModal } from './components/UpdatePhoneModal';
-import { UpdateEmailModal } from './components/UpdateEmailModal';
-import { LoginModal } from './components/LoginModal';
-import { AuthModal } from './components/AuthModal';
-import { AccountSettingsModal } from './components/AccountSettingsModal';
-import { WarrantyAlertsModal } from './components/WarrantyAlertsModal';
 import { SplashScreen } from './components/SplashScreen';
 import { WarrantyExpiryWidget } from './components/WarrantyExpiryWidget';
 import { BrandSupportDirectory } from './components/BrandSupportDirectory';
-import { ExportVaultModal } from './components/ExportVaultModal';
-import { AssetSavedModal, SavedAssetDetails } from './components/AssetSavedModal';
-import { EmergencyModal, VehicleDocuments } from './components/EmergencyModal';
+import { SavedAssetDetails } from './components/AssetSavedModal';
+import { VehicleDocuments } from './components/EmergencyModal';
+
+// Lazily loaded heavy modal dialogs
+const OCRScannerModal = lazy(() => import('./components/OCRScannerModal').then(m => ({ default: m.OCRScannerModal })));
+const AssetDetailModal = lazy(() => import('./components/AssetDetailModal').then(m => ({ default: m.AssetDetailModal })));
+const WarrantyClaimModal = lazy(() => import('./components/WarrantyClaimModal').then(m => ({ default: m.WarrantyClaimModal })));
+const AddAssetModal = lazy(() => import('./components/AddAssetModal').then(m => ({ default: m.AddAssetModal })));
+const EmergencyContactModal = lazy(() => import('./components/EmergencyContactModal').then(m => ({ default: m.EmergencyContactModal })));
+const UpdatePhoneModal = lazy(() => import('./components/UpdatePhoneModal').then(m => ({ default: m.UpdatePhoneModal })));
+const UpdateEmailModal = lazy(() => import('./components/UpdateEmailModal').then(m => ({ default: m.UpdateEmailModal })));
+const LoginModal = lazy(() => import('./components/LoginModal').then(m => ({ default: m.LoginModal })));
+const AuthModal = lazy(() => import('./components/AuthModal').then(m => ({ default: m.AuthModal })));
+const AccountSettingsModal = lazy(() => import('./components/AccountSettingsModal').then(m => ({ default: m.AccountSettingsModal })));
+const WarrantyAlertsModal = lazy(() => import('./components/WarrantyAlertsModal').then(m => ({ default: m.WarrantyAlertsModal })));
+const ExportVaultModal = lazy(() => import('./components/ExportVaultModal').then(m => ({ default: m.ExportVaultModal })));
+const AssetSavedModal = lazy(() => import('./components/AssetSavedModal').then(m => ({ default: m.AssetSavedModal })));
 import { MobileAssetService } from './services/mobileAssetService';
 import { syncEngine } from './services/mobileSyncEngine';
 import { auth } from './firebase';
@@ -390,109 +393,129 @@ export default function App() {
         </>
       )}
 
-      {/* Modal Dialogs */}
-      {selectedAsset && (
-        <AssetDetailModal
-          asset={selectedAsset}
-          onClose={() => setSelectedAsset(null)}
-          onOpenClaimModal={(asset) => {
-            setSelectedAsset(null);
-            setClaimAsset(asset);
-          }}
-          onUpdateAsset={handleUpdateAsset}
-          onOpenEmergencyModal={(data) => {
-            setSelectedAsset(null);
-            setVehicleEmergencyData(data);
-            setIsEmergencyModalOpen(true);
-          }}
-        />
-      )}
+      {/* Modal Dialogs (Suspense Lazy Loaded) */}
+      <Suspense fallback={null}>
+        {selectedAsset && (
+          <AssetDetailModal
+            asset={selectedAsset}
+            onClose={() => setSelectedAsset(null)}
+            onOpenClaimModal={(asset) => {
+              setSelectedAsset(null);
+              setClaimAsset(asset);
+            }}
+            onUpdateAsset={handleUpdateAsset}
+            onOpenEmergencyModal={(data) => {
+              setSelectedAsset(null);
+              setVehicleEmergencyData(data);
+              setIsEmergencyModalOpen(true);
+            }}
+          />
+        )}
 
-      {claimAsset && (
-        <WarrantyClaimModal
-          asset={claimAsset}
-          onClose={() => setClaimAsset(null)}
-        />
-      )}
+        {claimAsset && (
+          <WarrantyClaimModal
+            asset={claimAsset}
+            onClose={() => setClaimAsset(null)}
+          />
+        )}
 
-      <AddAssetModal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        onAddAsset={handleAddAsset}
-      />
+        {isAddModalOpen && (
+          <AddAssetModal
+            isOpen={isAddModalOpen}
+            onClose={() => setIsAddModalOpen(false)}
+            onAddAsset={handleAddAsset}
+          />
+        )}
 
-      <OCRScannerModal
-        isOpen={isOCRModalOpen}
-        onClose={() => setIsOCRModalOpen(false)}
-        onAddAsset={handleAddAsset}
-      />
+        {isOCRModalOpen && (
+          <OCRScannerModal
+            isOpen={isOCRModalOpen}
+            onClose={() => setIsOCRModalOpen(false)}
+            onAddAsset={handleAddAsset}
+          />
+        )}
 
-      <EmergencyContactModal
-        isOpen={isEmergencyModalOpen}
-        onClose={() => setIsEmergencyModalOpen(false)}
-        vehicleDocuments={vehicleEmergencyData || undefined}
-      />
+        {isEmergencyModalOpen && (
+          <EmergencyContactModal
+            isOpen={isEmergencyModalOpen}
+            onClose={() => setIsEmergencyModalOpen(false)}
+            vehicleDocuments={vehicleEmergencyData || undefined}
+          />
+        )}
 
-      <UpdatePhoneModal
-        isOpen={isUpdatePhoneModalOpen}
-        currentPhone={userPhone}
-        onClose={() => setIsUpdatePhoneModalOpen(false)}
-        onPhoneUpdated={handlePhoneUpdated}
-      />
+        {isUpdatePhoneModalOpen && (
+          <UpdatePhoneModal
+            isOpen={isUpdatePhoneModalOpen}
+            currentPhone={userPhone}
+            onClose={() => setIsUpdatePhoneModalOpen(false)}
+            onPhoneUpdated={handlePhoneUpdated}
+          />
+        )}
 
-      <UpdateEmailModal
-        isOpen={isUpdateEmailModalOpen}
-        currentEmail={userEmail}
-        onClose={() => setIsUpdateEmailModalOpen(false)}
-        onEmailUpdated={handleEmailUpdated}
-      />
+        {isUpdateEmailModalOpen && (
+          <UpdateEmailModal
+            isOpen={isUpdateEmailModalOpen}
+            currentEmail={userEmail}
+            onClose={() => setIsUpdateEmailModalOpen(false)}
+            onEmailUpdated={handleEmailUpdated}
+          />
+        )}
 
-      <LoginModal
-        isOpen={isLoginModalOpen}
-        onClose={() => setIsLoginModalOpen(false)}
-        onLoginSuccess={(email, phone) => {
-          if (email) handleEmailUpdated(email);
-          if (phone) handlePhoneUpdated(phone);
-          showToast('Signed in successfully!');
-        }}
-      />
+        {isLoginModalOpen && (
+          <LoginModal
+            isOpen={isLoginModalOpen}
+            onClose={() => setIsLoginModalOpen(false)}
+            onLoginSuccess={(email, phone) => {
+              if (email) handleEmailUpdated(email);
+              if (phone) handlePhoneUpdated(phone);
+              showToast('Signed in successfully!');
+            }}
+          />
+        )}
 
-      <AccountSettingsModal
-        isOpen={isAccountSettingsModalOpen}
-        userEmail={userEmail}
-        userPhone={userPhone}
-        userLocation={userLocation}
-        onClose={() => setIsAccountSettingsModalOpen(false)}
-        onOpenUpdatePhoneModal={() => setIsUpdatePhoneModalOpen(true)}
-        onOpenUpdateEmailModal={() => setIsUpdateEmailModalOpen(true)}
-        onOpenForgotPassword={() => setIsLoginModalOpen(true)}
-        onUpdateLocation={handleUpdateLocation}
-        onLoadDemoAssets={handleLoadDemoAssets}
-      />
+        {isAccountSettingsModalOpen && (
+          <AccountSettingsModal
+            isOpen={isAccountSettingsModalOpen}
+            userEmail={userEmail}
+            userPhone={userPhone}
+            userLocation={userLocation}
+            onClose={() => setIsAccountSettingsModalOpen(false)}
+            onOpenUpdatePhoneModal={() => setIsUpdatePhoneModalOpen(true)}
+            onOpenUpdateEmailModal={() => setIsUpdateEmailModalOpen(true)}
+            onOpenForgotPassword={() => setIsLoginModalOpen(true)}
+            onUpdateLocation={handleUpdateLocation}
+            onLoadDemoAssets={handleLoadDemoAssets}
+          />
+        )}
 
-      <WarrantyAlertsModal
-        isOpen={isWarrantyAlertsModalOpen}
-        assets={assets}
-        onClose={() => setIsWarrantyAlertsModalOpen(false)}
-        onSelectAsset={(asset) => {
-          setIsWarrantyAlertsModalOpen(false);
-          setSelectedAsset(asset);
-        }}
-      />
+        {isWarrantyAlertsModalOpen && (
+          <WarrantyAlertsModal
+            isOpen={isWarrantyAlertsModalOpen}
+            assets={assets}
+            onClose={() => setIsWarrantyAlertsModalOpen(false)}
+            onSelectAsset={(asset) => {
+              setIsWarrantyAlertsModalOpen(false);
+              setSelectedAsset(asset);
+            }}
+          />
+        )}
 
-      <ExportVaultModal
-        isOpen={isExportModalOpen}
-        assets={assets}
-        onClose={() => setIsExportModalOpen(false)}
-      />
+        {isExportModalOpen && (
+          <ExportVaultModal
+            isOpen={isExportModalOpen}
+            assets={assets}
+            onClose={() => setIsExportModalOpen(false)}
+          />
+        )}
 
-      {lastSavedAsset && (
-        <AssetSavedModal
-          isOpen={savedModalOpen}
-          onClose={() => setSavedModalOpen(false)}
-          assetDetails={lastSavedAsset}
-        />
-      )}
+        {lastSavedAsset && (
+          <AssetSavedModal
+            isOpen={savedModalOpen}
+            onClose={() => setSavedModalOpen(false)}
+            assetDetails={lastSavedAsset}
+          />
+        )}
+      </Suspense>
 
       {deleteTargetAsset && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">

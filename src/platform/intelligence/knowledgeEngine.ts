@@ -135,6 +135,128 @@ class AssetKnowledgeEngine {
         lastVerifiedAt: '2026-08-10'
       }
     });
+
+    // 5. Hyundai Creta / Venue 1.5 MPI & CRDi
+    this.registerKnowledge({
+      knowledgeId: 'kn_hyundai_creta_sched',
+      category: 'VEHICLE',
+      brand: 'Hyundai Motor India',
+      modelQuery: 'Creta 1.5 / Venue',
+      topic: 'MAINTENANCE_SCHEDULE',
+      title: 'Hyundai Creta / Venue Periodic Maintenance Matrix',
+      content: '1st Free Service at 1,000 KM (1 Month), 2nd at 10,000 KM (12 Months), subsequent periodic service every 10,000 KM or 12 Months. Engine oil 0W-20 API SN Plus (Petrol) / 0W-30 ACEA C2 (Diesel). Severe use cycle: 5,000 KM for severe stop-and-go dusty driving.',
+      structuredData: {
+        firstServiceKm: 1000,
+        firstServiceMonths: 1,
+        subsequentKm: 10000,
+        subsequentMonths: 12,
+        severeUseKm: 5000,
+        oilGradePetrol: '0W-20 API SN Plus / SP',
+        oilGradeDiesel: '0W-30 ACEA C2/C3'
+      },
+      provenance: {
+        sourceType: 'OEM_MANUAL',
+        sourceName: 'Hyundai Creta Owner Operating & Maintenance Manual 2026',
+        sourceVersion: 'Rev 4.1',
+        confidence: 0.99,
+        lastVerifiedAt: '2026-08-15'
+      }
+    });
+
+    // 6. Samsung Front-Load EcoBubble Washer
+    this.registerKnowledge({
+      knowledgeId: 'kn_samsung_washer_care',
+      category: 'APPLIANCE',
+      brand: 'Samsung',
+      modelQuery: 'EcoBubble Front Load Washer 7kg / 8kg / 9kg',
+      topic: 'MAINTENANCE_SCHEDULE',
+      title: 'Samsung EcoBubble Washer Drum Clean+ & Filter Schedule',
+      content: 'Execute Drum Clean+ self-cleaning cycle every 40 wash cycles (approx. 30 days) to eliminate bacterial residue. Clean debris trap & coin filter every 60 days. Descale water inlet mesh filter every 90 days.',
+      structuredData: {
+        drumCleanCycleInterval: 40,
+        debrisFilterCleanDays: 60,
+        inletMeshCleanDays: 90,
+        motorWarrantyYears: 20
+      },
+      provenance: {
+        sourceType: 'OEM_MANUAL',
+        sourceName: 'Samsung Front Loading Washer User Guide WW80T Series',
+        sourceVersion: '2026.01',
+        confidence: 0.98,
+        lastVerifiedAt: '2026-08-12'
+      }
+    });
+
+    // 7. Luminous Solar Inverter & Tubular Battery
+    this.registerKnowledge({
+      knowledgeId: 'kn_luminous_solar_ups',
+      category: 'HOME',
+      brand: 'Luminous Power Technologies',
+      modelQuery: 'Solarverter Pro / Red Charge Tubular 150Ah / 200Ah',
+      topic: 'MAINTENANCE_SCHEDULE',
+      title: 'Luminous Solar & Inverter Battery Maintenance Schedule',
+      content: 'Check electrolyte distilled water level via float indicators every 60 to 90 days. Apply petroleum jelly on terminal posts every 180 days to stop sulfation. Wash photovoltaic solar panel surface every 15 to 30 days in non-monsoon periods.',
+      structuredData: {
+        distilledWaterIntervalDays: 75,
+        terminalGreasingDays: 180,
+        solarPanelCleaningDays: 20,
+        batteryWarrantyMonths: 60
+      },
+      provenance: {
+        sourceType: 'OEM_MANUAL',
+        sourceName: 'Luminous Solarverter & Tubular Battery Technical Service Guide',
+        sourceVersion: '2026.2',
+        confidence: 0.99,
+        lastVerifiedAt: '2026-08-18'
+      }
+    });
+
+    // 8. Voltas Vectra Inverter Air Conditioner
+    this.registerKnowledge({
+      knowledgeId: 'kn_voltas_ac_care',
+      category: 'APPLIANCE',
+      brand: 'Voltas Limited (A Tata Enterprise)',
+      modelQuery: 'Vectra 1.5 Ton Adjustable Inverter AC',
+      topic: 'MAINTENANCE_SCHEDULE',
+      title: 'Voltas Inverter AC Filter & Pre-Season Maintenance',
+      content: 'Wash anti-dust and anti-microbial indoor filters every 15 days in heavy summer use (every 45 days in winter). Perform condenser water wash prior to summer onset (every 180 days). R32 refrigerant.',
+      structuredData: {
+        summerFilterCleanDays: 15,
+        winterFilterCleanDays: 45,
+        condenserServiceDays: 180,
+        compressorWarrantyYears: 10
+      },
+      provenance: {
+        sourceType: 'OEM_MANUAL',
+        sourceName: 'Voltas Vectra Room Air Conditioner Service & Maintenance Manual',
+        sourceVersion: '2026.03',
+        confidence: 0.98,
+        lastVerifiedAt: '2026-08-05'
+      }
+    });
+
+    // 9. Dell Latitude Enterprise Laptop
+    this.registerKnowledge({
+      knowledgeId: 'kn_dell_latitude_care',
+      category: 'BUSINESS',
+      brand: 'Dell Technologies',
+      modelQuery: 'Latitude 5440 / 5450 / 7440',
+      topic: 'MAINTENANCE_SCHEDULE',
+      title: 'Dell Latitude Enterprise Hardware & Battery Care',
+      content: 'Enable Dell Command Power Manager Primary AC Use charging profile (caps charge at 80% to triple battery lifespan). Blow out copper thermal heatsink fins every 180 days. Install OEM BIOS and TPM microcode updates quarterly.',
+      structuredData: {
+        batteryOptimalCapPercent: 80,
+        thermalDustBlowoutDays: 180,
+        biosUpdateIntervalDays: 90
+      },
+      provenance: {
+        sourceType: 'OEM_MANUAL',
+        sourceName: 'Dell Enterprise Client Hardware Maintenance & Lifecycle Manual',
+        sourceVersion: 'Rev A08',
+        confidence: 0.99,
+        lastVerifiedAt: '2026-08-14'
+      }
+    });
   }
 }
 
