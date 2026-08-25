@@ -26,6 +26,9 @@ import { AssetHealthPreviewTool } from './AssetHealthPreviewTool';
 import { AssetPassportPreview } from './AssetPassportPreview';
 import { SeoToolPageTemplate } from './SeoToolPageTemplate';
 import { SeoRegistry } from '../../platform/seo/seoRegistry';
+import { SmartKnowledgeHub } from './knowledge/SmartKnowledgeHub';
+import { UniversalDailyToolsHub } from './tools/UniversalDailyToolsHub';
+import { KnowledgeCategory } from '../../platform/knowledge/knowledgeHubData';
 
 interface PublicPlatformViewProps {
   onOpenAppVault: () => void;
@@ -35,6 +38,8 @@ interface PublicPlatformViewProps {
 
 export type PlatformTab =
   | 'daily_actions'
+  | 'knowledge_hub'
+  | 'tools_hub'
   | 'asset_explorer'
   | 'doc_analyzer'
   | 'repair_vs_replace'
@@ -48,7 +53,14 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
   currentUser
 }) => {
   const [activeTab, setActiveTab] = useState<PlatformTab>('daily_actions');
+  const [activeKnowledgeCat, setActiveKnowledgeCat] = useState<KnowledgeCategory | undefined>(undefined);
   const [activeSeoSlug, setActiveSeoSlug] = useState<string>('tools/warranty-checker');
+
+  const handleNavigateToKnowledge = (cat?: KnowledgeCategory) => {
+    setActiveKnowledgeCat(cat);
+    setActiveTab('knowledge_hub');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const handleNavigateToSeoPage = (slug: string) => {
     setActiveSeoSlug(slug);
@@ -93,12 +105,20 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
             What to Do Today
           </button>
           <button
-            onClick={() => setActiveTab('asset_explorer')}
+            onClick={() => handleNavigateToKnowledge()}
             className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'asset_explorer' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
+              activeTab === 'knowledge_hub' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
-            Asset Explorer
+            Knowledge Hub
+          </button>
+          <button
+            onClick={() => setActiveTab('tools_hub')}
+            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'tools_hub' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Daily Utility Tools
           </button>
           <button
             onClick={() => setActiveTab('doc_analyzer')}
@@ -106,23 +126,15 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
               activeTab === 'doc_analyzer' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
-            Document Analyzer
+            Doc Analyzer
           </button>
           <button
-            onClick={() => setActiveTab('repair_vs_replace')}
+            onClick={() => setActiveTab('asset_explorer')}
             className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'repair_vs_replace' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
+              activeTab === 'asset_explorer' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
-            Repair vs. Replace
-          </button>
-          <button
-            onClick={() => setActiveTab('health_check')}
-            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'health_check' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Health Score
+            Asset Explorer
           </button>
           <button
             onClick={() => setActiveTab('passport')}
@@ -275,12 +287,20 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
             What to Do Today
           </button>
           <button
-            onClick={() => setActiveTab('asset_explorer')}
+            onClick={() => handleNavigateToKnowledge()}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${
-              activeTab === 'asset_explorer' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
+              activeTab === 'knowledge_hub' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
             }`}
           >
-            Asset Explorer
+            Knowledge Hub
+          </button>
+          <button
+            onClick={() => setActiveTab('tools_hub')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${
+              activeTab === 'tools_hub' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
+            }`}
+          >
+            Daily Tools
           </button>
           <button
             onClick={() => setActiveTab('doc_analyzer')}
@@ -291,20 +311,20 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
             Doc Analyzer
           </button>
           <button
-            onClick={() => setActiveTab('repair_vs_replace')}
+            onClick={() => setActiveTab('asset_explorer')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${
-              activeTab === 'repair_vs_replace' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
+              activeTab === 'asset_explorer' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
             }`}
           >
-            Repair vs. Replace
+            Asset Explorer
           </button>
           <button
-            onClick={() => setActiveTab('health_check')}
+            onClick={() => setActiveTab('passport')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${
-              activeTab === 'health_check' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
+              activeTab === 'passport' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
             }`}
           >
-            Health Score
+            Passport
           </button>
         </div>
 
@@ -314,6 +334,20 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
             <DailyReturnEngine onActionClick={() => onOpenAppVault()} />
             <UniversalAssetExplorer />
           </div>
+        )}
+
+        {activeTab === 'knowledge_hub' && (
+          <SmartKnowledgeHub
+            initialCategory={activeKnowledgeCat}
+            onSelectCalculator={(slug) => handleNavigateToSeoPage(slug)}
+            onOpenVaultApp={onOpenAppVault}
+          />
+        )}
+
+        {activeTab === 'tools_hub' && (
+          <UniversalDailyToolsHub
+            onSaveToVault={onOpenAppVault}
+          />
         )}
 
         {activeTab === 'asset_explorer' && (
