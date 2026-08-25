@@ -35,6 +35,12 @@ import { ExploreYourAsset } from './tools/ExploreYourAsset';
 import { AssetPassportPreview } from './AssetPassportPreview';
 import { PublicAssetPassportView } from './passport/PublicAssetPassportView';
 import { NotFoundView } from './NotFoundView';
+import { AboutUsView } from './AboutUsView';
+import { PrivacyPolicyView } from './PrivacyPolicyView';
+import { TermsAndConditionsView } from './TermsAndConditionsView';
+import { ContactView } from './ContactView';
+import { CookiePolicyView } from './CookiePolicyView';
+import { GlobalTrustFooter } from './GlobalTrustFooter';
 import { SeoToolPageTemplate } from './SeoToolPageTemplate';
 import { SeoRegistry } from '../../platform/seo/seoRegistry';
 import { KnowledgeCategory } from '../../platform/knowledge/knowledgeHubData';
@@ -72,6 +78,11 @@ export type PlatformTab =
   | 'passport'
   | 'seo_page'
   | 'my_vault'
+  | 'about'
+  | 'privacy_policy'
+  | 'terms'
+  | 'contact'
+  | 'cookie_policy'
   | 'not_found';
 
 export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
@@ -110,6 +121,19 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
     setToastMessage({ text, actionLabel, onAction });
     setTimeout(() => setToastMessage(null), 4000);
   };
+
+  // Check route on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const p = (window.location.pathname || '').toLowerCase().replace(/\/$/, '');
+      if (p === '/about') setActiveTab('about');
+      else if (p === '/privacy-policy') setActiveTab('privacy_policy');
+      else if (p === '/terms-and-conditions' || p === '/terms') setActiveTab('terms');
+      else if (p === '/contact') setActiveTab('contact');
+      else if (p === '/cookie-policy') setActiveTab('cookie_policy');
+      else if (p === '/vault' && currentUser) setActiveTab('my_vault');
+    }
+  }, []);
 
   // Check guest migration on user login
   useEffect(() => {
@@ -362,6 +386,14 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
           >
             Bill Analyzer
           </button>
+          <button
+            onClick={() => { setActiveTab('about'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'about' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            About
+          </button>
 
           {/* Authenticated Customer Nav Tab */}
           {currentUser && (
@@ -498,6 +530,14 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
           >
             Explore Assets
           </button>
+          <button
+            onClick={() => { setActiveTab('about'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${
+              activeTab === 'about' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
+            }`}
+          >
+            About
+          </button>
           {currentUser && (
             <button
               onClick={() => setActiveTab('my_vault')}
@@ -631,6 +671,30 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
             />
           )}
 
+          {activeTab === 'about' && (
+            <AboutUsView
+              onOpenVaultApp={currentUser ? () => setActiveTab('my_vault') : () => setIsAuthModalOpen(true)}
+              onExploreAssets={() => { setActiveTab('asset_explorer'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              onExploreTools={() => { setActiveTab('tools_hub'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+            />
+          )}
+
+          {activeTab === 'privacy_policy' && (
+            <PrivacyPolicyView onGoBack={() => { setActiveTab('home'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
+          )}
+
+          {activeTab === 'terms' && (
+            <TermsAndConditionsView onGoBack={() => { setActiveTab('home'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
+          )}
+
+          {activeTab === 'contact' && (
+            <ContactView onGoHome={() => { setActiveTab('home'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
+          )}
+
+          {activeTab === 'cookie_policy' && (
+            <CookiePolicyView onGoBack={() => { setActiveTab('home'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
+          )}
+
           {activeTab === 'not_found' && (
             <NotFoundView
               onGoHome={() => { setActiveTab('home'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
@@ -686,75 +750,14 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
         />
       )}
 
-      {/* 6. Global Platform Footer */}
-      <footer className="bg-slate-950 border-t border-slate-800/80 px-4 sm:px-8 py-12 text-xs text-slate-400 space-y-8">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
-          {/* Brand Info */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Shield className="w-5 h-5 text-emerald-400" />
-              <span className="font-black text-white text-base">Asset Doctor</span>
-            </div>
-            <p className="text-[11px] text-slate-400 leading-relaxed">
-              The Universal Asset Intelligence & Lifecycle Platform. Know what you own, what it needs, and what it is worth.
-            </p>
-            <div className="flex items-center gap-2 text-[10px] text-emerald-400 font-mono">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>Platform Online · v2.8 Universal</span>
-            </div>
-          </div>
-
-          {/* Free Interactive Tools */}
-          <div className="space-y-2.5">
-            <h4 className="font-bold text-white uppercase text-[11px] tracking-wider font-mono">Free Platform Tools</h4>
-            <ul className="space-y-1.5 text-[11px]">
-              <li><button onClick={() => handleNavigateToTool('tools/repair-or-replace')} className="hover:text-emerald-400 transition cursor-pointer">Repair vs Replace Engine</button></li>
-              <li><button onClick={() => handleNavigateToTool('tools/warranty-checker')} className="hover:text-emerald-400 transition cursor-pointer">Warranty Expiry Tracker</button></li>
-              <li><button onClick={() => handleNavigateToTool('tools/depreciation-calculator')} className="hover:text-emerald-400 transition cursor-pointer">Depreciation & Valuation Engine</button></li>
-              <li><button onClick={() => handleNavigateToTool('tools/ownership-cost')} className="hover:text-emerald-400 transition cursor-pointer">Total Cost of Ownership (TCO)</button></li>
-              <li><button onClick={() => handleNavigateToTool('tools/maintenance-checker')} className="hover:text-emerald-400 transition cursor-pointer">Predictive Maintenance Checker</button></li>
-            </ul>
-          </div>
-
-          {/* Knowledge & Universes */}
-          <div className="space-y-2.5">
-            <h4 className="font-bold text-white uppercase text-[11px] tracking-wider font-mono">Asset Intelligence</h4>
-            <ul className="space-y-1.5 text-[11px]">
-              <li><button onClick={() => handleNavigateToKnowledge('VEHICLE')} className="hover:text-emerald-400 transition cursor-pointer">Automotive & 2-Wheelers</button></li>
-              <li><button onClick={() => handleNavigateToKnowledge('ELECTRONICS')} className="hover:text-emerald-400 transition cursor-pointer">Smartphones & Laptops</button></li>
-              <li><button onClick={() => handleNavigateToKnowledge('APPLIANCE')} className="hover:text-emerald-400 transition cursor-pointer">HVAC & Home Appliances</button></li>
-              <li><button onClick={() => handleNavigateToKnowledge('SOLAR')} className="hover:text-emerald-400 transition cursor-pointer">Solar & Energy Systems</button></li>
-              <li><button onClick={() => handleNavigateToKnowledge('BUSINESS')} className="hover:text-emerald-400 transition cursor-pointer">Business & Production Assets</button></li>
-            </ul>
-          </div>
-
-          {/* Privacy & Account */}
-          <div className="space-y-2.5">
-            <h4 className="font-bold text-white uppercase text-[11px] tracking-wider font-mono">Account & Vault</h4>
-            <ul className="space-y-1.5 text-[11px]">
-              <li>
-                {currentUser ? (
-                  <button onClick={() => setActiveTab('my_vault')} className="hover:text-emerald-400 transition cursor-pointer">My Asset Vault</button>
-                ) : (
-                  <button onClick={() => setIsAuthModalOpen(true)} className="hover:text-emerald-400 transition cursor-pointer">Customer Sign In</button>
-                )}
-              </li>
-              <li><button onClick={onOpenAppVault} className="hover:text-emerald-400 transition cursor-pointer">Enter App Vault</button></li>
-              <li><a href="/admin" className="hover:text-slate-200 transition">Super Admin Console</a></li>
-              <li className="text-slate-500 pt-2 text-[10px]">Client-side encryption · Zero advertiser sharing</li>
-            </ul>
-          </div>
-        </div>
-
-        <div className="max-w-6xl mx-auto pt-6 border-t border-slate-800/60 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-slate-500">
-          <p>© 2026 Asset Doctor Inc. Universal Asset Intelligence & Lifecycle Management. All rights reserved.</p>
-          <div className="flex items-center gap-4">
-            <span>Encrypted Offline-First Storage</span>
-            <span>•</span>
-            <span>Indian Accounting WDV / SLM Standards</span>
-          </div>
-        </div>
-      </footer>
+      {/* 6. Global Trust & Platform Footer */}
+      <GlobalTrustFooter
+        onNavigateTab={(tab) => {
+          setActiveTab(tab as PlatformTab);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        onSelectTool={handleNavigateToTool}
+      />
     </div>
   );
 };

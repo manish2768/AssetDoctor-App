@@ -273,6 +273,101 @@ export class SeoRegistry {
       relatedToolSlugs: ['tools/depreciation-calculator', 'tools/repair-or-replace', 'tools/vehicle-service-calculator'],
       relatedAssetCategories: ['VEHICLE', 'APPLIANCE', 'ELECTRONICS'],
       updatedAt: '2026-08-25'
+    },
+    'about': {
+      slug: 'about',
+      canonicalUrl: 'https://assetdoctor.in/about',
+      category: 'UNIVERSAL',
+      title: 'About Asset Doctor | Universal Asset Intelligence Platform',
+      metaDescription: 'Discover the story behind Asset Doctor, the universal asset lifecycle intelligence platform created by Ashutosh Rai to understand, protect, and manage physical assets.',
+      h1: 'Built to Understand Everything You Own',
+      intro: 'Asset Doctor is a universal asset intelligence and lifecycle platform designed to help people understand, protect, maintain and manage the things that matter to them.',
+      toolType: 'UNIVERSAL_EXPLORER',
+      supportingContent: [
+        {
+          sectionTitle: 'The Story of Asset Doctor',
+          paragraphs: [
+            'Asset Doctor began with a simple question: why should managing the things we own be so complicated? From vehicles and smartphones to air conditioners, appliances, solar systems and business equipment, every important asset has a lifecycle.',
+            'What makes the story unusual is the person behind the project — Ashutosh Rai, who began building Asset Doctor at just 14 years of age with curiosity and determination to learn by building.'
+          ]
+        }
+      ],
+      faq: [
+        {
+          question: 'What is the vision of Asset Doctor?',
+          answer: 'To serve as a long-term digital memory for everything people own: documents, warranties, maintenance, health, valuation, and lifecycle decisions.'
+        }
+      ],
+      relatedToolSlugs: ['tools/warranty-checker', 'tools/repair-or-replace', 'tools/asset-health-check'],
+      relatedAssetCategories: ['VEHICLE', 'ELECTRONICS', 'APPLIANCE'],
+      updatedAt: '2026-08-25'
+    },
+    'privacy-policy': {
+      slug: 'privacy-policy',
+      canonicalUrl: 'https://assetdoctor.in/privacy-policy',
+      category: 'UNIVERSAL',
+      title: 'Privacy Policy | Asset Doctor',
+      metaDescription: 'Asset Doctor Privacy Policy: Learn how we protect your asset data, enforce automated PII scrubbing, and maintain client-side zero-advertiser data isolation.',
+      h1: 'Privacy Policy',
+      intro: 'How Asset Doctor collects, vaults, scrubs, and protects your personal asset information.',
+      toolType: 'UNIVERSAL_EXPLORER',
+      supportingContent: [
+        {
+          sectionTitle: 'Privacy-First Architecture',
+          paragraphs: [
+            'Asset Doctor enforces strict client-side PII scrubbing and never sells customer data to advertisers or third-party data brokers.'
+          ]
+        }
+      ],
+      faq: [],
+      relatedToolSlugs: ['tools/warranty-checker', 'tools/repair-or-replace'],
+      relatedAssetCategories: ['UNIVERSAL', 'VEHICLE', 'ELECTRONICS'],
+      updatedAt: '2026-08-25'
+    },
+    'terms-and-conditions': {
+      slug: 'terms-and-conditions',
+      canonicalUrl: 'https://assetdoctor.in/terms-and-conditions',
+      category: 'UNIVERSAL',
+      title: 'Terms & Conditions | Asset Doctor',
+      metaDescription: 'Asset Doctor Terms and Conditions: User agreement, service capabilities, calculation heuristics, and intellectual property terms.',
+      h1: 'Terms & Conditions',
+      intro: 'Operating terms and usage conditions governing the Asset Doctor platform.',
+      toolType: 'UNIVERSAL_EXPLORER',
+      supportingContent: [],
+      faq: [],
+      relatedToolSlugs: ['tools/warranty-checker', 'tools/repair-or-replace'],
+      relatedAssetCategories: ['UNIVERSAL', 'VEHICLE', 'ELECTRONICS'],
+      updatedAt: '2026-08-25'
+    },
+    'contact': {
+      slug: 'contact',
+      canonicalUrl: 'https://assetdoctor.in/contact',
+      category: 'UNIVERSAL',
+      title: 'Contact Asset Doctor',
+      metaDescription: 'Get in touch with Asset Doctor. Submit product feedback, report technical issues, or inquire about business asset portfolio partnerships.',
+      h1: "Let's Build the Future of Asset Intelligence",
+      intro: 'Connect with the Asset Doctor engineering and support team.',
+      toolType: 'UNIVERSAL_EXPLORER',
+      supportingContent: [],
+      faq: [],
+      relatedToolSlugs: ['tools/warranty-checker', 'tools/repair-or-replace'],
+      relatedAssetCategories: ['UNIVERSAL', 'VEHICLE', 'ELECTRONICS'],
+      updatedAt: '2026-08-25'
+    },
+    'cookie-policy': {
+      slug: 'cookie-policy',
+      canonicalUrl: 'https://assetdoctor.in/cookie-policy',
+      category: 'UNIVERSAL',
+      title: 'Cookie Policy | Asset Doctor',
+      metaDescription: 'Learn how Asset Doctor uses essential local storage and privacy-scrubbed analytics without third-party advertising tracking cookies.',
+      h1: 'Cookie & Local Storage Policy',
+      intro: 'Information regarding browser cookies and local storage usage.',
+      toolType: 'UNIVERSAL_EXPLORER',
+      supportingContent: [],
+      faq: [],
+      relatedToolSlugs: ['tools/warranty-checker', 'tools/repair-or-replace'],
+      relatedAssetCategories: ['UNIVERSAL', 'VEHICLE', 'ELECTRONICS'],
+      updatedAt: '2026-08-25'
     }
   };
 
