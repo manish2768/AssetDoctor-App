@@ -1970,6 +1970,29 @@ function showAuthError(msg) {
   $('authError').classList.remove('hidden');
 }
 
+function formatAuthErrorMessage(err) {
+  if (!err) return 'Authentication failed. Please verify credentials.';
+  const code = err.code || '';
+  const msg = err.message || '';
+
+  if (code === 'auth/wrong-password' || code === 'auth/invalid-credential' || code === 'auth/user-not-found' || code === 'auth/invalid-email') {
+    return 'Email or password is incorrect.';
+  }
+  if (code === 'auth/too-many-requests') {
+    return 'Too many failed login attempts. Access temporarily locked for security. Please try again in a few minutes.';
+  }
+  if (code === 'auth/network-request-failed') {
+    return 'Authentication service is temporarily unavailable. Please check your internet connection and try again.';
+  }
+  if (code === 'auth/user-disabled') {
+    return 'This administrative account has been deactivated. Please contact security administration.';
+  }
+  if (msg.includes('Access denied') || msg.includes('Super Admin')) {
+    return 'Access denied — Super Admin authorization required.';
+  }
+  return msg || 'Something went wrong while opening the Admin Console.';
+}
+
 // ----------------------------------------------------
 // Secure Firebase Auth & Admin Claims Verification
 // ----------------------------------------------------
@@ -1979,19 +2002,40 @@ auth.onAuthStateChanged(async (user) => {
     state.currentRole = null;
     $('authScreen').classList.remove('hidden');
     $('appShell').classList.add('hidden');
+    const btn = $('btnSignIn');
+    if (btn) {
+      btn.disabled = false;
+      $('btnSignInText').textContent = 'Authenticate & Open Console';
+    }
     return;
+  }
+
+  const btn = $('btnSignIn');
+  if (btn) {
+    btn.disabled = true;
+    $('btnSignInText').textContent = 'Verifying Admin Access…';
   }
 
   try {
     await user.getIdToken(true);
     const tokenResult = await user.getIdTokenResult(true);
     const claims = tokenResult.claims || {};
-    const isSuperAdmin = claims.super_admin === true;
+    
+    // Super admin check: verified custom claim OR primary authorized master administrator email
+    const isSuperAdmin = claims.super_admin === true || user.email === 'manish2768@gmail.com';
 
     if (!isSuperAdmin) {
-      showAuthError('Access denied. Super Admin authorization required.');
+      showAuthError('Access denied — Super Admin authorization required.');
+      if (btn) {
+        btn.disabled = false;
+        $('btnSignInText').textContent = 'Try Again';
+      }
       await auth.signOut();
       return;
+    }
+
+    if (btn) {
+      $('btnSignInText').textContent = 'Opening Admin Console…';
     }
 
     state.currentUser = user;
@@ -2002,14 +2046,23 @@ auth.onAuthStateChanged(async (user) => {
     $('authScreen').classList.add('hidden');
     $('appShell').classList.remove('hidden');
 
+    if (btn) {
+      $('btnSignInText').textContent = 'Console Opened';
+    }
+
     subscribeToFirestoreData();
   } catch (err) {
-    showAuthError('Authorization failed: ' + err.message);
+    showAuthError('Admin authorization could not be verified because the database or auth service is unavailable: ' + err.message);
+    if (btn) {
+      btn.disabled = false;
+      $('btnSignInText').textContent = 'Try Again';
+    }
     await auth.signOut();
   }
 });
 
-$('btnSignIn').addEventListener('click', async () => {
+$('btnSignIn').addEventListener('click', async (e) => {
+  e.preventDefault();
   showAuthError('');
   const email = $('loginEmail').value.trim();
   const password = $('loginPassword').value;
@@ -2019,16 +2072,16 @@ $('btnSignIn').addEventListener('click', async () => {
   }
 
   const btn = $('btnSignIn');
+  if (btn.disabled) return; // Prevent duplicate concurrent submissions
   btn.disabled = true;
   $('btnSignInText').textContent = 'Authenticating…';
 
   try {
     await auth.signInWithEmailAndPassword(email, password);
   } catch (err) {
-    showAuthError(err.message || 'Authentication failed. Please verify credentials.');
-  } finally {
+    showAuthError(formatAuthErrorMessage(err));
     btn.disabled = false;
-    $('btnSignInText').textContent = 'Authenticate & Open Console';
+    $('btnSignInText').textContent = 'Try Again';
   }
 });
 
@@ -3457,7 +3510,7 @@ function openCustomerModal(uid) {
   const userAssets = state.assets.filter(a => (a.ownerUid === uid || a.uid === uid));
   $('modalCustomerAssetCount').textContent = userAssets.length.toString();
   if (!userAssets.length) {
-    $('modalCustomerAssetsList').innerHTML = '<p class="text-slate-500 py-3">No assets attached to this account.</p>
+    $('modalCustomerAssetsList').innerHTML = '<p class="text-slate-500 py-3">No assets attached to this account.</p>';
   } else {
     $('modalCustomerAssetsList').innerHTML = userAssets.map(a => `
       <div onclick="closeModal('customerModal'); openAssetModal('${a.id}');" class="p-3 rounded-xl border border-white/10 bg-slate-900/60 hover:bg-slate-800/60 cursor-pointer flex items-center justify-between transition">
