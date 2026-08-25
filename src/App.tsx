@@ -66,7 +66,7 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isAccountSettingsModalOpen, setIsAccountSettingsModalOpen] = useState(false);
   const [isWarrantyAlertsModalOpen, setIsWarrantyAlertsModalOpen] = useState(false);
-  const [showSplash, setShowSplash] = useState(true);
+  const [showSplash, setShowSplash] = useState(false);
   const [userPhone, setUserPhone] = useState<string>(() => {
     return localStorage.getItem('assetdoctor_user_phone') || '+91 98765 43210';
   });

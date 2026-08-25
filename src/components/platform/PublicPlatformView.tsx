@@ -15,19 +15,24 @@ import {
   ExternalLink,
   ChevronRight,
   User,
-  LogOut
+  LogOut,
+  Wrench,
+  ShieldCheck,
+  CalendarCheck,
+  FileSearch,
+  DollarSign
 } from 'lucide-react';
-import { UniversalSearchBar } from './UniversalSearchBar';
-import { DailyReturnEngine } from './DailyReturnEngine';
-import { UniversalAssetExplorer } from './UniversalAssetExplorer';
-import { SmartDocumentAnalyzerTool } from './SmartDocumentAnalyzerTool';
+import { PublicHomepageView } from './PublicHomepageView';
+import { SmartKnowledgeHub } from './knowledge/SmartKnowledgeHub';
+import { UniversalDailyToolsHub } from './tools/UniversalDailyToolsHub';
 import { RepairVsReplaceTool } from './RepairVsReplaceTool';
-import { AssetHealthPreviewTool } from './AssetHealthPreviewTool';
+import { MaintenanceCheckerTool } from './tools/MaintenanceCheckerTool';
+import { AssetHealthScoreTool } from './tools/AssetHealthScoreTool';
+import { SmartDocumentAnalyzerTool } from './SmartDocumentAnalyzerTool';
+import { ExploreYourAsset } from './tools/ExploreYourAsset';
 import { AssetPassportPreview } from './AssetPassportPreview';
 import { SeoToolPageTemplate } from './SeoToolPageTemplate';
 import { SeoRegistry } from '../../platform/seo/seoRegistry';
-import { SmartKnowledgeHub } from './knowledge/SmartKnowledgeHub';
-import { UniversalDailyToolsHub } from './tools/UniversalDailyToolsHub';
 import { KnowledgeCategory } from '../../platform/knowledge/knowledgeHubData';
 
 interface PublicPlatformViewProps {
@@ -37,13 +42,15 @@ interface PublicPlatformViewProps {
 }
 
 export type PlatformTab =
-  | 'daily_actions'
+  | 'home'
   | 'knowledge_hub'
   | 'tools_hub'
-  | 'asset_explorer'
-  | 'doc_analyzer'
   | 'repair_vs_replace'
-  | 'health_check'
+  | 'warranty_checker'
+  | 'maintenance_checker'
+  | 'health_score'
+  | 'invoice_analyzer'
+  | 'asset_explorer'
   | 'passport'
   | 'seo_page';
 
@@ -52,7 +59,7 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
   onOpenLoginModal,
   currentUser
 }) => {
-  const [activeTab, setActiveTab] = useState<PlatformTab>('daily_actions');
+  const [activeTab, setActiveTab] = useState<PlatformTab>('home');
   const [activeKnowledgeCat, setActiveKnowledgeCat] = useState<KnowledgeCategory | undefined>(undefined);
   const [activeSeoSlug, setActiveSeoSlug] = useState<string>('tools/warranty-checker');
 
@@ -62,18 +69,31 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleNavigateToSeoPage = (slug: string) => {
-    setActiveSeoSlug(slug);
-    setActiveTab('seo_page');
+  const handleNavigateToTool = (slug: string) => {
+    if (slug === 'tools/repair-or-replace') {
+      setActiveTab('repair_vs_replace');
+    } else if (slug === 'tools/maintenance-checker') {
+      setActiveTab('maintenance_checker');
+    } else if (slug === 'tools/asset-health-score') {
+      setActiveTab('health_score');
+    } else if (slug === 'tools/invoice-analyzer' || slug === 'tools/document-analyzer') {
+      setActiveTab('invoice_analyzer');
+    } else if (slug === 'tools/warranty-checker' || slug === 'tools/ownership-cost' || slug === 'tools/asset-depreciation') {
+      setActiveSeoSlug(slug);
+      setActiveTab('seo_page');
+    } else {
+      setActiveSeoSlug(slug);
+      setActiveTab('seo_page');
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
     <div className="min-h-screen bg-[#070D18] text-slate-100 flex flex-col selection:bg-emerald-500 selection:text-slate-950">
-      {/* 1. Global Navigation Bar */}
+      {/* 1. Global Header Navigation Bar */}
       <header className="sticky top-0 z-50 bg-[#070D18]/90 backdrop-blur-2xl border-b border-slate-800/80 px-4 sm:px-8 py-3.5 flex items-center justify-between gap-4">
-        {/* Brand Logo & Positioning */}
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveTab('daily_actions')}>
+        {/* Brand Logo & Universal Positioning */}
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => { setActiveTab('home'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
           <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 via-teal-400 to-cyan-400 p-0.5 shadow-lg shadow-emerald-500/20">
             <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
               <Shield className="w-5 h-5 text-emerald-400" />
@@ -94,15 +114,25 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
           </div>
         </div>
 
-        {/* Center: Navigation Links */}
+        {/* Center: Desktop Navigation Links */}
         <nav className="hidden lg:flex items-center gap-1 bg-slate-950/80 border border-slate-800/90 p-1 rounded-2xl text-xs font-bold">
           <button
-            onClick={() => setActiveTab('daily_actions')}
+            onClick={() => setActiveTab('home')}
             className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'daily_actions' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
+              activeTab === 'home' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
-            What to Do Today
+            Home
+          </button>
+          <button
+            onClick={() => setActiveTab('tools_hub')}
+            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'tools_hub' || activeTab === 'repair_vs_replace' || activeTab === 'maintenance_checker' || activeTab === 'health_score'
+                ? 'bg-emerald-500 text-slate-950 font-black shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Free Tools
           </button>
           <button
             onClick={() => handleNavigateToKnowledge()}
@@ -113,36 +143,20 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
             Knowledge Hub
           </button>
           <button
-            onClick={() => setActiveTab('tools_hub')}
-            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'tools_hub' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Daily Utility Tools
-          </button>
-          <button
-            onClick={() => setActiveTab('doc_analyzer')}
-            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'doc_analyzer' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Doc Analyzer
-          </button>
-          <button
             onClick={() => setActiveTab('asset_explorer')}
             className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
               activeTab === 'asset_explorer' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
-            Asset Explorer
+            Explore Assets
           </button>
           <button
-            onClick={() => setActiveTab('passport')}
+            onClick={() => setActiveTab('invoice_analyzer')}
             className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'passport' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
+              activeTab === 'invoice_analyzer' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
-            Passport
+            Bill Analyzer
           </button>
         </nav>
 
@@ -157,134 +171,46 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
               <ChevronRight className="w-4 h-4" />
             </button>
           ) : (
-            <button
-              onClick={onOpenLoginModal || onOpenAppVault}
-              className="px-4 sm:px-5 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm transition-all cursor-pointer flex items-center gap-2 shadow-lg shadow-emerald-500/20"
-            >
-              <span>Open Vault</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              {onOpenLoginModal && (
+                <button
+                  onClick={onOpenLoginModal}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-300 hover:text-white border border-slate-800 hover:border-slate-700 bg-slate-900/80 cursor-pointer hidden sm:block"
+                >
+                  Sign In
+                </button>
+              )}
+              <button
+                onClick={onOpenAppVault}
+                className="px-4 sm:px-5 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm transition-all cursor-pointer flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+              >
+                <span>Enter Vault</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           )}
         </div>
       </header>
 
-      {/* 2. Hero & Universal Search Section */}
-      <section className="relative px-4 sm:px-8 pt-10 pb-8 text-center space-y-6 overflow-hidden">
-        {/* Background ambient lighting */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 max-w-4xl mx-auto space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-black uppercase tracking-wider">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Universal Asset Intelligence Platform</span>
-          </div>
-
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-tight">
-            Know What You Own.<br />
-            <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">
-              Know What It Needs.
-            </span>
-          </h1>
-
-          <p className="text-xs sm:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed">
-            Universal asset tracking, warranty protection, OEM service predictions, and fair market valuation across vehicles, electronics, appliances, and home living.
-          </p>
-
-          {/* Universal Search Bar */}
-          <div className="pt-2">
-            <UniversalSearchBar onSelectResult={(res) => {
-              if (res.moduleId) setActiveTab('asset_explorer');
-            }} />
-          </div>
-
-          {/* 3-Step Universal Intelligence Micro-Guide */}
-          <div className="pt-8 max-w-5xl mx-auto">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
-              {/* Step 1 */}
-              <div className="p-5 rounded-2xl bg-gradient-to-b from-slate-900/80 to-slate-950/80 border border-slate-800/80 hover:border-emerald-500/30 transition-all duration-300 group shadow-lg">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
-                    Step 01
-                  </span>
-                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
-                    <Layers className="w-4 h-4" />
-                  </div>
-                </div>
-                <h3 className="text-sm font-black text-white group-hover:text-emerald-300 transition-colors">
-                  1. Add Your Asset
-                </h3>
-                <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
-                  Add your car, bike, phone, AC, appliance, electronics or any other valuable asset.
-                </p>
-                <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-slate-800/60">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-slate-400 border border-slate-800">Vehicles</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-slate-400 border border-slate-800">Phones</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-slate-400 border border-slate-800">Appliances</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-slate-400 border border-slate-800">Home Living</span>
-                </div>
-              </div>
-
-              {/* Step 2 */}
-              <div className="p-5 rounded-2xl bg-gradient-to-b from-slate-900/80 to-slate-950/80 border border-slate-800/80 hover:border-teal-500/30 transition-all duration-300 group shadow-lg">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20 font-mono">
-                    Step 02
-                  </span>
-                  <div className="w-8 h-8 rounded-xl bg-teal-500/10 flex items-center justify-center text-teal-400 group-hover:scale-110 transition-transform">
-                    <FileText className="w-4 h-4" />
-                  </div>
-                </div>
-                <h3 className="text-sm font-black text-white group-hover:text-teal-300 transition-colors">
-                  2. Scan & Understand
-                </h3>
-                <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
-                  Upload invoices, warranty, insurance, service records and important documents.
-                </p>
-                <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-slate-800/60">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-slate-400 border border-slate-800">OCR Extraction</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-slate-400 border border-slate-800">GST Invoice</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-slate-400 border border-slate-800">Warranty Card</span>
-                </div>
-              </div>
-
-              {/* Step 3 */}
-              <div className="p-5 rounded-2xl bg-gradient-to-b from-slate-900/80 to-slate-950/80 border border-slate-800/80 hover:border-cyan-500/30 transition-all duration-300 group shadow-lg">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-mono">
-                    Step 03
-                  </span>
-                  <div className="w-8 h-8 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 group-hover:scale-110 transition-transform">
-                    <Activity className="w-4 h-4" />
-                  </div>
-                </div>
-                <h3 className="text-sm font-black text-white group-hover:text-cyan-300 transition-colors">
-                  3. Stay Ahead
-                </h3>
-                <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
-                  Asset Doctor tracks maintenance, documents, expiry dates, health and important reminders.
-                </p>
-                <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-slate-800/60">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-slate-400 border border-slate-800">Service Due</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-slate-400 border border-slate-800">Health Score</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-slate-400 border border-slate-800">Repair Decision</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 3. Main Content View Area */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-8 pb-16 space-y-8">
-        {/* Mobile Navigation Tabs */}
+      {/* 2. Main Content Viewport */}
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-8 py-8 space-y-8">
+        {/* Mobile Navigation Bar */}
         <div className="flex lg:hidden items-center gap-1.5 overflow-x-auto pb-2 scrollbar-thin">
           <button
-            onClick={() => setActiveTab('daily_actions')}
+            onClick={() => setActiveTab('home')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${
-              activeTab === 'daily_actions' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
+              activeTab === 'home' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
             }`}
           >
-            What to Do Today
+            Home
+          </button>
+          <button
+            onClick={() => setActiveTab('tools_hub')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${
+              activeTab === 'tools_hub' || activeTab === 'repair_vs_replace' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
+            }`}
+          >
+            Free Tools
           </button>
           <button
             onClick={() => handleNavigateToKnowledge()}
@@ -295,52 +221,30 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
             Knowledge Hub
           </button>
           <button
-            onClick={() => setActiveTab('tools_hub')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${
-              activeTab === 'tools_hub' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
-            }`}
-          >
-            Daily Tools
-          </button>
-          <button
-            onClick={() => setActiveTab('doc_analyzer')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${
-              activeTab === 'doc_analyzer' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
-            }`}
-          >
-            Doc Analyzer
-          </button>
-          <button
             onClick={() => setActiveTab('asset_explorer')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${
               activeTab === 'asset_explorer' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
             }`}
           >
-            Asset Explorer
+            Explore Assets
           </button>
           <button
-            onClick={() => setActiveTab('passport')}
+            onClick={() => setActiveTab('invoice_analyzer')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${
-              activeTab === 'passport' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
+              activeTab === 'invoice_analyzer' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
             }`}
           >
-            Passport
+            Bill Analyzer
           </button>
         </div>
 
-        {/* Tab View Switcher */}
-        {activeTab === 'daily_actions' && (
-          <div className="space-y-10">
-            <DailyReturnEngine onActionClick={() => onOpenAppVault()} />
-            <UniversalAssetExplorer />
-          </div>
-        )}
-
-        {activeTab === 'knowledge_hub' && (
-          <SmartKnowledgeHub
-            initialCategory={activeKnowledgeCat}
-            onSelectCalculator={(slug) => handleNavigateToSeoPage(slug)}
+        {/* Dynamic Route View Switcher */}
+        {activeTab === 'home' && (
+          <PublicHomepageView
+            onSelectTool={handleNavigateToTool}
+            onSelectKnowledge={(id) => handleNavigateToKnowledge()}
             onOpenVaultApp={onOpenAppVault}
+            onOpenLoginModal={onOpenLoginModal}
           />
         )}
 
@@ -350,20 +254,43 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
           />
         )}
 
-        {activeTab === 'asset_explorer' && (
-          <UniversalAssetExplorer />
-        )}
-
-        {activeTab === 'doc_analyzer' && (
-          <SmartDocumentAnalyzerTool />
-        )}
-
         {activeTab === 'repair_vs_replace' && (
-          <RepairVsReplaceTool />
+          <div className="space-y-6">
+            <RepairVsReplaceTool onSaveToVault={onOpenAppVault} />
+          </div>
         )}
 
-        {activeTab === 'health_check' && (
-          <AssetHealthPreviewTool />
+        {activeTab === 'maintenance_checker' && (
+          <div className="space-y-6">
+            <MaintenanceCheckerTool onSaveToVault={onOpenAppVault} />
+          </div>
+        )}
+
+        {activeTab === 'health_score' && (
+          <div className="space-y-6">
+            <AssetHealthScoreTool onSaveToVault={onOpenAppVault} />
+          </div>
+        )}
+
+        {activeTab === 'invoice_analyzer' && (
+          <div className="space-y-6">
+            <SmartDocumentAnalyzerTool />
+          </div>
+        )}
+
+        {activeTab === 'knowledge_hub' && (
+          <SmartKnowledgeHub
+            initialCategory={activeKnowledgeCat}
+            onSelectCalculator={(slug) => handleNavigateToTool(slug)}
+            onOpenVaultApp={onOpenAppVault}
+          />
+        )}
+
+        {activeTab === 'asset_explorer' && (
+          <ExploreYourAsset
+            onSelectKnowledge={(id) => handleNavigateToKnowledge()}
+            onSelectTool={(slug) => handleNavigateToTool(slug)}
+          />
         )}
 
         {activeTab === 'passport' && (
@@ -373,94 +300,124 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
         {activeTab === 'seo_page' && (
           <SeoToolPageTemplate
             pageDefinition={SeoRegistry.getPage(activeSeoSlug) || SeoRegistry.getPage('tools/warranty-checker')!}
-            onNavigateToTool={handleNavigateToSeoPage}
+            onNavigateToTool={handleNavigateToTool}
             onOpenApp={onOpenAppVault}
           />
         )}
       </main>
 
-      {/* 4. Global Platform Footer */}
-      <footer className="bg-slate-950 border-t border-slate-800/80 px-4 sm:px-8 py-10 text-xs text-slate-400 space-y-6">
+      {/* 3. Global Platform Footer */}
+      <footer className="bg-slate-950 border-t border-slate-800/80 px-4 sm:px-8 py-12 text-xs text-slate-400 space-y-8">
         <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand Info */}
-          <div className="space-y-2">
+          <div className="space-y-3">
             <div className="flex items-center gap-2">
               <Shield className="w-5 h-5 text-emerald-400" />
               <span className="font-black text-white text-base">Asset Doctor</span>
             </div>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              The Universal Asset Intelligence & Lifecycle Platform. Crafted by Ashutosh (14) for 10-year scalable asset surveillance.
+              The Universal Asset Intelligence & Lifecycle Platform. Know what you own, what it needs, and what it is worth.
             </p>
+            <div className="flex items-center gap-2 text-[10px] text-emerald-400 font-mono">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>Platform Online · v2.8 Universal</span>
+            </div>
           </div>
 
-          {/* Free Tools */}
-          <div>
-            <span className="text-[10px] font-black uppercase text-slate-300 tracking-wider block mb-2">
-              Free Intelligent Tools
-            </span>
+          {/* Free Interactive Tools */}
+          <div className="space-y-2.5">
+            <h4 className="font-bold text-white uppercase text-[10px] tracking-wider font-mono text-emerald-400">
+              Free Asset Tools
+            </h4>
             <ul className="space-y-1.5 text-[11px]">
               <li>
-                <button onClick={() => handleNavigateToSeoPage('tools/warranty-checker')} className="hover:text-emerald-400 cursor-pointer">
-                  Warranty Checker & Tracker
-                </button>
-              </li>
-              <li>
-                <button onClick={() => handleNavigateToSeoPage('tools/repair-or-replace')} className="hover:text-emerald-400 cursor-pointer">
+                <button onClick={() => handleNavigateToTool('tools/repair-or-replace')} className="hover:text-white transition-colors cursor-pointer">
                   Repair vs. Replace Calculator
                 </button>
               </li>
               <li>
-                <button onClick={() => handleNavigateToSeoPage('tools/document-analyzer')} className="hover:text-emerald-400 cursor-pointer">
-                  Smart Bill & Invoice Analyzer
+                <button onClick={() => handleNavigateToTool('tools/warranty-checker')} className="hover:text-white transition-colors cursor-pointer">
+                  Warranty Expiry Checker
                 </button>
               </li>
               <li>
-                <button onClick={() => handleNavigateToSeoPage('tools/vehicle-service-calculator')} className="hover:text-emerald-400 cursor-pointer">
-                  Vehicle Service Calculator
+                <button onClick={() => handleNavigateToTool('tools/maintenance-checker')} className="hover:text-white transition-colors cursor-pointer">
+                  Maintenance Interval Checker
+                </button>
+              </li>
+              <li>
+                <button onClick={() => handleNavigateToTool('tools/asset-health-score')} className="hover:text-white transition-colors cursor-pointer">
+                  100-Point Asset Health Audit
+                </button>
+              </li>
+              <li>
+                <button onClick={() => handleNavigateToTool('tools/ownership-cost')} className="hover:text-white transition-colors cursor-pointer">
+                  Ownership Cost (TCO) Calculator
+                </button>
+              </li>
+              <li>
+                <button onClick={() => handleNavigateToTool('tools/invoice-analyzer')} className="hover:text-white transition-colors cursor-pointer">
+                  Bill & Invoice Analyzer
                 </button>
               </li>
             </ul>
           </div>
 
-          {/* Category Intelligence Hubs */}
-          <div>
-            <span className="text-[10px] font-black uppercase text-slate-300 tracking-wider block mb-2">
-              Asset Categories
-            </span>
+          {/* Knowledge Categories */}
+          <div className="space-y-2.5">
+            <h4 className="font-bold text-white uppercase text-[10px] tracking-wider font-mono text-cyan-400">
+              Knowledge Hub
+            </h4>
             <ul className="space-y-1.5 text-[11px]">
-              <li><button onClick={() => setActiveTab('asset_explorer')} className="hover:text-emerald-400 cursor-pointer">Vehicles & Automotive</button></li>
-              <li><button onClick={() => setActiveTab('asset_explorer')} className="hover:text-emerald-400 cursor-pointer">Smartphones & Electronics</button></li>
-              <li><button onClick={() => setActiveTab('asset_explorer')} className="hover:text-emerald-400 cursor-pointer">Home Appliances (AC, Geyser)</button></li>
-              <li><button onClick={() => setActiveTab('asset_explorer')} className="hover:text-emerald-400 cursor-pointer">Home Living & Solar</button></li>
+              <li>
+                <button onClick={() => handleNavigateToKnowledge('vehicles')} className="hover:text-white transition-colors cursor-pointer">
+                  Vehicles & Motorcycles
+                </button>
+              </li>
+              <li>
+                <button onClick={() => handleNavigateToKnowledge('electronics')} className="hover:text-white transition-colors cursor-pointer">
+                  Smartphones & Laptops
+                </button>
+              </li>
+              <li>
+                <button onClick={() => handleNavigateToKnowledge('home-appliances')} className="hover:text-white transition-colors cursor-pointer">
+                  AC & Home Appliances
+                </button>
+              </li>
+              <li>
+                <button onClick={() => handleNavigateToKnowledge('household-assets')} className="hover:text-white transition-colors cursor-pointer">
+                  Solar & Household Living
+                </button>
+              </li>
             </ul>
           </div>
 
-          {/* Security & Access */}
-          <div>
-            <span className="text-[10px] font-black uppercase text-slate-300 tracking-wider block mb-2">
-              Platform Security
-            </span>
-            <div className="space-y-2 text-[11px]">
-              <div className="flex items-center gap-1.5 text-emerald-400">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Client-Side Encrypted Storage</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-emerald-400">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Zero Third-Party Ad Trackers</span>
-              </div>
-              <a href="/admin" className="text-slate-500 hover:text-slate-400 block pt-1 font-mono">
-                Admin Control Center &rarr;
-              </a>
+          {/* Trust & Enterprise Governance */}
+          <div className="space-y-2.5">
+            <h4 className="font-bold text-white uppercase text-[10px] tracking-wider font-mono text-teal-400">
+              Security & Trust
+            </h4>
+            <div className="space-y-1.5 text-[11px] text-slate-400">
+              <p>🔒 AES-256 Client Vault</p>
+              <p>🛡️ Zero Advertiser Sharing</p>
+              <p>⚡ DPDP & GDPR Compliant</p>
+              <p className="pt-2">
+                <a href="/admin" className="text-slate-500 hover:text-slate-300 font-mono text-[10px]">
+                  Enterprise Admin Access
+                </a>
+              </p>
             </div>
           </div>
         </div>
 
-        <div className="max-w-6xl mx-auto pt-6 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-slate-500">
-          <p>&copy; 2026 Asset Doctor Platform. All rights reserved. Servivault v2.8 Live PWA.</p>
+        <div className="max-w-6xl mx-auto pt-6 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] text-slate-500 font-mono">
+          <p>© 2026 Asset Doctor Technologies. Universal Asset Intelligence Architecture.</p>
           <div className="flex items-center gap-4">
-            <a href="/privacy" className="hover:text-slate-400">Privacy Policy</a>
-            <a href="/terms" className="hover:text-slate-400">Terms of Service</a>
+            <span>ISO 27001 Controls</span>
+            <span>•</span>
+            <span>256-bit SSL</span>
+            <span>•</span>
+            <span>All Categories Supported</span>
           </div>
         </div>
       </footer>
