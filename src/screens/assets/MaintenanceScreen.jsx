@@ -29,7 +29,9 @@ import { formatINR, formatINRExact } from '../../utils/format';
 import { Haptics } from '../../services/haptics';
 import { openLogin } from '../../navigation/authGate';
 import { CompleteMaintenanceSheet } from '../../components/CompleteMaintenanceSheet';
+import { MobileNumericField } from '../../components/ui/MobileNumericField';
 import { HIT } from '../../theme/tokens';
+import { resolveAssetCapabilities } from '../../services/assets/assetCapabilities';
 
 const SERVICE_TYPES = [
   { id: 'periodic', label: 'Periodic' },
@@ -48,6 +50,9 @@ export function MaintenanceScreen({ route, navigation }) {
   const asset = getAsset(assetId);
   const uid = user?.uid;
   const id = asset?.assetId || asset?.id || assetId;
+  const caps = asset ? resolveAssetCapabilities(asset) : {};
+  const showOdometer = caps.supportsOdometer === true;
+  const isAc = String(asset?.categoryId || '').toLowerCase() === 'ac';
 
   const [tab, setTab] = useState('schedule'); // schedule | cost | add
   const [schedules, setSchedules] = useState([]);
@@ -319,8 +324,21 @@ export function MaintenanceScreen({ route, navigation }) {
           </View>
           <Field label="Due date (YYYY-MM-DD)" value={dueDate} onChangeText={setDueDate} placeholder="2026-09-15" />
           <Field label="Workshop / garage" value={workshop} onChangeText={setWorkshop} />
-          <Field label="Odometer (km)" value={odometerKm} onChangeText={setOdometerKm} keyboardType="numeric" />
-          <Field label="Estimated cost (₹)" value={estimatedCost} onChangeText={setEstimatedCost} keyboardType="numeric" />
+          {showOdometer ? (
+            <MobileNumericField
+              label="Odometer (km)"
+              value={odometerKm}
+              onChangeText={setOdometerKm}
+              placeholder="12450"
+            />
+          ) : null}
+          <MobileNumericField
+            label="Estimated cost (₹)"
+            value={estimatedCost}
+            onChangeText={setEstimatedCost}
+            allowDecimal
+            placeholder="0"
+          />
           <Pressable style={styles.primary} onPress={onAddSchedule} disabled={busy}>
             {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Save schedule</Text>}
           </Pressable>
@@ -377,10 +395,23 @@ export function MaintenanceScreen({ route, navigation }) {
 
       {tab === 'add' ? (
         <View>
-          <Text style={styles.section}>Log maintenance expense</Text>
-          <Field label="What was done" value={logTitle} onChangeText={setLogTitle} placeholder="Oil + filter change" />
+          <Text style={styles.section}>
+            {isAc ? 'Log filter / service expense' : 'Log maintenance expense'}
+          </Text>
+          <Field
+            label="What was done"
+            value={logTitle}
+            onChangeText={setLogTitle}
+            placeholder={isAc ? 'Filter cleaning' : 'Oil + filter change'}
+          />
           <Field label="Date (YYYY-MM-DD)" value={logDate} onChangeText={setLogDate} />
-          <Field label="Cost (₹)" value={logCost} onChangeText={setLogCost} keyboardType="numeric" />
+          <MobileNumericField
+            label="Cost (₹)"
+            value={logCost}
+            onChangeText={setLogCost}
+            allowDecimal
+            placeholder="0"
+          />
           <Field label="Workshop / vendor" value={logVendor} onChangeText={setLogVendor} />
           <Field label="Notes" value={logNotes} onChangeText={setLogNotes} placeholder="Parts, warranty, etc." />
           <Pressable style={styles.primary} onPress={onAddLog} disabled={busy}>
@@ -475,6 +506,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
+    minHeight: 44,
     color: COLORS.text,
     backgroundColor: 'rgba(255,255,255,0.04)',
   },

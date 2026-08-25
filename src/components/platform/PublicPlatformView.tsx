@@ -33,6 +33,7 @@ import { AssetHealthScoreTool } from './tools/AssetHealthScoreTool';
 import { SmartDocumentAnalyzerTool } from './SmartDocumentAnalyzerTool';
 import { ExploreYourAsset } from './tools/ExploreYourAsset';
 import { AssetPassportPreview } from './AssetPassportPreview';
+import { PublicAssetPassportView } from './passport/PublicAssetPassportView';
 import { SeoToolPageTemplate } from './SeoToolPageTemplate';
 import { SeoRegistry } from '../../platform/seo/seoRegistry';
 import { KnowledgeCategory } from '../../platform/knowledge/knowledgeHubData';
@@ -605,7 +606,9 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
           )}
 
           {activeTab === 'passport' && (
-            <AssetPassportPreview />
+            <PublicAssetPassportView
+              onOpenVaultApp={currentUser ? () => setActiveTab('my_vault') : () => setIsAuthModalOpen(true)}
+            />
           )}
 
           {activeTab === 'seo_page' && (

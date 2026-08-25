@@ -23,27 +23,35 @@ export const UniversalSearchBar: React.FC<UniversalSearchBarProps> = ({
     'What is the warranty for this phone?',
     'When should I clean my AC filter?',
     'What is the maintenance schedule?',
-    'my AC filter is due',
     'TVS Ronin service schedule',
     'Samsung AC filter cleaning',
-    'when should I service my bike',
-    'phone warranty check',
-    'should I repair my washing machine',
-    'how much is my old laptop worth',
+    'my fridge warranty is ending',
+    'how often should I clean my AC',
+    'my laptop is 4 years old should I replace it',
+    'solar inverter maintenance',
+    'POS printer AMC',
+    'bike service due',
     'what documents should I keep for my car'
   ];
 
   const suggestionChips = [
-    { label: 'TVS Ronin service', type: 'knowledge', target: 'kn-tvs-ronin-225' },
-    { label: 'iPhone battery health', type: 'knowledge', target: 'kn-apple-iphone-15-16' },
-    { label: 'my AC filter is due', type: 'knowledge', target: 'kn-daikin-inverter-ac' },
+    { label: 'Is there a recall for my car?', type: 'tool', target: 'tools/service-due-calculator' },
+    { label: 'What is the maintenance schedule?', type: 'tool', target: 'tools/maintenance-checker' },
+    { label: 'When should I clean my AC filter?', type: 'knowledge', target: 'kn-daikin-inverter-ac' },
+    { label: 'What is the warranty for this phone?', type: 'tool', target: 'tools/warranty-checker' },
+    { label: 'my fridge warranty is ending', type: 'tool', target: 'tools/warranty-checker' },
+    { label: 'how often should I clean my AC', type: 'knowledge', target: 'kn-daikin-inverter-ac' },
+    { label: 'my laptop is 4 years old should I replace it', type: 'tool', target: 'tools/repair-or-replace' },
+    { label: 'solar inverter maintenance', type: 'tool', target: 'tools/maintenance-checker' },
+    { label: 'POS printer AMC', type: 'tool', target: 'tools/maintenance-checker' },
+    { label: 'bike service due', type: 'tool', target: 'tools/service-due-calculator' },
     { label: 'when should I service my bike', type: 'tool', target: 'tools/service-due-calculator' },
+    { label: 'my AC filter is due', type: 'knowledge', target: 'kn-daikin-inverter-ac' },
     { label: 'phone warranty', type: 'tool', target: 'tools/warranty-checker' },
     { label: 'should I repair my washing machine', type: 'tool', target: 'tools/repair-or-replace' },
     { label: 'how much is my old laptop worth', type: 'tool', target: 'tools/depreciation-calculator' },
-    { label: 'what documents should I keep for my car', type: 'tool', target: 'tools/document-expiry' },
-    { label: 'Is there a recall for my car?', type: 'tool', target: 'tools/service-due-calculator' },
-    { label: 'What is the maintenance schedule?', type: 'tool', target: 'tools/maintenance-checker' }
+    { label: 'iPhone battery health', type: 'knowledge', target: 'kn-apple-iphone-15-16' },
+    { label: 'TVS Ronin service', type: 'knowledge', target: 'kn-tvs-ronin-225' }
   ];
 
   // Rotate placeholder every 3.5 seconds

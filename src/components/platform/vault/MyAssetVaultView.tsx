@@ -21,12 +21,22 @@ import {
   RefreshCw,
   Share2,
   Clock,
-  ArrowRight
+  ArrowRight,
+  QrCode,
+  History,
+  Activity,
+  FolderLock,
+  Building2,
+  Wrench
 } from 'lucide-react';
 import type { Asset } from '../../../types';
 import { MobileAssetService } from '../../../services/mobileAssetService';
 import { SavedResultsService, SavedCalculationResult } from '../../../services/savedResultsService';
 import { DeepLinkService } from '../../../services/deepLinkService';
+import { DailyAssetBrief } from './DailyAssetBrief';
+import { UnifiedUpcomingTimeline } from './UnifiedUpcomingTimeline';
+import { ShareableAssetPassportModal } from './ShareableAssetPassportModal';
+import { AssetTimelineEngine, TimelineEvent, HealthHistoryPoint, LifecycleInsight } from '../../../platform/timeline/assetTimelineEngine';
 
 interface MyAssetVaultViewProps {
   currentUser: any;
@@ -41,13 +51,17 @@ export const MyAssetVaultView: React.FC<MyAssetVaultViewProps> = ({
   onSelectAsset,
   onNavigateToTool
 }) => {
-  const [activeVaultTab, setActiveVaultTab] = useState<'assets' | 'results' | 'documents' | 'alerts'>('assets');
+  const [activeVaultTab, setActiveVaultTab] = useState<'assets' | 'schedule' | 'results' | 'business'>('assets');
   const [assets, setAssets] = useState<Asset[]>([]);
   const [savedResults, setSavedResults] = useState<SavedCalculationResult[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  // Inspection Drawer for Timeline & Health History
+  const [inspectingAsset, setInspectingAsset] = useState<Asset | null>(null);
+  const [sharingAsset, setSharingAsset] = useState<Asset | null>(null);
 
   const userId = currentUser?.uid || 'guest_user';
 
@@ -123,7 +137,7 @@ export const MyAssetVaultView: React.FC<MyAssetVaultViewProps> = ({
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Encrypted personal vault for your physical hardware, bills, warranties, and calculation reports.
+            Universal Asset Intelligence platform for your physical hardware, bills, warranties, and calculation ledgers.
           </p>
         </div>
 
@@ -163,11 +177,18 @@ export const MyAssetVaultView: React.FC<MyAssetVaultViewProps> = ({
         </div>
       </div>
 
-      {/* 3. Vault Tabs Switcher */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+      {/* 3. Daily Asset Brief ("Your Assets Today") */}
+      <DailyAssetBrief
+        assets={assets}
+        onNavigateToTool={onNavigateToTool}
+        onSelectAsset={(a) => setInspectingAsset(a)}
+      />
+
+      {/* 4. Vault Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto scrollbar-thin">
         <button
           onClick={() => setActiveVaultTab('assets')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
             activeVaultTab === 'assets'
               ? 'bg-emerald-500 text-slate-950 font-black shadow-md'
               : 'text-slate-400 hover:text-white bg-slate-900/60 border border-slate-800'
@@ -177,8 +198,19 @@ export const MyAssetVaultView: React.FC<MyAssetVaultViewProps> = ({
         </button>
 
         <button
+          onClick={() => setActiveVaultTab('schedule')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeVaultTab === 'schedule'
+              ? 'bg-emerald-500 text-slate-950 font-black shadow-md'
+              : 'text-slate-400 hover:text-white bg-slate-900/60 border border-slate-800'
+          }`}
+        >
+          Upcoming Schedule ({expiringSoonCount})
+        </button>
+
+        <button
           onClick={() => setActiveVaultTab('results')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
             activeVaultTab === 'results'
               ? 'bg-emerald-500 text-slate-950 font-black shadow-md'
               : 'text-slate-400 hover:text-white bg-slate-900/60 border border-slate-800'
@@ -188,14 +220,15 @@ export const MyAssetVaultView: React.FC<MyAssetVaultViewProps> = ({
         </button>
 
         <button
-          onClick={() => setActiveVaultTab('alerts')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            activeVaultTab === 'alerts'
+          onClick={() => setActiveVaultTab('business')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+            activeVaultTab === 'business'
               ? 'bg-emerald-500 text-slate-950 font-black shadow-md'
               : 'text-slate-400 hover:text-white bg-slate-900/60 border border-slate-800'
           }`}
         >
-          Alerts ({expiringSoonCount})
+          <Building2 className="w-3.5 h-3.5 text-indigo-400" />
+          <span>Business & AMC</span>
         </button>
       </div>
 
@@ -253,103 +286,134 @@ export const MyAssetVaultView: React.FC<MyAssetVaultViewProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredAssets.map(asset => (
-                <div
-                  key={asset.id}
-                  className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition-all flex flex-col justify-between space-y-4 group"
-                >
-                  <div>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center">
-                          {getCategoryIcon(asset.category)}
+              {filteredAssets.map(asset => {
+                const insight = AssetTimelineEngine.getLifecycleInsight(asset);
+
+                return (
+                  <div
+                    key={asset.id}
+                    className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition-all flex flex-col justify-between space-y-4 group"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center">
+                            {getCategoryIcon(asset.category)}
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-white text-sm group-hover:text-emerald-400 transition-colors">
+                              {asset.name}
+                            </h4>
+                            <span className="text-[10px] text-slate-400 font-mono block">
+                              {asset.brand || 'Universal'} • {asset.category}
+                            </span>
+                          </div>
+                        </div>
+
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase font-mono border ${
+                          asset.status === 'expired'
+                            ? 'bg-rose-500/10 text-rose-300 border-rose-500/30'
+                            : asset.status === 'expiring_soon'
+                            ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                            : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                        }`}>
+                          {asset.status === 'expired' ? 'Expired' : asset.status === 'expiring_soon' ? 'Expiring' : 'Active'}
+                        </span>
+                      </div>
+
+                      {/* Lifecycle Stage Insight Pill */}
+                      <div className="mt-3 flex items-center justify-between p-2 rounded-xl bg-slate-950/80 border border-slate-800 text-[10px] font-mono">
+                        <span className="text-slate-400">Stage: {insight.stageLabel}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-900 text-cyan-400 border border-cyan-500/30 text-[9px] uppercase font-bold">
+                          ESTIMATED
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-800/80 text-[11px] font-mono">
+                        <div>
+                          <span className="text-slate-500 block text-[10px] uppercase">Original Price</span>
+                          <span className="font-bold text-white">₹{(asset.price || 0).toLocaleString('en-IN')}</span>
                         </div>
                         <div>
-                          <h4 className="font-bold text-white text-sm group-hover:text-emerald-400 transition-colors">
-                            {asset.name}
-                          </h4>
-                          <span className="text-[10px] text-slate-400 font-mono block">
-                            {asset.brand || 'Universal'} • {asset.category}
-                          </span>
+                          <span className="text-slate-500 block text-[10px] uppercase">Warranty Expiry</span>
+                          <span className="font-bold text-slate-300">{asset.expiryDate || 'N/A'}</span>
                         </div>
                       </div>
-
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase font-mono border ${
-                        asset.status === 'expired'
-                          ? 'bg-rose-500/10 text-rose-300 border-rose-500/30'
-                          : asset.status === 'expiring_soon'
-                          ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                          : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-                      }`}>
-                        {asset.status === 'expired' ? 'Expired' : asset.status === 'expiring_soon' ? 'Expiring' : 'Active'}
-                      </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-slate-800/80 text-[11px] font-mono">
-                      <div>
-                        <span className="text-slate-500 block text-[10px] uppercase">Original Price</span>
-                        <span className="font-bold text-white">₹{(asset.price || 0).toLocaleString('en-IN')}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500 block text-[10px] uppercase">Warranty Expiry</span>
-                        <span className="font-bold text-slate-300">{asset.expiryDate || 'N/A'}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
-                    <button
-                      onClick={() => onSelectAsset && onSelectAsset(asset)}
-                      className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 cursor-pointer"
-                    >
-                      <span>View Details</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
                       <button
-                        onClick={() => DeepLinkService.openAssetCrossPlatform(asset.id)}
-                        title="Share / Open Deep Link"
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                        onClick={() => setInspectingAsset(asset)}
+                        className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 cursor-pointer"
                       >
-                        <Share2 className="w-3.5 h-3.5" />
+                        <History className="w-3.5 h-3.5" />
+                        <span>Timeline & Health</span>
                       </button>
 
-                      {deleteConfirmId === asset.id ? (
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => handleDeleteAsset(asset.id)}
-                            className="px-2 py-1 rounded bg-rose-500 text-slate-950 font-bold text-[10px] cursor-pointer"
-                          >
-                            Confirm
-                          </button>
-                          <button
-                            onClick={() => setDeleteConfirmId(null)}
-                            className="px-2 py-1 rounded bg-slate-800 text-slate-400 text-[10px] cursor-pointer"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
+                      <div className="flex items-center gap-1.5">
                         <button
-                          onClick={() => setDeleteConfirmId(asset.id)}
-                          title="Delete Asset"
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition cursor-pointer"
+                          onClick={() => setSharingAsset(asset)}
+                          title="Generate Digital Passport & QR"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <QrCode className="w-3.5 h-3.5" />
                         </button>
-                      )}
+
+                        <button
+                          onClick={() => DeepLinkService.openAssetCrossPlatform(asset.id)}
+                          title="Open Deep Link"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                        </button>
+
+                        {deleteConfirmId === asset.id ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleDeleteAsset(asset.id)}
+                              className="px-2 py-1 rounded bg-rose-500 text-slate-950 font-bold text-[10px] cursor-pointer"
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              onClick={() => setDeleteConfirmId(null)}
+                              className="px-2 py-1 rounded bg-slate-800 text-slate-400 text-[10px] cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setDeleteConfirmId(asset.id)}
+                            title="Delete Asset"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
       )}
 
       {/* ======================================================== */}
-      {/* TAB 2: SAVED CALCULATIONS */}
+      {/* TAB 2: UNIFIED UPCOMING SCHEDULE */}
+      {/* ======================================================== */}
+      {activeVaultTab === 'schedule' && (
+        <UnifiedUpcomingTimeline
+          assets={assets}
+          onSelectAsset={(a) => setInspectingAsset(a)}
+          onNavigateToTool={onNavigateToTool}
+        />
+      )}
+
+      {/* ======================================================== */}
+      {/* TAB 3: SAVED CALCULATIONS */}
       {/* ======================================================== */}
       {activeVaultTab === 'results' && (
         <div className="space-y-4">
@@ -416,46 +480,137 @@ export const MyAssetVaultView: React.FC<MyAssetVaultViewProps> = ({
       )}
 
       {/* ======================================================== */}
-      {/* TAB 3: PROACTIVE ALERTS */}
+      {/* TAB 4: P2B FOUNDATION (BUSINESS & SERVICE PROVIDERS) */}
       {/* ======================================================== */}
-      {activeVaultTab === 'alerts' && (
-        <div className="space-y-3">
-          {assets.filter(a => a.status === 'expiring_soon' || a.status === 'expired').length === 0 ? (
-            <div className="p-12 text-center rounded-3xl bg-slate-900/40 border border-slate-800 space-y-2">
-              <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
-              <h4 className="font-bold text-white text-base">All Assets in Optimal Health</h4>
-              <p className="text-xs text-slate-400">Zero critical warranty expirations or missed service dates.</p>
+      {activeVaultTab === 'business' && (
+        <div className="space-y-6">
+          <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                <Building2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Business Assets & Enterprise AMC</h3>
+                <p className="text-xs text-slate-400">Manage corporate assets, depreciation ledgers, and AMC contractor networks.</p>
+              </div>
             </div>
-          ) : (
-            assets
-              .filter(a => a.status === 'expiring_soon' || a.status === 'expired')
-              .map(a => (
-                <div
-                  key={a.id}
-                  className="p-4 rounded-2xl bg-slate-900/80 border border-amber-500/30 flex items-center justify-between gap-4 text-xs"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-                      <AlertTriangle className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h5 className="font-bold text-white text-sm">{a.name}</h5>
-                      <span className="text-[11px] text-slate-400">
-                        Warranty expires on {a.expiryDate || 'Soon'} ({a.daysRemaining} days remaining)
-                      </span>
-                    </div>
-                  </div>
 
-                  <button
-                    onClick={() => onNavigateToTool && onNavigateToTool('tools/warranty-checker')}
-                    className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition cursor-pointer shrink-0"
-                  >
-                    Check Claims
-                  </button>
-                </div>
-              ))
-          )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs pt-2">
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider block font-mono">
+                  Corporate Asset Hierarchy
+                </span>
+                <p className="text-slate-300 leading-relaxed">
+                  Support for departmental tagging, cost-center assignment, and Indian Companies Act depreciation schedules.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider block font-mono">
+                  Service Provider Discovery
+                </span>
+                <p className="text-slate-300 leading-relaxed">
+                  Service provider discovery and verified workshop partner integrations are coming soon to Asset Doctor Enterprise.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* ASSET TIMELINE & HEALTH INSPECTION DRAWER */}
+      {/* ======================================================== */}
+      {inspectingAsset && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-fade-in">
+          <div className="relative bg-[#070D18] border border-slate-800 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-6 text-slate-100 max-h-[90vh] overflow-y-auto scrollbar-thin">
+            <button
+              onClick={() => setInspectingAsset(null)}
+              className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition cursor-pointer"
+            >
+              ✕
+            </button>
+
+            <div className="border-b border-slate-800 pb-4">
+              <span className="text-[10px] font-black uppercase text-emerald-400 font-mono tracking-wider">
+                Universal Lifecycle Timeline
+              </span>
+              <h3 className="text-xl font-black text-white mt-1">{inspectingAsset.name}</h3>
+              <p className="text-xs text-slate-400 font-mono">
+                {inspectingAsset.brand} • {inspectingAsset.category}
+              </p>
+            </div>
+
+            {/* Health Score History & Honest Explanation */}
+            <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Activity className="w-4 h-4 text-emerald-400" />
+                  <span>Asset Health Calibration History</span>
+                </span>
+                <span className="text-[10px] font-mono text-slate-500">Deterministic Audit</span>
+              </div>
+
+              <div className="space-y-2">
+                {AssetTimelineEngine.computeHealthHistory(inspectingAsset).map((point, idx) => (
+                  <div key={idx} className="p-3 rounded-xl bg-slate-950 border border-slate-800/80 flex items-start justify-between gap-3 text-xs">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white font-mono">{point.date}</span>
+                        {point.delta !== 0 && (
+                          <span className={`text-[10px] font-mono font-bold ${point.delta > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {point.delta > 0 ? `+${point.delta}` : point.delta} pts
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5">{point.reason}</p>
+                    </div>
+
+                    <span className="text-base font-black text-emerald-400 font-mono shrink-0">
+                      {point.score}/100
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Chronological Lifecycle Timeline */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">Lifecycle Event Ledger</h4>
+
+              <div className="space-y-2">
+                {AssetTimelineEngine.generateAssetTimeline(inspectingAsset).map(ev => (
+                  <div key={ev.id} className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 flex items-start justify-between gap-3 text-xs">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white">{ev.title}</span>
+                        {ev.isEstimated && (
+                          <span className="px-1.5 py-0.2 rounded bg-slate-950 text-cyan-400 border border-cyan-500/30 text-[9px] font-mono">
+                            ESTIMATED
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-slate-400 text-[11px] leading-relaxed">{ev.description}</p>
+                    </div>
+
+                    <span className="text-[10px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800 shrink-0">
+                      {ev.date}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Shareable Passport Modal */}
+      {sharingAsset && (
+        <ShareableAssetPassportModal
+          isOpen={Boolean(sharingAsset)}
+          onClose={() => setSharingAsset(null)}
+          asset={sharingAsset}
+        />
       )}
     </div>
   );

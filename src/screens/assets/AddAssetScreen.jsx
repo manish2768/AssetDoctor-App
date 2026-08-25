@@ -30,6 +30,7 @@ import {
 import { ASSET_STATUS } from '../../constants/assetStatus';
 import { Haptics } from '../../services/haptics';
 import { LottieSuccess } from '../../components/LottieSuccess';
+import { MobileNumericField } from '../../components/ui/MobileNumericField';
 import { calculateResaleValue } from '../../utils/resaleCalculator';
 import { formatINR, formatINRExact } from '../../utils/format';
 import { toVaultValue } from '../../utils/parseMoneyValue';
@@ -604,11 +605,10 @@ export function AddAssetScreen({ navigation, route }) {
         <>
           <Text style={styles.section}>Vehicle details</Text>
           <Field label="Registration / plate" value={registration} onChangeText={setRegistration} />
-          <Field
+          <MobileNumericField
             label="Current odometer (km)"
             value={odometerKm}
             onChangeText={setOdometerKm}
-            keyboardType="numeric"
             placeholder="12450"
           />
           <Field
@@ -637,11 +637,10 @@ export function AddAssetScreen({ navigation, route }) {
             onChangeText={setNextServiceDue}
             placeholder="YYYY-MM-DD"
           />
-          <Field
+          <MobileNumericField
             label="Next service at (km)"
             value={nextServiceOdometerKm}
             onChangeText={setNextServiceOdometerKm}
-            keyboardType="numeric"
             placeholder="12570"
           />
         </>
@@ -706,8 +705,19 @@ export function AddAssetScreen({ navigation, route }) {
         </>
       ) : null}
 
-      <Field label="Price (₹)" value={value} onChangeText={setValue} keyboardType="numeric" />
-      <Field label="Warranty (months)" value={warrantyMonths} onChangeText={setWarrantyMonths} keyboardType="numeric" placeholder="12" />
+      <MobileNumericField
+        label="Price (₹)"
+        value={value}
+        onChangeText={setValue}
+        allowDecimal
+        placeholder="0"
+      />
+      <MobileNumericField
+        label="Warranty (months)"
+        value={warrantyMonths}
+        onChangeText={setWarrantyMonths}
+        placeholder="12"
+      />
       <Field
         label="Warranty expiry (optional override)"
         value={warrantyExpiry}
@@ -726,25 +736,24 @@ export function AddAssetScreen({ navigation, route }) {
       {applianceMeta.isAppliance ? (
         <>
           <Text style={styles.section}>Appliance Energy (bill estimate)</Text>
-          <Field
+          <MobileNumericField
             label="Rated Watts"
             value={powerWatts}
             onChangeText={setPowerWatts}
-            keyboardType="numeric"
             placeholder="1500"
           />
-          <Field
+          <MobileNumericField
             label="Power Factor (0.3 – 1.0)"
             value={powerFactor}
             onChangeText={setPowerFactor}
-            keyboardType="decimal-pad"
+            allowDecimal
             placeholder="0.85"
           />
-          <Field
+          <MobileNumericField
             label="Daily Hours Used"
             value={dailyHours}
             onChangeText={setDailyHours}
-            keyboardType="numeric"
+            allowDecimal
             placeholder="8"
           />
           {billPreview ? (
@@ -864,7 +873,9 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     borderRadius: 12,
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingVertical: 10,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   chipOn: { backgroundColor: 'rgba(59,130,246,0.28)', borderColor: COLORS.neonBlue },
   chipText: { color: COLORS.text, fontSize: 12, fontWeight: '600' },
@@ -876,6 +887,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
+    minHeight: 44,
     color: COLORS.text,
   },
   preview: {
