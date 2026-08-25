@@ -2,7 +2,7 @@
   "expo": {
     "name": "Asset Doctor",
     "slug": "asset-doctor",
-    "version": "1.0.61",
+    "version": "1.0.62",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "assetdoctor",
@@ -16,7 +16,7 @@
     },
     "android": {
       "package": "com.assetdoctor.app",
-      "versionCode": 116,
+      "versionCode": 117,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",

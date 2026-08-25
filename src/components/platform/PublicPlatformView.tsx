@@ -34,6 +34,7 @@ import { SmartDocumentAnalyzerTool } from './SmartDocumentAnalyzerTool';
 import { ExploreYourAsset } from './tools/ExploreYourAsset';
 import { AssetPassportPreview } from './AssetPassportPreview';
 import { PublicAssetPassportView } from './passport/PublicAssetPassportView';
+import { NotFoundView } from './NotFoundView';
 import { SeoToolPageTemplate } from './SeoToolPageTemplate';
 import { SeoRegistry } from '../../platform/seo/seoRegistry';
 import { KnowledgeCategory } from '../../platform/knowledge/knowledgeHubData';
@@ -46,6 +47,7 @@ import { GuestSessionService, GuestCalculation } from '../../services/guestSessi
 import { SavedResultsService, SavedCalculationResult } from '../../services/savedResultsService';
 import { DuplicateProtectionService } from '../../services/duplicateProtectionService';
 import { MobileAssetService } from '../../services/mobileAssetService';
+import { AnalyticsService } from '../../platform/analytics/analyticsService';
 import { auth } from '../../firebase';
 import type { Asset } from '../../types';
 
@@ -69,7 +71,8 @@ export type PlatformTab =
   | 'asset_explorer'
   | 'passport'
   | 'seo_page'
-  | 'my_vault';
+  | 'my_vault'
+  | 'not_found';
 
 export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
   onOpenAppVault,
@@ -625,6 +628,14 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
               onOpenAddAsset={onOpenAddAsset || (() => onOpenAppVault())}
               onSelectAsset={onSelectAsset}
               onNavigateToTool={handleNavigateToTool}
+            />
+          )}
+
+          {activeTab === 'not_found' && (
+            <NotFoundView
+              onGoHome={() => { setActiveTab('home'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              onExploreTools={() => { setActiveTab('tools_hub'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              onExploreAssets={() => { setActiveTab('asset_explorer'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
             />
           )}
         </PlatformErrorBoundary>

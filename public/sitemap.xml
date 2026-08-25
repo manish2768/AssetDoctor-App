@@ -8,7 +8,7 @@
     <priority>1.0</priority>
   </url>
 
-  <!-- 2. Free Interactive Tools & Calculators -->
+  <!-- 2. Free Universal Decision Tools & Calculators -->
   <url>
     <loc>https://assetdoctor.in/tools/warranty-checker</loc>
     <lastmod>2026-08-25</lastmod>
@@ -22,16 +22,40 @@
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://assetdoctor.in/tools/document-analyzer</loc>
+    <loc>https://assetdoctor.in/tools/service-due-calculator</loc>
     <lastmod>2026-08-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://assetdoctor.in/tools/asset-health-check</loc>
+    <loc>https://assetdoctor.in/tools/maintenance-checker</loc>
     <lastmod>2026-08-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://assetdoctor.in/tools/depreciation-calculator</loc>
+    <lastmod>2026-08-25</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://assetdoctor.in/tools/ownership-cost</loc>
+    <lastmod>2026-08-25</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://assetdoctor.in/tools/document-analyzer</loc>
+    <lastmod>2026-08-25</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://assetdoctor.in/tools/asset-health-check</loc>
+    <lastmod>2026-08-25</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
   </url>
   <url>
     <loc>https://assetdoctor.in/tools/asset-passport</loc>
@@ -40,19 +64,7 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://assetdoctor.in/tools/vehicle-service-calculator</loc>
-    <lastmod>2026-08-25</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://assetdoctor.in/tools/ac-maintenance-guide</loc>
-    <lastmod>2026-08-25</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://assetdoctor.in/tools/phone-battery-health</loc>
+    <loc>https://assetdoctor.in/tools/document-expiry</loc>
     <lastmod>2026-08-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
@@ -66,23 +78,36 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://assetdoctor.in/assets/appliances</loc>
-    <lastmod>2026-08-25</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
     <loc>https://assetdoctor.in/assets/electronics</loc>
     <lastmod>2026-08-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://assetdoctor.in/assets/home</loc>
+    <loc>https://assetdoctor.in/assets/appliances</loc>
     <lastmod>2026-08-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
+  <url>
+    <loc>https://assetdoctor.in/assets/solar-energy</loc>
+    <lastmod>2026-08-25</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://assetdoctor.in/assets/business</loc>
+    <lastmod>2026-08-25</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://assetdoctor.in/assets/home-living</loc>
+    <lastmod>2026-08-25</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
   <!-- 4. Smart Knowledge Hub Sub-Categories -->
   <url>
     <loc>https://assetdoctor.in/knowledge</loc>
@@ -109,19 +134,13 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://assetdoctor.in/knowledge/household-assets</loc>
+    <loc>https://assetdoctor.in/knowledge/solar-energy</loc>
     <lastmod>2026-08-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://assetdoctor.in/tools/ownership-cost</loc>
-    <lastmod>2026-08-25</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://assetdoctor.in/tools/asset-depreciation</loc>
+    <loc>https://assetdoctor.in/knowledge/business-assets</loc>
     <lastmod>2026-08-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>

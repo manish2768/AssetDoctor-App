@@ -8,9 +8,13 @@ Allow: /assets/
 Allow: /knowledge/
 Allow: /passport/
 
-# Protect Admin & API from public crawling
+# Protect Admin, Private Account, and Vault from public indexing
 Disallow: /admin
 Disallow: /admin.html
+Disallow: /account
+Disallow: /vault
+Disallow: /auth
+Disallow: /private
 Disallow: /api/
 Disallow: /_next/
 Disallow: /dist/
