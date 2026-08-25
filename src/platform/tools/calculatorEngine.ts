@@ -202,7 +202,7 @@ export class CalculatorEngine {
     method: 'DECLINING_BALANCE' | 'STRAIGHT_LINE' = 'DECLINING_BALANCE'
   ): DepreciationResult {
     const price = Math.max(1, purchasePrice);
-    const age = Math.max(0.1, ageYears);
+    const age = Math.max(0, ageYears);
 
     const rates: Record<string, { annualRate: number; usefulYears: number; salvagePct: number }> = {
       VEHICLE: { annualRate: 0.15, usefulYears: 12, salvagePct: 0.10 },
@@ -218,7 +218,21 @@ export class CalculatorEngine {
     let currentValue = price;
     const yearlySchedule: DepreciationResult['yearlySchedule'] = [];
 
-    if (method === 'DECLINING_BALANCE') {
+    if (age === 0) {
+      currentValue = price;
+      let runningVal = price;
+      for (let y = 1; y <= 5; y++) {
+        const dep = Math.round(runningVal * config.annualRate);
+        const closing = Math.max(salvageValue, runningVal - dep);
+        yearlySchedule.push({
+          year: y,
+          openingValue: runningVal,
+          depreciationAmount: dep,
+          closingValue: closing
+        });
+        runningVal = closing;
+      }
+    } else if (method === 'DECLINING_BALANCE') {
       currentValue = Math.max(salvageValue, Math.round(price * Math.pow(1 - config.annualRate, age)));
       let runningVal = price;
       for (let y = 1; y <= Math.min(10, Math.ceil(age + 3)); y++) {
@@ -227,21 +241,23 @@ export class CalculatorEngine {
         yearlySchedule.push({
           year: y,
           openingValue: runningVal,
-          depreciationAmount: runningVal - closing,
+          depreciationAmount: dep,
           closingValue: closing
         });
         runningVal = closing;
       }
     } else {
-      const annualStraightLine = Math.round((price - salvageValue) / config.usefulYears);
-      currentValue = Math.max(salvageValue, Math.round(price - (annualStraightLine * age)));
+      // STRAIGHT LINE (SLM)
+      const annualSLM = (price - salvageValue) / config.usefulYears;
+      currentValue = Math.max(salvageValue, Math.round(price - annualSLM * age));
       let runningVal = price;
       for (let y = 1; y <= Math.min(10, Math.ceil(age + 3)); y++) {
-        const closing = Math.max(salvageValue, runningVal - annualStraightLine);
+        const dep = Math.round(annualSLM);
+        const closing = Math.max(salvageValue, runningVal - dep);
         yearlySchedule.push({
           year: y,
           openingValue: runningVal,
-          depreciationAmount: runningVal - closing,
+          depreciationAmount: dep,
           closingValue: closing
         });
         runningVal = closing;

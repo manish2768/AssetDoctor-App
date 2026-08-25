@@ -11,7 +11,6 @@ import {
   ScrollView,
   Switch,
   Pressable,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -32,8 +31,10 @@ import { Haptics } from '../../services/haptics';
 import { COLORS } from '../../theme/branding';
 import { useTheme } from '../../context/ThemeProvider';
 import { TYPE, SPACING } from '../../theme/tokens';
+import { useUiFeedback } from '../../context/UiFeedbackProvider';
 
 export function PrivacySecurityScreen({ navigation }) {
+  const ui = useUiFeedback();
   const insets = useSafeAreaInsets();
   const { user, isAuthenticated, signOut } = useAuth();
   const { assets } = useAssets();
@@ -83,57 +84,55 @@ export function PrivacySecurityScreen({ navigation }) {
     Haptics.tap();
     try {
       await AppLockService.setEnabled(true);
-      Alert.alert('Vault Lock', 'Vault Lock enabled. Use your phone biometrics or PIN.');
+      ui.success('Vault Lock enabled. Use your phone biometrics or PIN.');
       await refresh();
     } catch (e) {
-      Alert.alert('Vault Lock', e?.message || 'Could not enable Vault Lock');
+      ui.error('Vault Lock', e?.message || 'Could not enable Vault Lock');
     }
   };
 
   const onExport = async () => {
     if (!uid) {
-      Alert.alert('Export', 'Sign in to export your data.');
+      ui.info('Export', 'Sign in to export your data.');
       return;
     }
     Haptics.tap();
     try {
       const prefs = await getPrivacyPrefs(uid);
       const payload = await requestUserDataExport(uid, uid, assets, prefs);
-      Alert.alert(
+      ui.info(
         'Data export ready',
         `${payload.assetCount} assets prepared as JSON metadata. Full file export ships in a later release.`,
       );
     } catch (e) {
-      Alert.alert('Export', e?.message || 'Export failed');
+      ui.error('Export', e?.message || 'Export failed');
     }
   };
 
-  const onDeleteAccount = () => {
+  const onDeleteAccount = async () => {
     if (!uid) {
-      Alert.alert('Delete account', 'Sign in first.');
+      ui.info('Delete account', 'Sign in first.');
       return;
     }
     const warning = getAccountDeletionWarning();
-    Alert.alert(warning.title, warning.body, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Request deletion',
-        style: 'destructive',
-        onPress: async () => {
-          setBusy(true);
-          try {
-            const result = await requestAccountDeletion(uid, uid, { confirmed: true });
-            Alert.alert('Deletion requested', result.nextStep || 'Signed out locally.');
-            if (typeof signOut === 'function') await signOut();
-            navigation?.navigate?.('Login');
-          } catch (e) {
-            Alert.alert('Deletion', e?.message || 'Could not request deletion');
-          } finally {
-            setBusy(false);
-          }
-        },
-      },
-    ]);
+    const ok = await ui.confirm({
+      title: warning.title,
+      message: warning.body,
+      confirmLabel: 'Request deletion',
+      destructive: true,
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const result = await requestAccountDeletion(uid, uid, { confirmed: true });
+      ui.success(result.nextStep || 'Signed out locally.');
+      if (typeof signOut === 'function') await signOut();
+      navigation?.navigate?.('Login');
+    } catch (e) {
+      ui.error('Deletion', e?.message || 'Could not request deletion');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const restore = describeRestoreFlow();
@@ -199,7 +198,7 @@ export function PrivacySecurityScreen({ navigation }) {
           style={styles.linkBtn}
           onPress={() => {
             Haptics.tap();
-            Alert.alert('Restore', `${restore.message}\n\n${restore.strategy}`);
+            ui.info('Restore', `${restore.message}\n\n${restore.strategy}`);
           }}
         >
           <Text style={styles.linkText}>How restore works on a new device</Text>

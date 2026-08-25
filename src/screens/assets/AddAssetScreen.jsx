@@ -12,13 +12,14 @@ import {
   ScrollView,
   ActivityIndicator,
   Image,
-  Alert,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 
 import { useAssets } from '../../context/AssetProvider';
+import { useUiFeedback } from '../../context/UiFeedbackProvider';
 import {
   ASSET_CATEGORY_OPTIONS,
+  BRAND,
   CONDITION_OPTIONS,
   ASSET_STATUS_OPTIONS,
   COLORS,
@@ -46,12 +47,58 @@ import { CategoryIcon } from '../../components/icons/CategoryIcon';
 import { useTabSafeBottomPadding } from '../../utils/tabSafePadding';
 import { extractRtoCode } from '../../utils/vehicleSpecs';
 
-const CATEGORY_GROUPS = [
-  'Vehicles',
-  'Electronics & Appliances',
-  'Digital Bills & Utility Subscriptions',
-  'Personal & Legal',
+const TOP_LEVEL_CATEGORIES = [
+  {
+    id: 'vehicle',
+    label: 'Vehicle',
+    icon: 'car',
+    categoryIds: ['car', 'bike', 'scooter', 'ev', 'commercial', 'vehicle_parts'],
+  },
+  {
+    id: 'electronics',
+    label: 'Electronics',
+    icon: 'mobile',
+    categoryIds: ['mobile', 'laptop', 'tablet', 'tv', 'accessory'],
+  },
+  {
+    id: 'home_appliance',
+    label: 'Home Appliance',
+    icon: 'ac',
+    categoryIds: ['ac', 'fridge', 'washing_machine', 'microwave', 'geyser', 'appliance'],
+  },
+  {
+    id: 'business',
+    label: 'Business Asset',
+    icon: 'commercial',
+    categoryIds: [
+      'utility_bill',
+      'electricity_bill',
+      'broadband',
+      'digital_subscription',
+      'insurance_policy',
+    ],
+  },
+  {
+    id: 'other',
+    label: 'Other',
+    icon: 'other',
+    categoryIds: ['legal_document', 'guarantee', 'other'],
+  },
 ];
+
+const VEHICLE_IDS = new Set(['bike', 'car', 'scooter', 'vehicle', 'motorcycle', 'vehicle_parts', 'ev', 'commercial']);
+
+function topLevelFromCategoryId(categoryId) {
+  const id = String(categoryId || '').toLowerCase();
+  const match = TOP_LEVEL_CATEGORIES.find((t) => t.categoryIds.includes(id));
+  return match?.id || 'other';
+}
+
+function subcategoriesForTopLevel(topLevelId) {
+  const top = TOP_LEVEL_CATEGORIES.find((t) => t.id === topLevelId);
+  if (!top) return ASSET_CATEGORY_OPTIONS.filter((c) => c.id === 'other');
+  return ASSET_CATEGORY_OPTIONS.filter((c) => top.categoryIds.includes(c.id));
+}
 
 function categoryIdFromOcr(data) {
   const text = `${data?.assetName || ''} ${data?.category || ''}`.toLowerCase();
@@ -77,6 +124,7 @@ export function AddAssetScreen({ navigation, route }) {
   const scanLabel = route?.params?.scanLabel || 'Scan Bill / RC with Camera';
   const { createAsset, updateAsset, getAsset } = useAssets();
   const { isAuthenticated } = useAuth();
+  const ui = useUiFeedback();
   const existing = editingId ? getAsset(editingId) : null;
   const isEdit = Boolean(editingId && existing);
   const bottomPad = useTabSafeBottomPadding({ extra: 24 });
@@ -84,16 +132,20 @@ export function AddAssetScreen({ navigation, route }) {
   const resolveInitialCategoryId = () => {
     if (existing?.categoryId) return existing.categoryId;
     const raw = String(route?.params?.categoryId || route?.params?.category || '').trim();
-    if (!raw) return 'bike';
+    if (!raw) return null;
     const lower = raw.toLowerCase();
     if (lower === 'appliance' || lower === 'appliances' || lower === 'electronics') {
       return 'appliance';
     }
     if (ASSET_CATEGORY_OPTIONS.some((c) => c.id === lower)) return lower;
-    return 'bike';
+    return null;
   };
 
-  const [categoryId, setCategoryId] = useState(resolveInitialCategoryId);
+  const initialCategoryId = resolveInitialCategoryId();
+  const [topLevelCategory, setTopLevelCategory] = useState(() =>
+    initialCategoryId ? topLevelFromCategoryId(initialCategoryId) : null,
+  );
+  const [categoryId, setCategoryId] = useState(initialCategoryId);
   const [status, setStatus] = useState(existing?.status || ASSET_STATUS.ACTIVE);
   const [assetName, setAssetName] = useState(existing?.assetName || '');
   const [storeName, setStoreName] = useState(existing?.storeName || '');
@@ -134,16 +186,19 @@ export function AddAssetScreen({ navigation, route }) {
   );
   const [nextServiceDue, setNextServiceDue] = useState(existing?.nextServiceDue || '');
   const [brandName, setBrandName] = useState(existing?.brandName || '');
+  const [modelName, setModelName] = useState(existing?.model || '');
+  const [installationDate, setInstallationDate] = useState(existing?.lastServiceDate || '');
   const [supportPhone, setSupportPhone] = useState(existing?.supportPhone || '');
   const [supportUrl, setSupportUrl] = useState(existing?.supportUrl || '');
-  const isVehicleCategory = [
-    'bike',
-    'car',
-    'scooter',
-    'vehicle',
-    'motorcycle',
-    'vehicle_parts',
-  ].includes(categoryId);
+  const isVehicleCategory = categoryId
+    ? VEHICLE_IDS.has(categoryId)
+    : topLevelCategory === 'vehicle';
+  const isElectronicsCategory = topLevelCategory === 'electronics';
+  const isApplianceCategory =
+    topLevelCategory === 'home_appliance' ||
+    ['ac', 'fridge', 'washing_machine', 'microwave', 'geyser', 'appliance'].includes(categoryId || '');
+  const categoryChosen = Boolean(categoryId);
+  const showFullForm = isEdit || categoryChosen;
   const [scanUri, setScanUri] = useState(null);
   const [scanDocumentType, setScanDocumentType] = useState('bill');
   const [scanHint, setScanHint] = useState('');
@@ -163,7 +218,10 @@ export function AddAssetScreen({ navigation, route }) {
         : ASSET_CATEGORY_OPTIONS.some((c) => c.id === lower)
           ? lower
           : null;
-    if (resolved) setCategoryId(resolved);
+    if (resolved) {
+      setCategoryId(resolved);
+      setTopLevelCategory(topLevelFromCategoryId(resolved));
+    }
   }, [route?.params?.categoryId, route?.params?.category, isEdit]);
 
   useEffect(() => {
@@ -205,6 +263,9 @@ export function AddAssetScreen({ navigation, route }) {
       existing.nextServiceOdometerKm != null ? String(existing.nextServiceOdometerKm) : '',
     );
     setBrandName(existing.brandName || '');
+    setModelName(existing.model || '');
+    setInstallationDate(existing.lastServiceDate || '');
+    setTopLevelCategory(topLevelFromCategoryId(existing.categoryId || 'other'));
     setSupportPhone(existing.supportPhone || '');
     setSupportUrl(existing.supportUrl || '');
   }, [existing?.id, existing?.assetId]);
@@ -214,7 +275,7 @@ export function AddAssetScreen({ navigation, route }) {
     try {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert('Camera', 'Allow camera access to scan Bill / RC.');
+        ui.info('Camera', 'Allow camera access to scan Bill / RC.');
         return;
       }
       const shot = await ImagePicker.launchCameraAsync({
@@ -241,8 +302,9 @@ export function AddAssetScreen({ navigation, route }) {
         if (ocr.data.insuranceExpiry && !insuranceExpiry) {
           setInsuranceExpiry(ocr.data.insuranceExpiry);
         }
-        setCategoryId(categoryIdFromOcr(ocr.data));
         const nextCategory = categoryIdFromOcr(ocr.data);
+        setCategoryId(nextCategory);
+        setTopLevelCategory(topLevelFromCategoryId(nextCategory));
         const meta = getCategoryPowerMeta(nextCategory);
         if (meta.isAppliance) {
           const hints = ocr.energyHints || {};
@@ -265,7 +327,7 @@ export function AddAssetScreen({ navigation, route }) {
         setScanHint('Photo attached — fill name & save to auto-vault (OCR optional on device)');
       }
     } catch (e) {
-      Alert.alert('Scan', e?.message || 'Could not open camera');
+      ui.error('Scan', e?.message || 'Could not open camera');
     }
   };
 
@@ -280,7 +342,7 @@ export function AddAssetScreen({ navigation, route }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openScanner, isEdit]);
 
-  const applianceMeta = getCategoryPowerMeta(categoryId);
+  const applianceMeta = getCategoryPowerMeta(categoryId || 'other');
   const billPreview = useMemo(() => {
     if (!applianceMeta.isAppliance) return null;
     return estimatePowerCost({
@@ -322,25 +384,23 @@ export function AddAssetScreen({ navigation, route }) {
   };
 
   const buildPayload = () => {
-    const cat = ASSET_CATEGORY_OPTIONS.find((c) => c.id === categoryId);
-    const vehicle = [
-      'bike',
-      'car',
-      'scooter',
-      'vehicle',
-      'motorcycle',
-      'vehicle_parts',
-    ].includes(categoryId);
+    const cat = ASSET_CATEGORY_OPTIONS.find((c) => c.id === categoryId) || ASSET_CATEGORY_OPTIONS.find((c) => c.id === 'other');
+    const vehicle = categoryId ? VEHICLE_IDS.has(categoryId) : false;
+    const resolvedName =
+      String(assetName || '').trim() ||
+      [brandName, modelName].filter(Boolean).join(' ').trim();
     return {
-      categoryId,
+      categoryId: categoryId || cat?.id || 'other',
       category: cat?.group || 'General',
-      categoryLabel: cat?.label || categoryId,
+      categoryLabel: cat?.label || categoryId || 'Other',
       icon: cat?.icon || 'other',
       status,
-      assetName,
+      assetName: resolvedName,
+      model: modelName.trim(),
       storeName,
       value: toVaultValue(value, 0),
       purchaseDate: normalizeStoredDate(purchaseDate),
+      lastServiceDate: normalizeStoredDate(installationDate),
       registration: vehicle ? registration : '',
       serialNumber,
       chassisNumber: vehicle ? chassisNumber : '',
@@ -375,8 +435,12 @@ export function AddAssetScreen({ navigation, route }) {
       setError('Sign in required to save this asset.');
       return;
     }
-    if (!String(assetName || '').trim()) {
-      setError('Asset name is required');
+    if (!String(assetName || '').trim() && !String(brandName || modelName || '').trim()) {
+      setError('Asset name or brand + model is required');
+      return;
+    }
+    if (!categoryId) {
+      setError('Pick what you are adding first');
       return;
     }
     setBusy(true);
@@ -444,11 +508,34 @@ export function AddAssetScreen({ navigation, route }) {
       ) : null}
 
       <Text style={styles.section}>What are you adding?</Text>
-      {CATEGORY_GROUPS.map((group) => (
-        <View key={group} style={styles.categoryGroup}>
-          <Text style={styles.groupLabel}>{group}</Text>
+      <View style={styles.chips}>
+        {TOP_LEVEL_CATEGORIES.map((t) => (
+          <Pressable
+            key={t.id}
+            onPress={() => {
+              Haptics.select();
+              setTopLevelCategory(t.id);
+              setCategoryId(null);
+            }}
+            style={[styles.chip, topLevelCategory === t.id && styles.chipOn]}
+          >
+            <View style={styles.chipInner}>
+              <CategoryIcon
+                name={t.icon}
+                size={18}
+                color={topLevelCategory === t.id ? COLORS.emerald : COLORS.muted}
+              />
+              <Text style={styles.chipText}>{t.label}</Text>
+            </View>
+          </Pressable>
+        ))}
+      </View>
+
+      {topLevelCategory ? (
+        <>
+          <Text style={styles.section}>Specific type</Text>
           <View style={styles.chips}>
-            {ASSET_CATEGORY_OPTIONS.filter((c) => c.group === group).map((c) => (
+            {subcategoriesForTopLevel(topLevelCategory).map((c) => (
               <Pressable
                 key={c.id}
                 onPress={() => {
@@ -469,9 +556,15 @@ export function AddAssetScreen({ navigation, route }) {
               </Pressable>
             ))}
           </View>
-        </View>
-      ))}
+        </>
+      ) : null}
 
+      {!showFullForm ? (
+        <Text style={styles.hint}>Choose a category above to see only the fields that matter.</Text>
+      ) : null}
+
+      {showFullForm ? (
+        <>
       <Text style={styles.section}>Status</Text>
       <View style={styles.chips}>
         {ASSET_STATUS_OPTIONS.map((s) => (
@@ -488,59 +581,53 @@ export function AddAssetScreen({ navigation, route }) {
         ))}
       </View>
 
-      <Field label="Asset Name" value={assetName} onChangeText={setAssetName} placeholder="TVS Ronin 225" />
-      <Field label="Store / Dealer" value={storeName} onChangeText={setStoreName} />
       <Field
-        label="Purchase Date (DD/MM/YYYY or YYYY-MM-DD)"
-        value={purchaseDate}
-        onChangeText={setPurchaseDate}
-        placeholder="24/06/2015"
+        label={
+          isElectronicsCategory || isApplianceCategory
+            ? 'Display name (optional — built from brand + model)'
+            : 'Asset Name'
+        }
+        value={assetName}
+        onChangeText={setAssetName}
+        placeholder={isVehicleCategory ? 'TVS Ronin 225' : 'Samsung Galaxy S24'}
       />
-      <Field label="Price (₹)" value={value} onChangeText={setValue} keyboardType="numeric" />
-      <Field label="Warranty (months)" value={warrantyMonths} onChangeText={setWarrantyMonths} keyboardType="numeric" placeholder="12" />
-      <Field
-        label="Warranty Expiry (optional override)"
-        value={warrantyExpiry}
-        onChangeText={setWarrantyExpiry}
-        placeholder="23/06/2025 or 2025-06-23"
-      />
-      <Field label="Serial Number" value={serialNumber} onChangeText={setSerialNumber} />
+
       {isVehicleCategory ? (
         <>
           <Text style={styles.section}>Vehicle details</Text>
-          <Field label="Registration / Plate" value={registration} onChangeText={setRegistration} />
-          <Field
-            label="RTO Code"
-            value={rtoCode}
-            onChangeText={setRtoCode}
-            placeholder={extractRtoCode(registration) || 'MH12'}
-          />
-          <Field
-            label="Fuel Norms"
-            value={fuelNorm}
-            onChangeText={setFuelNorm}
-            placeholder="BS6 / Petrol / CNG"
-          />
-          <Field label="Chassis / VIN" value={chassisNumber} onChangeText={setChassisNumber} />
-          <Field
-            label="Insurance Expiry"
-            value={insuranceExpiry}
-            onChangeText={setInsuranceExpiry}
-            placeholder="YYYY-MM-DD"
-          />
-          <Field label="PUC Expiry" value={pucExpiry} onChangeText={setPucExpiry} placeholder="YYYY-MM-DD" />
-          <Field
-            label="Next Service Date"
-            value={nextServiceDue}
-            onChangeText={setNextServiceDue}
-            placeholder="YYYY-MM-DD"
-          />
+          <Field label="Registration / plate" value={registration} onChangeText={setRegistration} />
           <Field
             label="Current odometer (km)"
             value={odometerKm}
             onChangeText={setOdometerKm}
             keyboardType="numeric"
             placeholder="12450"
+          />
+          <Field
+            label="Fuel type / EV (e.g. Petrol, BS6, Electric)"
+            value={fuelNorm}
+            onChangeText={setFuelNorm}
+            placeholder="Petrol / BS6 / Electric"
+          />
+          <Field
+            label="RTO code"
+            value={rtoCode}
+            onChangeText={setRtoCode}
+            placeholder={extractRtoCode(registration) || 'MH12'}
+          />
+          <Field label="Chassis / VIN" value={chassisNumber} onChangeText={setChassisNumber} />
+          <Field
+            label="Insurance expiry"
+            value={insuranceExpiry}
+            onChangeText={setInsuranceExpiry}
+            placeholder="YYYY-MM-DD"
+          />
+          <Field label="PUC expiry" value={pucExpiry} onChangeText={setPucExpiry} placeholder="YYYY-MM-DD" />
+          <Field
+            label="Next service date"
+            value={nextServiceDue}
+            onChangeText={setNextServiceDue}
+            placeholder="YYYY-MM-DD"
           />
           <Field
             label="Next service at (km)"
@@ -550,14 +637,84 @@ export function AddAssetScreen({ navigation, route }) {
             placeholder="12570"
           />
         </>
-      ) : (
+      ) : null}
+
+      {isElectronicsCategory ? (
+        <>
+          <Text style={styles.section}>Electronics details</Text>
+          <Field label="Brand" value={brandName} onChangeText={setBrandName} placeholder="Samsung, Apple…" />
+          <Field label="Model" value={modelName} onChangeText={setModelName} placeholder="Galaxy S24 Ultra" />
+          <Field
+            label="IMEI / serial number"
+            value={serialNumber}
+            onChangeText={setSerialNumber}
+            placeholder="Optional"
+          />
+          <Field
+            label="Purchase date (DD/MM/YYYY or YYYY-MM-DD)"
+            value={purchaseDate}
+            onChangeText={setPurchaseDate}
+            placeholder="24/06/2024"
+          />
+        </>
+      ) : null}
+
+      {isApplianceCategory && !isElectronicsCategory ? (
+        <>
+          <Text style={styles.section}>Appliance details</Text>
+          <Field label="Brand" value={brandName} onChangeText={setBrandName} placeholder="Daikin, LG…" />
+          <Field label="Model" value={modelName} onChangeText={setModelName} placeholder="1.5 Ton Split AC" />
+          <Field
+            label="Purchase date (DD/MM/YYYY or YYYY-MM-DD)"
+            value={purchaseDate}
+            onChangeText={setPurchaseDate}
+            placeholder="24/06/2024"
+          />
+          <Field
+            label="Installation date (optional)"
+            value={installationDate}
+            onChangeText={setInstallationDate}
+            placeholder="YYYY-MM-DD"
+          />
+          <Field
+            label="Next service / filter date (optional)"
+            value={nextServiceDue}
+            onChangeText={setNextServiceDue}
+            placeholder="YYYY-MM-DD"
+          />
+        </>
+      ) : null}
+
+      {!isVehicleCategory && !isElectronicsCategory && !isApplianceCategory ? (
+        <>
+          <Field label="Store / dealer" value={storeName} onChangeText={setStoreName} />
+          <Field
+            label="Purchase date (DD/MM/YYYY or YYYY-MM-DD)"
+            value={purchaseDate}
+            onChangeText={setPurchaseDate}
+            placeholder="24/06/2015"
+          />
+          <Field label="Serial number (optional)" value={serialNumber} onChangeText={setSerialNumber} />
+        </>
+      ) : null}
+
+      <Field label="Price (₹)" value={value} onChangeText={setValue} keyboardType="numeric" />
+      <Field label="Warranty (months)" value={warrantyMonths} onChangeText={setWarrantyMonths} keyboardType="numeric" placeholder="12" />
+      <Field
+        label="Warranty expiry (optional override)"
+        value={warrantyExpiry}
+        onChangeText={setWarrantyExpiry}
+        placeholder="23/06/2025 or 2025-06-23"
+      />
+
+      {!isVehicleCategory && !isElectronicsCategory && !isApplianceCategory ? (
         <Field
-          label="Next Service / AMC Date (optional)"
+          label="Next service / AMC date (optional)"
           value={nextServiceDue}
           onChangeText={setNextServiceDue}
           placeholder="YYYY-MM-DD"
         />
-      )}
+      ) : null}
       {applianceMeta.isAppliance ? (
         <>
           <Text style={styles.section}>Appliance Energy (bill estimate)</Text>
@@ -598,8 +755,10 @@ export function AddAssetScreen({ navigation, route }) {
         </>
       ) : null}
 
-      <Text style={styles.section}>Warranty & Customer Care</Text>
-      <Field label="Brand / Manufacturer" value={brandName} onChangeText={setBrandName} />
+      <Text style={styles.section}>Warranty & customer care</Text>
+      {!isElectronicsCategory && !isApplianceCategory ? (
+        <Field label="Brand / manufacturer" value={brandName} onChangeText={setBrandName} />
+      ) : null}
       <Field
         label="Customer Care Phone"
         value={supportPhone}
@@ -646,6 +805,8 @@ export function AddAssetScreen({ navigation, route }) {
           <Text style={styles.primaryText}>{isEdit ? 'Save Changes' : 'Save to Vault'}</Text>
         )}
       </Pressable>
+        </>
+      ) : null}
 
       <LottieSuccess
         visible={showSuccess}
@@ -687,8 +848,7 @@ const styles = StyleSheet.create({
   scanImage: { width: '100%', height: 160, borderRadius: 14 },
   scanHint: { color: COLORS.emerald, fontSize: 12, fontWeight: '700', marginTop: 8, marginBottom: 8 },
   section: { color: COLORS.muted, fontSize: 10, fontWeight: '800', marginBottom: 8, marginTop: 8 },
-  categoryGroup: { marginBottom: 6 },
-  groupLabel: { color: COLORS.text, fontSize: 12, fontWeight: '800', marginBottom: 7 },
+  hint: { color: COLORS.muted, fontSize: 12, marginTop: 8, marginBottom: 8, fontStyle: 'italic' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   chip: {
     borderWidth: 1,

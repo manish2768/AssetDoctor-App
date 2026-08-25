@@ -19,6 +19,7 @@ import { AuthProvider } from './src/context/AuthProvider';
 import { AssetProvider } from './src/context/AssetProvider';
 import { AppLockProvider } from './src/context/AppLockProvider';
 import { ThemeProvider } from './src/context/ThemeProvider';
+import { UiFeedbackProvider } from './src/context/UiFeedbackProvider';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { ProfileSetupModal } from './src/components/profile/ProfileSetupModal';
 import { COLORS } from './src/theme/branding';
@@ -133,6 +134,7 @@ export default function App() {
       <RootErrorBoundary onRestart={() => setBootKey((k) => k + 1)}>
         <SafeAreaProvider>
           <ThemeProvider>
+            <UiFeedbackProvider>
             <View style={styles.root}>
               <AppLockProvider>
                 <AuthProvider>
@@ -145,6 +147,7 @@ export default function App() {
                 </AuthProvider>
               </AppLockProvider>
             </View>
+            </UiFeedbackProvider>
           </ThemeProvider>
         </SafeAreaProvider>
       </RootErrorBoundary>

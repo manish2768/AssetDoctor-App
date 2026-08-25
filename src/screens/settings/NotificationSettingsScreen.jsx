@@ -3,7 +3,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Switch, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Switch, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { NotificationEngine } from '../../services/notifications/NotificationEngine';
@@ -11,6 +11,7 @@ import { DEFAULT_REMINDER_OFFSETS } from '../../services/notifications/notificat
 import { ExpiryAlertService } from '../../services/notifications/ExpiryAlertService';
 import { useAuth } from '../../context/AuthProvider';
 import { useAssets } from '../../context/AssetProvider';
+import { useUiFeedback } from '../../context/UiFeedbackProvider';
 import { Haptics } from '../../services/haptics';
 import { COLORS } from '../../theme/branding';
 
@@ -29,6 +30,7 @@ export function NotificationSettingsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { assets } = useAssets();
+  const ui = useUiFeedback();
   const [prefs, setPrefs] = useState(null);
   const [permHint, setPermHint] = useState(false);
 
@@ -56,7 +58,7 @@ export function NotificationSettingsScreen({ navigation }) {
     const result = await ExpiryAlertService.registerPushToken(user?.uid);
     if (!result.success) {
       setPermHint(true);
-      Alert.alert(
+      ui.info(
         'Notifications disabled',
         'Enable notifications in system settings to receive expiry and service reminders.',
       );
@@ -65,7 +67,7 @@ export function NotificationSettingsScreen({ navigation }) {
     setPermHint(false);
     await patch({ pushEnabled: true });
     await NotificationEngine.refreshForUser(user?.uid, assets).catch(() => {});
-    Alert.alert('Enabled', 'Reminders will use 30 / 15 / 7 / 3 / 1 / day-of schedule.');
+    ui.success('Reminders will use 30 / 15 / 7 / 3 / 1 / day-of schedule.');
   };
 
   if (!prefs) {

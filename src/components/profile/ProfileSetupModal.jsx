@@ -4,9 +4,10 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Modal, Image, Alert, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Modal, Image, Pressable } from 'react-native';
 
 import { useAuth } from '../../context/AuthProvider';
+import { useUiFeedback } from '../../context/UiFeedbackProvider';
 import { GlassCard, GlassInput, GlassButton } from '../ui/Glass';
 import { BRAND, COLORS, SPACING } from '../../theme/branding';
 import { Haptics } from '../../services/haptics';
@@ -18,6 +19,7 @@ export function ProfileSetupModal() {
   // Forced gate disabled via needsProfileSetup() === false.
   // Keep component mounted for optional future soft prompts.
   const { user, profile, completeProfileSetup, needsProfileSetup, sendOTP, verifyOTP } = useAuth();
+  const ui = useUiFeedback();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
@@ -86,7 +88,7 @@ export function ProfileSetupModal() {
       if (!otpResult.success) throw new Error(otpResult.error);
       if (!otpResult.confirmation) throw new Error('OTP session missing');
       setOtpSession(otpResult.confirmation);
-      Alert.alert('SMS OTP sent', SMS_OTP_TEMPLATE.userHint);
+      ui.info('SMS OTP sent', SMS_OTP_TEMPLATE.userHint);
       Haptics.success();
     } catch (e) {
       Haptics.error();

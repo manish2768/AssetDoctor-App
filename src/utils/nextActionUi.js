@@ -14,6 +14,7 @@ import { categoryFamilyLabel } from '../design-system/assetIntelligenceSchema';
 export function resolvePrimaryNextAction(asset = {}) {
   const caps = resolveAssetCapabilities(asset);
   const name = asset.nickname || asset.assetName || 'Asset';
+  const cat = String(asset.categoryId || '').toLowerCase();
   const candidates = [];
 
   const pushExpiry = (key, title, enabled) => {
@@ -22,21 +23,25 @@ export function resolvePrimaryNextAction(asset = {}) {
     if (d == null) return;
     let priority = 'MEDIUM';
     let metric = `${d} day${d === 1 ? '' : 's'}`;
-    let why = `${title} is approaching for ${name}.`;
+    let why = `${title} expires in ${d} day${d === 1 ? '' : 's'}`;
+    let displayTitle = title;
     if (d < 0) {
       priority = 'CRITICAL';
       metric = 'Expired';
       why = `${title} has expired for ${name}.`;
+      displayTitle = `${title} expired`;
     } else if (d <= 7) {
       priority = 'HIGH';
       metric = `${d} day${d === 1 ? '' : 's'} left`;
+      displayTitle = `${title} expires in ${d} day${d === 1 ? '' : 's'}`;
     } else if (d <= 30) {
       priority = 'MEDIUM';
+      displayTitle = `${title} expires in ${d} days`;
     } else {
       return;
     }
     candidates.push({
-      title,
+      title: displayTitle,
       why,
       metric,
       priority,
@@ -49,52 +54,69 @@ export function resolvePrimaryNextAction(asset = {}) {
   pushExpiry('pucExpiry', 'PUC', caps.supportsPUC);
   pushExpiry('warrantyExpiry', 'Warranty', caps.supportsWarranty !== false);
 
-  if (caps.supportsServiceHistory || asset.nextServiceDue) {
-    const d = daysUntil(asset.nextServiceDue);
-    if (d != null && d <= 45) {
-      candidates.push({
-        title: 'Service due',
-        why: d < 0 ? `${name} service is overdue.` : `Service is approaching for ${name}.`,
-        metric: d < 0 ? 'Overdue' : `${d} day${d === 1 ? '' : 's'}`,
-        priority: d < 0 || d <= 7 ? 'HIGH' : 'MEDIUM',
-        ctaLabel: 'View service',
-        sort: d < 0 ? 0 : 1,
-      });
-    }
-  }
-
   if (caps.supportsOdometer && asset.nextServiceOdometerKm != null && asset.odometerKm != null) {
     const remaining = Number(asset.nextServiceOdometerKm) - Number(asset.odometerKm);
     if (Number.isFinite(remaining) && remaining <= 1000) {
+      const dueNow = remaining <= 0;
       candidates.push({
-        title: 'Service due',
-        why: `Next service is approaching for ${name}.`,
-        metric:
-          remaining <= 0 ? 'Due now' : `${Math.round(remaining)} KM remaining`,
+        title: dueNow ? 'Service due now' : `Service due in ${Math.round(remaining)} KM`,
+        why: dueNow
+          ? `${name} has reached its next service odometer.`
+          : `Next service is ${Math.round(remaining)} KM away for ${name}.`,
+        metric: dueNow ? 'Due now' : `${Math.round(remaining)} KM remaining`,
         priority: remaining <= 200 ? 'HIGH' : 'MEDIUM',
         ctaLabel: 'View service',
-        sort: remaining <= 0 ? 0 : 1,
+        sort: dueNow ? 0 : 1,
       });
     }
   }
 
-  // AC filter — soft signal from nextServiceDue / category only (no invented dates)
-  const cat = String(asset.categoryId || '').toLowerCase();
-  if (cat === 'ac' && asset.nextServiceDue) {
+  if (caps.supportsServiceHistory || asset.nextServiceDue) {
     const d = daysUntil(asset.nextServiceDue);
-    if (d != null && d <= 30) {
+    if (d != null && d <= 45) {
+      const overdue = d < 0;
+      const isAc = cat === 'ac';
+      const title = isAc
+        ? overdue
+          ? 'AC filter cleaning is overdue'
+          : `AC filter cleaning is due in ${d} day${d === 1 ? '' : 's'}`
+        : overdue
+          ? 'Service overdue'
+          : `Service due in ${d} day${d === 1 ? '' : 's'}`;
       candidates.push({
-        title: 'Filter maintenance',
-        why: `AC filter / service care is due for ${name}.`,
-        metric: d < 0 ? 'Overdue' : `${d} days`,
-        priority: d <= 7 ? 'HIGH' : 'MEDIUM',
-        ctaLabel: 'View maintenance',
-        sort: 1,
+        title,
+        why: overdue
+          ? `${name} service is overdue.`
+          : isAc
+            ? `AC filter / service care is due for ${name}.`
+            : `Service is approaching for ${name}.`,
+        metric: overdue ? 'Overdue' : `${d} day${d === 1 ? '' : 's'}`,
+        priority: overdue || d <= 7 ? 'HIGH' : 'MEDIUM',
+        ctaLabel: isAc ? 'View maintenance' : 'View service',
+        sort: overdue ? 0 : 1,
       });
     }
   }
 
-  if (!candidates.length) return null;
+  if (!candidates.length) {
+    const expectsMaintenance =
+      caps.supportsServiceHistory ||
+      caps.supportsOdometer ||
+      cat === 'ac' ||
+      cat === 'vehicle' ||
+      cat === 'bike' ||
+      cat === 'car';
+    if (expectsMaintenance && !asset.nextServiceDue && asset.nextServiceOdometerKm == null) {
+      return {
+        title: 'Maintenance schedule unavailable',
+        why: `Add service details for ${name} to get a next action.`,
+        metric: '—',
+        priority: 'LOW',
+        ctaLabel: 'Add details',
+      };
+    }
+    return null;
+  }
   candidates.sort((a, b) => a.sort - b.sort);
   return candidates[0];
 }
@@ -105,7 +127,10 @@ export function resolvePrimaryNextAction(asset = {}) {
 export function primaryNextActionLine(asset = {}) {
   const a = resolvePrimaryNextAction(asset);
   if (!a) return null;
-  return `${a.title}: ${a.metric}`;
+  if (a.metric && a.metric !== '—' && !a.title.includes(a.metric)) {
+    return a.title;
+  }
+  return a.title;
 }
 
 /**

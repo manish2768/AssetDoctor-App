@@ -277,7 +277,14 @@ export class SeoRegistry {
   };
 
   public static getPage(slug: string): SeoPageDefinition | undefined {
-    return this.SEO_PAGES[slug] || Object.values(this.SEO_PAGES).find(p => p.slug === slug);
+    if (!slug) return this.SEO_PAGES['warranty-checker'];
+    const cleanSlug = slug.replace(/^tools\//, '').replace(/^\//, '').trim();
+    return (
+      this.SEO_PAGES[slug] ||
+      this.SEO_PAGES[cleanSlug] ||
+      Object.values(this.SEO_PAGES).find(p => p.slug === slug || p.slug === `tools/${cleanSlug}` || p.slug.endsWith(cleanSlug)) ||
+      this.SEO_PAGES['warranty-checker']
+    );
   }
 
   public static listAllPages(): SeoPageDefinition[] {

@@ -6,13 +6,14 @@ import {
   StyleSheet,
   SectionList,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 
 import { useAuth } from '../../context/AuthProvider';
 import { useAssets } from '../../context/AssetProvider';
+import { useUiFeedback } from '../../context/UiFeedbackProvider';
+import { EmptyState } from '../../components/ui/DesignSystem';
 import { DocumentVaultService } from '../../services/documents/DocumentVaultService';
 import { ShareService } from '../../services/share/ShareService';
 import { CloudVisionOcrService } from '../../services/ocr/CloudVisionOcrService';
@@ -50,10 +51,29 @@ function folderIcon(typeId) {
   return DOCUMENT_TYPES.find((d) => d.id === typeId)?.icon || '📁';
 }
 
+function resolveDocStatus(item) {
+  if (item.needsReview) return { label: 'Needs Review', icon: '⚠️', tone: 'warning' };
+  if (item.verified || item.fieldStatus === 'verified') {
+    return { label: 'Verified', icon: '✓', tone: 'success' };
+  }
+  if (item.pendingSync) return { label: 'Pending Sync', icon: '↻', tone: 'muted' };
+  if (item.offlineCached) return { label: 'Offline', icon: '📴', tone: 'muted' };
+  if (item.processing) return { label: 'Processing', icon: '⏳', tone: 'info' };
+  if (item.expired) return { label: 'Expired', icon: '⏰', tone: 'danger' };
+  return { label: 'Saved', icon: '✓', tone: 'success' };
+}
+
+function formatDocDate(item) {
+  const raw = item.createdAt || item.uploadedAt;
+  if (!raw) return null;
+  return String(raw).slice(0, 10);
+}
+
 export function DocumentsVaultScreen({ route, navigation }) {
   const assetId = route?.params?.assetId;
   const { user } = useAuth();
   const { getAsset } = useAssets();
+  const ui = useUiFeedback();
   const asset = getAsset(assetId);
   const [docs, setDocs] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -101,7 +121,7 @@ export function DocumentsVaultScreen({ route, navigation }) {
     }
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Permission needed', 'Allow photo library access to upload documents.');
+      ui.info('Permission needed', 'Allow photo library access to upload documents.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -118,13 +138,17 @@ export function DocumentsVaultScreen({ route, navigation }) {
       try {
         const ocr = await CloudVisionOcrService.recognizeInvoice(uri);
         if (!ocr.success) {
-          Alert.alert('OCR failed', ocr.error || 'Could not read this bill. Uploading without parse.');
+          ui.info('OCR failed', ocr.error || 'Could not read this bill. Uploading without parse.');
           const upload = await DocumentVaultService.uploadDocument(user.uid, assetId, {
             localPath: uri,
             type: selectedType,
           });
           if (!upload.success) {
-            Alert.alert(upload.queuedOffline ? 'Saved offline' : 'Upload failed', upload.error);
+            if (upload.queuedOffline) {
+              ui.info('Saved offline', upload.error);
+            } else {
+              ui.error('Upload failed', upload.error);
+            }
           }
           return;
         }
@@ -171,7 +195,11 @@ export function DocumentsVaultScreen({ route, navigation }) {
     });
     setBusy(false);
     if (!upload.success) {
-      Alert.alert(upload.queuedOffline ? 'Saved offline' : 'Upload failed', upload.error);
+      if (upload.queuedOffline) {
+        ui.info('Saved offline', upload.error);
+      } else {
+        ui.error('Upload failed', upload.error);
+      }
     }
   };
 
@@ -197,7 +225,11 @@ export function DocumentsVaultScreen({ route, navigation }) {
     });
     setBusy(false);
     if (!upload.success) {
-      Alert.alert(upload.queuedOffline ? 'Saved offline' : 'Upload failed', upload.error);
+      if (upload.queuedOffline) {
+        ui.info('Saved offline', upload.error);
+      } else {
+        ui.error('Upload failed', upload.error);
+      }
     }
   };
 
@@ -207,25 +239,23 @@ export function DocumentsVaultScreen({ route, navigation }) {
       ? await ShareService.shareEmergencyBundle({ asset, documents: docs })
       : await ShareService.quickShareDocuments({ asset, documents: docs });
     setBusy(false);
-    if (!result.success) Alert.alert('Share', result.error || 'Could not share documents');
+    if (!result.success) ui.error('Share', result.error || 'Could not share documents');
   };
 
-  const onDelete = (doc) => {
-    Alert.alert('Delete document?', doc.label || doc.type, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          await DocumentVaultService.deleteDocument(
-            user.uid,
-            assetId,
-            doc.docId || doc.id,
-            doc.storagePath,
-          );
-        },
-      },
-    ]);
+  const onDelete = async (doc) => {
+    const ok = await ui.confirm({
+      title: 'Delete document?',
+      message: doc.label || doc.type,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    await DocumentVaultService.deleteDocument(
+      user.uid,
+      assetId,
+      doc.docId || doc.id,
+      doc.storagePath,
+    );
   };
 
   const vaultCopy = vaultCopyForAsset(asset || {});
@@ -283,36 +313,39 @@ export function DocumentsVaultScreen({ route, navigation }) {
         contentContainerStyle={{ paddingVertical: 16 }}
         stickySectionHeadersEnabled={false}
         ListEmptyComponent={
-          <Text style={styles.empty}>{vaultCopy.empty}</Text>
+          <EmptyState
+            icon="📄"
+            title="Keep your important documents in one secure place."
+            message={vaultCopy.subtitle}
+            ctaLabel={selectedType === 'bill' ? 'Scan Bill (AI OCR)' : 'Upload Selected Type'}
+            onCta={pickAndUpload}
+          />
         }
         renderSectionHeader={({ section }) => (
           <Text style={styles.sectionTitle}>{section.title}</Text>
         )}
         renderItem={({ item }) => {
-          const statusLabel = item.needsReview
-            ? 'Needs Review'
-            : item.verified || item.fieldStatus === 'verified'
-              ? 'Verified'
-              : item.pendingSync
-                ? 'Pending'
-                : item.offlineCached
-                  ? 'Offline'
-                  : item.processing
-                    ? 'Processing'
-                    : item.expired
-                      ? 'Expired'
-                      : 'Saved';
+          const status = resolveDocStatus(item);
+          const docDate = formatDocDate(item);
+          const typeLabel = folderLabel(item.type);
+          const assetLabel = asset?.nickname || asset?.assetName || 'This asset';
           return (
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.docTitle}>{item.label || item.type}</Text>
+              <Text style={styles.docTitle}>{item.label || typeLabel}</Text>
               <Text style={styles.docMeta} numberOfLines={1}>
-                {statusLabel}
-                {item.createdAt || item.uploadedAt
-                  ? ` · ${String(item.createdAt || item.uploadedAt).slice(0, 10)}`
-                  : ''}
-                {item.expiryDate ? ` · Exp ${String(item.expiryDate).slice(0, 10)}` : ''}
+                {folderIcon(item.type)} {typeLabel} · {assetLabel}
               </Text>
+              <View style={styles.statusRow}>
+                <View style={[styles.statusBadge, styles[`status_${status.tone}`]]}>
+                  <Text style={styles.statusIcon}>{status.icon}</Text>
+                  <Text style={styles.statusText}>{status.label}</Text>
+                </View>
+                {docDate ? <Text style={styles.docDate}>{docDate}</Text> : null}
+                {item.expiryDate ? (
+                  <Text style={styles.docDate}>Exp {String(item.expiryDate).slice(0, 10)}</Text>
+                ) : null}
+              </View>
             </View>
             <Pressable
               style={styles.docWa}
@@ -322,7 +355,7 @@ export function DocumentsVaultScreen({ route, navigation }) {
                   asset,
                   document: item,
                 });
-                if (!result.success) Alert.alert('Share document', result.error);
+                if (!result.success) ui.error('Share document', result.error);
               }}
             >
               <Text style={styles.docWaText}>💬</Text>
@@ -407,6 +440,24 @@ const styles = StyleSheet.create({
   },
   docTitle: { color: COLORS.text, fontWeight: '700', fontSize: 13 },
   docMeta: { color: COLORS.muted, fontSize: 10, marginTop: 4 },
+  statusRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 6 },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  status_success: { borderColor: 'rgba(16,185,129,0.45)', backgroundColor: 'rgba(16,185,129,0.12)' },
+  status_warning: { borderColor: 'rgba(245,158,11,0.45)', backgroundColor: 'rgba(245,158,11,0.12)' },
+  status_info: { borderColor: 'rgba(59,130,246,0.45)', backgroundColor: 'rgba(59,130,246,0.12)' },
+  status_danger: { borderColor: 'rgba(244,63,94,0.45)', backgroundColor: 'rgba(244,63,94,0.12)' },
+  status_muted: { borderColor: COLORS.border, backgroundColor: 'rgba(255,255,255,0.04)' },
+  statusIcon: { fontSize: 10, fontWeight: '800' },
+  statusText: { color: COLORS.text, fontSize: 10, fontWeight: '700' },
+  docDate: { color: COLORS.muted, fontSize: 10, fontWeight: '600' },
   docWa: {
     width: 36,
     height: 36,

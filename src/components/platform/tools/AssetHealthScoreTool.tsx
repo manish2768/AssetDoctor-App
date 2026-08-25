@@ -10,6 +10,7 @@ import {
   Info,
   HelpCircle
 } from 'lucide-react';
+import { NumericInput } from '../../common/NumericInput';
 
 interface AssetHealthScoreToolProps {
   onSaveToVault?: () => void;
@@ -17,17 +18,18 @@ interface AssetHealthScoreToolProps {
 
 export const AssetHealthScoreTool: React.FC<AssetHealthScoreToolProps> = ({ onSaveToVault }) => {
   const [category, setCategory] = useState<'VEHICLE' | 'ELECTRONICS' | 'APPLIANCE' | 'HOUSEHOLD'>('VEHICLE');
-  const [ageYears, setAgeYears] = useState(2.5);
+  const [ageYears, setAgeYears] = useState<number | null>(2.5);
   const [maintenanceHistory, setMaintenanceHistory] = useState<'ON_TIME' | 'DELAYED' | 'MISSED'>('ON_TIME');
   const [warrantyStatus, setWarrantyStatus] = useState<'ACTIVE' | 'EXPIRED' | 'EXTENDED'>('ACTIVE');
   const [condition, setCondition] = useState<'FLAWLESS' | 'MINOR_WEAR' | 'MODERATE_ISSUES' | 'CRITICAL_FAILURE'>('FLAWLESS');
-  const [repairCount, setRepairCount] = useState(0);
+  const [repairCount, setRepairCount] = useState<number | null>(0);
   const [docsAvailable, setDocsAvailable] = useState<'FULL_DOCS' | 'BILL_ONLY' | 'NO_RECORDS'>('FULL_DOCS');
 
   // Transparent Point Weights: Total 100 Points
   // 1. Age Factor: Max 20 pts
+  const safeAge = ageYears ?? 0;
   const maxCategoryLife = category === 'ELECTRONICS' ? 5 : category === 'APPLIANCE' ? 9 : 12;
-  const lifeUsedRatio = Math.min(1, ageYears / maxCategoryLife);
+  const lifeUsedRatio = Math.min(1, safeAge / maxCategoryLife);
   const agePoints = Math.round(20 * (1 - lifeUsedRatio * 0.7)); // 6 to 20 pts
 
   // 2. Maintenance Compliance: Max 25 pts
@@ -40,7 +42,8 @@ export const AssetHealthScoreTool: React.FC<AssetHealthScoreToolProps> = ({ onSa
   const conditionPoints = condition === 'FLAWLESS' ? 15 : condition === 'MINOR_WEAR' ? 10 : condition === 'MODERATE_ISSUES' ? 5 : 0;
 
   // 5. Repair History: Max 10 pts
-  const repairPoints = repairCount === 0 ? 10 : repairCount <= 2 ? 6 : 2;
+  const safeRepairs = repairCount ?? 0;
+  const repairPoints = safeRepairs === 0 ? 10 : safeRepairs <= 2 ? 6 : 2;
 
   // 6. Documentation: Max 10 pts
   const docPoints = docsAvailable === 'FULL_DOCS' ? 10 : docsAvailable === 'BILL_ONLY' ? 6 : 2;
@@ -119,21 +122,24 @@ export const AssetHealthScoreTool: React.FC<AssetHealthScoreToolProps> = ({ onSa
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-400 font-semibold mb-1">Asset Age (Years)</label>
-                  <input
-                    type="number"
-                    step="0.5"
+                  <NumericInput
                     value={ageYears}
-                    onChange={(e) => setAgeYears(Number(e.target.value))}
+                    onChange={setAgeYears}
+                    placeholder="e.g. 2.5"
+                    min={0}
+                    max={50}
+                    allowDecimal={true}
                     className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 font-mono font-bold text-white focus:outline-none focus:border-teal-500"
                   />
                 </div>
                 <div>
                   <label className="block text-slate-400 font-semibold mb-1">Prior Repairs</label>
-                  <input
-                    type="number"
-                    min="0"
+                  <NumericInput
                     value={repairCount}
-                    onChange={(e) => setRepairCount(Number(e.target.value))}
+                    onChange={setRepairCount}
+                    placeholder="0"
+                    min={0}
+                    allowDecimal={false}
                     className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 font-mono font-bold text-white focus:outline-none focus:border-teal-500"
                   />
                 </div>

@@ -9,7 +9,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Alert,
   Pressable,
   Image,
   Modal,
@@ -18,6 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { useAuth } from '../../context/AuthProvider';
 import { useAssets } from '../../context/AssetProvider';
+import { useUiFeedback } from '../../context/UiFeedbackProvider';
 import { Screen, GlassCard, GlassInput, GlassButton, BrandFooter } from '../../components/ui/Glass';
 import { BRAND, COLORS, SPACING } from '../../theme/branding';
 import { openLogin } from '../../navigation/authGate';
@@ -78,6 +78,7 @@ export function ProfileScreen({ navigation }) {
     verifyOTP,
   } = useAuth();
   const { assets, isGuestDemo } = useAssets();
+  const ui = useUiFeedback();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(DEFAULT_PROFILE.name);
   const [mobile, setMobile] = useState('');
@@ -145,7 +146,7 @@ export function ProfileScreen({ navigation }) {
       refreshLocalProfile?.();
       Haptics.success();
     } catch (error) {
-      Alert.alert('Photo', error?.message || 'Could not update photo');
+      ui.error('Photo', error?.message || 'Could not update photo');
     } finally {
       setBusy(false);
       setPhotoSheet(false);
@@ -155,7 +156,7 @@ export function ProfileScreen({ navigation }) {
   const onPickFromGallery = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Permission needed', 'Allow photo access to set a profile picture.');
+      ui.info('Permission needed', 'Allow photo access to set a profile picture.');
       return;
     }
     const picked = await ImagePicker.launchImageLibraryAsync({
@@ -171,7 +172,7 @@ export function ProfileScreen({ navigation }) {
   const onPickFromCamera = async () => {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Permission needed', 'Allow camera access to take a profile photo.');
+      ui.info('Permission needed', 'Allow camera access to take a profile photo.');
       return;
     }
     const shot = await ImagePicker.launchCameraAsync({
@@ -186,7 +187,7 @@ export function ProfileScreen({ navigation }) {
 
   const onSave = async () => {
     if (!name.trim()) {
-      Alert.alert('Profile', 'Full name is required.');
+      ui.info('Profile', 'Full name is required.');
       return;
     }
     const cleanPhone = normalizePhone(mobile);
@@ -207,7 +208,7 @@ export function ProfileScreen({ navigation }) {
     const local = await saveLocalProfile(payload);
     if (!local.success) {
       setBusy(false);
-      Alert.alert('Profile', local.error || 'Could not save locally');
+      ui.error('Profile', local.error || 'Could not save locally');
       return;
     }
 
@@ -217,7 +218,7 @@ export function ProfileScreen({ navigation }) {
       if (!result?.success) {
         // Local save already succeeded — still refresh greeting
         refreshLocalProfile?.();
-        Alert.alert(
+        ui.info(
           'Saved on device',
           result?.error
             ? `Cloud sync failed (${result.error}). Local profile still updated.`
@@ -233,7 +234,7 @@ export function ProfileScreen({ navigation }) {
     refreshLocalProfile?.();
     Haptics.success();
     setEditing(false);
-    Alert.alert('Saved', 'Profile details updated.');
+    ui.success('Profile details updated.');
   };
 
   const onSendLinkOtp = async () => {
@@ -243,7 +244,7 @@ export function ProfileScreen({ navigation }) {
     }
     const cleanPhone = normalizePhone(mobile);
     if (!cleanPhone || cleanPhone.length < 10) {
-      Alert.alert('Mobile', 'Enter a valid mobile number first.');
+      ui.info('Mobile', 'Enter a valid mobile number first.');
       return;
     }
     setOtpBusy(true);
@@ -251,13 +252,13 @@ export function ProfileScreen({ navigation }) {
       const result = await sendOTP(cleanPhone, { mode: 'link' });
       setOtpBusy(false);
       if (!result?.success) {
-        Alert.alert('OTP', result?.error || 'Could not send OTP');
+        ui.error('OTP', result?.error || 'Could not send OTP');
         return;
       }
       setOtpConfirmation(result.confirmation);
       setOtpSent(true);
       Haptics.success();
-      Alert.alert(
+      ui.info(
         'OTP sent',
         result.mode === 'link'
           ? 'Enter the code to link this mobile to your Google/email account.'
@@ -265,13 +266,13 @@ export function ProfileScreen({ navigation }) {
       );
     } catch (e) {
       setOtpBusy(false);
-      Alert.alert('OTP', e?.message || 'Could not send OTP');
+      ui.error('OTP', e?.message || 'Could not send OTP');
     }
   };
 
   const onVerifyLinkOtp = async () => {
     if (!otpConfirmation) {
-      Alert.alert('OTP', 'Request a new OTP first.');
+      ui.info('OTP', 'Request a new OTP first.');
       return;
     }
     setOtpBusy(true);
@@ -279,7 +280,7 @@ export function ProfileScreen({ navigation }) {
       const result = await verifyOTP(otpConfirmation, otpCode, { mode: 'link' });
       setOtpBusy(false);
       if (!result?.success) {
-        Alert.alert('OTP', result?.error || 'Invalid OTP');
+        ui.error('OTP', result?.error || 'Invalid OTP');
         return;
       }
       const linkedPhone = result.user?.phoneNumber || normalizePhone(mobile);
@@ -295,8 +296,7 @@ export function ProfileScreen({ navigation }) {
       setOtpCode('');
       setOtpConfirmation(null);
       Haptics.success();
-      Alert.alert(
-        'Connected',
+      ui.success(
         result.message ||
           (result.merged
             ? 'Opened the vault for this mobile number.'
@@ -304,7 +304,7 @@ export function ProfileScreen({ navigation }) {
       );
     } catch (e) {
       setOtpBusy(false);
-      Alert.alert('OTP', e?.message || 'Could not verify OTP');
+      ui.error('OTP', e?.message || 'Could not verify OTP');
     }
   };
 
@@ -602,31 +602,25 @@ export function ProfileScreen({ navigation }) {
             title="Logout"
             variant="danger"
             style={{ marginTop: 16 }}
-            onPress={() => {
+            onPress={async () => {
               Haptics.tap();
-              Alert.alert(
-                'Logout',
-                'Sign out so you can switch accounts?',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  {
-                    text: 'Logout',
-                    style: 'destructive',
-                    onPress: async () => {
-                      const result = await Promise.race([
-                        signOut(),
-                        new Promise((resolve) => setTimeout(() => resolve({ success: true }), 6000)),
-                      ]);
-                      if (result?.success === false) {
-                        Alert.alert('Logout', result.error || 'Could not sign out');
-                        return;
-                      }
-                      Haptics.success();
-                      // RootNavigator remounts AuthWelcome (Google / Mobile / Guest)
-                    },
-                  },
-                ],
-              );
+              const ok = await ui.confirm({
+                title: 'Logout',
+                message: 'Sign out so you can switch accounts?',
+                confirmLabel: 'Logout',
+                destructive: true,
+              });
+              if (!ok) return;
+              const result = await Promise.race([
+                signOut(),
+                new Promise((resolve) => setTimeout(() => resolve({ success: true }), 6000)),
+              ]);
+              if (result?.success === false) {
+                ui.error('Logout', result.error || 'Could not sign out');
+                return;
+              }
+              Haptics.success();
+              // RootNavigator remounts AuthWelcome (Google / Mobile / Guest)
             }}
           />
         ) : (

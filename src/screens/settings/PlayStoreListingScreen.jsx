@@ -3,11 +3,12 @@
  */
 
 import React from 'react';
-import { ScrollView, Text, StyleSheet, Pressable, Share, Alert } from 'react-native';
+import { ScrollView, Text, StyleSheet, Pressable, Share } from 'react-native';
 
 import { Screen, GlassCard, BrandFooter } from '../../components/ui/Glass';
 import { BRAND, COLORS, SPACING } from '../../theme/branding';
 import { Haptics } from '../../services/haptics';
+import { useUiFeedback } from '../../context/UiFeedbackProvider';
 
 export const PLAY_STORE_LISTING = {
   title: 'Asset Doctor — Smart Asset Vault',
@@ -38,6 +39,7 @@ ${BRAND.footer}`,
 };
 
 export function PlayStoreListingScreen() {
+  const ui = useUiFeedback();
   const onShare = async () => {
     Haptics.tap();
     try {
@@ -45,7 +47,7 @@ export function PlayStoreListingScreen() {
         message: `${PLAY_STORE_LISTING.title}\n\n${PLAY_STORE_LISTING.shortDescription}\n\n${PLAY_STORE_LISTING.fullDescription}`,
       });
     } catch (e) {
-      Alert.alert('Share', e?.message || 'Could not share listing text');
+      ui.error('Share', e?.message || 'Could not share listing text');
     }
   };
 

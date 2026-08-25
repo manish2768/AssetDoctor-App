@@ -11,11 +11,11 @@ import {
   Platform,
   ScrollView,
   Pressable,
-  Alert,
   Modal,
 } from 'react-native';
 
 import { useAuth } from '../context/AuthProvider';
+import { useUiFeedback } from '../context/UiFeedbackProvider';
 import { AppLogo } from '../components/AppLogo';
 import { LottieSuccess } from '../components/LottieSuccess';
 import {
@@ -41,6 +41,7 @@ function normalizeEmail(value) {
 }
 
 export function LoginScreen({ navigation }) {
+  const ui = useUiFeedback();
   const {
     signInWithEmail,
     signUpWithEmail,
@@ -92,7 +93,7 @@ export function LoginScreen({ navigation }) {
   const showAuthError = (message, title = 'Sign in') => {
     const msg = String(message || 'Something went wrong');
     setError(msg);
-    Alert.alert(title, msg);
+    ui.error(title, msg);
   };
 
   const onGoogleLogin = async () => {

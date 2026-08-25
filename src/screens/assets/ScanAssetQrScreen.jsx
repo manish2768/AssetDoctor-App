@@ -10,11 +10,11 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
-  Alert,
 } from 'react-native';
 
 import { Screen, GlassCard, GlassButton } from '../../components/ui/Glass';
 import { useAssets } from '../../context/AssetProvider';
+import { useUiFeedback } from '../../context/UiFeedbackProvider';
 import { useThemeColors } from '../../context/ThemeProvider';
 import { SPACING, TYPE, RADIUS } from '../../theme/tokens';
 import { parseAssetQrPayload } from '../../services/assets/assetIdentity';
@@ -23,6 +23,7 @@ import { EmptyState } from '../../components/ui/DesignSystem';
 
 export function ScanAssetQrScreen({ navigation, route }) {
   const colors = useThemeColors();
+  const ui = useUiFeedback();
   const { assets } = useAssets();
   const [raw, setRaw] = useState('');
   const prefillAssetId = route?.params?.assetId;
@@ -53,14 +54,14 @@ export function ScanAssetQrScreen({ navigation, route }) {
   const onLookup = () => {
     Haptics.tap();
     if (!resolved?.parsed) {
-      Alert.alert(
+      ui.info(
         'Invalid code',
         'Paste an Asset Doctor QR payload or an AST- code (e.g. AST-AC-7F29A1).',
       );
       return;
     }
     if (!resolved.match) {
-      Alert.alert(
+      ui.info(
         'Asset not in vault',
         'This code is valid but no matching asset was found on this device.',
       );

@@ -9,7 +9,6 @@ import {
   StyleSheet,
   Pressable,
   Image,
-  Alert,
   ActivityIndicator,
   Linking,
 } from 'react-native';
@@ -19,6 +18,7 @@ import { formatDateIN } from '../utils/dates';
 import { calculateHealthScore } from '../utils/healthScore';
 import { ShareService } from '../services/share/ShareService';
 import { Haptics } from '../services/haptics';
+import { useUiFeedback } from '../context/UiFeedbackProvider';
 import { ValuationBlock } from './ValuationBlock';
 import { WarrantyBadge } from './WarrantyBadge';
 import { resolveSupportContact } from '../constants/brandDirectory';
@@ -44,6 +44,7 @@ function healthTone(score) {
 
 export function AssetPassportCard({ asset, onShared }) {
   const shotRef = useRef(null);
+  const ui = useUiFeedback();
   const [sharing, setSharing] = useState(false);
   const health = calculateHealthScore(asset || {});
   const support = resolveSupportContact(asset || {});
@@ -72,7 +73,7 @@ export function AssetPassportCard({ asset, onShared }) {
       }
       onShared?.(result);
       if (!result?.success && result?.error && result.error !== 'Share cancelled') {
-        Alert.alert('Share', result.error);
+        ui.error('Share', result.error);
       } else if (result?.success) {
         Haptics.success();
       }
@@ -209,7 +210,7 @@ export function AssetPassportCard({ asset, onShared }) {
             try {
               await Linking.openURL(`tel:${support.phone}`);
             } catch {
-              Alert.alert('Call failed', 'Could not open dialer');
+              ui.error('Call failed', 'Could not open dialer');
             }
           }}
         >

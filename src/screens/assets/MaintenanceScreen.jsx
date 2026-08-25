@@ -11,10 +11,12 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 
 import { useAuth } from '../../context/AuthProvider';
+import { useUiFeedback } from '../../context/UiFeedbackProvider';
 import { useAssets } from '../../context/AssetProvider';
 import {
   ServiceScheduleService,
@@ -26,6 +28,8 @@ import { COLORS } from '../../theme/branding';
 import { formatINR, formatINRExact } from '../../utils/format';
 import { Haptics } from '../../services/haptics';
 import { openLogin } from '../../navigation/authGate';
+import { CompleteMaintenanceSheet } from '../../components/CompleteMaintenanceSheet';
+import { HIT } from '../../theme/tokens';
 
 const SERVICE_TYPES = [
   { id: 'periodic', label: 'Periodic' },
@@ -40,6 +44,7 @@ export function MaintenanceScreen({ route, navigation }) {
   const assetId = route?.params?.assetId;
   const { user } = useAuth();
   const { getAsset } = useAssets();
+  const ui = useUiFeedback();
   const asset = getAsset(assetId);
   const uid = user?.uid;
   const id = asset?.assetId || asset?.id || assetId;
@@ -63,6 +68,7 @@ export function MaintenanceScreen({ route, navigation }) {
   const [logCost, setLogCost] = useState('');
   const [logVendor, setLogVendor] = useState('');
   const [logNotes, setLogNotes] = useState('');
+  const [completeTarget, setCompleteTarget] = useState(null);
 
   useEffect(() => {
     if (!uid || !id) return undefined;
@@ -91,7 +97,7 @@ export function MaintenanceScreen({ route, navigation }) {
       return;
     }
     if (!dueDate.trim()) {
-      Alert.alert('Service schedule', 'Due date required (YYYY-MM-DD)');
+      ui.info('Service schedule', 'Due date required (YYYY-MM-DD)');
       return;
     }
     setBusy(true);
@@ -105,39 +111,42 @@ export function MaintenanceScreen({ route, navigation }) {
     });
     setBusy(false);
     if (!result.success) {
-      Alert.alert('Failed', result.error || 'Could not save schedule');
+      ui.error('Failed', result.error || 'Could not save schedule');
       return;
     }
     setDueDate('');
     setEstimatedCost('');
     setTab('schedule');
-    Alert.alert('Saved', 'Next service date tracked.');
+    ui.success('Next service date tracked.');
   };
 
   const onComplete = (schedule) => {
-    Alert.alert('Mark service complete?', schedule.title || 'Service', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Done (no cost)',
-        onPress: async () => {
-          setBusy(true);
-          const result = await ServiceScheduleService.markComplete(uid, id, schedule.id, {});
-          setBusy(false);
-          if (!result.success) Alert.alert('Failed', result.error);
-        },
-      },
-      {
-        text: 'Done + log ₹',
-        onPress: () => {
-          setLogTitle(schedule.title || 'Service completed');
-          setLogVendor(schedule.workshop || '');
-          setLogCost(
-            schedule.estimatedCostInr ? String(schedule.estimatedCostInr) : '',
-          );
-          setTab('add');
-        },
-      },
-    ]);
+    Haptics.tap();
+    setCompleteTarget(schedule);
+  };
+
+  const finishElsewhere = async () => {
+    const schedule = completeTarget;
+    setCompleteTarget(null);
+    if (!schedule || !uid || !id) return;
+    setBusy(true);
+    const result = await ServiceScheduleService.markComplete(uid, id, schedule.id, {});
+    setBusy(false);
+    if (!result.success) {
+      ui.error('Failed', result.error);
+      return;
+    }
+    ui.success('Marked complete');
+  };
+
+  const finishInApp = () => {
+    const schedule = completeTarget;
+    setCompleteTarget(null);
+    if (!schedule) return;
+    setLogTitle(schedule.title || 'Service completed');
+    setLogVendor(schedule.workshop || '');
+    setLogCost(schedule.estimatedCostInr ? String(schedule.estimatedCostInr) : '');
+    setTab('add');
   };
 
   const onAddLog = async () => {
@@ -146,7 +155,7 @@ export function MaintenanceScreen({ route, navigation }) {
       return;
     }
     if (!logTitle.trim()) {
-      Alert.alert('Maintenance log', 'Title is required');
+      ui.info('Maintenance log', 'Title is required');
       return;
     }
     setBusy(true);
@@ -160,14 +169,34 @@ export function MaintenanceScreen({ route, navigation }) {
     });
     setBusy(false);
     if (!result.success) {
-      Alert.alert('Failed', result.error || 'Could not save log');
+      ui.error('Failed', result.error || 'Could not save log');
       return;
     }
     setLogTitle('');
     setLogCost('');
     setLogNotes('');
     setTab('cost');
-    Alert.alert('Saved', 'Maintenance expense logged.');
+    ui.success('Maintenance expense logged.');
+  };
+
+  const onDeleteSchedule = async (s) => {
+    const ok = await ui.confirm({
+      title: 'Delete schedule?',
+      message: s.title,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (ok) ServiceScheduleService.remove(uid, id, s.id);
+  };
+
+  const onDeleteLog = async (row) => {
+    const ok = await ui.confirm({
+      title: 'Delete log?',
+      message: row.title,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (ok) RepairLogService.remove(uid, id, row.id);
   };
 
   const daysLabel = (days) => {
@@ -253,16 +282,7 @@ export function MaintenanceScreen({ route, navigation }) {
                       </Pressable>
                       <Pressable
                         style={[styles.smallBtn, styles.dangerBtn]}
-                        onPress={() =>
-                          Alert.alert('Delete schedule?', s.title, [
-                            { text: 'Cancel', style: 'cancel' },
-                            {
-                              text: 'Delete',
-                              style: 'destructive',
-                              onPress: () => ServiceScheduleService.remove(uid, id, s.id),
-                            },
-                          ])
-                        }
+                        onPress={() => onDeleteSchedule(s)}
                       >
                         <Text style={styles.smallBtnText}>Delete</Text>
                       </Pressable>
@@ -334,16 +354,7 @@ export function MaintenanceScreen({ route, navigation }) {
                 </Text>
                 {row.notes ? <Text style={styles.sub}>{row.notes}</Text> : null}
                 <Pressable
-                  onPress={() =>
-                    Alert.alert('Delete log?', row.title, [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Delete',
-                        style: 'destructive',
-                        onPress: () => RepairLogService.remove(uid, id, row.id),
-                      },
-                    ])
-                  }
+                  onPress={() => onDeleteLog(row)}
                   style={{ marginTop: 8 }}
                 >
                   <Text style={{ color: COLORS.rose, fontWeight: '700', fontSize: 12 }}>Delete</Text>

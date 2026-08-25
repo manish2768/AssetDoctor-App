@@ -9,7 +9,6 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Alert,
   ActivityIndicator,
   Image,
 } from 'react-native';
@@ -69,10 +68,12 @@ import { buildUpcomingSummary } from '../../services/notifications/notificationR
 import { evaluatePortfolioNotifications } from '../../services/notifications/notificationRules';
 import { unreadCount as getUnreadNotificationCount } from '../../services/health/notificationCenter';
 import { QuickActionGrid, SectionHeader, EmptyState } from '../../components/ui/DesignSystem';
+import { CollapsibleSection } from '../../components/ui/CollapsibleSection';
 import { SmartAssetListCard } from '../../components/ui/SmartAssetListCard';
 import { SmartActionCard } from '../../components/SmartActionCard';
 import { useResponsiveLayout } from '../../utils/responsive';
 import { resolvePrimaryNextAction } from '../../utils/nextActionUi';
+import { useUiFeedback } from '../../context/UiFeedbackProvider';
 
 function formatRupee(amount) {
   const n = Number(amount) || 0;
@@ -127,6 +128,7 @@ export function DashboardScreen({ navigation }) {
   const { isCompact } = useResponsiveLayout();
   const { profile, isAuthenticated, user, displayName: authDisplayName } = useAuth();
   const { assets, urgent, loading, removeAsset, portfolioHealth } = useAssets();
+  const ui = useUiFeedback();
   const [exporting, setExporting] = useState(false);
   const [listFilter, setListFilter] = useState('all'); // all | expired | attention
   const [reminderTask, setReminderTask] = useState(null);
@@ -322,24 +324,24 @@ export function DashboardScreen({ navigation }) {
     [activeAssets],
   );
 
-  const confirmDelete = (item) => {
+  const confirmDelete = async (item) => {
     const id = item.assetId || item.id;
-    Alert.alert('Delete Asset', `Remove “${item.assetName}” from your vault?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          const result = await removeAsset(id);
-          if (!result?.success) {
-            Alert.alert('Delete failed', result?.error || 'Could not delete');
-            return;
-          }
-          Haptics.success();
-          swipeRefs.current[id]?.close?.();
-        },
-      },
-    ]);
+    const ok = await ui.confirm({
+      title: 'Delete Asset',
+      message: `Remove “${item.assetName}” from your vault?`,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      destructive: true,
+    });
+    if (!ok) return;
+    const result = await removeAsset(id);
+    if (!result?.success) {
+      ui.error('Delete failed', result?.error || 'Could not delete');
+      return;
+    }
+    Haptics.success();
+    ui.success('Asset removed');
+    swipeRefs.current[id]?.close?.();
   };
 
   const goScan = () => {
@@ -420,12 +422,12 @@ export function DashboardScreen({ navigation }) {
               filename: 'asset-doctor-vault.pdf',
             });
           } catch {
-            Alert.alert('PDF ready', 'Vault PDF was created on this device.');
+            ui.success('Vault PDF was created on this device.');
           }
           Haptics.success();
         } catch (error) {
           Haptics.error();
-          Alert.alert('Export failed', error?.message || 'Could not create PDF');
+          ui.error('Export failed', error?.message || 'Could not create PDF');
         } finally {
           setExporting(false);
         }
@@ -628,7 +630,7 @@ export function DashboardScreen({ navigation }) {
           ))}
         </View>
 
-        <SectionHeader title="Quick actions" subtitle="Most used tools" />
+        <SectionHeader title="Quick actions" subtitle="Scan, add, or open your vault" />
         <QuickActionGrid
           actions={[
             {
@@ -640,7 +642,7 @@ export function DashboardScreen({ navigation }) {
             {
               id: 'scan',
               icon: '📷',
-              label: 'Scan Bill',
+              label: 'Scan Doc',
               onPress: goScan,
             },
             {
@@ -650,51 +652,52 @@ export function DashboardScreen({ navigation }) {
               onPress: goVault,
             },
             {
-              id: 'svc',
-              icon: '🛠',
-              label: 'Service',
+              id: 'alerts',
+              icon: '🔔',
+              label: 'Alerts',
               onPress: () => {
                 Haptics.tap();
-                const first = activeAssets[0];
-                if (first) {
-                  navigation?.navigate?.('Maintenance', {
-                    assetId: first.assetId || first.id,
-                  });
-                } else {
-                  goManual();
-                }
-              },
-            },
-            {
-              id: 'analytics',
-              icon: '📊',
-              label: 'Analytics',
-              onPress: () => {
-                Haptics.tap();
-                const first = activeAssets[0];
-                if (first) {
-                  navigation?.navigate?.('AssetAnalytics', {
-                    assetId: first.assetId || first.id,
-                  });
-                } else {
-                  goAssets();
-                }
-              },
-            },
-            {
-              id: 'qr',
-              icon: '⬚',
-              label: 'Scan QR',
-              onPress: () => {
-                Haptics.tap();
-                navigation?.navigate?.('ScanAssetQr');
+                navigation?.navigate?.('NotificationCenter');
               },
             },
           ]}
         />
 
+        <SectionHeader
+          title="Your assets"
+          subtitle={activeAssets.length ? `${activeAssets.length} in vault` : 'Add your first asset'}
+          actionLabel={activeAssets.length ? 'View all' : undefined}
+          onAction={activeAssets.length ? goAssets : undefined}
+        />
+        {activeAssets.length ? (
+          activeAssets.slice(0, 4).map((item) => (
+            <SmartAssetListCard
+              key={item.assetId || item.id}
+              asset={item}
+              onPress={() =>
+                navigation.navigate('AssetPassport', { assetId: item.assetId || item.id })
+              }
+            />
+          ))
+        ) : (
+          <EmptyState
+            icon="＋"
+            title="Your assets deserve a home"
+            message="Add a vehicle, phone, AC, or equipment to start tracking health and documents."
+            ctaLabel="Add Your First Asset"
+            onCta={goManual}
+            style={{ marginBottom: 12 }}
+          />
+        )}
+
+        <CollapsibleSection
+          title="Value & insights"
+          subtitle="Net worth, ownership cost, and tools — expand when needed"
+          defaultOpen={false}
+          badge={activeAssets.length ? formatINR(totalVaultValue) : undefined}
+        >
         {/* Net worth card — estimated current / resale value across household */}
-        <View style={styles.worthCard}>
+        <View style={[styles.worthCard, { marginBottom: 0, borderWidth: 0, padding: 0 }]}>
           <View style={styles.worthTop}>
             <Text style={styles.worthEyebrow}>HOUSEHOLD NET WORTH</Text>
             <View style={styles.lockerBadge}>
@@ -850,11 +853,11 @@ export function DashboardScreen({ navigation }) {
               const row = sample
                 ? calculateCostToUse(sample)
                 : { dailyCost: portfolioCost.dailyCost, monthlyCost: portfolioCost.monthlyCost, assetName: 'your vault' };
-              Alert.alert(
-                'AI Cost-to-Use',
+              ui.info(
+                'Cost-to-Use',
                 sample
-                  ? `${row.assetName}\n\n~₹${row.dailyCost}/day · ₹${row.monthlyCost}/month\nOwnership cost so far: ₹${row.ownershipCost?.toLocaleString?.('en-IN') || row.ownershipCost}`
-                  : `Vault average usage\n\n~₹${portfolioCost.dailyCost}/day · ₹${portfolioCost.monthlyCost}/month across ${portfolioCost.count} assets.`,
+                  ? `${row.assetName}: ~₹${row.dailyCost}/day · ₹${row.monthlyCost}/month`
+                  : `Vault: ~₹${portfolioCost.dailyCost}/day · ₹${portfolioCost.monthlyCost}/month across ${portfolioCost.count} assets.`,
               );
             }}
           >
@@ -868,12 +871,12 @@ export function DashboardScreen({ navigation }) {
             onPress={() => {
               Haptics.tap();
               if (!topResaleAsset) {
-                Alert.alert('Resale estimate', 'Add an asset with purchase price to see market value.');
+                ui.info('Resale estimate', 'Add an asset with purchase price to see market value.');
                 return;
               }
-              Alert.alert(
-                'One-Click Resale',
-                `${cleanAssetDisplayName(topResaleAsset.asset?.assetName, { registration: topResaleAsset.asset?.registration }) || 'Asset'}\n\nEst. market value: ${formatINR(topResaleAsset.estimatedResale)}\nRetained: ${topResaleAsset.breakdown?.retainedPercent || 0}%`,
+              ui.info(
+                'Resale value',
+                `${cleanAssetDisplayName(topResaleAsset.asset?.assetName, { registration: topResaleAsset.asset?.registration }) || 'Asset'}: ${formatINR(topResaleAsset.estimatedResale)} (${topResaleAsset.breakdown?.retainedPercent || 0}% retained)`,
               );
             }}
           >
@@ -888,7 +891,7 @@ export function DashboardScreen({ navigation }) {
             style={styles.featureCard}
             onPress={() => {
               Haptics.tap();
-              Alert.alert(
+              ui.info(
                 'Warranty health',
                 warrantyHealthy.total
                   ? `${warrantyHealthy.active} of ${warrantyHealthy.total} warranties still active.`
@@ -907,11 +910,11 @@ export function DashboardScreen({ navigation }) {
             style={styles.featureCard}
             onPress={() => {
               Haptics.tap();
-              Alert.alert(
-                'Insurance & PUC',
+              ui.info(
+                'Expiry alerts',
                 urgentBanners.length
-                  ? `${urgentBanners.length} reminder(s) need attention — scroll to Urgent Reminders.`
-                  : 'No PUC / insurance alerts in the next 15 days.',
+                  ? `${urgentBanners.length} reminder(s) need attention — open Reminders & browse.`
+                  : 'No expiry alerts in the next 15 days.',
               );
             }}
           >
@@ -1011,7 +1014,14 @@ export function DashboardScreen({ navigation }) {
           </View>
           <Text style={styles.chevron}>›</Text>
         </Pressable>
+        </CollapsibleSection>
 
+        <CollapsibleSection
+          title="Reminders & browse"
+          subtitle="Urgent items, folders, and full asset list"
+          defaultOpen={false}
+          badge={urgentBanners.length ? String(urgentBanners.length) : undefined}
+        >
         {/* Urgent — expired (red) + due soon */}
         <Text style={styles.sectionLabel}>URGENT REMINDERS</Text>
         {urgentBanners.length ? (
@@ -1206,6 +1216,8 @@ export function DashboardScreen({ navigation }) {
           );
         })}
 
+        </CollapsibleSection>
+
         <Text style={styles.buildStamp}>Asset Doctor · {OTA_BUNDLE_LABEL}</Text>
       </ScrollView>
 
@@ -1226,7 +1238,7 @@ export function DashboardScreen({ navigation }) {
         onSetReminder={async (task) => {
           setReminderTask(null);
           if (!user?.uid || !task?.assetId) {
-            Alert.alert('Reminder', 'Sign in to set email & push reminders.');
+            ui.info('Reminder', 'Sign in to set email & push reminders.');
             return;
           }
           const trigger = new Date();
@@ -1241,12 +1253,11 @@ export function DashboardScreen({ navigation }) {
             triggerAt: trigger,
             type: 'urgent_card',
           });
-          Alert.alert(
-            'Reminder',
-            queued.success
-              ? 'Reminder queued — you will get push / email alerts.'
-              : queued.error || 'Could not queue reminder',
-          );
+          if (queued.success) {
+            ui.success('Reminder queued — you will get push / email alerts.');
+          } else {
+            ui.error('Reminder', queued.error || 'Could not queue reminder');
+          }
         }}
       />
     </View>

@@ -37,6 +37,8 @@ export class PlatformErrorBoundary extends Component<Props, State> {
 
   public render() {
     if (this.state.hasError) {
+      const diagnosticId = `AD-ERR-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
       return (
         <div className="min-h-[50vh] flex items-center justify-center p-6 bg-[#070D18] text-slate-100">
           <div className="max-w-md w-full rounded-3xl bg-slate-900/90 border border-slate-800 p-8 text-center space-y-6 shadow-2xl">
@@ -46,11 +48,16 @@ export class PlatformErrorBoundary extends Component<Props, State> {
 
             <div className="space-y-2">
               <h3 className="text-xl font-black text-white">
-                {this.props.fallbackTitle || 'Asset Doctor Ready'}
+                Something didn't load correctly.
               </h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                {this.props.fallbackMessage || 'Something went wrong while displaying this section. Your vaulted asset data is completely safe.'}
+                {this.props.fallbackMessage || 'An unexpected rendering issue occurred. Your vaulted asset data and sessions remain completely secure.'}
               </p>
+              <div className="pt-1">
+                <span className="text-[10px] font-mono text-slate-500 bg-slate-950 px-2.5 py-1 rounded-md border border-slate-800">
+                  Ref: {diagnosticId}
+                </span>
+              </div>
             </div>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
@@ -66,7 +73,7 @@ export class PlatformErrorBoundary extends Component<Props, State> {
                 className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-all cursor-pointer border border-slate-700 flex items-center justify-center gap-2"
               >
                 <Home className="w-3.5 h-3.5" />
-                <span>Go to Home</span>
+                <span>Back to Asset Doctor Home</span>
               </button>
             </div>
           </div>

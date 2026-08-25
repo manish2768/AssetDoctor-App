@@ -13,29 +13,30 @@ import {
 } from 'lucide-react';
 import { AssetHealthEngine } from '../../platform/intelligence/healthEngine';
 import { createUniversalAsset, AssetCategoryType } from '../../platform/core/universalAssetSchema';
+import { NumericInput } from '../common/NumericInput';
 
 export const AssetHealthPreviewTool: React.FC = () => {
   const [category, setCategory] = useState<AssetCategoryType>('VEHICLE');
   const [assetName, setAssetName] = useState('TVS Ronin 225');
   const [brand, setBrand] = useState('TVS');
-  const [purchasePrice, setPurchasePrice] = useState(154000);
+  const [purchasePrice, setPurchasePrice] = useState<number | null>(154000);
   const [warrantyStatus, setWarrantyStatus] = useState<'ACTIVE' | 'EXPIRING_SOON' | 'EXPIRED'>('ACTIVE');
-  const [primaryMetric, setPrimaryMetric] = useState(6120); // KM for vehicle, Days since clean for AC, Battery % for phone
+  const [primaryMetric, setPrimaryMetric] = useState<number | null>(6120); // KM for vehicle, Days since clean for AC, Battery % for phone
 
   const mockAsset = createUniversalAsset({
     name: assetName,
     category,
     brand,
-    purchasePrice,
+    purchasePrice: purchasePrice ?? 0,
     warranty: {
       hasWarranty: true,
       warrantyStatus,
       expiryDate: warrantyStatus === 'ACTIVE' ? '2027-02-15' : '2026-09-01'
     },
     categoryData: {
-      odometerKm: category === 'VEHICLE' ? primaryMetric : undefined,
-      daysSinceLastFilterClean: category === 'APPLIANCE' ? primaryMetric : undefined,
-      batteryHealthPercent: category === 'ELECTRONICS' ? primaryMetric : undefined
+      odometerKm: category === 'VEHICLE' ? (primaryMetric ?? 0) : undefined,
+      daysSinceLastFilterClean: category === 'APPLIANCE' ? (primaryMetric ?? 0) : undefined,
+      batteryHealthPercent: category === 'ELECTRONICS' ? (primaryMetric ?? 0) : undefined
     }
   });
 
@@ -149,10 +150,11 @@ export const AssetHealthPreviewTool: React.FC = () => {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-slate-400 font-semibold mb-1">Purchase Price (₹)</label>
-                <input
-                  type="number"
+                <NumericInput
                   value={purchasePrice}
-                  onChange={(e) => setPurchasePrice(Number(e.target.value))}
+                  onChange={setPurchasePrice}
+                  placeholder="e.g. 154000"
+                  min={0}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono font-bold text-white focus:outline-none focus:border-emerald-500"
                 />
               </div>
@@ -175,10 +177,11 @@ export const AssetHealthPreviewTool: React.FC = () => {
               <label className="block text-xs text-slate-400 font-semibold mb-1">
                 {category === 'VEHICLE' ? 'Odometer Distance (KM)' : category === 'APPLIANCE' ? 'Days Since Last Filter Clean' : 'Battery Health Percentage (%)'}
               </label>
-              <input
-                type="number"
+              <NumericInput
                 value={primaryMetric}
-                onChange={(e) => setPrimaryMetric(Number(e.target.value))}
+                onChange={setPrimaryMetric}
+                placeholder="0"
+                min={0}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono font-bold text-white focus:outline-none focus:border-emerald-500"
               />
             </div>

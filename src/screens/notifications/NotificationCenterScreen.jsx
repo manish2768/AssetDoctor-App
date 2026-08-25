@@ -17,7 +17,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthProvider';
 import { useAssets } from '../../context/AssetProvider';
 import { NotificationEngine } from '../../services/notifications/NotificationEngine';
-import { NOTIFICATION_STATUS } from '../../services/notifications/notificationTypes';
+import {
+  NOTIFICATION_STATUS,
+  NOTIFICATION_PRIORITY,
+  NOTIFICATION_TYPE,
+  TYPE_TO_PREF_KEY,
+} from '../../services/notifications/notificationTypes';
 import { Haptics } from '../../services/haptics';
 import { useThemeColors } from '../../context/ThemeProvider';
 import { RADIUS, SPACING, TYPE, HIT } from '../../theme/tokens';
@@ -30,23 +35,68 @@ const TABS = [
   { id: 'expired', label: 'Expired' },
 ];
 
+const PRIORITY_RANK = {
+  [NOTIFICATION_PRIORITY.CRITICAL]: 0,
+  [NOTIFICATION_PRIORITY.HIGH]: 1,
+  [NOTIFICATION_PRIORITY.MEDIUM]: 2,
+  [NOTIFICATION_PRIORITY.LOW]: 3,
+};
+
 function priorityMeta(p) {
-  if (p === 'CRITICAL') return { tone: 'error', label: 'Critical' };
-  if (p === 'HIGH') return { tone: 'warning', label: 'Important' };
-  if (p === 'MEDIUM') return { tone: 'info', label: 'Attention' };
+  if (p === NOTIFICATION_PRIORITY.CRITICAL) return { tone: 'error', label: 'Critical' };
+  if (p === NOTIFICATION_PRIORITY.HIGH) return { tone: 'warning', label: 'Important' };
+  if (p === NOTIFICATION_PRIORITY.MEDIUM) return { tone: 'info', label: 'Attention' };
   return { tone: 'neutral', label: 'Info' };
+}
+
+function alertTypeLabel(item) {
+  const type = item.notificationType || item.type;
+  if (type === NOTIFICATION_TYPE.SERVICE_DUE) return 'SERVICE DUE';
+  if (type === NOTIFICATION_TYPE.MAINTENANCE_DUE) return 'MAINTENANCE';
+  if (type === NOTIFICATION_TYPE.INSURANCE_EXPIRY) return 'INSURANCE';
+  if (type === NOTIFICATION_TYPE.PUC_EXPIRY) return 'PUC';
+  if (type === NOTIFICATION_TYPE.WARRANTY_EXPIRY) return 'WARRANTY';
+  if (type === NOTIFICATION_TYPE.BATTERY_HEALTH) return 'BATTERY';
+  if (type === NOTIFICATION_TYPE.ASSET_HEALTH) return 'HEALTH';
+  if (type === NOTIFICATION_TYPE.DOCUMENT_EXPIRY) return 'DOCUMENT';
+  const pref = TYPE_TO_PREF_KEY[type];
+  if (pref) return String(pref).toUpperCase();
+  if (item.category) return String(item.category).toUpperCase();
+  return 'ALERT';
+}
+
+function metricLabel(item) {
+  const d = item.daysLeft;
+  if (d == null || Number.isNaN(Number(d))) return null;
+  const n = Number(d);
+  if (n < 0) return `${Math.abs(n)} day${Math.abs(n) === 1 ? '' : 's'} overdue`;
+  if (n === 0) return 'Due today';
+  if (n === 1) return '1 day left';
+  return `${n} days left`;
 }
 
 function itemTime(item) {
   const raw =
     item.dueAt ||
     item.scheduledFor ||
+    item.eventDate ||
     item.createdAt ||
     item.updatedAt ||
     item.timestamp ||
     null;
   const t = raw ? new Date(raw).getTime() : NaN;
   return Number.isFinite(t) ? t : Date.now();
+}
+
+function sortByPriority(items = []) {
+  return [...items].sort((a, b) => {
+    const pa = PRIORITY_RANK[a.priority] ?? 9;
+    const pb = PRIORITY_RANK[b.priority] ?? 9;
+    if (pa !== pb) return pa - pb;
+    const da = a.daysLeft != null ? Number(a.daysLeft) : 999;
+    const db = b.daysLeft != null ? Number(b.daysLeft) : 999;
+    return da - db;
+  });
 }
 
 function groupAlerts(items = []) {
@@ -64,13 +114,34 @@ function groupAlerts(items = []) {
     else upcoming.push(item);
   }
   const sections = [];
-  if (today.length) sections.push({ title: 'Today', data: today });
-  if (week.length) sections.push({ title: 'This Week', data: week });
-  if (upcoming.length) sections.push({ title: 'Upcoming', data: upcoming });
+  if (today.length) sections.push({ title: 'Today', data: sortByPriority(today) });
+  if (week.length) sections.push({ title: 'This Week', data: sortByPriority(week) });
+  if (upcoming.length) sections.push({ title: 'Upcoming', data: sortByPriority(upcoming) });
   if (!sections.length && items.length) {
-    sections.push({ title: 'Alerts', data: items });
+    sections.push({ title: 'Alerts', data: sortByPriority(items) });
   }
   return sections;
+}
+
+function resolveAssetName(item, assets = []) {
+  const id = item.assetId || item.deepLink?.assetId;
+  if (id) {
+    const match = assets.find((a) => (a.assetId || a.id) === id);
+    if (match?.assetName) return match.assetName;
+  }
+  const title = String(item.title || '');
+  const colon = title.indexOf(':');
+  if (colon > 0) return title.slice(colon + 1).trim();
+  return title || 'Your asset';
+}
+
+function isUnread(item) {
+  return (
+    item.status === NOTIFICATION_STATUS.UNREAD ||
+    item.status === 'SCHEDULED' ||
+    item.status === 'SENT' ||
+    !item.status
+  );
 }
 
 export function NotificationCenterScreen({ navigation }) {
@@ -107,8 +178,7 @@ export function NotificationCenterScreen({ navigation }) {
     setRefreshing(false);
   };
 
-  const openItem = async (item) => {
-    Haptics.tap();
+  const navigateToItem = async (item) => {
     await NotificationEngine.markRead(item.alertId || item.notificationId);
     const assetId = item.assetId || item.deepLink?.assetId;
     const screen = item.deepLink?.screen || 'AssetPassport';
@@ -122,6 +192,11 @@ export function NotificationCenterScreen({ navigation }) {
       navigation.navigate('AssetPassport', { assetId, focusSection });
     }
     load().catch(() => {});
+  };
+
+  const openItem = async (item) => {
+    Haptics.tap();
+    await navigateToItem(item);
   };
 
   const dismissItem = async (item) => {
@@ -182,58 +257,90 @@ export function NotificationCenterScreen({ navigation }) {
             style={{ marginHorizontal: 16, marginTop: 24 }}
           />
         }
-        contentContainerStyle={{ paddingBottom: 48, paddingHorizontal: 16 }}
+        contentContainerStyle={{ paddingBottom: 48, paddingHorizontal: 16, flexGrow: 1 }}
         renderSectionHeader={({ section }) => (
           <Text style={[TYPE.label, { color: colors.textMuted, marginTop: 16, marginBottom: 8 }]}>
             {section.title}
           </Text>
         )}
         renderItem={({ item }) => {
-          const unread =
-            item.status === NOTIFICATION_STATUS.UNREAD ||
-            item.status === 'SCHEDULED' ||
-            item.status === 'SENT' ||
-            !item.status;
+          const unread = isUnread(item);
           const meta = priorityMeta(item.priority);
+          const typeLabel = alertTypeLabel(item);
+          const assetName = resolveAssetName(item, assets);
+          const metric = metricLabel(item);
+          const priorityBorder =
+            item.priority === NOTIFICATION_PRIORITY.CRITICAL
+              ? colors.error
+              : item.priority === NOTIFICATION_PRIORITY.HIGH
+                ? colors.warning
+                : unread
+                  ? colors.borderAccent || colors.secondary
+                  : colors.border;
+
           return (
-            <Pressable
+            <View
               style={[
                 styles.card,
                 {
-                  backgroundColor: colors.surface,
-                  borderColor: unread ? colors.borderAccent || colors.border : colors.border,
+                  backgroundColor: unread ? colors.surface : colors.surfaceMuted,
+                  borderColor: priorityBorder,
+                  borderLeftWidth: unread ? 3 : 1,
+                  opacity: unread ? 1 : 0.88,
                 },
               ]}
-              onPress={() => openItem(item)}
-              accessibilityRole="button"
-              accessibilityLabel={`${meta.label}. ${item.title || 'Asset reminder'}`}
             >
-              <View style={styles.cardTop}>
-                <Text style={[TYPE.bodyStrong, { color: colors.text, flex: 1 }]} numberOfLines={2}>
-                  {item.title || 'Asset reminder'}
-                </Text>
+              <View style={styles.cardHeader}>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <View style={styles.typeRow}>
+                    <Text style={[TYPE.micro, styles.typeLabel, { color: colors.primary }]}>
+                      {typeLabel}
+                    </Text>
+                    {unread ? (
+                      <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />
+                    ) : (
+                      <Text style={[TYPE.micro, { color: colors.textMuted }]}>Read</Text>
+                    )}
+                  </View>
+                  <Text style={[TYPE.bodyStrong, { color: colors.text }]} numberOfLines={2}>
+                    {assetName}
+                  </Text>
+                  {metric ? (
+                    <Text style={[TYPE.caption, { color: colors.text, fontWeight: '700' }]}>
+                      {metric}
+                    </Text>
+                  ) : null}
+                  {item.body || item.message ? (
+                    <Text style={[TYPE.caption, { color: colors.textMuted, marginTop: 2 }]} numberOfLines={2}>
+                      {item.body || item.message}
+                    </Text>
+                  ) : null}
+                </View>
                 <StatusBadge label={meta.label} tone={meta.tone} />
               </View>
-              {item.body || item.message ? (
-                <Text style={[TYPE.caption, { color: colors.textMuted, marginTop: 6 }]} numberOfLines={3}>
-                  {item.body || item.message}
-                </Text>
-              ) : null}
+
               <View style={styles.cardActions}>
-                <Text style={[TYPE.micro, { color: colors.primary, fontWeight: '700' }]}>
-                  Open asset →
-                </Text>
+                <Pressable
+                  style={[styles.viewBtn, { backgroundColor: colors.infoSoft, borderColor: colors.secondary }]}
+                  onPress={() => openItem(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View asset ${assetName}`}
+                >
+                  <Text style={[TYPE.caption, { color: colors.secondary, fontWeight: '800' }]}>
+                    View Asset
+                  </Text>
+                </Pressable>
                 <Pressable
                   onPress={() => dismissItem(item)}
                   hitSlop={8}
                   accessibilityRole="button"
-                  accessibilityLabel="Mark as read"
-                  style={{ minHeight: HIT.min, justifyContent: 'center' }}
+                  accessibilityLabel="Dismiss alert"
+                  style={styles.dismissBtn}
                 >
                   <Text style={[TYPE.micro, { color: colors.textMuted }]}>Dismiss</Text>
                 </Pressable>
               </View>
-            </Pressable>
+            </View>
           );
         }}
       />
@@ -264,12 +371,44 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     marginBottom: SPACING.sm,
   },
-  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  typeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  typeLabel: {
+    letterSpacing: 0.6,
+    fontWeight: '800',
+  },
+  unreadDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
   cardActions: {
-    marginTop: 10,
+    marginTop: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
+  },
+  viewBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    minHeight: HIT.min,
+    justifyContent: 'center',
+  },
+  dismissBtn: {
+    minHeight: HIT.min,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
   },
 });
 

@@ -22,6 +22,7 @@ import {
   WarrantyExpiryResult,
   TcoResult
 } from '../../../platform/tools/calculatorEngine';
+import { NumericInput } from '../../common/NumericInput';
 
 interface UniversalDailyToolsHubProps {
   initialTool?: 'repair_replace' | 'depreciation' | 'warranty' | 'tco';
@@ -37,43 +38,63 @@ export const UniversalDailyToolsHub: React.FC<UniversalDailyToolsHubProps> = ({
 
   // 1. Repair vs Replace States
   const [rvrAssetType, setRvrAssetType] = useState<'VEHICLE' | 'ELECTRONICS' | 'APPLIANCE' | 'HOUSEHOLD' | 'OTHER'>('APPLIANCE');
-  const [rvrPrice, setRvrPrice] = useState(42000);
-  const [rvrAge, setRvrAge] = useState(4.5);
-  const [rvrRepairCost, setRvrRepairCost] = useState(14500);
-  const [rvrRepairCount, setRvrRepairCount] = useState(1);
+  const [rvrPrice, setRvrPrice] = useState<number | null>(42000);
+  const [rvrAge, setRvrAge] = useState<number | null>(4.5);
+  const [rvrRepairCost, setRvrRepairCost] = useState<number | null>(14500);
+  const [rvrRepairCount, setRvrRepairCount] = useState<number | null>(1);
   const [rvrWarranty, setRvrWarranty] = useState<'ACTIVE' | 'EXPIRED' | 'EXTENDED'>('EXPIRED');
 
   // 2. Depreciation States
-  const [depPrice, setDepPrice] = useState(165000);
-  const [depAge, setDepAge] = useState(3);
+  const [depPrice, setDepPrice] = useState<number | null>(165000);
+  const [depAge, setDepAge] = useState<number | null>(3);
   const [depCategory, setDepCategory] = useState<'VEHICLE' | 'ELECTRONICS' | 'APPLIANCE' | 'HOUSEHOLD' | 'OTHER'>('VEHICLE');
   const [depMethod, setDepMethod] = useState<'DECLINING_BALANCE' | 'STRAIGHT_LINE'>('DECLINING_BALANCE');
 
   // 3. Warranty States
   const [warPurchaseDate, setWarPurchaseDate] = useState('2025-06-15');
-  const [warMonths, setWarMonths] = useState(24);
-  const [warExtMonths, setWarExtMonths] = useState(0);
+  const [warMonths, setWarMonths] = useState<number | null>(24);
+  const [warExtMonths, setWarExtMonths] = useState<number | null>(0);
 
   // 4. TCO States
-  const [tcoPrice, setTcoPrice] = useState(180000);
-  const [tcoAnnualMaint, setTcoAnnualMaint] = useState(8500);
-  const [tcoAnnualFuel, setTcoAnnualFuel] = useState(36000);
-  const [tcoAnnualIns, setTcoAnnualIns] = useState(6500);
-  const [tcoYears, setTcoYears] = useState(5);
+  const [tcoPrice, setTcoPrice] = useState<number | null>(180000);
+  const [tcoAnnualMaint, setTcoAnnualMaint] = useState<number | null>(8500);
+  const [tcoAnnualFuel, setTcoAnnualFuel] = useState<number | null>(36000);
+  const [tcoAnnualIns, setTcoAnnualIns] = useState<number | null>(6500);
+  const [tcoYears, setTcoYears] = useState<number | null>(5);
 
   // Calculations
-  const rvrResult = CalculatorEngine.calculateRepairVsReplace({
+  const rvrHasInputs = rvrPrice !== null && rvrRepairCost !== null && rvrPrice > 0;
+  const rvrResult = rvrHasInputs ? CalculatorEngine.calculateRepairVsReplace({
     assetType: rvrAssetType,
-    purchasePrice: rvrPrice,
-    ageYears: rvrAge,
-    repairCost: rvrRepairCost,
-    previousRepairCount: rvrRepairCount,
+    purchasePrice: rvrPrice ?? 0,
+    ageYears: rvrAge ?? 1,
+    repairCost: rvrRepairCost ?? 0,
+    previousRepairCount: rvrRepairCount ?? 0,
     warrantyStatus: rvrWarranty
-  });
+  }) : null;
 
-  const depResult = CalculatorEngine.calculateDepreciation(depPrice, depAge, depCategory, depMethod);
-  const warResult = CalculatorEngine.calculateWarranty(warPurchaseDate, warMonths, warExtMonths);
-  const tcoResult = CalculatorEngine.calculateTco(tcoPrice, tcoAnnualMaint, tcoAnnualFuel, tcoAnnualIns, tcoYears);
+  const depHasInputs = depPrice !== null && depAge !== null && depPrice > 0;
+  const depResult = depHasInputs ? CalculatorEngine.calculateDepreciation(
+    depPrice ?? 0,
+    depAge ?? 1,
+    depCategory,
+    depMethod
+  ) : null;
+
+  const warResult = CalculatorEngine.calculateWarranty(
+    warPurchaseDate,
+    warMonths ?? 12,
+    warExtMonths ?? 0
+  );
+
+  const tcoHasInputs = tcoPrice !== null && tcoYears !== null && tcoPrice > 0;
+  const tcoResult = tcoHasInputs ? CalculatorEngine.calculateTco(
+    tcoPrice ?? 0,
+    tcoAnnualMaint ?? 0,
+    tcoAnnualFuel ?? 0,
+    tcoAnnualIns ?? 0,
+    tcoYears ?? 1
+  ) : null;
 
   const handleShare = () => {
     navigator.clipboard?.writeText(window.location.href);
@@ -194,20 +215,23 @@ export const UniversalDailyToolsHub: React.FC<UniversalDailyToolsHubProps> = ({
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-slate-400 font-semibold mb-1">Original Price (₹)</label>
-                      <input
-                        type="number"
+                      <NumericInput
                         value={rvrPrice}
-                        onChange={(e) => setRvrPrice(Number(e.target.value))}
+                        onChange={setRvrPrice}
+                        placeholder="e.g. 42000"
+                        min={0}
                         className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 font-mono font-bold text-white focus:outline-none focus:border-amber-500"
                       />
                     </div>
                     <div>
                       <label className="block text-slate-400 font-semibold mb-1">Asset Age (Years)</label>
-                      <input
-                        type="number"
-                        step="0.5"
+                      <NumericInput
                         value={rvrAge}
-                        onChange={(e) => setRvrAge(Number(e.target.value))}
+                        onChange={setRvrAge}
+                        placeholder="e.g. 4.5"
+                        min={0}
+                        max={50}
+                        allowDecimal={true}
                         className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 font-mono font-bold text-white focus:outline-none focus:border-amber-500"
                       />
                     </div>
@@ -216,20 +240,22 @@ export const UniversalDailyToolsHub: React.FC<UniversalDailyToolsHubProps> = ({
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-slate-400 font-semibold mb-1">Estimated Repair (₹)</label>
-                      <input
-                        type="number"
+                      <NumericInput
                         value={rvrRepairCost}
-                        onChange={(e) => setRvrRepairCost(Number(e.target.value))}
+                        onChange={setRvrRepairCost}
+                        placeholder="e.g. 14500"
+                        min={0}
                         className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 font-mono font-bold text-amber-400 focus:outline-none focus:border-amber-500"
                       />
                     </div>
                     <div>
                       <label className="block text-slate-400 font-semibold mb-1">Previous Repairs</label>
-                      <input
-                        type="number"
-                        min="0"
+                      <NumericInput
                         value={rvrRepairCount}
-                        onChange={(e) => setRvrRepairCount(Number(e.target.value))}
+                        onChange={setRvrRepairCount}
+                        placeholder="0"
+                        min={0}
+                        allowDecimal={false}
                         className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 font-mono font-bold text-white focus:outline-none focus:border-amber-500"
                       />
                     </div>
@@ -251,50 +277,56 @@ export const UniversalDailyToolsHub: React.FC<UniversalDailyToolsHubProps> = ({
               </div>
 
               {/* Recommendation Outputs */}
-              <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Decision Recommendation</span>
-                  <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border font-mono ${
-                    rvrResult.recommendation === 'REPLACE'
-                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                      : rvrResult.recommendation === 'MONITOR'
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                  }`}>
-                    {rvrResult.recommendation}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
-                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Current Asset Value</span>
-                    <span className="text-xl font-black text-cyan-400 font-mono">₹{rvrResult.fairMarketValue.toLocaleString('en-IN')}</span>
-                  </div>
-                  <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
-                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Repair Cost Ratio</span>
-                    <span className="text-xl font-black text-amber-400 font-mono">{rvrResult.repairCostRatio}%</span>
-                  </div>
-                </div>
-
-                {/* Financial Summary */}
-                <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Financial Impact Rationale</span>
-                  <p className="text-xs text-slate-200 leading-relaxed">{rvrResult.financialImpactSummary}</p>
-                </div>
-
-                {/* Reasoning Points */}
-                <div className="space-y-1.5 text-xs text-slate-300">
-                  {rvrResult.reasoning.map((r, idx) => (
-                    <div key={idx} className="flex items-start gap-2">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                      <span>{r}</span>
+              <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-4 flex flex-col justify-between">
+                {rvrResult ? (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Decision Recommendation</span>
+                      <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border font-mono ${
+                        rvrResult.recommendation === 'REPLACE'
+                          ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                          : rvrResult.recommendation === 'MONITOR'
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                          : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      }`}>
+                        {rvrResult.recommendation}
+                      </span>
                     </div>
-                  ))}
-                </div>
 
-                <p className="text-[10px] text-slate-500 italic pt-2 border-t border-slate-800">
-                  {rvrResult.disclaimer}
-                </p>
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+                        <span className="text-[10px] uppercase font-bold text-slate-500 block">Current Asset Value</span>
+                        <span className="text-xl font-black text-cyan-400 font-mono">₹{rvrResult.fairMarketValue.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+                        <span className="text-[10px] uppercase font-bold text-slate-500 block">Repair Cost Ratio</span>
+                        <span className="text-xl font-black text-amber-400 font-mono">{rvrResult.repairCostRatio}%</span>
+                      </div>
+                    </div>
+
+                    {/* Financial Summary */}
+                    <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5 text-xs text-slate-300">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Decision Summary</span>
+                      <p className="leading-relaxed">{rvrResult.summary}</p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="my-auto text-center p-8 space-y-2 text-slate-400">
+                    <HelpCircle className="w-8 h-8 text-amber-400/80 mx-auto" />
+                    <h4 className="font-bold text-white text-sm">Enter Values to Calculate</h4>
+                    <p className="text-xs max-w-xs mx-auto">
+                      Fill in the original price and repair quote to evaluate the 50% threshold decision rule.
+                    </p>
+                  </div>
+                )}
+
+                <button
+                  onClick={onSaveToVault}
+                  className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 mt-2"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Save this result to Asset Doctor</span>
+                </button>
               </div>
             </div>
           </div>
@@ -306,14 +338,14 @@ export const UniversalDailyToolsHub: React.FC<UniversalDailyToolsHubProps> = ({
         {activeTool === 'depreciation' && (
           <div className="space-y-6">
             <div className="border-b border-slate-800 pb-4">
-              <h3 className="text-xl font-black text-white">Asset Depreciation & Salvage Calculator</h3>
-              <p className="text-xs text-slate-400 mt-0.5">Model asset value decay using Declining Balance (WDV) or Straight-Line accounting methods.</p>
+              <h3 className="text-xl font-black text-white">Asset Depreciation & Valuation Engine</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Model annual Written Down Value (WDV) or Straight-Line depreciation based on Indian accounting rules.</p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-4 text-xs">
-                <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider block">Valuation Parameters</span>
-                
+                <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider block">Depreciation Parameters</span>
+
                 <div className="space-y-3">
                   <div>
                     <label className="block text-slate-400 font-semibold mb-1">Asset Category</label>
@@ -332,20 +364,23 @@ export const UniversalDailyToolsHub: React.FC<UniversalDailyToolsHubProps> = ({
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-slate-400 font-semibold mb-1">Original Price (₹)</label>
-                      <input
-                        type="number"
+                      <NumericInput
                         value={depPrice}
-                        onChange={(e) => setDepPrice(Number(e.target.value))}
+                        onChange={setDepPrice}
+                        placeholder="e.g. 165000"
+                        min={0}
                         className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 font-mono font-bold text-white focus:outline-none focus:border-cyan-500"
                       />
                     </div>
                     <div>
                       <label className="block text-slate-400 font-semibold mb-1">Age (Years)</label>
-                      <input
-                        type="number"
-                        step="0.5"
+                      <NumericInput
                         value={depAge}
-                        onChange={(e) => setDepAge(Number(e.target.value))}
+                        onChange={setDepAge}
+                        placeholder="e.g. 3"
+                        min={0}
+                        max={50}
+                        allowDecimal={true}
                         className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 font-mono font-bold text-white focus:outline-none focus:border-cyan-500"
                       />
                     </div>
@@ -376,33 +411,53 @@ export const UniversalDailyToolsHub: React.FC<UniversalDailyToolsHubProps> = ({
               </div>
 
               {/* Output Results */}
-              <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-4">
-                <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider block">Valuation Outcome</span>
+              <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-4 flex flex-col justify-between">
+                {depResult ? (
+                  <>
+                    <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider block">Valuation Outcome</span>
 
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
-                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Current Fair Value</span>
-                    <span className="text-xl font-black text-cyan-400 font-mono">₹{depResult.currentValue.toLocaleString('en-IN')}</span>
-                  </div>
-                  <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
-                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Total Depreciation</span>
-                    <span className="text-xl font-black text-rose-400 font-mono">₹{depResult.totalDepreciation.toLocaleString('en-IN')}</span>
-                  </div>
-                </div>
-
-                {/* 5-Year Schedule Preview */}
-                <div className="space-y-1.5">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Yearly Depreciation Schedule</span>
-                  <div className="space-y-1 text-xs">
-                    {depResult.yearlySchedule.slice(0, 5).map((row) => (
-                      <div key={row.year} className="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 border border-slate-800/80 font-mono text-[11px]">
-                        <span className="text-slate-400 font-bold">Year {row.year}</span>
-                        <span className="text-rose-400">-₹{row.depreciationAmount.toLocaleString('en-IN')}</span>
-                        <span className="text-white font-bold">₹{row.closingValue.toLocaleString('en-IN')}</span>
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+                        <span className="text-[10px] uppercase font-bold text-slate-500 block">Current Fair Value</span>
+                        <span className="text-xl font-black text-cyan-400 font-mono">₹{depResult.currentValue.toLocaleString('en-IN')}</span>
                       </div>
-                    ))}
+                      <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+                        <span className="text-[10px] uppercase font-bold text-slate-500 block">Total Depreciation</span>
+                        <span className="text-xl font-black text-rose-400 font-mono">₹{depResult.totalDepreciation.toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
+
+                    {/* 5-Year Schedule Preview */}
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Yearly Depreciation Schedule</span>
+                      <div className="space-y-1 text-xs">
+                        {depResult.yearlySchedule.slice(0, 5).map((row) => (
+                          <div key={row.year} className="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 border border-slate-800/80 font-mono text-[11px]">
+                            <span className="text-slate-400 font-bold">Year {row.year}</span>
+                            <span className="text-rose-400">-₹{row.depreciationAmount.toLocaleString('en-IN')}</span>
+                            <span className="text-white font-bold">₹{row.closingValue.toLocaleString('en-IN')}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="my-auto text-center p-8 space-y-2 text-slate-400">
+                    <HelpCircle className="w-8 h-8 text-cyan-400/80 mx-auto" />
+                    <h4 className="font-bold text-white text-sm">Enter Price & Age</h4>
+                    <p className="text-xs max-w-xs mx-auto">
+                      Provide the original acquisition cost and age in years to project multi-year depreciation curves.
+                    </p>
                   </div>
-                </div>
+                )}
+
+                <button
+                  onClick={onSaveToVault}
+                  className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 mt-2"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Save this result to Asset Doctor</span>
+                </button>
               </div>
             </div>
           </div>
@@ -436,19 +491,23 @@ export const UniversalDailyToolsHub: React.FC<UniversalDailyToolsHubProps> = ({
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-slate-400 font-semibold mb-1">Standard Warranty (Months)</label>
-                      <input
-                        type="number"
+                      <NumericInput
                         value={warMonths}
-                        onChange={(e) => setWarMonths(Number(e.target.value))}
+                        onChange={setWarMonths}
+                        placeholder="e.g. 24"
+                        min={0}
+                        allowDecimal={false}
                         className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 font-mono font-bold text-white focus:outline-none focus:border-emerald-500"
                       />
                     </div>
                     <div>
                       <label className="block text-slate-400 font-semibold mb-1">Extended AMC (Months)</label>
-                      <input
-                        type="number"
+                      <NumericInput
                         value={warExtMonths}
-                        onChange={(e) => setWarExtMonths(Number(e.target.value))}
+                        onChange={setWarExtMonths}
+                        placeholder="0"
+                        min={0}
+                        allowDecimal={false}
                         className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 font-mono font-bold text-white focus:outline-none focus:border-emerald-500"
                       />
                     </div>
@@ -457,29 +516,39 @@ export const UniversalDailyToolsHub: React.FC<UniversalDailyToolsHubProps> = ({
               </div>
 
               {/* Warranty Output */}
-              <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Status Outcome</span>
-                  <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border font-mono ${
-                    warResult.status === 'EXPIRED'
-                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                      : warResult.status === 'EXPIRING_SOON'
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                  }`}>
-                    {warResult.statusLabel}
-                  </span>
+              <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-4 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Status Outcome</span>
+                    <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border font-mono ${
+                      warResult.status === 'EXPIRED'
+                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                        : warResult.status === 'EXPIRING_SOON'
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                        : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                    }`}>
+                      {warResult.statusLabel}
+                    </span>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 mb-3">
+                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Warranty Expiry Date</span>
+                    <span className="text-2xl font-black text-white font-mono">{warResult.expiryDate}</span>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Consumer Guidance</span>
+                    <p className="text-xs text-slate-200 leading-relaxed">{warResult.guidance}</p>
+                  </div>
                 </div>
 
-                <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
-                  <span className="text-[10px] uppercase font-bold text-slate-500 block">Warranty Expiry Date</span>
-                  <span className="text-2xl font-black text-white font-mono">{warResult.expiryDate}</span>
-                </div>
-
-                <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1.5">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Consumer Guidance</span>
-                  <p className="text-xs text-slate-200 leading-relaxed">{warResult.guidance}</p>
-                </div>
+                <button
+                  onClick={onSaveToVault}
+                  className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 mt-2"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Save this result to Asset Doctor</span>
+                </button>
               </div>
             </div>
           </div>
@@ -502,19 +571,23 @@ export const UniversalDailyToolsHub: React.FC<UniversalDailyToolsHubProps> = ({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-slate-400 font-semibold mb-1">Purchase Price (₹)</label>
-                    <input
-                      type="number"
+                    <NumericInput
                       value={tcoPrice}
-                      onChange={(e) => setTcoPrice(Number(e.target.value))}
+                      onChange={setTcoPrice}
+                      placeholder="e.g. 180000"
+                      min={0}
                       className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 font-mono font-bold text-white focus:outline-none focus:border-indigo-500"
                     />
                   </div>
                   <div>
                     <label className="block text-slate-400 font-semibold mb-1">Ownership Horizon (Yrs)</label>
-                    <input
-                      type="number"
+                    <NumericInput
                       value={tcoYears}
-                      onChange={(e) => setTcoYears(Number(e.target.value))}
+                      onChange={setTcoYears}
+                      placeholder="e.g. 5"
+                      min={1}
+                      max={30}
+                      allowDecimal={false}
                       className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 font-mono font-bold text-white focus:outline-none focus:border-indigo-500"
                     />
                   </div>
@@ -523,28 +596,31 @@ export const UniversalDailyToolsHub: React.FC<UniversalDailyToolsHubProps> = ({
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <label className="block text-slate-400 font-semibold mb-1">Annual Service (₹)</label>
-                    <input
-                      type="number"
+                    <NumericInput
                       value={tcoAnnualMaint}
-                      onChange={(e) => setTcoAnnualMaint(Number(e.target.value))}
+                      onChange={setTcoAnnualMaint}
+                      placeholder="8500"
+                      min={0}
                       className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 font-mono text-xs text-white focus:outline-none focus:border-indigo-500"
                     />
                   </div>
                   <div>
                     <label className="block text-slate-400 font-semibold mb-1">Annual Power/Fuel (₹)</label>
-                    <input
-                      type="number"
+                    <NumericInput
                       value={tcoAnnualFuel}
-                      onChange={(e) => setTcoAnnualFuel(Number(e.target.value))}
+                      onChange={setTcoAnnualFuel}
+                      placeholder="36000"
+                      min={0}
                       className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 font-mono text-xs text-white focus:outline-none focus:border-indigo-500"
                     />
                   </div>
                   <div>
                     <label className="block text-slate-400 font-semibold mb-1">Annual Insurance (₹)</label>
-                    <input
-                      type="number"
+                    <NumericInput
                       value={tcoAnnualIns}
-                      onChange={(e) => setTcoAnnualIns(Number(e.target.value))}
+                      onChange={setTcoAnnualIns}
+                      placeholder="6500"
+                      min={0}
                       className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 font-mono text-xs text-white focus:outline-none focus:border-indigo-500"
                     />
                   </div>
@@ -552,29 +628,49 @@ export const UniversalDailyToolsHub: React.FC<UniversalDailyToolsHubProps> = ({
               </div>
 
               {/* TCO Results */}
-              <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-4">
-                <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider block">Cumulative Lifetime Cost</span>
+              <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-4 flex flex-col justify-between">
+                {tcoResult ? (
+                  <>
+                    <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider block">Cumulative Lifetime Cost</span>
 
-                <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
-                  <span className="text-[10px] uppercase font-bold text-slate-500 block">Total Cost of Ownership</span>
-                  <span className="text-3xl font-black text-indigo-400 font-mono">₹{tcoResult.totalCostOfOwnership.toLocaleString('en-IN')}</span>
-                  <div className="flex items-center gap-3 text-xs text-slate-400 mt-1 font-mono">
-                    <span>₹{tcoResult.monthlyAverageCost.toLocaleString('en-IN')}/mo</span>
-                    <span>•</span>
-                    <span>₹{tcoResult.dailyCost.toLocaleString('en-IN')}/day</span>
-                  </div>
-                </div>
+                    <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
+                      <span className="text-[10px] uppercase font-bold text-slate-500 block">Total Cost of Ownership</span>
+                      <span className="text-3xl font-black text-indigo-400 font-mono">₹{tcoResult.totalCostOfOwnership.toLocaleString('en-IN')}</span>
+                      <div className="flex items-center gap-3 text-xs text-slate-400 mt-1 font-mono">
+                        <span>₹{tcoResult.monthlyAverageCost.toLocaleString('en-IN')}/mo</span>
+                        <span>•</span>
+                        <span>₹{tcoResult.dailyCost.toLocaleString('en-IN')}/day</span>
+                      </div>
+                    </div>
 
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
-                    <span className="text-[10px] text-slate-500 font-bold block">Capital Acquisition</span>
-                    <span className="font-bold text-white font-mono">{tcoResult.capitalCostPercent}%</span>
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                        <span className="text-[10px] text-slate-500 font-bold block">Capital Acquisition</span>
+                        <span className="font-bold text-white font-mono">{tcoResult.capitalCostPercent}%</span>
+                      </div>
+                      <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                        <span className="text-[10px] text-slate-500 font-bold block">Operational & Upkeep</span>
+                        <span className="font-bold text-amber-400 font-mono">{tcoResult.operatingCostPercent}%</span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="my-auto text-center p-8 space-y-2 text-slate-400">
+                    <HelpCircle className="w-8 h-8 text-indigo-400/80 mx-auto" />
+                    <h4 className="font-bold text-white text-sm">Enter Price & Ownership Horizon</h4>
+                    <p className="text-xs max-w-xs mx-auto">
+                      Provide the purchase price and ownership duration to calculate full TCO.
+                    </p>
                   </div>
-                  <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
-                    <span className="text-[10px] text-slate-500 font-bold block">Operational & Upkeep</span>
-                    <span className="font-bold text-amber-400 font-mono">{tcoResult.operatingCostPercent}%</span>
-                  </div>
-                </div>
+                )}
+
+                <button
+                  onClick={onSaveToVault}
+                  className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 mt-2"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Save this result to Asset Doctor</span>
+                </button>
               </div>
             </div>
           </div>

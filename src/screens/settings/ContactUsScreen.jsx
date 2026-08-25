@@ -3,27 +3,29 @@
  */
 
 import React from 'react';
-import { ScrollView, Text, StyleSheet, Pressable, Linking, Alert } from 'react-native';
+import { ScrollView, Text, StyleSheet, Pressable, Linking } from 'react-native';
 
 import { Screen, GlassCard, BrandFooter } from '../../components/ui/Glass';
 import { BRAND, COLORS, SPACING } from '../../theme/branding';
 import { Haptics } from '../../services/haptics';
+import { useUiFeedback } from '../../context/UiFeedbackProvider';
 
 const SUPPORT_EMAIL = 'support@assetdoctor.in';
 
 export function ContactUsScreen() {
+  const ui = useUiFeedback();
   const openMail = async () => {
     Haptics.tap();
     const url = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('[Asset Doctor] Support')}`;
     try {
       const can = await Linking.canOpenURL(url);
       if (!can) {
-        Alert.alert('Email', `Write to us at ${SUPPORT_EMAIL}`);
+        ui.info('Email', `Write to us at ${SUPPORT_EMAIL}`);
         return;
       }
       await Linking.openURL(url);
     } catch {
-      Alert.alert('Email', `Write to us at ${SUPPORT_EMAIL}`);
+      ui.info('Email', `Write to us at ${SUPPORT_EMAIL}`);
     }
   };
 

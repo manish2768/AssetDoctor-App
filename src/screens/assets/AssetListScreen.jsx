@@ -10,7 +10,6 @@ import {
   FlatList,
   Pressable,
   TextInput,
-  Alert,
   RefreshControl,
   ScrollView,
 } from 'react-native';
@@ -28,6 +27,7 @@ import { getAssetFolderType } from '../../utils/assetFolders';
 import { useTabSafeBottomPadding } from '../../utils/tabSafePadding';
 import { needsAttention, hasExpiredDocuments } from '../../utils/assetExpiry';
 import { useThemeColors } from '../../context/ThemeProvider';
+import { useUiFeedback } from '../../context/UiFeedbackProvider';
 
 const FILTERS = [
   { id: 'all', label: 'All' },
@@ -40,6 +40,7 @@ const FILTERS = [
 
 export function AssetListScreen({ navigation }) {
   const colors = useThemeColors();
+  const ui = useUiFeedback();
   const { assets, loading, removeAsset } = useAssets();
   const { isAuthenticated } = useAuth();
   const [query, setQuery] = useState('');
@@ -70,21 +71,19 @@ export function AssetListScreen({ navigation }) {
     setTimeout(() => setRefreshing(false), 600);
   };
 
-  const onDelete = (item) => {
-    Alert.alert('Delete asset?', `${item.assetName} will be removed from your vault.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          const id = item.assetId || item.id;
-          const result = await removeAsset(id, item.billStoragePath);
-          if (!result?.success) {
-            Alert.alert('Delete failed', result?.error || 'Try again');
-          }
-        },
-      },
-    ]);
+  const onDelete = async (item) => {
+    const ok = await ui.confirm({
+      title: 'Delete asset?',
+      message: `${item.assetName} will be removed from your vault.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    const id = item.assetId || item.id;
+    const result = await removeAsset(id, item.billStoragePath);
+    if (!result?.success) {
+      ui.error('Delete failed', result?.error || 'Try again');
+    }
   };
 
   return (
@@ -168,7 +167,7 @@ export function AssetListScreen({ navigation }) {
         ListEmptyComponent={
           <EmptyState
             icon="🏠"
-            title={loading ? 'Loading assets…' : query || filter !== 'all' ? 'No matches' : 'Your assets deserve a home'}
+            title={loading ? 'Loading assets…' : query || filter !== 'all' ? 'No matches' : 'Your assets deserve a home.'}
             message={
               query || filter !== 'all'
                 ? 'Try a different search or filter.'

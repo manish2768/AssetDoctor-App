@@ -11,7 +11,6 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -44,6 +43,7 @@ import {
   vehicleMatchLabel,
 } from '../services/vehicles/VehicleMatchService';
 import { AssetService, createAssetId } from '../services/assets/AssetService';
+import { useUiFeedback } from '../context/UiFeedbackProvider';
 
 const CATEGORY_CHIPS = [
   { id: SMART_CATEGORIES.VEHICLES, label: 'Vehicle' },
@@ -161,6 +161,7 @@ export function ReviewAssetModal({
   onDismiss,
 }) {
   const insets = useSafeAreaInsets();
+  const ui = useUiFeedback();
   const { createAsset, assets } = useAssets();
   const { user } = useAuth();
   const [form, setForm] = useState(() => seedFromInvoice(initialInvoice));
@@ -247,66 +248,54 @@ export function ReviewAssetModal({
     setMatchInfo(matchVehicleForDocument(assets, probe));
   };
 
-  const confirmMatchAndSave = (payload) =>
-    new Promise((resolve) => {
-      const matched = matchInfo.matched;
-      if (!isAttachDoc) {
-        resolve(true);
-        return;
-      }
-      if (matched || payload.linkAssetId) {
-        const label = vehicleMatchLabel(
-          matched ||
-            matchInfo.vehicles.find((v) => (v.assetId || v.id) === payload.linkAssetId),
-        );
-        Alert.alert(
-          'Vehicle matched',
-          `Matched with your existing ${label}. Update document (archive previous & set active)?`,
-          [
-            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-            { text: 'Update document', onPress: () => resolve(true) },
-          ],
-        );
-        return;
-      }
-      if (matchInfo.vehicles?.length) {
-        Alert.alert(
-          'No automatic match',
-          'No vehicle matched this registration/chassis. Attach to a registered vehicle below, or create a new vehicle passport.',
-          [
-            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-            { text: 'Create new vehicle', onPress: () => resolve('create') },
-            { text: 'I will pick below', onPress: () => resolve(false) },
-          ],
-        );
-        return;
-      }
-      Alert.alert(
-        'No vehicle in vault',
-        'No registered vehicles found. Create a new vehicle passport from this scan?',
-        [
-          { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-          { text: 'Create vehicle', onPress: () => resolve('create') },
-        ],
+  const confirmMatchAndSave = async (payload) => {
+    const matched = matchInfo.matched;
+    if (!isAttachDoc) return true;
+    if (matched || payload.linkAssetId) {
+      const label = vehicleMatchLabel(
+        matched ||
+          matchInfo.vehicles.find((v) => (v.assetId || v.id) === payload.linkAssetId),
       );
+      return ui.confirm({
+        title: 'Vehicle matched',
+        message: `Matched with your existing ${label}. Update document (archive previous & set active)?`,
+        confirmLabel: 'Update document',
+      });
+    }
+    if (matchInfo.vehicles?.length) {
+      const createNew = await ui.confirm({
+        title: 'No automatic match',
+        message:
+          'No vehicle matched this registration/chassis. Attach to a registered vehicle below, or create a new vehicle passport.',
+        confirmLabel: 'Create new vehicle',
+        cancelLabel: 'Pick below',
+      });
+      return createNew ? 'create' : false;
+    }
+    const createNew = await ui.confirm({
+      title: 'No vehicle in vault',
+      message: 'No registered vehicles found. Create a new vehicle passport from this scan?',
+      confirmLabel: 'Create vehicle',
     });
+    return createNew ? 'create' : false;
+  };
 
   const onSave = async () => {
     Haptics.tap();
     if (!String(form.productName || '').trim()) {
-      Alert.alert('Asset name required', 'Enter asset / item name (e.g. TVS RONIN).');
+      ui.info('Asset name required', 'Enter asset / item name (e.g. TVS RONIN).');
       return;
     }
     if (needsTotal && (form.totalAmount == null || !(Number(form.totalAmount) > 0))) {
-      Alert.alert('Total required', 'Enter bill total / price (e.g. 135500).');
+      ui.info('Total required', 'Enter bill total / price (e.g. 135500).');
       return;
     }
     if (isInsurance && !String(form.expiryDate || '').trim()) {
-      Alert.alert('Expiry required', 'Enter insurance / policy expiry (YYYY-MM-DD).');
+      ui.info('Expiry required', 'Enter insurance / policy expiry (YYYY-MM-DD).');
       return;
     }
     if (isPuc && !String(form.expiryDate || '').trim()) {
-      Alert.alert('PUC expiry required', 'Enter PUC validity end date (YYYY-MM-DD).');
+      ui.info('PUC expiry required', 'Enter PUC validity end date (YYYY-MM-DD).');
       return;
     }
 
@@ -491,7 +480,7 @@ export function ReviewAssetModal({
       };
 
       if (isAttachDoc && !linkAssetId) {
-        Alert.alert(
+        ui.info(
           'Select a vehicle',
           'Pick a registered vehicle below, or choose Create new vehicle when prompted.',
         );
@@ -501,7 +490,7 @@ export function ReviewAssetModal({
 
       const result = await createAsset(payload, null);
       if (result?.needsVehicleLink) {
-        Alert.alert(
+        ui.info(
           'Select a vehicle',
           result.error || 'Choose which vehicle this document belongs to.',
         );
@@ -522,17 +511,16 @@ export function ReviewAssetModal({
         result.renewed && result.archivedCount
           ? ` Previous ${scanDocumentType.toUpperCase()} archived.`
           : '';
-      Alert.alert(
-        result.renewed ? 'Document renewed' : 'Saved to Vault',
+      ui.success(
         result.renewed
-          ? `Linked to vehicle passport. Expiry updated & alerts refreshed.${archivedMsg}`
-          : 'Structured details saved. Redirecting to Home…',
-        [{ text: 'OK', onPress: () => goHomeDashboard() }],
+          ? `Document renewed. Linked to vehicle passport. Expiry updated & alerts refreshed.${archivedMsg}`
+          : 'Saved to Vault. Structured details saved. Redirecting to Home…',
       );
       onDismiss?.();
+      goHomeDashboard();
     } catch (error) {
       Haptics.error();
-      Alert.alert('Save failed', error?.message || 'Could not save to vault');
+      ui.error('Save failed', error?.message || 'Could not save to vault');
     } finally {
       setSaving(false);
     }

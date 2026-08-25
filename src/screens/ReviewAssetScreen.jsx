@@ -10,7 +10,6 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Alert,
   LayoutAnimation,
   Platform,
   UIManager,
@@ -58,6 +57,7 @@ import {
   normalizeDocumentType,
 } from '../services/gemini/geminiService';
 import { makeMicroThumbnail } from '../utils/makeMicroThumbnail';
+import { useUiFeedback } from '../context/UiFeedbackProvider';
 
 /** Top-level review buckets requested for confirm UI */
 const REVIEW_CATEGORY_CHIPS = [
@@ -168,6 +168,7 @@ function readSafeReviewParams(route) {
 }
 
 export function ReviewAssetScreen({ navigation, route }) {
+  const ui = useUiFeedback();
   const { createAsset, assets } = useAssets();
   const { user } = useAuth();
   const safeParams = useMemo(() => readSafeReviewParams(route), [route]);
@@ -260,14 +261,10 @@ export function ReviewAssetScreen({ navigation, route }) {
     if (!ocrFailed || manualToastShown.current) return undefined;
     manualToastShown.current = true;
     const t = setTimeout(() => {
-      Alert.alert(
-        'Manual entry',
-        'Could not auto-fill details, please enter manually',
-        [{ text: 'OK' }],
-      );
+      ui.info('Manual entry', 'Could not auto-fill details, please enter manually');
     }, 400);
     return () => clearTimeout(t);
-  }, [ocrFailed]);
+  }, [ocrFailed, ui]);
 
   const docKind = String(
     invoice.documentKind || invoice.documentType || invoice.scanDocumentType || 'bill',
@@ -497,28 +494,20 @@ export function ReviewAssetScreen({ navigation, route }) {
     };
   };
 
-  const promptVehicleLink = (vehicles) =>
-    new Promise((resolve) => {
-      if (!vehicles?.length) {
-        Alert.alert(
-          'Vehicle required',
-          'Pehle vehicle invoice save karein, phir Insurance / PUC / RC scan karein.',
-          [{ text: 'OK', onPress: () => resolve(null) }],
-        );
-        return;
-      }
-      Alert.alert(
-        'Link to vehicle',
-        'Insurance / PUC alag asset nahi banega — existing vehicle choose karein:',
-        [
-          ...vehicles.slice(0, 5).map((v) => ({
-            text: `${v.assetName || 'Vehicle'}${v.registration ? ` · ${v.registration}` : ''}`,
-            onPress: () => resolve(v.assetId || v.id),
-          })),
-          { text: 'Cancel', style: 'cancel', onPress: () => resolve(null) },
-        ],
+  const promptVehicleLink = async (vehicles) => {
+    if (!vehicles?.length) {
+      ui.info(
+        'Vehicle required',
+        'Pehle vehicle invoice save karein, phir Insurance / PUC / RC scan karein.',
       );
-    });
+      return null;
+    }
+    ui.info(
+      'Link to vehicle',
+      'Insurance / PUC alag asset nahi banega — existing vehicle choose karein from the list above.',
+    );
+    return null;
+  };
 
   const findExistingForUpdate = () => {
     const byChassis = findAssetByChassis(assets, invoice.chassisNumber);
@@ -705,7 +694,7 @@ export function ReviewAssetScreen({ navigation, route }) {
       });
     } catch (error) {
       Haptics.error();
-      Alert.alert('Save failed', error?.message || 'Could not save');
+      ui.error('Save failed', error?.message || 'Could not save');
     } finally {
       setSaving(false);
     }
@@ -716,19 +705,19 @@ export function ReviewAssetScreen({ navigation, route }) {
     const latestAudit = await refreshAudit(invoice);
     if (!isAttachDoc && (latestAudit.missingTotal || !totalOk)) {
       Haptics.warning();
-      Alert.alert('Bill total required', 'Enter Grand Total before saving (e.g. 135500).');
+      ui.info('Bill total required', 'Enter Grand Total before saving (e.g. 135500).');
       return;
     }
     if (!isAttachDoc && !invoice.productName?.trim()) {
       const selected =
         itemList.find((i) => i.index === selectedItemIndex) || pickPrimaryItem(itemList);
       if (!selected?.name) {
-        Alert.alert('Product required', 'Add product / asset name before saving.');
+        ui.info('Product required', 'Add product / asset name before saving.');
         return;
       }
     }
     if (isAttachDoc && !invoice.insuranceExpiry && docKind === 'insurance') {
-      Alert.alert(
+      ui.info(
         'Insurance expiry required',
         'Insurance expiry date (YYYY-MM-DD) daalein — e.g. 2026-07-13',
       );
@@ -738,19 +727,15 @@ export function ReviewAssetScreen({ navigation, route }) {
     if (!isAttachDoc && latestAudit.isDuplicate) {
       const existing = findExistingForUpdate();
       Haptics.warning();
-      Alert.alert(
-        'Invoice already saved',
-        existing
+      const ok = await ui.confirm({
+        title: 'Invoice already saved',
+        message: existing
           ? 'Yeh invoice pehle save ho chuka hai. Abhi jo details aapne bhare hain unse existing passport update karein?'
           : 'Yeh invoice number + GSTIN pehle scan ho chuka hai. Phir bhi save / update karein?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: existing ? 'Update passport' : 'Save anyway',
-            onPress: () => persistSave(latestAudit, { allowDuplicate: true }),
-          },
-        ],
-      );
+        confirmLabel: existing ? 'Update passport' : 'Save anyway',
+      });
+      if (!ok) return;
+      await persistSave(latestAudit, { allowDuplicate: true });
       return;
     }
 

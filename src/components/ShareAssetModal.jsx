@@ -12,7 +12,6 @@ import {
   Image,
   Share,
   Linking,
-  Alert,
 } from 'react-native';
 
 import { COLORS, RADIUS, SPACING, BRAND } from '../theme/branding';
@@ -20,6 +19,7 @@ import { GlassButton } from './ui/Glass';
 import { Haptics } from '../services/haptics';
 import { formatINRExact } from '../utils/format';
 import { ShareService } from '../services/share/ShareService';
+import { useUiFeedback } from '../context/UiFeedbackProvider';
 
 function buildCaption({ name, price }) {
   const priceText =
@@ -35,6 +35,7 @@ export function ShareAssetModal({
   price = null,
   imageUri = '',
 }) {
+  const ui = useUiFeedback();
   const caption = buildCaption({ name: assetName, price });
 
   const finish = () => {
@@ -49,7 +50,7 @@ export function ShareAssetModal({
       try {
         await Share.share({ message: caption });
       } catch {
-        Alert.alert('Share', result?.error || 'Could not open WhatsApp');
+        ui.error('Share', result?.error || 'Could not open WhatsApp');
       }
     }
   };
@@ -69,7 +70,7 @@ export function ShareAssetModal({
       }
       await Share.share({ message: caption, title: `${BRAND.name} Asset` });
     } catch (error) {
-      Alert.alert('Instagram', error?.message || 'Open Instagram and paste your vault caption.');
+      ui.error('Instagram', error?.message || 'Open Instagram and paste your vault caption.');
     }
   };
 
@@ -86,7 +87,7 @@ export function ShareAssetModal({
       }
       await Share.share({ message: caption, title: `${BRAND.name} Asset` });
     } catch (error) {
-      Alert.alert('Share', error?.message || 'Could not open share sheet');
+      ui.error('Share', error?.message || 'Could not open share sheet');
     }
   };
 

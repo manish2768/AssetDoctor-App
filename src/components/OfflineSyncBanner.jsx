@@ -24,24 +24,28 @@ export function OfflineSyncBanner({ userId }) {
   if (!offline && !pending && !failed) return null;
 
   let text = '';
+  let statusLabel = 'SYNCED';
   let bg = colors.infoSoft;
   let dot = colors.info;
   let a11y = 'Synced';
   if (offline) {
+    statusLabel = 'OFFLINE';
     text = "You're offline. Changes will sync automatically.";
     bg = colors.warningSoft;
     dot = colors.warning;
     a11y = 'Offline';
   } else if (failed) {
+    statusLabel = 'SYNC ERROR';
     text = "Couldn't sync your data. Tap to retry.";
     bg = colors.errorSoft;
     dot = colors.error;
-    a11y = 'Sync failed';
+    a11y = 'Sync error';
   } else if (pending) {
-    text = `Syncing ${pending} item${pending === 1 ? '' : 's'}…`;
+    statusLabel = 'PENDING SYNC';
+    text = `${pending} item${pending === 1 ? '' : 's'} waiting to sync. Tap to retry.`;
     bg = colors.infoSoft;
     dot = colors.info;
-    a11y = 'Syncing';
+    a11y = 'Pending sync';
   }
 
   return (
@@ -52,10 +56,16 @@ export function OfflineSyncBanner({ userId }) {
       }}
       style={[styles.banner, { backgroundColor: bg, borderBottomColor: colors.border }]}
       accessibilityRole="button"
-      accessibilityLabel={`${a11y}. ${text}`}
+      accessibilityLabel={`${statusLabel}. ${text}`}
     >
       <View style={styles.dotRow}>
         <View style={[styles.dot, { backgroundColor: dot }]} />
+        <Text
+          style={[TYPE.micro, { color: colors.text, fontWeight: '800', letterSpacing: 0.4 }]}
+          accessibilityElementsHidden
+        >
+          {statusLabel}
+        </Text>
         <Text style={[TYPE.caption, { flex: 1, color: colors.text, fontWeight: '600' }]} numberOfLines={2}>
           {text}
         </Text>

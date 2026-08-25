@@ -10,7 +10,6 @@ import {
   ScrollView,
   Pressable,
   TextInput,
-  Alert,
   Linking,
   Platform,
   Share,
@@ -25,6 +24,7 @@ import { FeedbackService } from '../../services/feedback/FeedbackService';
 import { buildDeviceDiagnostics } from '../../services/diagnostics/DeviceDiagnostics';
 import { CrashlyticsService } from '../../services/crashlytics/CrashlyticsService';
 import { useTabSafeBottomPadding } from '../../utils/tabSafePadding';
+import { useUiFeedback } from '../../context/UiFeedbackProvider';
 
 const CATEGORIES = [
   { id: 'crash', label: 'App crash', emoji: '💥' },
@@ -40,6 +40,7 @@ function buildDeviceBlock(user, profile) {
 }
 
 export function ReportIssueScreen({ route, navigation }) {
+  const ui = useUiFeedback();
   const { user, profile, isAuthenticated } = useAuth();
   const bottomPad = useTabSafeBottomPadding({ extra: 24 });
   const preset = route?.params?.category || 'bug';
@@ -72,7 +73,7 @@ export function ReportIssueScreen({ route, navigation }) {
 
   const onEmail = async () => {
     if (!message.trim()) {
-      Alert.alert('Report issue', 'Please write what went wrong (or your idea).');
+      ui.info('Report issue', 'Please write what went wrong (or your idea).');
       return;
     }
     Haptics.tap();
@@ -90,7 +91,7 @@ export function ReportIssueScreen({ route, navigation }) {
       else await Share.share({ message: composeBody(), title: 'Asset Doctor Report Error' });
       Haptics.success();
     } catch (e) {
-      Alert.alert('Email', e?.message || 'Could not open email app');
+      ui.error('Email', e?.message || 'Could not open email app');
     } finally {
       setBusy(false);
     }
@@ -98,7 +99,7 @@ export function ReportIssueScreen({ route, navigation }) {
 
   const onWhatsApp = async () => {
     if (!message.trim()) {
-      Alert.alert('Report issue', 'Please write what went wrong (or your idea).');
+      ui.info('Report issue', 'Please write what went wrong (or your idea).');
       return;
     }
     Haptics.tap();
@@ -110,7 +111,7 @@ export function ReportIssueScreen({ route, navigation }) {
         text: composeBody(),
       });
       if (!result.success) {
-        Alert.alert('WhatsApp', result.error || 'Could not open WhatsApp');
+        ui.error('WhatsApp', result.error || 'Could not open WhatsApp');
       } else {
         Haptics.success();
       }
@@ -121,11 +122,11 @@ export function ReportIssueScreen({ route, navigation }) {
 
   const onSaveCloud = async () => {
     if (!message.trim()) {
-      Alert.alert('Report issue', 'Please write what went wrong (or your idea).');
+      ui.info('Report issue', 'Please write what went wrong (or your idea).');
       return;
     }
     if (!isAuthenticated || !user?.uid) {
-      Alert.alert(
+      ui.info(
         'Sign in for cloud submit',
         'Guests can still send feedback by Email or WhatsApp. Sign in to save a protected cloud report.',
       );
@@ -142,7 +143,7 @@ export function ReportIssueScreen({ route, navigation }) {
     });
     setBusy(false);
     if (!result.success) {
-      Alert.alert(
+      ui.info(
         'Saved offline',
         result.error ||
           'Could not reach cloud. Use Email or WhatsApp — your message is still ready to send.',
@@ -150,9 +151,8 @@ export function ReportIssueScreen({ route, navigation }) {
       return;
     }
     Haptics.success();
-    Alert.alert('Thank you!', 'Your report was sent to the Asset Doctor team.', [
-      { text: 'OK', onPress: () => navigation?.goBack?.() },
-    ]);
+    ui.success('Your report was sent to the Asset Doctor team.');
+    navigation?.goBack?.();
   };
 
   return (

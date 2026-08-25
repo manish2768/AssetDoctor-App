@@ -1,11 +1,12 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Switch } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Switch } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { useAuth } from '../../context/AuthProvider';
 import { useAssets } from '../../context/AssetProvider';
 import { useAppLock } from '../../context/AppLockProvider';
+import { useUiFeedback } from '../../context/UiFeedbackProvider';
 import {
   Screen,
   GlassCard,
@@ -33,6 +34,7 @@ export function SettingsScreen({ navigation }) {
     useAuth();
   const { assets } = useAssets();
   const { enabled: appLockOn, securityLabel, setAppLockEnabled, canUseDeviceLock } = useAppLock();
+  const ui = useUiFeedback();
   const bottomPad = useTabSafeBottomPadding({ extra: 24 });
   const [confirmOut, setConfirmOut] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -77,24 +79,24 @@ export function SettingsScreen({ navigation }) {
     const result = await updateProfile({ name, phone, email, address, pincode });
     setBusy(false);
     if (!result.success) {
-      Alert.alert('Profile', result.error || 'Could not save');
+      ui.error('Profile', result.error || 'Could not save');
       return;
     }
     Haptics.success();
     setEditing(false);
-    Alert.alert('Saved', 'Your profile was updated.');
+    ui.success('Your profile was updated.');
   };
 
   const onEnableAlerts = async () => {
     if (!user?.uid) {
-      Alert.alert('Expiry alerts', 'Sign in first to enable alerts for your saved assets.');
+      ui.info('Expiry alerts', 'Sign in first to enable alerts for your saved assets.');
       return;
     }
     const result = await ExpiryAlertService.registerPushToken(user?.uid);
     if (result?.success) {
       await ExpiryAlertService.syncPortfolioAlerts(assets);
     }
-    Alert.alert(
+    ui.info(
       'Expiry alerts',
       result?.success
         ? 'Notifications enabled. You will get reminders 7, 3 and 1 day before expiry.'
@@ -102,75 +104,62 @@ export function SettingsScreen({ navigation }) {
     );
   };
 
-  const onTogglePushReminders = () => {
+  const onTogglePushReminders = async () => {
     if (!isAuthenticated || !user?.uid) {
-      Alert.alert('Reminders', 'Sign in first to manage reminder preferences.');
+      ui.info('Reminders', 'Sign in first to manage reminder preferences.');
       return;
     }
     const currentlyOptedOut = profile?.pushRemindersOptOut === true;
-    Alert.alert(
-      'Expiry reminders',
-      currentlyOptedOut
+    const ok = await ui.confirm({
+      title: 'Expiry reminders',
+      message: currentlyOptedOut
         ? 'Turn on email & push reminders for PUC, insurance, warranty and service?'
         : 'Turn off email & push service reminders? Local in-app alerts may still appear if enabled.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: currentlyOptedOut ? 'Turn on' : 'Turn off',
-          style: currentlyOptedOut ? 'default' : 'destructive',
-          onPress: async () => {
-            setBusy(true);
-            const result = await updateProfile({
-              pushRemindersOptOut: !currentlyOptedOut,
-              whatsappRemindersOptOut: !currentlyOptedOut, // legacy field mirror
-            });
-            setBusy(false);
-            if (!result.success) {
-              Alert.alert('Reminders', result.error || 'Could not update preference');
-              return;
-            }
-            Haptics.success();
-            Alert.alert(
-              'Saved',
-              currentlyOptedOut
-                ? 'Email & push reminders are on again.'
-                : 'Email & push reminders are off for your account.',
-            );
-          },
-        },
-      ],
+      confirmLabel: currentlyOptedOut ? 'Turn on' : 'Turn off',
+      destructive: !currentlyOptedOut,
+    });
+    if (!ok) return;
+    setBusy(true);
+    const result = await updateProfile({
+      pushRemindersOptOut: !currentlyOptedOut,
+      whatsappRemindersOptOut: !currentlyOptedOut,
+    });
+    setBusy(false);
+    if (!result.success) {
+      ui.error('Reminders', result.error || 'Could not update preference');
+      return;
+    }
+    Haptics.success();
+    ui.success(
+      currentlyOptedOut
+        ? 'Email & push reminders are on again.'
+        : 'Email & push reminders are off for your account.',
     );
   };
 
   const onToggleAppLock = async (nextValue) => {
     const turningOn = nextValue === true;
     if (!turningOn && appLockOn) {
-      Alert.alert(
-        'Turn off App Lock?',
-        'Anyone who opens this phone can browse your vault without PIN/pattern.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Turn off',
-            style: 'destructive',
-            onPress: async () => {
-              setBusy(true);
-              const result = await setAppLockEnabled(false);
-              setBusy(false);
-              if (!result.success) {
-                Alert.alert('App Lock', result.error || 'Could not update App Lock');
-              }
-            },
-          },
-        ],
-      );
+      const ok = await ui.confirm({
+        title: 'Turn off App Lock?',
+        message: 'Anyone who opens this phone can browse your vault without PIN/pattern.',
+        confirmLabel: 'Turn off',
+        destructive: true,
+      });
+      if (!ok) return;
+      setBusy(true);
+      const result = await setAppLockEnabled(false);
+      setBusy(false);
+      if (!result.success) {
+        ui.error('App Lock', result.error || 'Could not update App Lock');
+      }
       return;
     }
     setBusy(true);
     const result = await setAppLockEnabled(true);
     setBusy(false);
     if (!result.success) {
-      Alert.alert(
+      ui.error(
         'App Lock',
         result.error ||
           (result.missingEnrollment
@@ -200,7 +189,7 @@ export function SettingsScreen({ navigation }) {
     } else {
       message = result.error || 'Sync failed — will retry when you reopen the app.';
     }
-    Alert.alert('Cloud Locker', message);
+    ui.info('Cloud Locker', message);
   };
 
   function pendingAfterSuccessMessage(result) {
@@ -213,9 +202,9 @@ export function SettingsScreen({ navigation }) {
   const onReplayOnboarding = async () => {
     try {
       await AsyncStorage.removeItem(ONBOARDING_KEY);
-      Alert.alert('Onboarding', 'Tutorial will show again next time you restart the app.');
+      ui.info('Onboarding', 'Tutorial will show again next time you restart the app.');
     } catch (e) {
-      Alert.alert('Onboarding', e?.message || 'Could not reset');
+      ui.error('Onboarding', e?.message || 'Could not reset');
     }
   };
 
@@ -226,26 +215,26 @@ export function SettingsScreen({ navigation }) {
     const result = await OtaUpdateService.check({ reload: false });
     setBusy(false);
     if (!result.success) {
-      Alert.alert(
+      ui.info(
         'App update',
         `${result.error || 'Could not check'}\n\nChannel: ${info.channel}\nBundle: ${info.bundleLabel}\nMode: ${info.isEmbeddedLaunch ? 'embedded (no OTA yet)' : 'OTA'}`,
       );
       return;
     }
     if (!result.available) {
-      Alert.alert(
+      ui.info(
         'Already latest',
         `Channel: ${info.channel}\nBundle: ${info.bundleLabel}\nUpdate: ${info.updateIdShort}\n${info.isEmbeddedLaunch ? 'Still on APK bundle — OTA not loaded yet.' : 'OTA is active.'}`,
       );
       return;
     }
-    Alert.alert('Update ready', 'Restart now to apply the new Home / Scan UI?', [
-      { text: 'Later', style: 'cancel' },
-      {
-        text: 'Restart now',
-        onPress: () => OtaUpdateService.reload(),
-      },
-    ]);
+    const restart = await ui.confirm({
+      title: 'Update ready',
+      message: 'Restart now to apply the new Home / Scan UI?',
+      confirmLabel: 'Restart now',
+      cancelLabel: 'Later',
+    });
+    if (restart) OtaUpdateService.reload();
   };
 
   const onCheckPlayStore = async () => {
@@ -255,7 +244,7 @@ export function SettingsScreen({ navigation }) {
     setBusy(false);
     const installed = decision.installed || PlayStoreUpdateService.getInstalledInfo();
     if (!decision.shouldPrompt) {
-      Alert.alert(
+      ui.info(
         'Play Store',
         decision.reason === 'disabled'
           ? `Play update prompts are off until the listing is live.\n\nPackage: ${ANDROID_PACKAGE}\nInstalled: ${installed.version}`
@@ -407,7 +396,7 @@ export function SettingsScreen({ navigation }) {
             title="Firestore security"
             subtitle={isAuthenticated ? 'Encrypted cloud backup active' : 'Sign in for cloud backup'}
             onPress={() =>
-              Alert.alert(
+              ui.info(
                 'Firestore',
                 isAuthenticated
                   ? `Encrypted profile sync active for ${profile?.name || 'your account'}.`
