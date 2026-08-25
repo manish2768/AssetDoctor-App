@@ -1,1 +1,8 @@
 @import "tailwindcss";
+@import "./design-system/cssTokens.css";
+
+html,
+body,
+#root {
+  font-family: var(--ad-font);
+}

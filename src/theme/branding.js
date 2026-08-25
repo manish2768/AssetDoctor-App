@@ -32,8 +32,9 @@ export {
 
 export const BRAND = {
   name: 'Asset Doctor',
-  tagline: 'Protect, Track & Save: The Smart Asset Vault',
-  shortTagline: 'Protect, Track & Save',
+  tagline: 'One place to understand, protect and manage everything you own',
+  shortTagline: 'Universal Asset Intelligence',
+  productLine: 'Universal Asset Intelligence Platform',
   creator: 'Ashutosh Rai',
   creatorCredit: 'Built by Ashutosh Rai',
   footer: 'Built by Ashutosh Rai',

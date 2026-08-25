@@ -86,6 +86,35 @@ export function IconPlus({ color = '#FFFFFF' }) {
   );
 }
 
+export function IconDocuments({ color = '#64748B', solid = false }) {
+  return (
+    <Svg {...baseProps(color)} fill={solid ? color : 'none'}>
+      <Path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+      <Path d="M14 3v5h5" />
+      <Line x1="9" y1="13" x2="15" y2="13" />
+      <Line x1="9" y1="17" x2="15" y2="17" />
+    </Svg>
+  );
+}
+
+export function IconAlerts({ color = '#64748B', solid = false }) {
+  return (
+    <Svg {...baseProps(color)} fill={solid ? color : 'none'}>
+      <Path d="M12 3a6 6 0 0 1 6 6c0 4 2 5 2 5H4s2-1 2-5a6 6 0 0 1 6-6z" />
+      <Path d="M10 19a2 2 0 0 0 4 0" />
+    </Svg>
+  );
+}
+
+export function IconProfile({ color = '#64748B', solid = false }) {
+  return (
+    <Svg {...baseProps(color)} fill={solid ? color : 'none'}>
+      <Circle cx="12" cy="8" r="3.5" />
+      <Path d="M5 20c1.5-3.5 4-5 7-5s5.5 1.5 7 5" />
+    </Svg>
+  );
+}
+
 export const TAB_ICON_SIZE = SIZE;
 export const TAB_ICON_STROKE = STROKE;
 
@@ -96,4 +125,7 @@ export default {
   IconEnergy,
   IconSettings,
   IconPlus,
+  IconDocuments,
+  IconAlerts,
+  IconProfile,
 };

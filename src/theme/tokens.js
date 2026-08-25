@@ -22,6 +22,15 @@ export const TYPE = Object.freeze({
   bodyStrong: { fontSize: 15, lineHeight: 22, fontFamily: FONTS.semibold, fontWeight: '600' },
   caption: { fontSize: 13, lineHeight: 18, fontFamily: FONTS.medium, fontWeight: '500' },
   label: { fontSize: 11, lineHeight: 14, fontFamily: FONTS.bold, fontWeight: '700', letterSpacing: 0.6 },
+  /** Large numeric metrics (health score, counts, currency) — tabular nums preferred */
+  metric: {
+    fontSize: 28,
+    lineHeight: 32,
+    fontFamily: FONTS.bold,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  button: { fontSize: 15, lineHeight: 20, fontFamily: FONTS.semibold, fontWeight: '600' },
   micro: { fontSize: 10, lineHeight: 13, fontFamily: FONTS.semibold, fontWeight: '600' },
 });
 

@@ -1,0 +1,167 @@
+/**
+ * Asset Doctor — Web design tokens (CSS custom properties).
+ * Shared visual language with mobile `src/theme/palettes.js` + `tokens.js`.
+ * Import once from `src/index.css`.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  /* Brand */
+  --ad-primary: #0f766e;
+  --ad-primary-hover: #0d9488;
+  --ad-secondary: #2563eb;
+  --ad-success: #059669;
+  --ad-warning: #d97706;
+  --ad-error: #e11d48;
+  --ad-info: #2563eb;
+
+  /* Surfaces */
+  --ad-bg: #f8fafc;
+  --ad-bg-deep: #f1f5f9;
+  --ad-surface: #ffffff;
+  --ad-surface-muted: #f8fafc;
+  --ad-text: #1e293b;
+  --ad-text-muted: #64748b;
+  --ad-text-on-primary: #ffffff;
+  --ad-border: #e2e8f0;
+  --ad-border-strong: #cbd5e1;
+  --ad-overlay: rgba(15, 23, 42, 0.45);
+  --ad-shadow: 0 4px 16px rgba(100, 116, 139, 0.12);
+
+  /* Marketing dark (public platform only) */
+  --ad-platform-bg: #070d18;
+  --ad-platform-surface: #0b1220;
+  --ad-platform-text: #f1f5f9;
+  --ad-platform-muted: #94a3b8;
+  --ad-platform-accent: #2dd4bf;
+  --ad-platform-accent-2: #34d399;
+
+  /* Typography */
+  --ad-font: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ad-font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --ad-display: 800 2.5rem/1.15 var(--ad-font);
+  --ad-h1: 800 1.75rem/1.25 var(--ad-font);
+  --ad-h2: 700 1.375rem/1.3 var(--ad-font);
+  --ad-h3: 700 1.125rem/1.35 var(--ad-font);
+  --ad-body: 400 0.9375rem/1.55 var(--ad-font);
+  --ad-caption: 500 0.8125rem/1.4 var(--ad-font);
+  --ad-label: 700 0.6875rem/1.2 var(--ad-font);
+  --ad-metric: 800 1.75rem/1.1 var(--ad-font);
+  --ad-button: 600 0.9375rem/1.2 var(--ad-font);
+
+  /* Spacing / radius */
+  --ad-space-xxs: 0.25rem;
+  --ad-space-xs: 0.375rem;
+  --ad-space-sm: 0.625rem;
+  --ad-space-md: 1rem;
+  --ad-space-lg: 1.5rem;
+  --ad-space-xl: 2rem;
+  --ad-radius-xs: 0.5rem;
+  --ad-radius-sm: 0.75rem;
+  --ad-radius-md: 1rem;
+  --ad-radius-lg: 1.375rem;
+  --ad-radius-full: 9999px;
+
+  /* Motion */
+  --ad-motion-fast: 150ms;
+  --ad-motion-normal: 220ms;
+  --ad-hit-min: 44px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ad-motion-fast: 0ms;
+    --ad-motion-normal: 0ms;
+  }
+}
+
+.ad-font-display { font: var(--ad-display); letter-spacing: -0.02em; }
+.ad-font-h1 { font: var(--ad-h1); letter-spacing: -0.015em; }
+.ad-font-h2 { font: var(--ad-h2); }
+.ad-font-h3 { font: var(--ad-h3); }
+.ad-font-body { font: var(--ad-body); }
+.ad-font-caption { font: var(--ad-caption); color: var(--ad-text-muted); }
+.ad-font-label {
+  font: var(--ad-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ad-text-muted);
+}
+.ad-font-metric { font: var(--ad-metric); font-variant-numeric: tabular-nums; }
+.ad-font-button { font: var(--ad-button); }
+
+.ad-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: var(--ad-hit-min);
+  padding: 0.625rem 1.125rem;
+  border-radius: var(--ad-radius-sm);
+  font: var(--ad-button);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background var(--ad-motion-fast), border-color var(--ad-motion-fast), opacity var(--ad-motion-fast);
+}
+.ad-btn:focus-visible {
+  outline: 2px solid var(--ad-secondary);
+  outline-offset: 2px;
+}
+.ad-btn-primary {
+  background: var(--ad-primary);
+  color: var(--ad-text-on-primary);
+}
+.ad-btn-primary:hover { background: var(--ad-primary-hover); }
+.ad-btn-secondary {
+  background: transparent;
+  color: var(--ad-text);
+  border-color: var(--ad-border-strong);
+}
+.ad-btn-secondary:hover { background: var(--ad-surface-muted); }
+.ad-btn-ghost {
+  background: transparent;
+  color: var(--ad-primary);
+}
+
+.ad-card {
+  background: var(--ad-surface);
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius-md);
+  padding: var(--ad-space-md);
+}
+.ad-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--ad-radius-full);
+  font: var(--ad-label);
+  letter-spacing: 0.04em;
+}
+.ad-badge-success { background: rgba(5, 150, 105, 0.12); color: var(--ad-success); }
+.ad-badge-warning { background: rgba(217, 119, 6, 0.12); color: var(--ad-warning); }
+.ad-badge-error { background: rgba(225, 29, 72, 0.1); color: var(--ad-error); }
+.ad-badge-info { background: rgba(37, 99, 235, 0.1); color: var(--ad-info); }
+.ad-badge-neutral { background: var(--ad-surface-muted); color: var(--ad-text-muted); }
+
+.ad-input {
+  width: 100%;
+  min-height: var(--ad-hit-min);
+  padding: 0.625rem 0.875rem;
+  border-radius: var(--ad-radius-sm);
+  border: 1px solid var(--ad-border);
+  background: var(--ad-surface);
+  color: var(--ad-text);
+  font: var(--ad-body);
+}
+.ad-input:focus {
+  outline: 2px solid rgba(15, 118, 110, 0.35);
+  border-color: var(--ad-primary);
+}
+
+.ad-sync-live { color: var(--ad-success); }
+.ad-sync-syncing { color: var(--ad-info); }
+.ad-sync-offline { color: var(--ad-warning); }
+.ad-sync-pending { color: var(--ad-warning); }

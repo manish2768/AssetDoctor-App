@@ -6,7 +6,9 @@
   "trailingSlash": false,
   "redirects": [
     { "source": "/svg", "destination": "/", "permanent": true },
-    { "source": "/svg/(.*)", "destination": "/", "permanent": true }
+    { "source": "/svg/(.*)", "destination": "/", "permanent": true },
+    { "source": "/adminsvg", "destination": "/admin", "permanent": true },
+    { "source": "/adminsvg/(.*)", "destination": "/admin", "permanent": true }
   ],
   "headers": [
     {

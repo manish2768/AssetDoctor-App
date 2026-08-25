@@ -284,6 +284,86 @@ export function LoadingInline({ label = 'Loading…' }) {
   );
 }
 
+/**
+ * Primary / secondary / ghost / danger buttons — single source for CTAs.
+ * variant: primary | secondary | ghost | danger
+ */
+export function Button({
+  label,
+  onPress,
+  variant = 'primary',
+  disabled = false,
+  loading = false,
+  style,
+  accessibilityLabel,
+}) {
+  const colors = useThemeColors();
+  const map = {
+    primary: { bg: colors.primary, fg: colors.textOnPrimary, border: 'transparent' },
+    secondary: { bg: 'transparent', fg: colors.text, border: colors.borderStrong || colors.border },
+    ghost: { bg: 'transparent', fg: colors.primary, border: 'transparent' },
+    danger: { bg: colors.error, fg: colors.textOnPrimary, border: 'transparent' },
+  };
+  const v = map[variant] || map.primary;
+  return (
+    <Pressable
+      onPress={() => {
+        if (disabled || loading) return;
+        Haptics.tap();
+        onPress?.();
+      }}
+      disabled={disabled || loading}
+      style={[
+        styles.btn,
+        {
+          backgroundColor: v.bg,
+          borderColor: v.border,
+          opacity: disabled || loading ? 0.5 : 1,
+        },
+        style,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel || label}
+      accessibilityState={{ disabled: !!(disabled || loading) }}
+    >
+      {loading ? (
+        <ActivityIndicator color={v.fg} />
+      ) : (
+        <Text style={[TYPE.button, { color: v.fg }]}>{label}</Text>
+      )}
+    </Pressable>
+  );
+}
+
+export function SurfaceCard({ children, style, elevated = true }) {
+  const colors = useThemeColors();
+  return (
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+        },
+        elevated ? elevation(1, colors.shadow) : null,
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
+export function FieldLabel({ children, required }) {
+  const colors = useThemeColors();
+  return (
+    <Text style={[TYPE.label, { color: colors.textMuted, marginBottom: 6 }]}>
+      {children}
+      {required ? <Text style={{ color: colors.error }}> *</Text> : null}
+    </Text>
+  );
+}
+
 const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
@@ -356,6 +436,20 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     justifyContent: 'center',
   },
+  btn: {
+    minHeight: HIT.min,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  card: {
+    borderWidth: 1,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+  },
 });
 
 export default {
@@ -368,4 +462,7 @@ export default {
   SyncStatusPill,
   QuickActionGrid,
   LoadingInline,
+  Button,
+  SurfaceCard,
+  FieldLabel,
 };
