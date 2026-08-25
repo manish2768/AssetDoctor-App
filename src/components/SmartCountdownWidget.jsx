@@ -95,14 +95,14 @@ export function SmartCountdownWidget({ tasks = [], onPressTask }) {
     <View style={styles.wrap}>
       <View style={styles.header}>
         <Text style={styles.heading}>Smart Renewal Countdown</Text>
-        <Text style={styles.caption}>PUC, insurance, warranty and service protection</Text>
+        <Text style={styles.caption}>Upcoming warranties, service, and document deadlines</Text>
       </View>
 
       {tasks.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>🟢 All clear for now</Text>
           <Text style={styles.emptyBody}>
-            No insurance, PUC, warranty, or service deadlines in the next few weeks.
+            No warranty, service, or document deadlines in the next few weeks.
           </Text>
         </View>
       ) : (

@@ -147,8 +147,8 @@ export const EXPIRY_ALERT_PROFILES = Object.freeze({
   }),
   insuranceExpiry: Object.freeze({
     days: Object.freeze([30, 15, 7, 3, 1, 0]),
-    label: 'Motor insurance',
-    message: 'Your motor insurance expires soon. Renew before your cover ends.',
+    label: 'Insurance',
+    message: 'Your insurance expires soon. Renew before your cover ends.',
   }),
   warrantyExpiry: Object.freeze({
     days: Object.freeze([30, 15, 7, 3, 1, 0]),

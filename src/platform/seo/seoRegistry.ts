@@ -217,6 +217,62 @@ export class SeoRegistry {
       relatedToolSlugs: ['tools/repair-or-replace', 'tools/warranty-checker', 'tools/asset-health-check'],
       relatedAssetCategories: ['APPLIANCE'],
       updatedAt: '2026-08-25'
+    },
+    'depreciation-calculator': {
+      slug: 'tools/depreciation-calculator',
+      canonicalUrl: 'https://assetdoctor.in/tools/depreciation-calculator',
+      category: 'UNIVERSAL',
+      title: 'Asset Depreciation Calculator & WDV Loss Engine | Asset Doctor',
+      metaDescription: 'Calculate annual depreciation schedules, written down values (WDV), and residual salvage equity for electronics, vehicles, appliances, and business equipment.',
+      h1: 'Universal Asset Depreciation Calculator',
+      intro: 'Project 10-year declining market values and salvage equity using Written Down Value and Straight-Line models tailored to Indian market benchmarks.',
+      toolType: 'REPAIR_VS_REPLACE',
+      supportingContent: [
+        {
+          sectionTitle: 'Understanding Asset Value Retention',
+          paragraphs: [
+            'Physical assets lose economic utility through calendar aging, wear and tear, and technological obsolescence. Consumer electronics depreciate at 25% annually, whereas automobiles lose ~15% per year.',
+            'Tracking depreciation allows owners to identify the optimum replacement window before maintenance costs outstrip capital value.'
+          ]
+        }
+      ],
+      faq: [
+        {
+          question: 'What is the Written Down Value (WDV) method?',
+          answer: 'The WDV method applies an annual depreciation percentage against the remaining book value of the asset at the beginning of each period, mirroring realistic market resale depreciation.'
+        }
+      ],
+      relatedToolSlugs: ['tools/repair-or-replace', 'tools/warranty-checker', 'tools/ownership-cost'],
+      relatedAssetCategories: ['ELECTRONICS', 'VEHICLE', 'APPLIANCE'],
+      updatedAt: '2026-08-25'
+    },
+    'ownership-cost': {
+      slug: 'tools/ownership-cost',
+      canonicalUrl: 'https://assetdoctor.in/tools/ownership-cost',
+      category: 'UNIVERSAL',
+      title: 'Total Cost of Ownership (TCO) Calculator | Asset Doctor',
+      metaDescription: 'Free Total Cost of Ownership calculator. Quantify fuel, energy, insurance, and maintenance expenses over multi-year asset lifecycles.',
+      h1: 'Total Cost of Ownership (TCO) Analyzer',
+      intro: 'Discover the real cost of owning any major asset. Quantify daily and monthly operational overhead beyond the initial showroom purchase invoice.',
+      toolType: 'REPAIR_VS_REPLACE',
+      supportingContent: [
+        {
+          sectionTitle: 'The Hidden Cost of Asset Ownership',
+          paragraphs: [
+            'Over a 5 to 7 year ownership horizon, recurring expenses including fuel/charging, preventative servicing, insurance premiums, and component replacements often represent 60% or more of total capital outlay.',
+            'Quantifying true TCO empowers smarter acquisition, leasing, and upgrade decisions.'
+          ]
+        }
+      ],
+      faq: [
+        {
+          question: 'How is Total Cost of Ownership calculated?',
+          answer: 'TCO combines initial purchase price with cumulative annual maintenance, energy/fuel consumption, insurance, AMC contracts, and regulatory compliance fees over the ownership duration.'
+        }
+      ],
+      relatedToolSlugs: ['tools/depreciation-calculator', 'tools/repair-or-replace', 'tools/vehicle-service-calculator'],
+      relatedAssetCategories: ['VEHICLE', 'APPLIANCE', 'ELECTRONICS'],
+      updatedAt: '2026-08-25'
     }
   };
 

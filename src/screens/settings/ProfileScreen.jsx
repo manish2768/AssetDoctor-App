@@ -557,6 +557,39 @@ export function ProfileScreen({ navigation }) {
           style={styles.aboutLink}
           onPress={() => {
             Haptics.tap();
+            navigation?.navigate?.('SettingsHome');
+          }}
+        >
+          <Text style={styles.familyTitle}>Settings & security</Text>
+          <Text style={styles.sub}>Privacy, notifications, app lock →</Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.aboutLink}
+          onPress={() => {
+            Haptics.tap();
+            navigation?.navigate?.('NotificationCenter');
+          }}
+        >
+          <Text style={styles.familyTitle}>Alerts</Text>
+          <Text style={styles.sub}>Actionable reminders for every asset →</Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.aboutLink}
+          onPress={() => {
+            Haptics.tap();
+            navigation?.navigate?.('EnergyOverview');
+          }}
+        >
+          <Text style={styles.familyTitle}>Energy intelligence</Text>
+          <Text style={styles.sub}>Appliance & EV energy insights →</Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.aboutLink}
+          onPress={() => {
+            Haptics.tap();
             navigation?.navigate?.('About');
           }}
         >

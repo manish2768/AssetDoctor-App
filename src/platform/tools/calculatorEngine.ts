@@ -316,7 +316,6 @@ export class CalculatorEngine {
     const totalIns = annualInsurance * years;
     const totalTco = price + totalMaint + totalEnergy + totalIns;
 
-    const totalOperating = totalMaint + totalEnergy + totalIns;
     const capitalPct = totalTco > 0 ? Math.round((price / totalTco) * 100) : 100;
     const operatingPct = 100 - capitalPct;
 
@@ -334,6 +333,108 @@ export class CalculatorEngine {
         totalEnergyOrFuel: totalEnergy,
         totalInsuranceAndCompliance: totalIns
       }
+    };
+  }
+
+  /**
+   * 5. Asset Fair Market Value & Resale Estimator
+   */
+  public static calculateAssetValue(
+    purchasePrice: number,
+    ageMonths: number,
+    category: 'ELECTRONICS' | 'VEHICLE' | 'APPLIANCE' | 'HOUSEHOLD' | 'OTHER' = 'ELECTRONICS',
+    condition: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR' = 'GOOD'
+  ) {
+    const price = Math.max(100, purchasePrice);
+    const ageYears = Math.max(0.08, ageMonths / 12);
+
+    const baseDepreciation = this.calculateDepreciation(price, ageYears, category, 'DECLINING_BALANCE');
+    const conditionMultipliers: Record<string, number> = {
+      EXCELLENT: 1.12,
+      GOOD: 1.00,
+      FAIR: 0.85,
+      POOR: 0.65
+    };
+    const mult = conditionMultipliers[condition] || 1.0;
+    const estimatedValue = Math.round(baseDepreciation.currentValue * mult);
+    const resaleRetainedPct = Math.round((estimatedValue / price) * 100);
+
+    return {
+      estimatedValue,
+      originalPrice: price,
+      retainedPercentage: resaleRetainedPct,
+      conditionBonus: condition === 'EXCELLENT' ? '+12% Premium for complete documentation & box' : condition === 'POOR' ? '-35% Penalty for cosmetic/functional defects' : 'Standard Market Baseline',
+      liquidityRating: resaleRetainedPct > 50 ? 'HIGH LIQUIDITY' : resaleRetainedPct > 25 ? 'MODERATE LIQUIDITY' : 'LOW LIQUIDITY',
+      optimalResaleWindow: ageMonths < 36 ? 'Sell within next 6–12 months before major generational price drop.' : 'Asset has stabilized near terminal residual equity.'
+    };
+  }
+
+  /**
+   * 6. Document Expiry & Compliance Tracker
+   */
+  public static calculateDocumentExpiry(
+    issueDateStr: string,
+    validityMonths: number,
+    documentType: 'INSURANCE' | 'PUC' | 'AMC' | 'FITNESS' | 'WARRANTY_CERT' = 'INSURANCE'
+  ) {
+    const issueDate = new Date(issueDateStr || Date.now());
+    const expiryDate = new Date(issueDate);
+    expiryDate.setMonth(expiryDate.getMonth() + validityMonths);
+
+    const now = new Date();
+    const diffMs = expiryDate.getTime() - now.getTime();
+    const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+    let status: 'VALID' | 'EXPIRING_SOON' | 'EXPIRED' = 'VALID';
+    let alertLevel: 'SUCCESS' | 'WARNING' | 'CRITICAL' = 'SUCCESS';
+    let complianceNotice = 'Document is legally compliant and active.';
+
+    if (daysRemaining < 0) {
+      status = 'EXPIRED';
+      alertLevel = 'CRITICAL';
+      complianceNotice = documentType === 'INSURANCE'
+        ? 'CRITICAL: Driving with expired motor insurance violates Section 146 of MV Act. Subject to ₹2,000–₹4,000 fine and legal liability.'
+        : documentType === 'PUC'
+        ? 'CRITICAL: Expired PUC attracts ₹10,000 penalty under Section 190(2) MV Act.'
+        : 'Contract has expired. Renewal required to maintain preventative coverage.';
+    } else if (daysRemaining <= 15) {
+      status = 'EXPIRING_SOON';
+      alertLevel = 'WARNING';
+      complianceNotice = `Action required: Renew within ${daysRemaining} days to prevent policy lapse or regulatory penalties.`;
+    }
+
+    return {
+      documentType,
+      expiryDate: expiryDate.toISOString().split('T')[0],
+      daysRemaining,
+      status,
+      alertLevel,
+      complianceNotice
+    };
+  }
+
+  /**
+   * 7. Lifetime Operational Cost Engine
+   */
+  public static calculateLifetimeCost(
+    purchasePrice: number,
+    expectedLifespanYears: number,
+    annualOperatingCost: number
+  ) {
+    const price = Math.max(1000, purchasePrice);
+    const lifespan = Math.max(1, expectedLifespanYears);
+    const cumulativeOperating = annualOperatingCost * lifespan;
+    const totalLifetimeCost = price + cumulativeOperating;
+
+    return {
+      purchasePrice: price,
+      lifespanYears: lifespan,
+      annualOperatingCost,
+      cumulativeOperatingCost: cumulativeOperating,
+      totalLifetimeCost,
+      operatingMultiplier: Math.round((cumulativeOperating / price) * 10) / 10,
+      annualEquivalentCost: Math.round(totalLifetimeCost / lifespan),
+      costEfficiencyRating: cumulativeOperating < price ? 'HIGH EFFICIENCY' : cumulativeOperating < price * 2 ? 'MODERATE OVERHEAD' : 'HIGH OPERATING OVERHEAD'
     };
   }
 }

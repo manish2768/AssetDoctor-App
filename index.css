@@ -1,1 +1,2 @@
 @import "tailwindcss";
+@import "./src/design-system/cssTokens.css";

@@ -25,6 +25,7 @@ import { DOCUMENT_TYPES, COLORS } from '../../theme/branding';
 import { Haptics } from '../../services/haptics';
 import { openLogin } from '../../navigation/authGate';
 import { openReviewInvoice } from '../../navigation/navActions';
+import { vaultCopyForAsset } from '../../design-system/assetIntelligenceSchema';
 
 const FOLDER_ORDER = [
   'bill',
@@ -84,7 +85,7 @@ export function DocumentsVaultScreen({ route, navigation }) {
   if (!assetId) {
     return (
       <View style={[styles.root, { justifyContent: 'center' }]}>
-        <Text style={styles.empty}>Select an asset from the Vault tab to manage documents.</Text>
+        <Text style={styles.empty}>Select an asset from Documents to manage its vault.</Text>
         <Pressable onPress={() => navigation?.goBack?.()}>
           <Text style={styles.link}>Go back</Text>
         </Pressable>
@@ -227,12 +228,12 @@ export function DocumentsVaultScreen({ route, navigation }) {
     ]);
   };
 
+  const vaultCopy = vaultCopyForAsset(asset || {});
+
   return (
     <View style={styles.root}>
       <Text style={styles.title}>Documents Vault</Text>
-      <Text style={styles.sub}>
-        {asset?.assetName || 'Asset'} — Vehicle Invoice, Insurance, PUC, Warranty
-      </Text>
+      <Text style={styles.sub}>{vaultCopy.subtitle}</Text>
 
       <View style={styles.chips}>
         {DOCUMENT_TYPES.map((t) => (
@@ -282,9 +283,7 @@ export function DocumentsVaultScreen({ route, navigation }) {
         contentContainerStyle={{ paddingVertical: 16 }}
         stickySectionHeadersEnabled={false}
         ListEmptyComponent={
-          <Text style={styles.empty}>
-            No documents yet — upload Vehicle Invoice, Insurance, PUC, or Warranty.
-          </Text>
+          <Text style={styles.empty}>{vaultCopy.empty}</Text>
         }
         renderSectionHeader={({ section }) => (
           <Text style={styles.sectionTitle}>{section.title}</Text>

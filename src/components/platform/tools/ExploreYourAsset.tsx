@@ -142,10 +142,33 @@ export const ExploreYourAsset: React.FC<ExploreYourAssetProps> = ({
       recommendedTool: 'tools/asset-health-score'
     },
     {
+      id: 'business',
+      name: 'Business Assets',
+      subtitle: 'Office Hardware, POS Systems, Machinery & Servers',
+      icon: <Layers className="w-5 h-5 text-purple-400" />,
+      subtypes: ['Enterprise Laptops & Workstations', 'Thermal POS Printers & Terminals', 'Commercial Air Conditioning & Chillers', 'Rack Servers & Network Switches', 'Office Photocopiers & Scanners'],
+      commonMaintenance: [
+        'Quarterly thermal paste & heat sink dust purge on servers/workstations',
+        'Daily thermal head cleaning on POS & receipt printers',
+        'UPS battery impedance and runtime load testing every 90 days',
+        'Annual comprehensive AMC inspection on commercial HVAC'
+      ],
+      commonDocuments: ['Commercial GST Invoice with Asset Tag', 'Hardware AMC Agreement', 'Enterprise Software Licenses', 'Fixed Asset Register (FAR) Barcode'],
+      warrantyNorms: '3-5 Years Next-Business-Day (NBD) Onsite Enterprise OEM Warranty.',
+      commonProblems: [
+        'Thermal shutdown from clogged server rack intakes',
+        'POS thermal head burnout from low-grade paper rolls',
+        'Unexpected downtime due to unmonitored capacitor aging'
+      ],
+      featuredKnowledgeId: 'kn-dell-latitude-enterprise',
+      featuredKnowledgeLabel: 'Enterprise Hardware & Fixed Asset Register Guide',
+      recommendedTool: 'tools/ownership-cost'
+    },
+    {
       id: 'custom',
       name: 'Other Assets',
       subtitle: 'Tools, Cameras, Musical & Custom Assets',
-      icon: <Layers className="w-5 h-5 text-purple-400" />,
+      icon: <Sparkles className="w-5 h-5 text-indigo-400" />,
       subtypes: ['Professional Cameras & Lenses', 'Musical Instruments', 'Power Tools & Workshop Hardware', 'Custom Personal Equipment'],
       commonMaintenance: [
         'Camera sensor blower cleaning & dry cabinet storage (<45% RH)',
@@ -161,7 +184,7 @@ export const ExploreYourAsset: React.FC<ExploreYourAssetProps> = ({
       ],
       featuredKnowledgeId: 'kn-dell-latitude-enterprise',
       featuredKnowledgeLabel: 'Universal Custom Asset Tracking Standards',
-      recommendedTool: 'tools/invoice-analyzer'
+      recommendedTool: 'tools/document-expiry'
     }
   ];
 

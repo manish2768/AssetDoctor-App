@@ -9,6 +9,7 @@ import {
   ArrowRight,
   Sparkles
 } from 'lucide-react';
+import { ASSET_INTELLIGENCE_TOOLS } from '../../../platform/tools/toolsArchitecture';
 
 interface PublicToolsGridProps {
   onSelectTool: (toolSlug: string) => void;
@@ -97,6 +98,7 @@ export const PublicToolsGrid: React.FC<PublicToolsGridProps> = ({ onSelectTool }
         </h2>
         <p className="text-xs sm:text-sm text-slate-400">
           Useful answers for the things you own. Free, instant, and privacy-first.
+          {' '}Scalable suite of {ASSET_INTELLIGENCE_TOOLS.length}+ Asset Intelligence tools.
         </p>
       </div>
 

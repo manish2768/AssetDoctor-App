@@ -1,5 +1,6 @@
 /**
- * Floating premium tab bar — theme-aware + responsive width.
+ * Primary navigation — Home · Assets · Documents · Alerts · Profile
+ * Scan lives on Home quick actions (openScanInvoice) — not a competing tab.
  */
 
 import React from 'react';
@@ -11,21 +12,20 @@ import { Haptics } from '../services/haptics';
 import { FONTS } from '../theme/branding';
 import { HIT, RADIUS } from '../theme/tokens';
 import { useThemeColors } from '../context/ThemeProvider';
-import { openScanInvoice } from '../navigation/navActions';
 import {
   IconHome,
   IconAssets,
-  IconEnergy,
-  IconSettings,
-  IconPlus,
+  IconDocuments,
+  IconAlerts,
+  IconProfile,
 } from './icons/TabIcons';
 
 const TAB_CONFIG = [
   { name: 'Home', label: 'Home', Icon: IconHome },
   { name: 'Assets', label: 'Assets', Icon: IconAssets },
-  { name: '__fab__', label: 'Scan', fab: true },
-  { name: 'Power', label: 'Energy', Icon: IconEnergy },
-  { name: 'Settings', label: 'Settings', Icon: IconSettings },
+  { name: 'Documents', label: 'Docs', Icon: IconDocuments },
+  { name: 'Alerts', label: 'Alerts', Icon: IconAlerts },
+  { name: 'Profile', label: 'Profile', Icon: IconProfile },
 ];
 
 export function CustomBottomTabBar({ state, descriptors, navigation }) {
@@ -34,11 +34,6 @@ export function CustomBottomTabBar({ state, descriptors, navigation }) {
   const colors = useThemeColors();
   const active = colors.tabActive || colors.secondary || colors.neonBlue;
   const barWidth = Math.min(width - 20, 720);
-
-  const onFabPress = () => {
-    Haptics.tap();
-    openScanInvoice();
-  };
 
   return (
     <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 10) }]}>
@@ -54,23 +49,6 @@ export function CustomBottomTabBar({ state, descriptors, navigation }) {
         ]}
       >
         {TAB_CONFIG.map((config) => {
-          if (config.fab) {
-            return (
-              <View key="fab" style={styles.fabSlot}>
-                <TouchableOpacity
-                  onPress={onFabPress}
-                  activeOpacity={0.9}
-                  style={[styles.fabBtn, { backgroundColor: colors.primary }]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Scan invoice"
-                >
-                  <IconPlus color={colors.textOnPrimary || '#FFFFFF'} />
-                </TouchableOpacity>
-                <Text style={[styles.fabLabel, { color: colors.textMuted }]}>Scan</Text>
-              </View>
-            );
-          }
-
           const route = state.routes.find((r) => r.name === config.name);
           if (!route) return <View key={config.name} style={styles.tabItem} />;
 
@@ -154,9 +132,9 @@ const styles = StyleSheet.create({
   },
   floatingBar: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingTop: 10,
     paddingBottom: 8,
     borderRadius: RADIUS.xl,
@@ -194,25 +172,6 @@ const styles = StyleSheet.create({
   tabLabelActive: {
     fontFamily: FONTS.semibold,
     fontWeight: '700',
-  },
-  fabSlot: {
-    width: 64,
-    alignItems: 'center',
-    marginTop: -22,
-  },
-  fabBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-  },
-  fabLabel: {
-    fontSize: 10,
-    fontFamily: FONTS.medium,
-    fontWeight: '600',
-    marginTop: 4,
   },
 });
 

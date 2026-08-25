@@ -755,8 +755,8 @@ export function PremiumScanCta({ onPress, style }) {
               { color: colors.textMuted, marginTop: 6, lineHeight: 18 },
             ]}
           >
-            Scan any bill, RC, insurance, PUC or service document. AI extracts the details — you
-            confirm before saving.
+            Scan a purchase bill, warranty, service record, or category-relevant document. AI
+            extracts the details — you confirm before saving.
           </Text>
           <Text style={[TYPE.caption, { color: colors.primary, fontWeight: '600', marginTop: 12 }]}>
             Scan Document →
@@ -769,13 +769,23 @@ export function PremiumScanCta({ onPress, style }) {
 
 export function UpcomingSummaryCard({ summary, unread = 0, onPress, style }) {
   const colors = useThemeColors();
-  const cells = [
-    { label: 'Insurance', value: summary?.insurance ?? 0 },
-    { label: 'Service', value: summary?.service ?? 0 },
-    { label: 'Warranty', value: summary?.warranty ?? 0 },
-    { label: 'PUC', value: summary?.puc ?? 0 },
-    { label: 'Expired', value: summary?.expired ?? 0 },
+  // Universal reminders — only surface cells with signal (never force vehicle-only PUC/Insurance).
+  const allCells = [
+    { label: 'Insurance', value: summary?.insurance ?? 0, key: 'insurance' },
+    { label: 'Service', value: summary?.service ?? 0, key: 'service' },
+    { label: 'Warranty', value: summary?.warranty ?? 0, key: 'warranty' },
+    { label: 'PUC', value: summary?.puc ?? 0, key: 'puc' },
+    { label: 'Expired', value: summary?.expired ?? 0, key: 'expired' },
   ];
+  const active = allCells.filter((c) => c.value > 0);
+  const cells =
+    active.length > 0
+      ? active.slice(0, 5)
+      : [
+          { label: 'Service', value: 0 },
+          { label: 'Warranty', value: 0 },
+          { label: 'Docs', value: 0 },
+        ];
   return (
     <Entrance delay={50}>
       <Pressable
@@ -791,7 +801,7 @@ export function UpcomingSummaryCard({ summary, unread = 0, onPress, style }) {
           style,
         ]}
         accessibilityRole="button"
-        accessibilityLabel={`Upcoming reminders. Insurance ${cells[0].value}, Service ${cells[1].value}, Warranty ${cells[2].value}, PUC ${cells[3].value}, Expired ${cells[4].value}`}
+        accessibilityLabel={`Upcoming reminders. ${cells.map((c) => `${c.label} ${c.value}`).join(', ')}`}
       >
         <View style={styles.rowBetween}>
           <Text style={[TYPE.h2, { color: colors.text, fontSize: 18 }]}>Upcoming</Text>
@@ -877,8 +887,8 @@ export function HomeEmptyOnboarding({ onScan, onAdd, style }) {
             { color: colors.textMuted, textAlign: 'center', marginTop: 10, lineHeight: 18 },
           ]}
         >
-          Scan a purchase bill, RC, insurance, PUC or service document. Asset Doctor extracts the
-          details — you always confirm before saving.
+          Scan a purchase bill, warranty card, or service document for any asset you own. Asset
+          Doctor extracts the details — you always confirm before saving.
         </Text>
         <Pressable
           onPress={() => {

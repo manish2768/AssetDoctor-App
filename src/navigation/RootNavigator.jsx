@@ -192,7 +192,8 @@ function VaultStackNav() {
 function SettingsStackNav() {
   const Stack = createNativeStackNavigator();
   return (
-    <Stack.Navigator initialRouteName="SettingsHome" screenOptions={stackOptions}>
+    <Stack.Navigator initialRouteName="ProfileHome" screenOptions={stackOptions}>
+      <Stack.Screen name="ProfileHome" component={ProfileScreen} options={{ title: 'Profile' }} />
       <Stack.Screen name="SettingsHome" component={SettingsScreen} options={{ title: 'Settings' }} />
       <Stack.Screen
         name="PrivacySecurity"
@@ -207,9 +208,8 @@ function SettingsStackNav() {
       <Stack.Screen
         name="NotificationCenter"
         component={NotificationCenterScreen}
-        options={{ title: 'Notifications' }}
+        options={{ title: 'Alerts' }}
       />
-      <Stack.Screen name="ProfileHome" component={ProfileScreen} options={{ title: 'Profile' }} />
       <Stack.Screen name="AssetPassport" component={AssetPassportScreen} options={{ title: 'Asset Passport' }} />
       <Stack.Screen name="Maintenance" component={MaintenanceScreen} options={{ title: 'Service & Maintenance' }} />
       <Stack.Screen name="DocumentsVault" component={DocumentsVaultScreen} options={{ title: 'Documents' }} />
@@ -224,6 +224,32 @@ function SettingsStackNav() {
         component={AssetEnergyScreen}
         options={{ title: 'Appliance Energy' }}
       />
+      <Stack.Screen
+        name="EnergyOverview"
+        component={EnergyScreen}
+        options={{ title: 'Energy', headerShown: false }}
+      />
+    </Stack.Navigator>
+  );
+}
+
+function AlertsStackNav() {
+  const Stack = createNativeStackNavigator();
+  return (
+    <Stack.Navigator initialRouteName="NotificationCenter" screenOptions={stackOptions}>
+      <Stack.Screen
+        name="NotificationCenter"
+        component={NotificationCenterScreen}
+        options={{ title: 'Alerts' }}
+      />
+      <Stack.Screen
+        name="NotificationSettings"
+        component={NotificationSettingsScreen}
+        options={{ title: 'Notification settings' }}
+      />
+      <Stack.Screen name="AssetPassport" component={AssetPassportScreen} options={{ title: 'Asset Passport' }} />
+      <Stack.Screen name="DocumentsVault" component={DocumentsVaultScreen} options={{ title: 'Documents' }} />
+      <Stack.Screen name="Maintenance" component={MaintenanceScreen} options={{ title: 'Service & Maintenance' }} />
     </Stack.Navigator>
   );
 }
@@ -268,12 +294,9 @@ function MainTabs() {
     >
       <Tab.Screen name="Home" component={HomeStackNav} options={{ title: 'Home', tabBarLabel: 'Home' }} />
       <Tab.Screen name="Assets" component={AssetsStackNav} options={{ title: 'Assets' }} />
-      <Tab.Screen
-        name="Power"
-        component={EnergyScreen}
-        options={{ headerShown: false, title: 'Energy', tabBarLabel: 'Energy' }}
-      />
-      <Tab.Screen name="Settings" component={SettingsStackNav} options={{ title: 'Settings' }} />
+      <Tab.Screen name="Documents" component={VaultStackNav} options={{ title: 'Documents', tabBarLabel: 'Docs' }} />
+      <Tab.Screen name="Alerts" component={AlertsStackNav} options={{ title: 'Alerts' }} />
+      <Tab.Screen name="Profile" component={SettingsStackNav} options={{ title: 'Profile', tabBarLabel: 'Profile' }} />
     </Tab.Navigator>
   );
 }

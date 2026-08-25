@@ -1,16 +1,19 @@
 /**
  * Asset Health Score (0–100)
  * Factors: document completeness, expiry urgency, age, condition.
+ * Expiry checks are category-aware — never penalize a phone for missing PUC.
  */
 
 import { daysUntil, yearsSince } from './dates';
 import { clamp } from './format';
+import { resolveAssetCapabilities } from '../services/assets/assetCapabilities';
 
 /**
  * @param {object} asset
- * @returns {{ score: number, grade: string, factors: object, tips: string[] }}
+ * @returns {{ score: number, grade: string, factors: object, tips: string[], band?: string, explainFactors: object[] }}
  */
 export function calculateHealthScore(asset = {}) {
+  const caps = resolveAssetCapabilities(asset);
   let score = 100;
   const tips = [];
   const factors = {
@@ -28,7 +31,11 @@ export function calculateHealthScore(asset = {}) {
   }
   if (!asset.serialNumber && !asset.chassisNumber && !asset.registration) {
     docPenalty += 7;
-    tips.push('Add serial / chassis / registration number');
+    tips.push(
+      caps.supportsOdometer
+        ? 'Add serial / chassis / registration number'
+        : 'Add serial number or product identifier',
+    );
   }
   if (!asset.purchaseDate) {
     docPenalty += 5;
@@ -38,13 +45,13 @@ export function calculateHealthScore(asset = {}) {
   factors.documents = -docPenalty;
   score -= docPenalty;
 
-  // --- Expiry urgency (max -40) ---
+  // --- Expiry urgency (max -40) — category gated ---
   let expiryPenalty = 0;
   const checks = [
-    { key: 'insuranceExpiry', label: 'Insurance' },
-    { key: 'pucExpiry', label: 'PUC' },
-    { key: 'warrantyExpiry', label: 'Warranty' },
-  ];
+    caps.supportsInsurance ? { key: 'insuranceExpiry', label: 'Insurance' } : null,
+    caps.supportsPUC ? { key: 'pucExpiry', label: 'PUC' } : null,
+    caps.supportsWarranty ? { key: 'warrantyExpiry', label: 'Warranty' } : null,
+  ].filter(Boolean);
   for (const { key, label } of checks) {
     const days = daysUntil(asset[key]);
     if (days === null) continue;
@@ -87,7 +94,64 @@ export function calculateHealthScore(asset = {}) {
   else if (score >= 50) grade = 'Fair';
   else if (score >= 30) grade = 'At Risk';
 
-  return { score, grade, factors, tips: tips.slice(0, 4), ageYears: Number(ageYears.toFixed(1)) };
+  const statusTone = (penalty) => {
+    if (penalty >= 0) return 'success';
+    if (penalty > -10) return 'info';
+    if (penalty > -20) return 'warning';
+    return 'error';
+  };
+  const statusWord = (penalty) => {
+    if (penalty >= 0) return 'Good';
+    if (penalty > -10) return 'Fair';
+    if (penalty > -20) return 'Needs attention';
+    return 'Critical';
+  };
+
+  const warrantyDays = daysUntil(asset.warrantyExpiry);
+  const explainFactors = [
+    {
+      id: 'documents',
+      label: 'Documents',
+      status: statusWord(factors.documents),
+      tone: statusTone(factors.documents),
+    },
+    {
+      id: 'maintenance',
+      label: caps.supportsServiceHistory ? 'Maintenance' : 'Upkeep',
+      status: statusWord(factors.expiries),
+      tone: statusTone(factors.expiries),
+    },
+    {
+      id: 'warranty',
+      label: 'Warranty',
+      status: asset.warrantyExpiry
+        ? warrantyDays < 0
+          ? 'Expired'
+          : 'Active'
+        : 'Not set',
+      tone: asset.warrantyExpiry
+        ? warrantyDays < 0
+          ? 'error'
+          : 'success'
+        : 'neutral',
+    },
+    {
+      id: 'issues',
+      label: 'Recent issues',
+      status: asset.condition === 'poor' ? 'Reported' : 'None',
+      tone: asset.condition === 'poor' ? 'warning' : 'success',
+    },
+  ];
+
+  return {
+    score,
+    grade,
+    band: grade,
+    factors,
+    tips: tips.slice(0, 4),
+    ageYears: Number(ageYears.toFixed(1)),
+    explainFactors,
+  };
 }
 
 /**
@@ -97,7 +161,6 @@ export function calculatePortfolioHealth(assets = []) {
   if (!assets.length) return { score: 100, grade: 'Excellent', count: 0 };
   const scores = assets.map((a) => calculateHealthScore(a).score);
   const score = Math.round(scores.reduce((s, n) => s + n, 0) / scores.length);
-  const { grade } = calculateHealthScore({ condition: 'good' }); // placeholder
   let g = 'Critical';
   if (score >= 85) g = 'Excellent';
   else if (score >= 70) g = 'Good';

@@ -59,31 +59,31 @@ export const PublicHomepageView: React.FC<PublicHomepageViewProps> = ({
         </div>
 
         <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white leading-[1.1]">
-          Know What You Own. <br />
+          Everything you own. <br />
           <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">
-            Know What It Needs.
+            One intelligent place to manage it.
           </span>
         </h1>
 
         <p className="text-sm sm:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed">
-          Universal asset tracking, maintenance intelligence, warranty protection, document intelligence and lifecycle insights for everything you own.
+          Track, protect, maintain and understand every important asset you own. Universal lifecycle intelligence across vehicles, electronics, appliances, and business equipment.
         </p>
 
         {/* Hero Action Buttons */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
           <button
-            onClick={() => onSelectTool('assets/explore')}
-            className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm transition-all cursor-pointer shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
+            onClick={onOpenVaultApp}
+            className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm transition-all cursor-pointer shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
           >
-            <span>Explore Your Asset</span>
-            <ChevronRight className="w-4 h-4" />
+            <span>Start Managing Your Assets</span>
+            <ArrowRight className="w-4 h-4" />
           </button>
           <button
-            onClick={onOpenVaultApp}
-            className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm transition-all cursor-pointer border border-slate-800 hover:border-slate-700 flex items-center justify-center gap-2"
+            onClick={() => onSelectTool('assets/explore')}
+            className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm transition-all cursor-pointer border border-slate-800 hover:border-slate-700 flex items-center justify-center gap-2"
           >
-            <span>Open My Vault</span>
-            <ArrowRight className="w-4 h-4 text-emerald-400" />
+            <span>Explore Asset Intelligence</span>
+            <ChevronRight className="w-4 h-4 text-emerald-400" />
           </button>
         </div>
 
@@ -95,7 +95,7 @@ export const PublicHomepageView: React.FC<PublicHomepageViewProps> = ({
           </span>
           <span className="px-3 py-1 rounded-xl bg-slate-900 border border-slate-800 text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
             <Smartphone className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Phones & Laptops</span>
+            <span>Electronics</span>
           </span>
           <span className="px-3 py-1 rounded-xl bg-slate-900 border border-slate-800 text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
             <Wrench className="w-3.5 h-3.5 text-teal-400" />
@@ -103,7 +103,11 @@ export const PublicHomepageView: React.FC<PublicHomepageViewProps> = ({
           </span>
           <span className="px-3 py-1 rounded-xl bg-slate-900 border border-slate-800 text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
             <Home className="w-3.5 h-3.5 text-amber-400" />
-            <span>Solar & Living Assets</span>
+            <span>Solar & Energy</span>
+          </span>
+          <span className="px-3 py-1 rounded-xl bg-slate-900 border border-slate-800 text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+            <Layers className="w-3.5 h-3.5 text-purple-400" />
+            <span>Business Assets</span>
           </span>
         </div>
       </section>

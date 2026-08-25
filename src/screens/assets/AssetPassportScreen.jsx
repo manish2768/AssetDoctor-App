@@ -35,6 +35,8 @@ import { useTabSafeBottomPadding } from '../../utils/tabSafePadding';
 import { ClaimAssistantSheet } from '../../components/ClaimAssistantSheet';
 import { cleanAssetDisplayName } from '../../utils/displayAssetName';
 import { computeGadgetSmartMetrics } from '../../utils/gadgetSmartMetrics';
+import { HealthScoreExplain } from '../../components/HealthScoreExplain';
+import { vaultCopyForAsset } from '../../design-system/assetIntelligenceSchema';
 
 export function AssetPassportScreen({ route, navigation }) {
   const assetId = route?.params?.assetId;
@@ -348,9 +350,7 @@ export function AssetPassportScreen({ route, navigation }) {
 
       <View style={styles.panel}>
         <Text style={styles.panelTitle}>Document Folders</Text>
-        <Text style={styles.tip}>
-          Vehicle Invoice · Insurance Policy · PUC · Warranty — stored as separate vault categories
-        </Text>
+        <Text style={styles.tip}>{vaultCopyForAsset(asset).subtitle}</Text>
         <Pressable
           style={styles.folderCta}
           onPress={() => {
@@ -365,20 +365,16 @@ export function AssetPassportScreen({ route, navigation }) {
       </View>
 
       <View style={styles.panel}>
-        <Text style={styles.panelTitle}>Asset Health</Text>
-        <Text style={styles.score}>
-          {health.score} / 100 <Text style={styles.grade}>{health.band || health.grade}</Text>
-        </Text>
-        {(health.why || health.tips || []).length ? (
-          <>
-            <Text style={[styles.panelTitle, { marginTop: 10, fontSize: 13 }]}>Why?</Text>
-            {(health.why || health.tips).slice(0, 5).map((t) => (
-              <Text key={t} style={styles.tip}>
-                • {t}
-              </Text>
-            ))}
-          </>
-        ) : null}
+        <HealthScoreExplain
+          score={health.score}
+          label={health.band || health.grade}
+          factors={health.explainFactors || []}
+          footnote={
+            (health.why || health.tips || []).length
+              ? (health.why || health.tips).slice(0, 2).join(' · ')
+              : undefined
+          }
+        />
         {health.breakdown ? (
           <>
             <Text style={[styles.panelTitle, { marginTop: 10, fontSize: 13 }]}>Health breakdown</Text>

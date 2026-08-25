@@ -360,7 +360,7 @@ export function DashboardScreen({ navigation }) {
   };
 
   const goProfile = () => {
-    navigation?.getParent()?.navigate?.('Settings', { screen: 'ProfileHome' });
+    navigation?.getParent()?.navigate?.('Profile', { screen: 'ProfileHome' });
   };
 
   const goVault = () => {
