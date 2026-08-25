@@ -4,6 +4,10 @@
   "outputDirectory": "dist",
   "cleanUrls": true,
   "trailingSlash": false,
+  "redirects": [
+    { "source": "/svg", "destination": "/", "permanent": true },
+    { "source": "/svg/(.*)", "destination": "/", "permanent": true }
+  ],
   "headers": [
     {
       "source": "/",
