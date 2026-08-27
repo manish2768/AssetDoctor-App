@@ -6,8 +6,9 @@
 export {
   WelcomeGreetingModal as WelcomeBackModal,
   WelcomeGreetingModal,
-  shouldShowWelcomeGreeting,
+    shouldShowWelcomeGreeting,
   shouldShowWelcomeGreeting as shouldShowWelcomeBackModal,
+  markWelcomeGreetingSeenToday,
 } from './WelcomeGreetingModal';
 
 export { default } from './WelcomeGreetingModal';

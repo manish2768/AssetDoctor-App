@@ -1,6 +1,6 @@
 /**
  * Primary navigation — Home · Assets · Documents · Alerts · Profile
- * Scan lives on Home quick actions (openScanInvoice) — not a competing tab.
+ * Compact floating bottom bar (68dp height), subtle elevation, clean #0F8F87 active indicator.
  */
 
 import React from 'react';
@@ -10,7 +10,7 @@ import { useWindowDimensions } from 'react-native';
 
 import { Haptics } from '../services/haptics';
 import { FONTS } from '../theme/branding';
-import { HIT, RADIUS } from '../theme/tokens';
+import { HIT, RADIUS, elevation } from '../theme/tokens';
 import { useThemeColors } from '../context/ThemeProvider';
 import {
   IconHome,
@@ -32,11 +32,11 @@ export function CustomBottomTabBar({ state, descriptors, navigation }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const colors = useThemeColors();
-  const active = colors.tabActive || colors.secondary || colors.neonBlue;
-  const barWidth = Math.min(width - 20, 720);
+  const active = colors.primary || '#0F8F87';
+  const barWidth = Math.min(width - 24, 600);
 
   return (
-    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 12) }]}>
       <View
         style={[
           styles.floatingBar,
@@ -44,8 +44,8 @@ export function CustomBottomTabBar({ state, descriptors, navigation }) {
             width: barWidth,
             backgroundColor: colors.surface,
             borderColor: colors.border,
-            shadowColor: colors.shadow,
           },
+          elevation(2, colors.shadow),
         ]}
       >
         {TAB_CONFIG.map((config) => {
@@ -86,7 +86,7 @@ export function CustomBottomTabBar({ state, descriptors, navigation }) {
             <TouchableOpacity
               key={route.key}
               onPress={onPress}
-              activeOpacity={0.85}
+              activeOpacity={0.82}
               style={styles.tabItem}
               accessibilityRole="tab"
               accessibilityState={{ selected: isFocused }}
@@ -96,12 +96,13 @@ export function CustomBottomTabBar({ state, descriptors, navigation }) {
                 style={[
                   styles.iconWrap,
                   isFocused && {
-                    backgroundColor: colors.infoSoft || 'rgba(37,99,235,0.10)',
+                    backgroundColor: colors.accentLight || 'rgba(11,143,131,0.12)',
                   },
                 ]}
               >
-                <Icon color={isFocused ? active : colors.textMuted} solid={isFocused} />
+                <Icon color={isFocused ? active : colors.textMuted} solid={isFocused} size={20} />
               </View>
+              {isFocused ? <View style={[styles.activeDot, { backgroundColor: active }]} /> : <View style={styles.activeDotSpacer} />}
               <Text
                 style={[
                   styles.tabLabel,
@@ -119,7 +120,7 @@ export function CustomBottomTabBar({ state, descriptors, navigation }) {
   );
 }
 
-export const TAB_BAR_HEIGHT = 72;
+export const TAB_BAR_HEIGHT = 68;
 
 const styles = StyleSheet.create({
   container: {
@@ -135,44 +136,43 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 8,
-    paddingTop: 10,
-    paddingBottom: 8,
-    borderRadius: RADIUS.xl,
+    paddingVertical: 6,
+    height: TAB_BAR_HEIGHT,
+    borderRadius: RADIUS.large,
     borderWidth: 1,
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
-    ...Platform.select({
-      ios: {},
-      android: {},
-      default: {},
-    }),
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 2,
     minHeight: HIT.min,
-    minWidth: HIT.min,
   },
   iconWrap: {
-    width: 44,
-    height: 36,
-    borderRadius: 12,
+    width: 38,
+    height: 28,
+    borderRadius: RADIUS.small,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 2,
+  },
+  activeDot: {
+    width: 12,
+    height: 2,
+    borderRadius: 2,
+    marginBottom: 2,
+  },
+  activeDotSpacer: {
+    height: 2,
+    marginBottom: 2,
   },
   tabLabel: {
-    fontSize: 10,
+    fontSize: 11,
+    fontWeight: '500',
     fontFamily: FONTS.medium,
-    fontWeight: '600',
-    marginTop: 2,
   },
   tabLabelActive: {
-    fontFamily: FONTS.semibold,
     fontWeight: '700',
+    fontFamily: FONTS.bold,
   },
 });
-
-export default CustomBottomTabBar;

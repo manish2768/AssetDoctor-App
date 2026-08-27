@@ -47,6 +47,7 @@ import { PlayStoreUpdateService } from '../services/updates/PlayStoreUpdateServi
 import { Haptics } from '../services/haptics';
 import { COLORS } from '../theme/branding';
 import { useTheme } from '../context/ThemeProvider';
+import { useDrawer } from '../context/DrawerContext';
 import { ONBOARDING_KEY } from '../constants/storageKeys';
 import { CustomBottomTabBar } from '../components/CustomBottomTabBar';
 import { GlobalSearchScreen } from '../screens/search/GlobalSearchScreen';
@@ -54,9 +55,12 @@ import { ScanAssetQrScreen } from '../screens/assets/ScanAssetQrScreen';
 import {
   WelcomeBackModal,
   shouldShowWelcomeGreeting,
+  markWelcomeGreetingSeenToday,
 } from '../components/WelcomeBackModal';
-import { navigationRef, goHomeDashboard } from './navActions';
+import { navigationRef, goHomeDashboard, openScanInvoice } from './navActions';
 import { AuthBootGate } from './AuthBootGate';
+import { UserService } from '../services/user/UserService';
+import { isWelcomeExperienceEligible } from '../services/onboarding/welcomeExperience';
 import {
   clearScanSession,
   restoreScanSessionIfNeeded,
@@ -124,6 +128,24 @@ function addAssetOptions({ route }) {
   return { title: route?.params?.assetId ? 'Edit Asset' : 'Add Asset' };
 }
 
+function DrawerHeaderButton() {
+  const { openDrawer } = useDrawer();
+  return (
+    <Pressable
+      onPress={() => {
+        Haptics.tap();
+        openDrawer();
+      }}
+      hitSlop={8}
+      style={{ paddingRight: 10, paddingVertical: 4 }}
+      accessibilityRole="button"
+      accessibilityLabel="Open universal navigation drawer"
+    >
+      <Text style={{ fontSize: 20, fontWeight: '800', color: COLORS.text }}>☰</Text>
+    </Pressable>
+  );
+}
+
 /**
  * Home stack — Dashboard ONLY as landing. No ScanBill here.
  */
@@ -156,7 +178,14 @@ function HomeStackNav() {
 function AssetsStackNav() {
   return (
     <AssetsStack.Navigator initialRouteName="AssetList" screenOptions={stackOptions}>
-      <AssetsStack.Screen name="AssetList" component={AssetListScreen} options={{ title: 'Assets' }} />
+      <AssetsStack.Screen
+        name="AssetList"
+        component={AssetListScreen}
+        options={{
+          title: 'Assets',
+          headerLeft: () => <DrawerHeaderButton />,
+        }}
+      />
       <AssetsStack.Screen name="AddAsset" component={AddAssetScreen} options={addAssetOptions} />
       <AssetsStack.Screen name="GlobalSearch" component={GlobalSearchScreen} options={{ title: 'Search', headerShown: false }} />
       <AssetsStack.Screen name="ScanAssetQr" component={ScanAssetQrScreen} options={{ title: 'Scan Asset QR' }} />
@@ -171,7 +200,14 @@ function AssetsStackNav() {
 function VaultStackNav() {
   return (
     <VaultStack.Navigator initialRouteName="VaultHome" screenOptions={stackOptions}>
-      <VaultStack.Screen name="VaultHome" component={VaultHomeScreen} options={{ title: 'Document Vault' }} />
+      <VaultStack.Screen
+        name="VaultHome"
+        component={VaultHomeScreen}
+        options={{
+          title: 'Document Vault',
+          headerLeft: () => <DrawerHeaderButton />,
+        }}
+      />
       <VaultStack.Screen
         name="CategoryFolders"
         component={CategoryFoldersScreen}
@@ -193,7 +229,14 @@ function SettingsStackNav() {
   const Stack = createNativeStackNavigator();
   return (
     <Stack.Navigator initialRouteName="ProfileHome" screenOptions={stackOptions}>
-      <Stack.Screen name="ProfileHome" component={ProfileScreen} options={{ title: 'Profile' }} />
+      <Stack.Screen
+        name="ProfileHome"
+        component={ProfileScreen}
+        options={{
+          title: 'Profile',
+          headerLeft: () => <DrawerHeaderButton />,
+        }}
+      />
       <Stack.Screen name="SettingsHome" component={SettingsScreen} options={{ title: 'Settings' }} />
       <Stack.Screen
         name="PrivacySecurity"
@@ -240,7 +283,10 @@ function AlertsStackNav() {
       <Stack.Screen
         name="NotificationCenter"
         component={NotificationCenterScreen}
-        options={{ title: 'Alerts' }}
+        options={{
+          title: 'Alerts',
+          headerLeft: () => <DrawerHeaderButton />,
+        }}
       />
       <Stack.Screen
         name="NotificationSettings"
@@ -433,6 +479,7 @@ export function RootNavigator() {
     emailVerified,
     user,
     displayName,
+    profile,
     allowGuestBrowse,
     retryProfileHydrate,
     needsProfileSetup,
@@ -502,23 +549,19 @@ export function RootNavigator() {
       return undefined;
     }
 
-    (async () => {
-      try {
-        const key = `${ONBOARDING_KEY}:${user.uid}`;
-        const done = await AsyncStorage.getItem(key);
-        // Migrate legacy global flag once
-        const legacy = await AsyncStorage.getItem(ONBOARDING_KEY);
-        const complete = done === '1' || legacy === '1';
-        if (complete && done !== '1') {
-          await AsyncStorage.setItem(key, '1');
-        }
-        if (!cancelled) setShowOnboarding(!complete);
-      } catch {
-        if (!cancelled) setShowOnboarding(true);
-      } finally {
-        if (!cancelled) setOnboardingChecked(true);
-      }
-    })();
+    // Wait for profile hydrate so reinstall cannot fake a first-time user.
+    // Keep onboardingChecked true so AuthBootGate (not a blank spinner) stays visible.
+    if (!profileReady) {
+      setShowOnboarding(false);
+      setOnboardingChecked(true);
+      return undefined;
+    }
+
+    const eligible = isWelcomeExperienceEligible(profile);
+    if (!cancelled) {
+      setShowOnboarding(eligible);
+      setOnboardingChecked(true);
+    }
 
     return () => {
       cancelled = true;
@@ -530,17 +573,34 @@ export function RootNavigator() {
     isAuthenticated,
     user?.uid,
     needsProfileSetup,
+    profileReady,
+    profile?.welcomeExperiencePending,
+    profile?.onboardingCompleted,
+    profile?.welcomeExperienceCompleted,
   ]);
 
-  const finishOnboarding = async () => {
+  const finishOnboarding = async (action = {}) => {
     try {
       const uid = user?.uid;
-      if (uid) await AsyncStorage.setItem(`${ONBOARDING_KEY}:${uid}`, '1');
+      if (uid) {
+        await UserService.markWelcomeExperienceComplete(uid);
+        await AsyncStorage.setItem(`${ONBOARDING_KEY}:${uid}`, '1');
+      }
       await AsyncStorage.setItem(ONBOARDING_KEY, '1');
+      await markWelcomeGreetingSeenToday();
     } catch {
       /* ignore */
     }
     setShowOnboarding(false);
+    if (action?.openScanner) {
+      setTimeout(() => {
+        try {
+          openScanInvoice();
+        } catch {
+          /* navigator may still be mounting */
+        }
+      }, 400);
+    }
   };
 
   useEffect(() => {
@@ -590,7 +650,12 @@ export function RootNavigator() {
 
   // Auth first — onboarding only for signed-in users after profile gate
   if (showOnboarding && isAuthenticated && !needsProfileSetup && !showAuthStack) {
-    return <OnboardingScreen onDone={finishOnboarding} />;
+    return (
+      <OnboardingScreen
+        onDone={finishOnboarding}
+        displayName={displayName || user?.displayName || profile?.name || ''}
+      />
+    );
   }
 
   const bootBlocking =

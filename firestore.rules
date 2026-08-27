@@ -142,7 +142,8 @@ service cloud.firestore {
     // ----------------------------------------------------
     match /ocrReviewQueue/{reviewId} {
       allow read: if isOcrReviewer() || isAdmin();
-      allow create: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid;
       allow update: if isOcrReviewer() || isAdmin();
       allow delete: if isSuperAdmin();
     }
@@ -201,7 +202,15 @@ service cloud.firestore {
     // ----------------------------------------------------
     match /notification_queue/{notificationId} {
       allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
-      allow create, update, delete: if isSuperAdmin();
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.channel == 'whatsapp'
+        && request.resource.data.eventType == 'user_welcome'
+        && request.resource.data.status == 'queued'
+        && request.resource.data.templateKey == 'welcome_message'
+        && request.resource.data.keys().hasAll(['userId', 'channel', 'templateKey', 'status', 'idempotencyKey', 'recipientPhone'])
+        && !request.resource.data.keys().hasAny(['accessToken', 'token', 'META_WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_TOKEN']);
+      allow update, delete: if isSuperAdmin() || isAdmin();
     }
 
     match /notification_logs/{logId} {

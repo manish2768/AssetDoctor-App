@@ -5,12 +5,37 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  getWhatsAppConfigStatus,
+  registerWhatsAppPhoneNumber,
+  getWhatsAppPhoneNumberDetails,
+  getWhatsAppTemplates,
+  sendMetaWhatsAppMessage,
+  normalizeWhatsAppNumber,
+} from './MetaWhatsAppService.js';
+import {
+  APPROVED_META_TEMPLATES,
+  NOTIF_TYPE,
+  NOTIF_STATUS,
+  sendWelcomeNotification,
+  sendOtpNotification,
+  verifyWhatsAppOtp,
+  sendExpiryReminder,
+  sendServiceReminder,
+  sendWhatsAppTemplate,
+  getWhatsAppUserPreferences,
+  setWhatsAppUserPreferences,
+  getNotificationAuditLogs,
+  handleWebhookStatusUpdate,
+} from './WhatsAppNotificationService.js';
 
 const WA_LOGS_STORAGE_KEY = 'asset_doctor_whatsapp_logs_v1';
 const WA_CONSENT_STORAGE_KEY = 'asset_doctor_whatsapp_consents_v1';
 
 export const WA_TEMPLATE = Object.freeze({
-  OTP_VERIFICATION: 'ad_otp_verification',
+  OTP_VERIFICATION: 'asset_doctor_otp',
+  WELCOME: 'welcome_message',
+  EXPIRY_REMINDER: 'expiry_reminder',
   SERVICE_REMINDER: 'ad_service_reminder',
   WARRANTY_EXPIRY: 'ad_warranty_expiry',
   INSURANCE_EXPIRY: 'ad_insurance_expiry',
@@ -28,17 +53,118 @@ export const WA_MESSAGE_STATUS = Object.freeze({
 });
 
 export const WhatsAppService = {
+  // Re-export Constants
+  APPROVED_TEMPLATES: APPROVED_META_TEMPLATES,
+  NOTIF_TYPE,
+  NOTIF_STATUS,
+
+  /**
+   * Safe status check of WhatsApp Cloud API configuration
+   */
+  getStatus() {
+    return getWhatsAppConfigStatus();
+  },
+
+  /**
+   * Register phone number on Meta Cloud API with 6-digit PIN
+   */
+  async registerPhoneNumber(options = {}) {
+    return registerWhatsAppPhoneNumber(options);
+  },
+
+  /**
+   * Fetch verified business display name & quality rating from Meta
+   */
+  async getPhoneNumberDetails() {
+    return getWhatsAppPhoneNumberDetails();
+  },
+
+  /**
+   * Query approved templates from WABA account
+   */
+  async getTemplates() {
+    return getWhatsAppTemplates();
+  },
+
+  /**
+   * Flow A: Send User Welcome Message
+   */
+  async sendWelcome({ userId, phone, userName }) {
+    return sendWelcomeNotification({ userId, phone, userName });
+  },
+
+  /**
+   * Flow B: Send WhatsApp OTP
+   */
+  async sendOtp({ userId, phone, otp }) {
+    return sendOtpNotification({ userId, phone, otp });
+  },
+
+  /**
+   * Flow B: Verify WhatsApp OTP
+   */
+  async verifyOtp(phone, inputOtp) {
+    return verifyWhatsAppOtp(phone, inputOtp);
+  },
+
+  /**
+   * Flow C: Send Document Expiry Reminder (Insurance, PUC, Warranty)
+   */
+  async sendExpiryReminder({
+    userId,
+    phone,
+    customerName,
+    vehicleName,
+    docType,
+    expiryDate,
+    assetId,
+  }) {
+    return sendExpiryReminder({
+      userId,
+      phone,
+      customerName,
+      vehicleName,
+      docType,
+      expiryDate,
+      assetId,
+    });
+  },
+
+  /**
+   * Flow D: Send Service Reminder
+   */
+  async sendServiceReminder({
+    userId,
+    phone,
+    userName,
+    vehicleName,
+    odometer,
+    daysLeft,
+  }) {
+    return sendServiceReminder({
+      userId,
+      phone,
+      userName,
+      vehicleName,
+      odometer,
+      daysLeft,
+    });
+  },
+
+  /**
+   * Send arbitrary approved WhatsApp template
+   */
+  async sendTemplate(options) {
+    return sendWhatsAppTemplate(options);
+  },
+
   /**
    * Check if user has opted in for WhatsApp updates
    */
   async getUserConsent(userId) {
     if (!userId) return false;
-    try {
-      const raw = await AsyncStorage.getItem(`${WA_CONSENT_STORAGE_KEY}_${userId}`);
-      return raw ? JSON.parse(raw).optedIn === true : true; // Default true for service alerts
-    } catch {
-      return true;
-    }
+    const prefs = await getWhatsAppUserPreferences(userId);
+    return prefs.whatsappEnabled;
   },
 
   /**
@@ -46,36 +172,30 @@ export const WhatsAppService = {
    */
   async setUserConsent(userId, optedIn = true) {
     if (!userId) return;
-    const consent = {
-      userId,
-      optedIn,
-      updatedAt: new Date().toISOString(),
-    };
-    await AsyncStorage.setItem(`${WA_CONSENT_STORAGE_KEY}_${userId}`, JSON.stringify(consent));
+    return setWhatsAppUserPreferences(userId, { whatsappEnabled: optedIn });
   },
 
   /**
-   * Render template parameters for dispatch
+   * Render template parameters for fallback dispatch
    */
   renderTemplate(templateName, variables = {}) {
     switch (templateName) {
       case WA_TEMPLATE.OTP_VERIFICATION:
-        return `Your Asset Doctor verification code is ${variables.otp}. Valid for 10 minutes. Do not share this OTP with anyone.`;
-      case WA_TEMPLATE.SERVICE_REMINDER:
-        return `Hello ${variables.userName || 'User'}, your vehicle ${variables.assetName || ''} (${variables.regNumber || ''}) is due for periodic service in ${variables.daysLeft} days. Current odometer: ${variables.odometer || '—'} KM.`;
-      case WA_TEMPLATE.WARRANTY_EXPIRY:
-        return `Reminder: The warranty for your ${variables.assetName || 'appliance'} expires on ${variables.expiryDate}. Keep your invoice and warranty card handy in Asset Doctor Vault.`;
-      case WA_TEMPLATE.INSURANCE_EXPIRY:
-        return `Alert: Vehicle Insurance for ${variables.assetName || ''} (${variables.regNumber || ''}) expires on ${variables.expiryDate}. Renew on time to avoid fines.`;
-      case WA_TEMPLATE.TICKET_UPDATE:
-        return `Support Update: Your ticket ${variables.ticketId} status has changed to "${variables.status}". View details in Asset Doctor app.`;
+      case 'asset_doctor_otp':
+        return `Your Asset Doctor verification code is ${variables.otp || variables['1']}. Valid for 10 minutes.`;
+      case WA_TEMPLATE.WELCOME:
+      case 'welcome_message':
+        return `Hello ${variables.userName || variables['1'] || 'User'}, welcome to Asset Doctor!`;
+      case WA_TEMPLATE.EXPIRY_REMINDER:
+      case 'expiry_reminder':
+        return `Hello ${variables.customerName || variables['1']}, reminder for ${variables.vehicleName || variables['2']}: ${variables.docType || variables['3']} expires on ${variables.expiryDate || variables['4']}.`;
       default:
         return `Asset Doctor Notification: ${variables.message || 'You have an asset update.'}`;
     }
   },
 
   /**
-   * Send WhatsApp notification (Production API wrapper + offline fallback logger)
+   * Legacy notification dispatcher for backward compatibility
    */
   async sendNotification({
     userId,
@@ -87,76 +207,49 @@ export const WhatsAppService = {
       throw new Error('Recipient phone number required for WhatsApp notification');
     }
 
-    const consent = await this.getUserConsent(userId);
-    if (!consent) {
-      return { success: false, status: 'opted_out', message: 'User opted out of WhatsApp updates' };
+    if (template === WA_TEMPLATE.WELCOME || template === 'welcome_message') {
+      return this.sendWelcome({ userId, phone, userName: variables.userName || variables['1'] });
     }
 
-    const renderedText = this.renderTemplate(template, variables);
-    const messageId = `wa-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
-    const now = new Date().toISOString();
-
-    const logEntry = {
-      messageId,
-      userId: userId || 'unknown',
-      phone: String(phone).replace(/\D/g, ''),
-      template,
-      renderedText,
-      status: WA_MESSAGE_STATUS.SENT,
-      sentAt: now,
-      deliveredAt: null,
-      readAt: null,
-    };
-
-    // In production environment with Meta credentials:
-    // const res = await fetch(`https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`, ...)
-    
-    // Save to message logs
-    try {
-      const logs = await this.getMessageLogs();
-      const updated = [logEntry, ...logs].slice(0, 500);
-      await AsyncStorage.setItem(WA_LOGS_STORAGE_KEY, JSON.stringify(updated));
-    } catch (e) {
-      console.warn('[WhatsAppService] Failed to save message log:', e);
+    if (template === WA_TEMPLATE.OTP_VERIFICATION || template === 'asset_doctor_otp') {
+      return this.sendOtp({ userId, phone, otp: variables.otp || variables['1'] });
     }
 
-    return {
-      success: true,
-      messageId,
-      status: WA_MESSAGE_STATUS.SENT,
-      renderedText,
-    };
+    if (template === WA_TEMPLATE.EXPIRY_REMINDER || template === 'expiry_reminder') {
+      return this.sendExpiryReminder({
+        userId,
+        phone,
+        customerName: variables.customerName || variables['1'],
+        vehicleName: variables.vehicleName || variables['2'],
+        docType: variables.docType || variables['3'],
+        expiryDate: variables.expiryDate || variables['4'],
+        assetId: variables.assetId,
+      });
+    }
+
+    // Default template send
+    return sendWhatsAppTemplate({
+      userId,
+      phone,
+      templateName: template,
+      languageCode: variables.languageCode || 'en',
+      parameters: variables.parameters || Object.values(variables),
+    });
   },
 
   /**
    * Process incoming WhatsApp webhook status update
    */
-  async processWebhookStatusUpdate({ messageId, status, timestamp }) {
-    if (!messageId || !status) return false;
-    const logs = await this.getMessageLogs();
-    const idx = logs.findIndex((l) => l.messageId === messageId);
-    if (idx === -1) return false;
-
-    logs[idx].status = status;
-    if (status === WA_MESSAGE_STATUS.DELIVERED) logs[idx].deliveredAt = timestamp || new Date().toISOString();
-    if (status === WA_MESSAGE_STATUS.READ) logs[idx].readAt = timestamp || new Date().toISOString();
-
-    await AsyncStorage.setItem(WA_LOGS_STORAGE_KEY, JSON.stringify(logs));
-    return true;
+  async processWebhookStatusUpdate(payload) {
+    if (!payload) return false;
+    return handleWebhookStatusUpdate(payload);
   },
 
   /**
    * Get all message delivery logs
    */
-  async getMessageLogs() {
-    try {
-      const raw = await AsyncStorage.getItem(WA_LOGS_STORAGE_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
+  async getMessageLogs(filterUserId = null) {
+    return getNotificationAuditLogs(filterUserId);
   },
 };
 

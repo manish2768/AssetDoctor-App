@@ -99,22 +99,6 @@ export function resolvePrimaryNextAction(asset = {}) {
   }
 
   if (!candidates.length) {
-    const expectsMaintenance =
-      caps.supportsServiceHistory ||
-      caps.supportsOdometer ||
-      cat === 'ac' ||
-      cat === 'vehicle' ||
-      cat === 'bike' ||
-      cat === 'car';
-    if (expectsMaintenance && !asset.nextServiceDue && asset.nextServiceOdometerKm == null) {
-      return {
-        title: 'Maintenance schedule unavailable',
-        why: `Add service details for ${name} to get a next action.`,
-        metric: '—',
-        priority: 'LOW',
-        ctaLabel: 'Add details',
-      };
-    }
     return null;
   }
   candidates.sort((a, b) => a.sort - b.sort);

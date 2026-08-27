@@ -1,0 +1,49 @@
+# EAS uses this file INSTEAD of .gitignore. Keep secrets and build junk out of the archive.
+node_modules/
+dist/
+dist-bundle-check/
+.expo/
+.git/
+.gradle/
+.tools/
+.adb_home/
+coverage/
+scratch/
+
+# Force npm on EAS (package-lock.json). Do not delete bun.lock locally.
+bun.lock
+bun.lockb
+
+# Native build outputs (paths EAS previously still packed)
+android/.gradle/
+android/build/
+android/.cxx/
+android/app/build/
+android/app/.cxx/
+android/.kotlin/
+ios/build/
+ios/Pods/
+
+# Local signing / secrets — production signing stays on EAS remote credentials
+.env
+.env.local
+.env.*
+!.env.example
+credentials/
+credentials*.json
+service-account*.json
+*.jks
+android/keystore.properties
+android/local.properties
+android/app/debug.keystore
+.whatsapp_*.json
+.whatsapp__*.json
+
+# Cloud Functions are deployed separately; do not pack into EAS
+functions/
+
+# Previous local artifacts must not be uploaded
+*.apk
+*.aab
+*.log
+assetdoctor.zip

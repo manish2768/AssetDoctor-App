@@ -1,170 +1,217 @@
 /**
- * First-run onboarding — 2 sleek pages (Welcome + Never Miss an Expiry)
+ * First-time premium welcome — NEW customers only.
+ * Wired from RootNavigator when Firestore welcomeExperiencePending is true.
  */
 
-import React, { useRef, useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
-  Dimensions,
+  Image,
+  ScrollView,
   Pressable,
+  Dimensions,
+  Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { BRAND, COLORS, SPACING } from '../../theme/branding';
+import { COLORS } from '../../theme/branding';
+import { TYPE, SPACING, RADIUS } from '../../theme/tokens';
 import { Haptics } from '../../services/haptics';
+import {
+  IconScanLine,
+  IconSpark,
+  IconBell,
+  IconLock,
+  IconChart,
+  IconArrowRight,
+} from '../../design-system/icons';
+import {
+  firstNameFromDisplay,
+  welcomePrimaryAction,
+  welcomeSecondaryAction,
+} from '../../services/onboarding/welcomeExperience';
 
-const { width } = Dimensions.get('window');
+const BANNER = require('../../../assets/welcome-banner.jpg');
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const BANNER_H = Math.min(Math.round(SCREEN_W * 0.72), Math.round(SCREEN_H * 0.34));
 
-const SLIDES = [
+const FEATURES = [
   {
-    key: 'welcome',
-    icon: '📷',
-    title: 'Welcome to Asset Doctor',
-    body:
-      'Zero manual typing. Automated 1-click scanning for Bills, RCs, Warranties, and Insurance — drop messy paperwork into a smart digital vault.',
+    key: 'scan',
+    Icon: IconScanLine,
+    title: 'Smart Scan',
+    body: 'Scan bills, insurance, warranty, RC and important documents.',
   },
   {
-    key: 'expiry',
-    icon: '🔔',
-    title: 'Never Miss an Expiry',
-    body:
-      'Instant WhatsApp document sharing, smart reminders for PUC, Insurance & Service, plus Family Locker access for your whole household.',
+    key: 'intel',
+    Icon: IconSpark,
+    title: 'Asset Intelligence',
+    body: 'Understand asset health, service requirements and important actions.',
+  },
+  {
+    key: 'alerts',
+    Icon: IconBell,
+    title: 'Smart Alerts',
+    body: 'Never miss insurance, warranty, PUC or service deadlines.',
+  },
+  {
+    key: 'vault',
+    Icon: IconLock,
+    title: 'Document Vault',
+    body: 'Keep important documents organized and accessible.',
+  },
+  {
+    key: 'cost',
+    Icon: IconChart,
+    title: 'Cost & Ownership',
+    body: 'Understand purchase, maintenance and ownership costs.',
   },
 ];
 
-export function OnboardingScreen({ onDone }) {
-  const listRef = useRef(null);
-  const [index, setIndex] = useState(0);
+export function OnboardingScreen({ onDone, displayName = '' }) {
+  const first = firstNameFromDisplay(displayName);
 
-  const finish = () => {
+  const finish = (action) => {
     Haptics.success();
-    onDone?.();
-  };
-
-  const next = () => {
-    Haptics.tap();
-    if (index >= SLIDES.length - 1) {
-      finish();
-      return;
-    }
-    const nextIndex = index + 1;
-    listRef.current?.scrollToIndex({ index: nextIndex, animated: true });
-    setIndex(nextIndex);
+    onDone?.(action);
   };
 
   return (
-    <View style={styles.root}>
-      <Text style={styles.brand}>{BRAND.name}</Text>
-      <Text style={styles.tag}>{BRAND.tagline}</Text>
-      <View style={styles.creatorBadge}>
-        <Text style={styles.creatorText}>Crafted by Ashutosh (14) 🚀</Text>
-      </View>
+    <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        <Image
+          source={BANNER}
+          style={styles.banner}
+          resizeMode="contain"
+          accessibilityRole="image"
+          accessibilityLabel="Asset Doctor welcome banner"
+        />
 
-      <FlatList
-        ref={listRef}
-        data={SLIDES}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        keyExtractor={(item) => item.key}
-        onMomentumScrollEnd={(e) => {
-          const i = Math.round(e.nativeEvent.contentOffset.x / width);
-          setIndex(i);
-        }}
-        renderItem={({ item }) => (
-          <View style={styles.slide}>
-            <View style={styles.iconOrb}>
-              <Text style={styles.icon}>{item.icon}</Text>
+        {first ? (
+          <Text style={styles.hello} numberOfLines={1}>
+            Welcome, {first} 👋
+          </Text>
+        ) : null}
+
+        <Text style={styles.kicker}>Welcome to Asset Doctor</Text>
+        <Text style={styles.subtitle}>Your assets. Your documents. Your protection.</Text>
+        <Text style={styles.support}>One intelligent vault for everything you own.</Text>
+
+        <View style={styles.features}>
+          {FEATURES.map(({ key, Icon, title, body }) => (
+            <View key={key} style={styles.featureRow}>
+              <View style={styles.iconWrap}>
+                <Icon size={18} color={COLORS.electricTeal || '#00B8A9'} />
+              </View>
+              <View style={styles.featureCopy}>
+                <Text style={styles.featureTitle}>{title}</Text>
+                <Text style={styles.featureBody}>{body}</Text>
+              </View>
             </View>
-            <Text style={styles.title}>{item.title}</Text>
-            <Text style={styles.body}>{item.body}</Text>
-          </View>
-        )}
-      />
+          ))}
+        </View>
+      </ScrollView>
 
-      <View style={styles.dots}>
-        {SLIDES.map((s, i) => (
-          <View key={s.key} style={[styles.dot, i === index && styles.dotOn]} />
-        ))}
+      <View style={styles.footer}>
+        <Pressable
+          style={styles.primary}
+          onPress={() => finish(welcomePrimaryAction())}
+          accessibilityRole="button"
+          accessibilityLabel="Protect My First Asset"
+        >
+          <Text style={styles.primaryText}>Protect My First Asset</Text>
+          <IconArrowRight size={18} color="#FFFFFF" />
+        </Pressable>
+        <Pressable
+          onPress={() => finish(welcomeSecondaryAction())}
+          style={styles.secondary}
+          accessibilityRole="button"
+          accessibilityLabel="Explore Asset Doctor"
+        >
+          <Text style={styles.secondaryText}>Explore Asset Doctor</Text>
+        </Pressable>
       </View>
-
-      <Pressable style={styles.primary} onPress={next}>
-        <Text style={styles.primaryText}>
-          {index === SLIDES.length - 1 ? 'Get Started' : 'Next'}
-        </Text>
-      </Pressable>
-      <Pressable onPress={finish} style={{ padding: 12 }}>
-        <Text style={styles.skip}>Skip</Text>
-      </Pressable>
-      <Text style={styles.footer}>{BRAND.footer}</Text>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.bg, paddingTop: 56 },
-  brand: { color: COLORS.text, fontSize: 28, fontWeight: '900', textAlign: 'center' },
-  tag: {
-    color: COLORS.emerald,
-    textAlign: 'center',
-    marginTop: 8,
-    paddingHorizontal: 24,
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  creatorBadge: {
+  root: { flex: 1, backgroundColor: COLORS.midnight || '#07111F' },
+  scroll: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.md },
+  banner: {
+    width: '100%',
+    height: BANNER_H,
     alignSelf: 'center',
-    marginTop: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(0,245,160,0.35)',
-    backgroundColor: 'rgba(0,245,160,0.1)',
+    marginTop: SPACING.xs,
   },
-  creatorText: { color: COLORS.emerald, fontWeight: '800', fontSize: 11 },
-  slide: { width, paddingHorizontal: 32, alignItems: 'center', marginTop: 36 },
-  iconOrb: {
-    width: 96,
-    height: 96,
-    borderRadius: 32,
-    backgroundColor: 'rgba(0,245,160,0.12)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(0,245,160,0.4)',
+  hello: {
+    ...TYPE.caption,
+    color: COLORS.electricTeal || '#00B8A9',
+    textAlign: 'center',
+    marginTop: SPACING.sm,
+  },
+  kicker: {
+    ...TYPE.h1,
+    color: COLORS.textOnHero || '#F8FAFC',
+    textAlign: 'center',
+    marginTop: SPACING.sm,
+  },
+  subtitle: {
+    ...TYPE.bodyStrong,
+    color: COLORS.electricTeal || '#00B8A9',
+    textAlign: 'center',
+    marginTop: SPACING.xs,
+  },
+  support: {
+    ...TYPE.bodySmall,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginTop: SPACING.xs,
+    marginBottom: SPACING.md,
+  },
+  features: { gap: SPACING.sm },
+  featureRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.sm },
+  iconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: RADIUS.sm,
+    backgroundColor: 'rgba(0, 184, 169, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 184, 169, 0.28)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 22,
+    marginTop: 1,
   },
-  icon: { fontSize: 44 },
-  title: { color: COLORS.text, fontSize: 24, fontWeight: '900', textAlign: 'center' },
-  body: {
-    color: COLORS.muted,
-    textAlign: 'center',
-    marginTop: 14,
-    lineHeight: 23,
-    fontSize: 15,
-  },
-  dots: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginVertical: 20 },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.border },
-  dotOn: { backgroundColor: COLORS.emerald, width: 20 },
-  primary: {
-    marginHorizontal: SPACING.lg,
-    backgroundColor: COLORS.emerald,
-    borderRadius: 16,
-    paddingVertical: 15,
-    alignItems: 'center',
-  },
-  primaryText: { color: COLORS.onPrimary, fontWeight: '900', fontSize: 15 },
-  skip: { color: COLORS.muted, textAlign: 'center', fontWeight: '700' },
+  featureCopy: { flex: 1 },
+  featureTitle: { ...TYPE.bodyStrong, color: COLORS.textOnHero || '#F8FAFC' },
+  featureBody: { ...TYPE.caption, color: COLORS.textMuted, marginTop: 2 },
   footer: {
-    color: COLORS.muted,
-    textAlign: 'center',
-    marginTop: 8,
-    marginBottom: 28,
-    fontSize: 11,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.sm,
+    paddingBottom: Platform.OS === 'android' ? SPACING.md : SPACING.xs,
+    gap: SPACING.xs,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
   },
+  primary: {
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.lg,
+    paddingVertical: 14,
+    paddingHorizontal: SPACING.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+  },
+  primaryText: { ...TYPE.button, color: '#FFFFFF' },
+  secondary: { paddingVertical: 12, alignItems: 'center' },
+  secondaryText: { ...TYPE.caption, color: COLORS.textMuted },
 });
 
 export default OnboardingScreen;

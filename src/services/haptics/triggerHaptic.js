@@ -3,7 +3,17 @@
  * Prefer native haptic module; always fall back to Android Vibration so feedback works in EAS APKs.
  */
 
-import { Platform, Vibration } from 'react-native';
+let Platform = { OS: 'web' };
+let Vibration = { vibrate: () => {} };
+if (typeof process === 'undefined' || !process.release || process.env.NODE_ENV === 'react-native') {
+  try {
+    const rnName = 'react-native';
+    // eslint-disable-next-line import/no-dynamic-require, global-require
+    const rn = require(rnName);
+    if (rn?.Platform) Platform = rn.Platform;
+    if (rn?.Vibration) Vibration = rn.Vibration;
+  } catch {}
+}
 
 const HAPTIC_OPTIONS = {
   enableVibrateFallback: true,

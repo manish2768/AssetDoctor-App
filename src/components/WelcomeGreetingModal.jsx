@@ -20,6 +20,15 @@ import { Haptics } from '../services/haptics';
 
 const GREETING_SESSION_KEY = 'asset_doctor_welcome_greeting_session_v1';
 
+export async function markWelcomeGreetingSeenToday() {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    await AsyncStorage.setItem(GREETING_SESSION_KEY, today);
+  } catch {
+    /* ignore */
+  }
+}
+
 function timeGreeting() {
   const h = new Date().getHours();
   if (h < 12) return 'Good Morning';

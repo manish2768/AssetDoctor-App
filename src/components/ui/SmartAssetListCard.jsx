@@ -100,11 +100,13 @@ export function SmartAssetListCard({ asset, onPress, onLongPress, style }) {
             {nextLine}
           </Text>
         </View>
-      ) : (
-        <Text style={[TYPE.caption, { color: colors.textMuted, marginTop: 10 }]}>
-          Maintenance schedule unavailable
-        </Text>
-      )}
+      ) : asset.odometerKm != null && Number(asset.odometerKm) > 0 ? (
+        <View style={styles.subRow}>
+          <Text style={[TYPE.caption, { color: colors.textMuted }]}>
+            {Number(asset.odometerKm).toLocaleString('en-IN')} KM
+          </Text>
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -131,6 +133,9 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.sm,
     minHeight: 36,
     justifyContent: 'center',
+  },
+  subRow: {
+    marginTop: 6,
   },
 });
 

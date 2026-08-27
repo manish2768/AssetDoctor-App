@@ -24,6 +24,7 @@ import { openLogin } from '../../navigation/authGate';
 import { Haptics } from '../../services/haptics';
 import { uploadProfilePhoto } from '../../services/user/ProfilePhotoService';
 import { normalizePhone } from '../../utils/profileSetup';
+import { calculateHealthScore } from '../../utils/healthScore';
 import {
   DEFAULT_PROFILE,
   loadLocalProfile,
@@ -99,6 +100,21 @@ export function ProfileScreen({ navigation }) {
     () => assets.filter((a) => !a.isDemo && !a.deletedAt).length,
     [assets],
   );
+
+  const vaultHealth = useMemo(() => {
+    const list = assets.filter((a) => !a.isDemo && !a.deletedAt);
+    let total = 0;
+    let n = 0;
+    for (const a of list) {
+      const res = calculateHealthScore(a);
+      const v = typeof res === 'number' ? res : res?.score;
+      if (Number.isFinite(v)) {
+        total += v;
+        n += 1;
+      }
+    }
+    return n ? Math.round(total / n) : null;
+  }, [assets]);
 
   const hydrateFromSources = async () => {
     const local = await loadLocalProfile();
@@ -314,7 +330,7 @@ export function ProfileScreen({ navigation }) {
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Profile Settings</Text>
+        <Text style={styles.title}>Account</Text>
 
         <GlassCard glow style={{ marginTop: 10 }}>
           <View style={styles.avatarRow}>
@@ -358,10 +374,10 @@ export function ProfileScreen({ navigation }) {
             <View style={styles.statRow}>
               <View style={styles.statChip}>
                 <Text style={styles.statNum}>{vaultedCount}</Text>
-                <Text style={styles.statLabel}>Vaulted assets</Text>
+                <Text style={styles.statLabel}>Assets</Text>
               </View>
               <View style={styles.statChip}>
-                <Text style={styles.statNum}>🔒</Text>
+                <Text style={styles.statNum}>{isAuthenticated ? 'On' : 'Local'}</Text>
                 <Text style={styles.statLabel}>Encrypted sync</Text>
               </View>
             </View>
@@ -523,79 +539,102 @@ export function ProfileScreen({ navigation }) {
         )}
 
         <View style={styles.scoreWrap}>
-          <Text style={styles.scoreLabel}>Vault Protection Score</Text>
+          <Text style={styles.scoreLabel}>Vault protection score</Text>
           <Text style={styles.scoreValue}>
-            {Math.min(
-              100,
-              Math.round(
-                vaultedCount * 12 +
-                  (pincode ? 8 : 0) +
-                  (address || city ? 8 : 0) +
-                  (mobile ? 10 : 0) +
-                  (name ? 10 : 0),
-              ),
-            )}
-            <Text style={styles.scoreUnit}> / 100</Text>
+            {vaultHealth == null ? '—' : vaultHealth}
+            {vaultHealth != null ? <Text style={styles.scoreUnit}> / 100</Text> : null}
           </Text>
           <Text style={styles.scoreHint}>
-            Completing profile + vaulting assets raises your protection score.
+            {vaultHealth == null
+              ? 'Add assets to see your vault health from real documents and coverage.'
+              : 'Average health of assets in your vault.'}
           </Text>
         </View>
 
-        <Pressable
-          style={styles.aboutLink}
-          onPress={() => {
-            Haptics.tap();
-            navigation?.navigate?.('ReportIssue');
-          }}
-        >
-          <Text style={styles.familyTitle}>Report issue / Feedback</Text>
-          <Text style={styles.sub}>Crash, bug, or idea — reach the team →</Text>
-        </Pressable>
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionHeading}>ACCOUNT</Text>
+          <Pressable
+            style={styles.settingItem}
+            onPress={() => {
+              Haptics.tap();
+              navigation?.navigate?.('SettingsHome');
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.familyTitle}>App Lock & Security</Text>
+              <Text style={styles.sub}>Biometrics, passcode protection</Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
+        </View>
 
-        <Pressable
-          style={styles.aboutLink}
-          onPress={() => {
-            Haptics.tap();
-            navigation?.navigate?.('SettingsHome');
-          }}
-        >
-          <Text style={styles.familyTitle}>Settings & security</Text>
-          <Text style={styles.sub}>Privacy, notifications, app lock →</Text>
-        </Pressable>
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionHeading}>PREFERENCES</Text>
+          <Pressable
+            style={styles.settingItem}
+            onPress={() => {
+              Haptics.tap();
+              navigation?.navigate?.('NotificationCenter');
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.familyTitle}>Alerts & Reminders</Text>
+              <Text style={styles.sub}>Manage expiry and service notices</Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
+        </View>
 
-        <Pressable
-          style={styles.aboutLink}
-          onPress={() => {
-            Haptics.tap();
-            navigation?.navigate?.('NotificationCenter');
-          }}
-        >
-          <Text style={styles.familyTitle}>Alerts</Text>
-          <Text style={styles.sub}>Actionable reminders for every asset →</Text>
-        </Pressable>
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionHeading}>VAULT</Text>
+          <Pressable
+            style={styles.settingItem}
+            onPress={() => {
+              Haptics.tap();
+              navigation?.navigate?.('SettingsHome');
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.familyTitle}>Privacy & Sync</Text>
+              <Text style={styles.sub}>Offline storage and encrypted cloud backup</Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
+        </View>
 
-        <Pressable
-          style={styles.aboutLink}
-          onPress={() => {
-            Haptics.tap();
-            navigation?.navigate?.('EnergyOverview');
-          }}
-        >
-          <Text style={styles.familyTitle}>Energy intelligence</Text>
-          <Text style={styles.sub}>Appliance & EV energy insights →</Text>
-        </Pressable>
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionHeading}>FEEDBACK & SUPPORT</Text>
+          <Pressable
+            style={styles.settingItem}
+            onPress={() => {
+              Haptics.tap();
+              navigation?.navigate?.('ReportIssue');
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.familyTitle}>Feedback / Report Bug</Text>
+              <Text style={styles.sub}>Share ideas or report an issue directly</Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
+        </View>
 
-        <Pressable
-          style={styles.aboutLink}
-          onPress={() => {
-            Haptics.tap();
-            navigation?.navigate?.('About');
-          }}
-        >
-          <Text style={styles.familyTitle}>About Us</Text>
-          <Text style={styles.sub}>{BRAND.creatorCredit} — story & vision →</Text>
-        </Pressable>
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionHeading}>ABOUT</Text>
+          <Pressable
+            style={styles.settingItem}
+            onPress={() => {
+              Haptics.tap();
+              navigation?.navigate?.('About');
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.familyTitle}>About Asset Doctor</Text>
+              <Text style={styles.sub}>{BRAND.creatorCredit} · v1.0.0</Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
+        </View>
 
         {isAuthenticated ? (
           <GlassButton
@@ -758,6 +797,18 @@ const styles = StyleSheet.create({
   scoreValue: { color: COLORS.emerald, fontSize: 28, fontWeight: '900', marginTop: 4 },
   scoreUnit: { color: COLORS.muted, fontSize: 14, fontWeight: '700' },
   scoreHint: { color: COLORS.muted, fontSize: 12, marginTop: 6, lineHeight: 17 },
+  sectionContainer: { marginTop: 14 },
+  sectionHeading: { color: COLORS.muted, fontSize: 11, fontWeight: '800', letterSpacing: 0.6, marginBottom: 6, paddingHorizontal: 4 },
+  settingItem: {
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  chevron: { color: COLORS.muted, fontSize: 20, fontWeight: '700', marginLeft: 8 },
   sheetBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(15,23,42,0.55)',

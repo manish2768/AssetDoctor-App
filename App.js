@@ -22,6 +22,8 @@ import { ThemeProvider } from './src/context/ThemeProvider';
 import { UiFeedbackProvider } from './src/context/UiFeedbackProvider';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { ProfileSetupModal } from './src/components/profile/ProfileSetupModal';
+import { DrawerProvider } from './src/context/DrawerContext';
+import { AssetDrawer } from './src/components/drawer/AssetDrawer';
 import { COLORS } from './src/theme/branding';
 import {
   ensureFirebaseApp,
@@ -139,10 +141,13 @@ export default function App() {
               <AppLockProvider>
                 <AuthProvider>
                   <AssetProvider>
-                    <RootErrorBoundary onRestart={() => setBootKey((k) => k + 1)}>
-                      <RootNavigator />
-                      <ProfileSetupModal />
-                    </RootErrorBoundary>
+                    <DrawerProvider>
+                      <RootErrorBoundary onRestart={() => setBootKey((k) => k + 1)}>
+                        <RootNavigator />
+                        <ProfileSetupModal />
+                        <AssetDrawer />
+                      </RootErrorBoundary>
+                    </DrawerProvider>
                   </AssetProvider>
                 </AuthProvider>
               </AppLockProvider>

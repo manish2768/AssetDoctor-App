@@ -21,10 +21,10 @@ function baseProps(color) {
   };
 }
 
-export function IconHome({ color = '#64748B', solid = false }) {
+export function IconHome({ color = '#64748B', solid = false, size = SIZE }) {
   if (solid) {
     return (
-      <Svg width={SIZE} height={SIZE} viewBox="0 0 24 24">
+      <Svg width={size} height={size} viewBox="0 0 24 24">
         <Path
           d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9.5z"
           fill={color}
@@ -33,7 +33,7 @@ export function IconHome({ color = '#64748B', solid = false }) {
     );
   }
   return (
-    <Svg {...baseProps(color)}>
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <Path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9.5z" />
     </Svg>
   );

@@ -3528,7 +3528,7 @@ function renderNotificationQueue() {
     return;
   }
 
-  tbody.innerHTML = items.map(item => {
+    tbody.innerHTML = items.map(item => {
     const statusBadge = item.status === 'delivered' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' :
                         item.status === 'read' ? 'bg-brand-500/20 text-brand-300 border-brand-500/30' :
                         item.status === 'sent' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' :
@@ -3538,6 +3538,16 @@ function renderNotificationQueue() {
 
     const timeStr = item.createdAt ? new Date(item.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '—';
     const payload = item.payload || {};
+    const isWelcome = item.eventType === 'user_welcome' || item.type === 'WELCOME' || item.templateKey === 'welcome_message';
+    const customerType = (item.customerType || payload.customerType || '').toUpperCase();
+    const welcomeLabel = isWelcome
+      ? `${customerType === 'EXISTING' ? 'EXISTING USER' : 'NEW'} · WELCOME ${String(item.status || 'queued').toUpperCase()}`
+      : String(item.status || '');
+    const detail = isWelcome
+      ? `${item.customerName || payload.userName || 'Welcome'} · retry ${item.retryCount || 0}${item.wamid ? ` · ${item.wamid}` : ''}`
+      : (payload.assetName
+          ? `<strong class="text-white">${payload.assetName}</strong> (${payload.identifier || '—'})`
+          : (payload.docLabel || payload.ticketId || '—'));
 
     return `
       <tr class="table-row">
@@ -3548,11 +3558,11 @@ function renderNotificationQueue() {
         </td>
         <td class="px-4 py-3 font-mono text-brand-300 text-xs font-bold">${item.templateKey}</td>
         <td class="px-4 py-3 text-slate-300 text-xs">
-          ${payload.assetName ? `<strong class="text-white">${payload.assetName}</strong> (${payload.identifier || '—'})` : (payload.docLabel || payload.ticketId || '—')}
+          ${detail}
         </td>
         <td class="px-4 py-3">
           <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase ${statusBadge}">
-            ${item.status}
+            ${welcomeLabel}
           </span>
           ${item.failureReason ? `<span class="block text-[9px] text-slate-500 mt-0.5">${item.failureReason}</span>` : ''}
         </td>

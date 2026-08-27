@@ -1,771 +1,449 @@
-import React, { useState } from 'react';
+/**
+ * Asset Doctor — Master Asset Detail / Passport Screen
+ * Premium asset passport with overview metrics, relationally linked documents, and chronological timeline.
+ */
+
+import React, { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Linking,
-  ScrollView,
-  Text,
-  Pressable,
-  StyleSheet,
   View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Pressable,
+  ActivityIndicator,
+  Share,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAssets } from '../../context/AssetProvider';
-import { AssetPassportCard } from '../../components/AssetPassportCard';
-import { ShareService } from '../../services/share/ShareService';
-import { PdfExporter } from '../../services/pdfExporter';
-import { DocumentVaultService } from '../../services/documents/DocumentVaultService';
 import { useAuth } from '../../context/AuthProvider';
-import { COLORS } from '../../theme/branding';
+import { useThemeColors } from '../../context/ThemeProvider';
+import { useUiFeedback } from '../../context/UiFeedbackProvider';
 import { Haptics } from '../../services/haptics';
 import { calculateHealthScore } from '../../utils/healthScore';
-import { formatDateIN } from '../../utils/dates';
-import { getExpiryTone } from '../../utils/warrantyStatus';
-import { ValuationBlock } from '../../components/ValuationBlock';
-import { WarrantyBadge } from '../../components/WarrantyBadge';
-import { WarrantyProgressBar } from '../../components/WarrantyProgressBar';
-import { evaluateMaintenanceVsValue } from '../../utils/maintenanceValueAlert';
-import { resolveSupportContact } from '../../constants/brandDirectory';
-import { IndiaNumberPlate } from '../../components/vehicle/IndiaNumberPlate';
-import { VehicleStatusBadges } from '../../components/vehicle/VehicleStatusBadges';
-import { SpecAccordion } from '../../components/vehicle/SpecAccordion';
-import { getVehicleSpecs } from '../../utils/vehicleSpecs';
-import { useTabSafeBottomPadding } from '../../utils/tabSafePadding';
-import { ClaimAssistantSheet } from '../../components/ClaimAssistantSheet';
-import { computeGadgetSmartMetrics } from '../../utils/gadgetSmartMetrics';
-import { HealthScoreExplain } from '../../components/HealthScoreExplain';
-import { vaultCopyForAsset, resolveIntelligenceLayout } from '../../design-system/assetIntelligenceSchema';
+import { formatDateIN, daysUntil } from '../../utils/dates';
+import { formatINR } from '../../utils/format';
+import { calculateCostToUse } from '../../utils/costToUse';
 import { resolveAssetCapabilities } from '../../services/assets/assetCapabilities';
-import { SmartActionCard } from '../../components/SmartActionCard';
-import { CollapsibleSection } from '../../components/ui/CollapsibleSection';
-import { useUiFeedback } from '../../context/UiFeedbackProvider';
 import {
-  categoryHealthFactors,
-  resolvePrimaryNextAction,
-} from '../../utils/nextActionUi';
-
-function TrackerRow({ label, value, color, styles: s }) {
-  return (
-    <View style={s.trackerRow}>
-      <Text style={s.trackerLabel}>{label}</Text>
-      <Text style={[s.trackerValue, color ? { color } : null]}>{value}</Text>
-    </View>
-  );
-}
+  IconButton,
+  StatusBadge,
+  HealthScore,
+  SectionHeader,
+  MetricCard,
+  TimelineItem,
+  DocumentRow,
+  PrimaryButton,
+  SecondaryButton,
+} from '../../components/design-system';
+import { PremiumIcon } from '../../design-system/icons';
+import { CategoryIcon } from '../../components/icons/CategoryIcon';
+import { RADIUS, SPACING, TYPE, elevation } from '../../theme/tokens';
 
 export function AssetPassportScreen({ route, navigation }) {
-  const assetId = route?.params?.assetId;
-  const fromQr = !!route?.params?.fromQr;
-  const { getAsset, removeAsset } = useAssets();
-  const { user, profile } = useAuth();
+  const insets = useSafeAreaInsets();
+  const colors = useThemeColors();
   const ui = useUiFeedback();
+  const { getAsset, removeAsset } = useAssets();
+  const { isAuthenticated } = useAuth();
+
+  const assetId = route?.params?.assetId;
   const asset = getAsset(assetId);
-  const [sharing, setSharing] = useState(false);
-  const [sharingPassport, setSharingPassport] = useState(false);
-  const [claimOpen, setClaimOpen] = useState(false);
+
   const [deleting, setDeleting] = useState(false);
-  const bottomPad = useTabSafeBottomPadding({ extra: 24 });
 
   if (!asset) {
     return (
-      <View style={styles.root}>
-        <Text style={styles.missing}>Asset not found</Text>
+      <View style={[styles.root, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={[TYPE.h2, { color: colors.text }]}>Asset not found</Text>
+        <SecondaryButton
+          title="Back to Assets"
+          onPress={() => navigation.goBack()}
+          style={{ marginTop: 16 }}
+        />
       </View>
     );
   }
 
   const health = calculateHealthScore(asset);
   const caps = resolveAssetCapabilities(asset);
-  const layout = resolveIntelligenceLayout(asset);
-  const isVehicle = caps.supportsOdometer === true;
-  const isAc = String(asset.categoryId || '').toLowerCase() === 'ac';
-  const support = resolveSupportContact(asset);
-  const pucTone = getExpiryTone(asset.pucExpiry, { urgentDays: 15 });
-  const insuranceTone = getExpiryTone(asset.insuranceExpiry, { urgentDays: 30 });
-  const warrantyTone = getExpiryTone(asset.warrantyExpiry, { urgentDays: 30 });
-  const serviceTone = getExpiryTone(asset.nextServiceDue, { urgentDays: 15 });
-  const vehicleSpecs = isVehicle ? getVehicleSpecs(asset) : null;
-  const maintenanceAlert = evaluateMaintenanceVsValue(asset);
-  const nextAction = resolvePrimaryNextAction(asset);
-  const healthFactors = categoryHealthFactors(asset, health);
-  const gadgetMetrics = caps.supportsBatteryHealth ? computeGadgetSmartMetrics(asset) : null;
+  const isVehicle = caps.supportsOdometer === true || !!asset.registration;
 
-  const hasCoverage =
-    asset.warrantyExpiry ||
-    (caps.supportsInsurance && asset.insuranceExpiry) ||
-    (caps.supportsPUC && asset.pucExpiry) ||
-    asset.nextServiceDue;
+  // Calculate Ownership Duration
+  const purchaseDate = asset.purchaseDate || asset.invoiceDate || asset.createdAt;
+  const ownershipYears = useMemo(() => {
+    if (!purchaseDate) return '1 yr';
+    const start = new Date(purchaseDate).getTime();
+    if (isNaN(start)) return '1 yr';
+    const diffDays = Math.max(1, (Date.now() - start) / (1000 * 60 * 60 * 24));
+    const yrs = (diffDays / 365.25).toFixed(1);
+    return `${yrs} yrs`;
+  }, [purchaseDate]);
 
-  const hasMaintenanceSection =
-    layout.fieldsBySection.maintenance?.length > 0 &&
-    (isVehicle ||
-      caps.supportsServiceHistory ||
-      asset.nextServiceDue ||
-      asset.odometerKm != null ||
-      isAc);
+  // Estimated Current Value
+  const purchasePrice = Number(asset.purchasePrice || asset.invoiceAmount || asset.totalAmount || 0);
+  const costRow = calculateCostToUse(asset);
+  const currentValue =
+    costRow?.success && Number(costRow.estimatedResale) > 0 ? Math.round(costRow.estimatedResale) : null;
 
-  const hasWarrantySection = caps.supportsWarranty && (asset.warrantyExpiry || asset.warrantyMonths);
-  const hasHistorySection = caps.supportsServiceHistory;
-  const vaultCopy = vaultCopyForAsset(asset);
+  // Linked Documents
+  const linkedDocs = useMemo(() => {
+    const docs = [];
 
-  const importantSubtitle = [
-    caps.supportsOdometer && asset.odometerKm != null ? `${asset.odometerKm} km` : null,
-    caps.supportsBatteryHealth && gadgetMetrics
-      ? `Battery ${gadgetMetrics.batteryHealthPercent}%`
-      : null,
-    asset.warrantyExpiry ? `Warranty · ${formatDateIN(asset.warrantyExpiry)}` : null,
-  ]
-    .filter(Boolean)
-    .slice(0, 2)
-    .join(' · ') || 'Key dates and valuation at a glance';
-
-  const onEmergencyShare = async () => {
-    Haptics.tap();
-    setSharing(true);
-    const docs = user?.uid
-      ? await DocumentVaultService.listDocuments(user.uid, asset.assetId || asset.id)
-      : [];
-    const result = await ShareService.shareEmergencyBundle({ asset, documents: docs });
-    setSharing(false);
-    if (!result.success) ui.error('Emergency Share', result.error || 'Could not create PDF');
-  };
-
-  const onSharePassportPdf = async () => {
-    Haptics.tap();
-    setSharingPassport(true);
-    const result = await PdfExporter.shareAssetPassportPdf({
-      asset,
-      owner: {
-        name: profile?.name || user?.displayName || '',
-        phone: profile?.phone || user?.phoneNumber || '',
-      },
-      preferWhatsApp: true,
-    });
-    setSharingPassport(false);
-    if (!result.success) {
-      ui.error('Passport PDF', result.error || 'Could not share Asset Passport');
-    }
-  };
-
-  const onCallSupport = async () => {
-    Haptics.tap();
-    if (!support?.phone) {
-      const goEdit = await ui.confirm({
-        title: 'Add customer care',
-        message:
-          'Save the manufacturer phone number or pick a known brand to use 1-tap helpline.',
-        confirmLabel: 'Edit asset',
-        cancelLabel: 'Later',
+    if (asset.insurancePolicyNumber || asset.insuranceExpiry) {
+      const insDays = daysUntil(asset.insuranceExpiry);
+      docs.push({
+        id: 'ins-doc',
+        type: 'Insurance Policy',
+        name: asset.insurerName || 'Vehicle Insurance',
+        identifier: asset.insurancePolicyNumber || asset.registration,
+        dateText: asset.insuranceExpiry ? `Valid until ${formatDateIN(asset.insuranceExpiry)}` : '',
+        verified: true,
+        daysLeft: insDays,
       });
-      if (goEdit) {
-        navigation?.navigate?.('AddAsset', { assetId: asset.assetId || asset.id });
-      }
-      return;
     }
+
+    if (asset.pucExpiry) {
+      const pucDays = daysUntil(asset.pucExpiry);
+      docs.push({
+        id: 'puc-doc',
+        type: 'PUC Certificate',
+        name: 'Pollution Under Control',
+        identifier: asset.registration,
+        dateText: `Valid until ${formatDateIN(asset.pucExpiry)}`,
+        verified: true,
+        daysLeft: pucDays,
+      });
+    }
+
+    if (asset.lastServiceDate || asset.odometerKm || asset.serviceHistory?.length) {
+      docs.push({
+        id: 'svc-doc',
+        type: 'Service Invoice',
+        name: asset.workshopName || 'Authorized Service',
+        identifier: asset.odometerKm ? `${asset.odometerKm.toLocaleString()} KM` : '',
+        dateText: asset.lastServiceDate ? formatDateIN(asset.lastServiceDate) : 'Latest service recorded',
+        verified: true,
+      });
+    }
+
+    if (asset.warrantyExpiry) {
+      const warDays = daysUntil(asset.warrantyExpiry);
+      docs.push({
+        id: 'war-doc',
+        type: 'Warranty Card',
+        name: asset.brand || asset.manufacturer || asset.assetName,
+        identifier: asset.serialNumber || asset.imei,
+        dateText: `Valid until ${formatDateIN(asset.warrantyExpiry)}`,
+        verified: true,
+        daysLeft: warDays,
+      });
+    }
+
+    return docs;
+  }, [asset]);
+
+  // Timeline Events
+  const timelineEvents = useMemo(() => {
+    const events = [];
+
+    if (purchaseDate) {
+      events.push({
+        id: 'ev-purch',
+        date: formatDateIN(purchaseDate),
+        title: 'Asset Added & Protected',
+        subtitle: purchasePrice > 0 ? `Registered with value ₹${purchasePrice.toLocaleString()}` : 'Initial record created',
+      });
+    }
+
+    if (asset.lastServiceDate) {
+      events.push({
+        id: 'ev-svc',
+        date: formatDateIN(asset.lastServiceDate),
+        title: 'Service Maintenance Recorded',
+        subtitle: asset.odometerKm ? `Odometer: ${asset.odometerKm.toLocaleString()} KM` : 'Service completed',
+      });
+    }
+
+    if (asset.insuranceExpiry) {
+      events.push({
+        id: 'ev-ins',
+        date: formatDateIN(asset.insuranceExpiry),
+        title: 'Insurance Expiry Target',
+        subtitle: asset.insurerName || 'Coverage policy',
+      });
+    }
+
+    if (!events.length) {
+      events.push({
+        id: 'ev-default',
+        date: formatDateIN(new Date().toISOString()),
+        title: 'Asset Active in Vault',
+        subtitle: 'All document records synced securely',
+      });
+    }
+
+    return events;
+  }, [asset, purchaseDate, purchasePrice]);
+
+  const onShare = async () => {
+    Haptics.tap();
     try {
-      await Linking.openURL(`tel:${support.phone}`);
-    } catch (error) {
-      ui.error('Customer care', error?.message || 'Could not open dialer.');
+      await Share.share({
+        message: `Asset Doctor Passport: ${asset.assetName} (${asset.registration || asset.serialNumber || 'Protected'})\nHealth Score: ${health}/100\nManaged securely via Asset Doctor.`,
+        title: `${asset.assetName} Passport`,
+      });
+    } catch (e) {
+      // Ignored
     }
   };
 
   const onDelete = async () => {
-    Haptics.tap();
-    const confirmed = await ui.confirm({
-      title: 'Delete Asset',
-      message: `Remove “${asset.assetName}” from your vault? This hides it from Home and reminders.`,
+    const ok = await ui.confirm({
+      title: 'Delete Asset?',
+      message: `Are you sure you want to remove ${asset.assetName} from your vault?`,
       confirmLabel: 'Delete',
-      cancelLabel: 'Cancel',
       destructive: true,
     });
-    if (!confirmed) return;
+    if (!ok) return;
 
     setDeleting(true);
-    const result = await removeAsset(asset.assetId || asset.id);
-    setDeleting(false);
-    if (!result?.success) {
-      ui.error('Delete failed', result?.error || 'Could not delete asset');
-      return;
+    try {
+      const res = await removeAsset(asset.assetId || asset.id, asset.billStoragePath);
+      if (res?.success) {
+        navigation.goBack();
+      } else {
+        ui.error('Delete failed', res?.error || 'Please try again.');
+      }
+    } finally {
+      setDeleting(false);
     }
-    Haptics.success();
-    if (navigation.canGoBack()) navigation.goBack();
-    else navigation.navigate('MainTabs', { screen: 'Home' });
   };
 
-  const navigateMaintenance = () =>
-    navigation?.navigate?.('Maintenance', { assetId: asset.assetId || asset.id });
-
-  const navigateDocuments = () =>
-    navigation?.navigate?.('DocumentsVault', { assetId: asset.assetId || asset.id });
-
   return (
-    <ScrollView style={styles.root} contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}>
-      {/* 1. ASSET HEADER — always visible */}
-      <Text style={styles.title}>Asset Passport</Text>
-      {asset.isDemo ? (
-        <Text style={styles.demoNote}>Demo preview — sign in to save your own assets & docs</Text>
-      ) : null}
-
-      <View style={styles.badgeRow}>
-        <WarrantyBadge warrantyExpiry={asset.warrantyExpiry} />
-      </View>
-
-      <AssetPassportCard asset={asset} />
-
-      {fromQr ? (
-        <View style={styles.qrActions}>
-          {[
-            { label: 'Add Service', onPress: navigateMaintenance },
-            {
-              label: 'Add Expense',
-              onPress: () =>
-                navigation.navigate('Maintenance', {
-                  assetId: asset.assetId || asset.id,
-                  tab: 'add',
-                }),
-            },
-            { label: 'Documents', onPress: navigateDocuments },
-            { label: 'History', onPress: navigateMaintenance },
-          ].map((a) => (
-            <Pressable
-              key={a.label}
-              style={styles.qrChip}
-              onPress={() => {
-                Haptics.tap();
-                a.onPress();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={a.label}
-            >
-              <Text style={styles.qrChipText}>{a.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-
-      {/* 2. HEALTH — always prominent */}
-      <View style={styles.panel}>
-        <HealthScoreExplain
-          score={health.score}
-          label={health.band || health.grade}
-          factors={healthFactors}
-          footnote={
-            (health.why || health.tips || []).length
-              ? (health.why || health.tips).slice(0, 2).join(' · ')
-              : undefined
-          }
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      {/* Top Header */}
+      <View style={[styles.headerWrap, { paddingTop: Math.max(insets.top, 8) }]}>
+        <IconButton
+          icon={<PremiumIcon name="arrow-left" size={18} color={colors.text} />}
+          label="Back"
+          onPress={() => navigation.goBack()}
+          variant="surface"
+          size={44}
+        />
+        <Text style={[TYPE.h2, { color: colors.text, flex: 1, textAlign: 'center', marginHorizontal: 8 }]} numberOfLines={1}>
+          Asset Passport
+        </Text>
+        <IconButton
+          icon={<PremiumIcon name="share" size={18} color={colors.text} />}
+          label="Share"
+          onPress={onShare}
+          variant="surface"
+          size={44}
         />
       </View>
 
-      {maintenanceAlert?.shouldAlert ? (
-        <View style={[styles.panel, { borderColor: '#F59E0B', borderWidth: 1 }]}>
-          <Text style={styles.panelTitle}>Upgrade review</Text>
-          <Text style={styles.demoNote}>{maintenanceAlert.message}</Text>
-        </View>
-      ) : null}
-
-      {/* 3. PRIMARY ACTION */}
-      {nextAction ? (
-        <SmartActionCard
-          title={nextAction.title}
-          why={nextAction.why}
-          metric={nextAction.metric}
-          priority={nextAction.priority}
-          ctaLabel={nextAction.ctaLabel}
-          onPress={() => {
-            Haptics.tap();
-            if (/service|filter|maintenance/i.test(nextAction.title)) {
-              navigateMaintenance();
-            } else if (/document|review/i.test(nextAction.title)) {
-              navigateDocuments();
-            }
-          }}
-          style={{ marginBottom: 12 }}
-        />
-      ) : null}
-
-      {/* 4. IMPORTANT INFORMATION — default expanded */}
-      <CollapsibleSection
-        title="Important information"
-        subtitle={importantSubtitle}
-        defaultOpen
-        badge={health.score != null ? `${health.score}%` : undefined}
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
+        showsVerticalScrollIndicator={false}
       >
-        {hasCoverage ? (
-          <View style={styles.innerBlock}>
-            <Text style={styles.panelTitle}>Coverage progress</Text>
-            {asset.warrantyExpiry ? (
-              <WarrantyProgressBar
-                label="Warranty"
-                startDate={asset.purchaseDate || asset.invoiceDate}
-                endDate={asset.warrantyExpiry}
+        {/* ASSET PASSPORT HERO */}
+        <View
+          style={[
+            styles.passportCard,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+            elevation(2, colors.shadow),
+          ]}
+        >
+          <View style={styles.passportTopRow}>
+            <View style={[styles.passportIconBox, { backgroundColor: colors.accentLight }]}>
+              <CategoryIcon
+                category={asset.categoryId || asset.icon || 'car'}
+                size={28}
+                color={colors.primary}
               />
+            </View>
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={[TYPE.h1, { color: colors.text }]} numberOfLines={1}>
+                {asset.assetName}
+              </Text>
+              <Text style={[TYPE.bodySmall, { color: colors.textMuted, marginTop: 2 }]}>
+                {asset.registration ? `${asset.registration} · ` : ''}
+                {asset.categoryLabel || asset.category || 'Asset'}
+              </Text>
+            </View>
+            <HealthScore score={health} />
+          </View>
+
+          {/* Quick Identity Tags */}
+          <View style={styles.identityTagRow}>
+            {asset.registration ? (
+              <View style={[styles.idTag, { backgroundColor: colors.surfaceMuted, borderColor: colors.border }]}>
+                <Text style={[TYPE.caption, { color: colors.text, fontWeight: '700' }]}>
+                  REG: {asset.registration}
+                </Text>
+              </View>
             ) : null}
-            {caps.supportsInsurance && asset.insuranceExpiry ? (
-              <WarrantyProgressBar
-                label="Insurance"
-                startDate={asset.insuranceStart || asset.purchaseDate}
-                endDate={asset.insuranceExpiry}
-              />
+            {asset.serialNumber ? (
+              <View style={[styles.idTag, { backgroundColor: colors.surfaceMuted, borderColor: colors.border }]}>
+                <Text style={[TYPE.caption, { color: colors.text, fontWeight: '700' }]}>
+                  SN: {asset.serialNumber}
+                </Text>
+              </View>
             ) : null}
-            {caps.supportsPUC && asset.pucExpiry ? (
-              <WarrantyProgressBar
-                label="PUC"
-                startDate={asset.purchaseDate}
-                endDate={asset.pucExpiry}
-                totalDays={180}
-              />
-            ) : null}
-            {asset.nextServiceDue ? (
-              <WarrantyProgressBar
-                label={isAc ? 'Filter / service' : 'Next service'}
-                startDate={asset.lastServiceDate || asset.purchaseDate}
-                endDate={asset.nextServiceDue}
-              />
+            {asset.imei ? (
+              <View style={[styles.idTag, { backgroundColor: colors.surfaceMuted, borderColor: colors.border }]}>
+                <Text style={[TYPE.caption, { color: colors.text, fontWeight: '700' }]}>
+                  IMEI: {asset.imei}
+                </Text>
+              </View>
             ) : null}
           </View>
+        </View>
+
+        {/* OVERVIEW SECTION */}
+        <SectionHeader title="Overview" />
+        <View style={styles.metricGrid}>
+          <MetricCard
+            title="Purchase"
+            value={purchasePrice > 0 ? formatINR(purchasePrice) : '—'}
+            subtitle={purchaseDate ? formatDateIN(purchaseDate) : 'Not recorded'}
+          />
+          <MetricCard
+            title="Current Value"
+            value={currentValue ? formatINR(currentValue) : '—'}
+            subtitle="Estimated"
+          />
+          <MetricCard
+            title="Ownership"
+            value={ownershipYears}
+            subtitle="Active"
+          />
+        </View>
+
+        {/* DOCUMENTS SECTION */}
+        <SectionHeader
+          title="Documents"
+          subtitle={`${linkedDocs.length} ${linkedDocs.length === 1 ? 'document' : 'documents'} linked`}
+          style={{ marginTop: SPACING.md }}
+        />
+        {linkedDocs.length > 0 ? (
+          linkedDocs.map((doc) => (
+            <DocumentRow
+              key={doc.id}
+              documentType={doc.type}
+              assetName={doc.name}
+              identifier={doc.identifier}
+              dateText={doc.dateText}
+              verified={doc.verified}
+            />
+          ))
         ) : (
-          <Text style={styles.tip}>
-            Add warranty{caps.supportsInsurance ? ' / insurance' : ''}
-            {caps.supportsPUC ? ' / PUC' : ''} dates to track coverage.
-          </Text>
+          <View style={[styles.noDocsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[TYPE.caption, { color: colors.textMuted }]}>
+              No documents linked to this asset yet. Scan a bill to link automatically.
+            </Text>
+          </View>
         )}
 
-        {caps.supportsBatteryHealth && gadgetMetrics ? (
-          <View style={styles.innerBlock}>
-            <TrackerRow
-              label="Battery health (est.)"
-              value={`${gadgetMetrics.batteryHealthPercent}%`}
-              styles={styles}
+        {/* TIMELINE SECTION */}
+        <SectionHeader title="Timeline" style={{ marginTop: SPACING.md }} />
+        <View style={[styles.timelineCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          {timelineEvents.map((ev, idx) => (
+            <TimelineItem
+              key={ev.id}
+              date={ev.date}
+              title={ev.title}
+              subtitle={ev.subtitle}
+              isLast={idx === timelineEvents.length - 1}
             />
-            <TrackerRow
-              label="Live resale (est.)"
-              value={`₹${gadgetMetrics.liveResaleValue.toLocaleString('en-IN')}`}
-              styles={styles}
-            />
-          </View>
-        ) : null}
-
-        {caps.supportsOdometer && asset.odometerKm != null ? (
-          <View style={styles.innerBlock}>
-            <TrackerRow
-              label="Odometer"
-              value={`${asset.odometerKm} km`}
-              styles={styles}
-            />
-            {asset.nextServiceOdometerKm != null ? (
-              <TrackerRow
-                label="Next service at"
-                value={`${asset.nextServiceOdometerKm} km`}
-                styles={styles}
-              />
-            ) : null}
-          </View>
-        ) : null}
-
-        <View style={styles.innerBlock}>
-          <Text style={styles.panelTitle}>Valuation</Text>
-          <ValuationBlock asset={asset} />
+          ))}
         </View>
-      </CollapsibleSection>
 
-      {/* 5. MAINTENANCE — collapsed by default */}
-      {hasMaintenanceSection ? (
-        <CollapsibleSection
-          title="Maintenance"
-          subtitle={
-            isVehicle
-              ? 'Odometer, service, insurance & compliance'
-              : isAc
-                ? 'Filter cleaning & service schedule'
-                : 'Service dates & upkeep'
-          }
-          defaultOpen={false}
-          badge={
-            asset.nextServiceDue
-              ? formatDateIN(asset.nextServiceDue)
-              : caps.supportsOdometer && asset.odometerKm != null
-                ? `${asset.odometerKm} km`
-                : undefined
-          }
-        >
-          {isVehicle && vehicleSpecs?.rawRegistration ? (
-            <IndiaNumberPlate registration={vehicleSpecs.rawRegistration} style={{ marginBottom: 12 }} />
-          ) : null}
-          {isVehicle ? (
-            <VehicleStatusBadges
-              pucExpiry={asset.pucExpiry}
-              insuranceExpiry={asset.insuranceExpiry}
-              warrantyExpiry={asset.warrantyExpiry}
-              style={{ marginBottom: 10 }}
-            />
-          ) : null}
-          {caps.supportsPUC && asset.pucExpiry ? (
-            <TrackerRow
-              label="PUC expiry"
-              value={`${formatDateIN(asset.pucExpiry)} · ${pucTone.label}`}
-              color={pucTone.color}
-              styles={styles}
-            />
-          ) : null}
-          {caps.supportsInsurance && asset.insuranceExpiry ? (
-            <TrackerRow
-              label="Insurance expiry"
-              value={`${formatDateIN(asset.insuranceExpiry)} · ${insuranceTone.label}`}
-              color={insuranceTone.color}
-              styles={styles}
-            />
-          ) : null}
-          {caps.supportsServiceHistory || asset.nextServiceDue ? (
-            <TrackerRow
-              label={isAc ? 'Filter / service date' : 'Next service date'}
-              value={
-                asset.nextServiceDue
-                  ? `${formatDateIN(asset.nextServiceDue)} · ${serviceTone.label}`
-                  : '—'
-              }
-              color={asset.nextServiceDue ? serviceTone.color : undefined}
-              styles={styles}
-            />
-          ) : null}
-          {caps.supportsOdometer ? (
-            <>
-              <TrackerRow
-                label="Odometer"
-                value={asset.odometerKm != null ? `${asset.odometerKm} km` : '—'}
-                styles={styles}
-              />
-              <TrackerRow
-                label="Next service at"
-                value={
-                  asset.nextServiceOdometerKm != null
-                    ? `${asset.nextServiceOdometerKm} km`
-                    : '—'
-                }
-                styles={styles}
-              />
-              {caps.supportsFuelTracking && asset.fuelNorm ? (
-                <TrackerRow label="Fuel / norms" value={asset.fuelNorm} styles={styles} />
-              ) : null}
-              <SpecAccordion
-                title="Vehicle specs"
-                defaultOpen={false}
-                rows={[
-                  { label: 'RTO', value: vehicleSpecs?.rto },
-                  { label: 'Fuel norms', value: vehicleSpecs?.fuelNorm },
-                  { label: 'Chassis / frame', value: vehicleSpecs?.chassis },
-                  { label: 'Engine no.', value: asset.engineNumber || '—' },
-                  {
-                    label: 'Invoice no.',
-                    value: asset.invoiceMeta?.invoiceNumber || '—',
-                  },
-                  {
-                    label: 'Seller GSTIN',
-                    value: asset.invoiceMeta?.shopGstin || '—',
-                  },
-                ]}
-              />
-            </>
-          ) : null}
-          <Pressable style={styles.sectionCta} onPress={navigateMaintenance}>
-            <Text style={styles.sectionCtaText}>Open service & maintenance →</Text>
-          </Pressable>
-        </CollapsibleSection>
-      ) : null}
-
-      {/* DOCUMENTS */}
-      {layout.fieldsBySection.documents?.length ? (
-        <CollapsibleSection
-          title="Documents"
-          subtitle={vaultCopy.subtitle}
-          defaultOpen={false}
-        >
-          <Text style={styles.tip}>{vaultCopy.empty}</Text>
-          <Pressable style={styles.folderCta} onPress={navigateDocuments}>
-            <Text style={styles.folderCtaText}>Open categorised Documents Vault →</Text>
-          </Pressable>
-        </CollapsibleSection>
-      ) : null}
-
-      {/* WARRANTY */}
-      {hasWarrantySection ? (
-        <CollapsibleSection
-          title="Warranty"
-          subtitle={
-            asset.warrantyExpiry
-              ? `${formatDateIN(asset.warrantyExpiry)} · ${warrantyTone.label}`
-              : 'Track manufacturer coverage'
-          }
-          defaultOpen={false}
-          badge={asset.warrantyMonths ? `${asset.warrantyMonths} mo` : undefined}
-        >
-          {asset.warrantyExpiry ? (
-            <TrackerRow
-              label="Warranty expiry"
-              value={`${formatDateIN(asset.warrantyExpiry)} · ${warrantyTone.label}`}
-              color={warrantyTone.color}
-              styles={styles}
-            />
-          ) : null}
-          {asset.brandName ? (
-            <TrackerRow label="Brand" value={asset.brandName} styles={styles} />
-          ) : null}
-          {asset.purchaseDate ? (
-            <TrackerRow
-              label="Purchase date"
-              value={formatDateIN(asset.purchaseDate)}
-              styles={styles}
-            />
-          ) : null}
-          <Pressable
-            style={styles.claimAiInline}
-            onPress={() => {
-              Haptics.tap();
-              setClaimOpen(true);
-            }}
-          >
-            <Text style={styles.btnText}>How to claim warranty / repair?</Text>
-          </Pressable>
-        </CollapsibleSection>
-      ) : null}
-
-      {/* HISTORY */}
-      {hasHistorySection ? (
-        <CollapsibleSection
-          title="History"
-          subtitle="Service & repair records"
-          defaultOpen={false}
-        >
-          {asset.lastServiceDate ? (
-            <TrackerRow
-              label="Last service"
-              value={formatDateIN(asset.lastServiceDate)}
-              styles={styles}
-            />
-          ) : (
-            <Text style={styles.tip}>No service history logged yet.</Text>
-          )}
-          <Pressable style={styles.sectionCta} onPress={navigateMaintenance}>
-            <Text style={styles.sectionCtaText}>View full service history →</Text>
-          </Pressable>
-        </CollapsibleSection>
-      ) : null}
-
-      {/* ADDITIONAL DETAILS — actions & extras */}
-      <CollapsibleSection
-        title="Additional details"
-        subtitle="Support, sharing & asset management"
-        defaultOpen={false}
-      >
-        <Pressable style={styles.supportCard} onPress={onCallSupport}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.supportTitle}>
-              {support ? 'Call support / toll-free helpline' : 'Claim warranty / support'}
-            </Text>
-            <Text style={styles.tip}>
-              {support
-                ? `${support.label} · ${support.phone}${
-                    support.source === 'directory' ? ' · brand directory' : ''
-                  }`
-                : 'Add manufacturer customer care for 1-tap calling'}
-            </Text>
-          </View>
-          <Text style={styles.supportCta}>Call</Text>
-        </Pressable>
-
-        {asset.serialNumber ? (
-          <TrackerRow label="Serial / IMEI" value={asset.serialNumber} styles={styles} />
-        ) : null}
-        {asset.storeName ? (
-          <TrackerRow label="Store / dealer" value={asset.storeName} styles={styles} />
-        ) : null}
-
-        <Pressable
-          style={styles.analyticsBtn}
-          onPress={() => {
-            Haptics.tap();
-            navigation.navigate('AssetAnalytics', { assetId: asset.assetId || asset.id });
-          }}
-        >
-          <Text style={styles.analyticsBtnText}>View asset analytics</Text>
-        </Pressable>
-
-        <Pressable
-          style={styles.edit}
-          onPress={() => {
-            Haptics.tap();
-            navigation?.navigate?.('AddAsset', { assetId: asset.assetId || asset.id });
-          }}
-        >
-          <Text style={styles.btnText}>Edit asset</Text>
-        </Pressable>
-
-        <Pressable style={styles.whatsapp} onPress={onSharePassportPdf} disabled={sharingPassport}>
-          {sharingPassport ? (
-            <ActivityIndicator color={COLORS.onPrimary} />
-          ) : (
-            <Text style={styles.btnTextDark}>Share Asset Passport PDF · WhatsApp</Text>
-          )}
-        </Pressable>
-
-        {ShareService.isEmergencyShareEligible(asset) ? (
-          <Pressable style={styles.secondary} onPress={onEmergencyShare} disabled={sharing}>
-            {sharing ? (
-              <ActivityIndicator color={COLORS.text} />
-            ) : (
-              <Text style={styles.btnText}>Emergency share · offline PDF</Text>
-            )}
-          </Pressable>
-        ) : null}
-
-        <Pressable style={styles.secondary} onPress={navigateDocuments}>
-          <Text style={styles.btnText}>Open documents vault</Text>
-        </Pressable>
-
-        {!asset.isDemo ? (
-          <Pressable style={styles.deleteBtn} onPress={onDelete} disabled={deleting}>
-            {deleting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.deleteText}>Delete asset</Text>
-            )}
-          </Pressable>
-        ) : null}
-      </CollapsibleSection>
-
-      <ClaimAssistantSheet visible={claimOpen} asset={asset} onClose={() => setClaimOpen(false)} />
-    </ScrollView>
+        {/* ACTIONS */}
+        <View style={styles.actionButtonsWrap}>
+          <PrimaryButton
+            title="Scan Document for this Asset"
+            onPress={() => navigation.getParent()?.navigate?.('ScanBill')}
+            size="md"
+            style={{ marginBottom: SPACING.xs }}
+          />
+          <SecondaryButton
+            title={deleting ? 'Deleting...' : 'Delete Asset'}
+            onPress={onDelete}
+            disabled={deleting}
+            size="md"
+            textStyle={{ color: colors.danger }}
+          />
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.bg },
-  content: { padding: 20 },
-  title: { color: COLORS.text, fontSize: 22, fontWeight: '800', marginBottom: 10 },
-  badgeRow: { marginBottom: 10 },
-  demoNote: {
-    color: COLORS.amber,
-    fontSize: 12,
-    fontWeight: '700',
-    marginBottom: 10,
+  root: {
+    flex: 1,
   },
-  missing: { color: COLORS.muted, textAlign: 'center', marginTop: 40 },
-  panel: {
-    marginTop: 14,
-    padding: 14,
-    borderRadius: 16,
+  headerWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.xs,
+  },
+  scrollContent: {
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.xs,
+  },
+  passportCard: {
+    padding: SPACING.md,
+    borderRadius: RADIUS.large,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    marginBottom: SPACING.sm,
   },
-  innerBlock: { marginTop: 10 },
-  qrActions: {
+  passportTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  passportIconBox: {
+    width: 52,
+    height: 52,
+    borderRadius: RADIUS.medium,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  identityTagRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 12,
+    marginTop: SPACING.sm,
   },
-  qrChip: {
+  idTag: {
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: 4,
+    borderRadius: RADIUS.small,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.bgDeep,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    marginRight: 6,
+    marginBottom: 4,
   },
-  qrChipText: { color: COLORS.emerald, fontWeight: '800', fontSize: 12 },
-  panelTitle: { color: COLORS.muted, fontSize: 11, fontWeight: '800', marginBottom: 8 },
-  tip: { color: COLORS.muted, fontSize: 12, marginTop: 6 },
-  folderCta: {
-    marginTop: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: 'rgba(79,70,229,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(79,70,229,0.35)',
-  },
-  folderCtaText: { color: '#A5B4FC', fontWeight: '800', fontSize: 12 },
-  sectionCta: {
-    marginTop: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: 'rgba(15,118,110,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(15,118,110,0.35)',
-  },
-  sectionCtaText: { color: '#5EEAD4', fontWeight: '800', fontSize: 12 },
-  trackerRow: {
+  metricGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 10,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
+    marginHorizontal: -4,
   },
-  trackerLabel: { color: COLORS.muted, fontSize: 12, fontWeight: '600', flex: 1 },
-  trackerValue: { color: COLORS.text, fontSize: 12, fontWeight: '800', flex: 1.2, textAlign: 'right' },
-  supportCard: {
-    marginTop: 4,
-    padding: 16,
-    borderRadius: 16,
+  noDocsCard: {
+    padding: SPACING.md,
+    borderRadius: RADIUS.medium,
     borderWidth: 1,
-    borderColor: 'rgba(0,242,254,0.4)',
-    backgroundColor: 'rgba(0,242,254,0.09)',
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'center',
   },
-  supportTitle: { color: COLORS.text, fontWeight: '900', fontSize: 15 },
-  supportCta: { color: COLORS.emerald, fontWeight: '900', fontSize: 13 },
-  claimAiInline: {
-    marginTop: 12,
-    backgroundColor: '#1E3A5F',
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  edit: {
-    marginTop: 10,
-    backgroundColor: COLORS.indigo,
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  whatsapp: {
-    marginTop: 10,
-    backgroundColor: COLORS.emerald,
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  secondary: {
-    marginTop: 10,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
+  timelineCard: {
+    padding: SPACING.md,
+    borderRadius: RADIUS.medium,
     borderWidth: 1,
-    borderColor: COLORS.border,
   },
-  deleteBtn: {
-    marginTop: 18,
-    backgroundColor: '#FF3B30',
-    borderRadius: 14,
-    paddingVertical: 15,
-    alignItems: 'center',
+  actionButtonsWrap: {
+    marginTop: SPACING.lg,
   },
-  deleteText: { color: '#fff', fontWeight: '900', fontSize: 15 },
-  btnText: { color: COLORS.text, fontWeight: '800' },
-  btnTextDark: { color: COLORS.onPrimary, fontWeight: '900' },
-  analyticsBtn: {
-    marginTop: 10,
-    backgroundColor: '#0F766E',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  analyticsBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
 });
-
-export default AssetPassportScreen;

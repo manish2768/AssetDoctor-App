@@ -89,43 +89,13 @@ app.post('/api/scan-receipt', async (req, res) => {
     }
 
     if (!aiClient) {
-      // Fallback multi-item parsing when GEMINI_API_KEY is not set
-      console.log('Gemini API key missing, using smart mock multi-item OCR response.');
-      return res.json({
-        success: true,
-        source: 'fallback_ocr',
-        data: {
-          vendor: 'Flipkart India Pvt Ltd',
-          purchaseDate: '2026-02-14',
-          totalAmount: 27298,
-          gstin: '29AABCU9603R1ZM',
-          items: [
-            {
-              itemName: 'Nothing Phone (3a) Lite (128GB, White)',
-              brand: 'Nothing',
-              price: 23999,
-              warrantyMonths: 12,
-              category: 'Gadgets',
-              serialNumber: 'NT-PH3A-884102',
-              notes: 'Extracted from Flipkart Multi-Item Tax Invoice via AI OCR',
-              selected: true,
-            },
-            {
-              itemName: 'CMF Buds 2 Plus ANC Wireless Earbuds',
-              brand: 'CMF by Nothing',
-              price: 3299,
-              warrantyMonths: 12,
-              category: 'Gadgets',
-              serialNumber: 'CMF-BD2P-99120',
-              notes: 'Extracted from Flipkart Multi-Item Tax Invoice via AI OCR',
-              selected: true,
-            },
-          ],
-        },
+      return res.status(503).json({
+        success: false,
+        error: 'Gemini OCR service is unconfigured on server (GEMINI_API_KEY missing).',
       });
     }
 
-    // Call Gemini 3.6 Flash for OCR parsing
+    // Call Gemini for OCR parsing
     const parts: any[] = [];
 
     if (base64Image) {
@@ -148,25 +118,29 @@ app.post('/api/scan-receipt', async (req, res) => {
       });
     }
 
-    const promptText = `You are a high-precision OCR, Invoice parsing and AI Scam Guard assistant for AssetDoctor ServiVault.
-Extract ALL asset/product items and tax details listed on this receipt/invoice.
-Also search for the merchant's GSTIN (Goods & Services Tax Number, 15 characters e.g. 29AABCU9603R1ZM) if present.
+    const promptText = `You are a strict, zero-hallucination document intelligence engine for Asset Doctor.
+CRITICAL ZERO-HALLUCINATION RULES:
+1. ONLY extract fields and values physically printed on the document.
+2. DO NOT invent, assume, or default any field. If not printed, return null or empty string.
+3. NEVER assume warranty is 12 months unless explicitly printed.
+4. NEVER invent serial numbers, chassis numbers, odometer readings, or registration numbers.
+5. NEVER invent dates. If purchase date is not visible, return null.
 
-Return ONLY a structured JSON matching this schema:
+Return ONLY structured JSON matching this schema:
 {
-  "vendor": string (store or merchant name like Flipkart India, Amazon, Croma),
-  "purchaseDate": string (YYYY-MM-DD),
-  "totalAmount": number (total sum in INR),
-  "gstin": string (15 character GSTIN if found, else empty),
+  "vendor": string | null,
+  "purchaseDate": string | null,
+  "totalAmount": number | null,
+  "gstin": string | null,
   "items": [
     {
-      "itemName": string (clean product name),
-      "brand": string (brand name),
-      "price": number (in INR Rupees),
-      "warrantyMonths": number (default 12 if unknown),
-      "category": string ("Electronics" | "Vehicles" | "Appliances" | "Gadgets" | "Home" | "Other"),
-      "serialNumber": string,
-      "notes": string
+      "itemName": string,
+      "brand": string | null,
+      "price": number | null,
+      "warrantyMonths": number | null,
+      "category": string,
+      "serialNumber": string | null,
+      "notes": string | null
     }
   ]
 }
@@ -175,36 +149,10 @@ ${textContent ? `Invoice text content:\n${textContent}` : ''}`;
     parts.push({ text: promptText });
 
     const response = await aiClient.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-2.5-flash',
       contents: { parts },
       config: {
         responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            vendor: { type: Type.STRING },
-            purchaseDate: { type: Type.STRING },
-            totalAmount: { type: Type.NUMBER },
-            gstin: { type: Type.STRING },
-            items: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  itemName: { type: Type.STRING },
-                  brand: { type: Type.STRING },
-                  price: { type: Type.NUMBER },
-                  warrantyMonths: { type: Type.NUMBER },
-                  category: { type: Type.STRING },
-                  serialNumber: { type: Type.STRING },
-                  notes: { type: Type.STRING },
-                },
-                required: ['itemName', 'price', 'category'],
-              },
-            },
-          },
-          required: ['items'],
-        },
       },
     });
 
@@ -212,15 +160,15 @@ ${textContent ? `Invoice text content:\n${textContent}` : ''}`;
     const jsonResult = JSON.parse(parsedText);
 
     const extractedItems = (jsonResult.items || []).map((item: any, idx: number) => ({
-      itemName: item.itemName || `Scanned Item ${idx + 1}`,
-      brand: item.brand || jsonResult.vendor || 'Generic',
-      price: Number(item.price) || 0,
-      warrantyMonths: Number(item.warrantyMonths) || 12,
+      itemName: item.itemName || `Item ${idx + 1}`,
+      brand: item.brand || null,
+      price: typeof item.price === 'number' && Number.isFinite(item.price) ? item.price : null,
+      warrantyMonths: typeof item.warrantyMonths === 'number' && Number.isFinite(item.warrantyMonths) ? item.warrantyMonths : null,
       category: ['Electronics', 'Vehicles', 'Appliances', 'Gadgets', 'Home', 'Other'].includes(item.category)
         ? item.category
-        : 'Electronics',
-      serialNumber: item.serialNumber || `SN-${Math.floor(100000 + Math.random() * 900000)}`,
-      notes: item.notes || 'Verified by AssetDoctor AI OCR Scan',
+        : 'Other',
+      serialNumber: item.serialNumber || null,
+      notes: item.notes || null,
       selected: true,
     }));
 
@@ -230,22 +178,11 @@ ${textContent ? `Invoice text content:\n${textContent}` : ''}`;
       success: true,
       source: 'gemini_ocr',
       data: {
-        vendor: jsonResult.vendor || 'Authorized Merchant',
-        purchaseDate: jsonResult.purchaseDate || new Date().toISOString().split('T')[0],
-        totalAmount: Number(jsonResult.totalAmount) || calculatedTotal,
-        gstin: jsonResult.gstin || '',
-        items: extractedItems.length > 0 ? extractedItems : [
-          {
-            itemName: 'Scanned Invoice Asset',
-            brand: 'Generic',
-            price: 15000,
-            warrantyMonths: 12,
-            category: 'Electronics',
-            serialNumber: `SN-${Math.floor(100000 + Math.random() * 900000)}`,
-            notes: 'Verified by AssetDoctor AI OCR Scan',
-            selected: true,
-          }
-        ],
+        vendor: jsonResult.vendor || null,
+        purchaseDate: jsonResult.purchaseDate || null,
+        totalAmount: typeof jsonResult.totalAmount === 'number' ? jsonResult.totalAmount : (calculatedTotal > 0 ? calculatedTotal : null),
+        gstin: jsonResult.gstin || null,
+        items: extractedItems,
       },
     });
   } catch (err: any) {
@@ -287,20 +224,177 @@ app.get('/api/webhook/whatsapp', (req, res) => {
 app.post('/api/webhook/whatsapp', async (req, res) => {
   try {
     const payload = req.body;
-    const signature = req.headers['x-hub-signature-256'] as string;
 
     // Validate payload existence
     if (!payload || !payload.entry) {
       return res.status(200).json({ status: 'ignored', reason: 'empty_payload' });
     }
 
-    console.log('[Meta Webhook Event Received]', JSON.stringify(payload, null, 2));
+    const deliveryStatus = payload?.entry?.[0]?.changes?.[0]?.value?.statuses?.[0]?.status;
+    console.log('[WHATSAPP_TRACE] DELIVERY_WEBHOOK', deliveryStatus || 'no_status');
 
-    // Acknowledge receipt to Meta immediately (prevents Meta retry timeout)
-    res.status(200).json({ status: 'EVENT_RECEIVED' });
+    // Update message status in notification engine
+    try {
+      const { handleWebhookStatusUpdate } = await import('./src/services/whatsapp/WhatsAppNotificationService.js');
+      await handleWebhookStatusUpdate(payload);
+    } catch (e: any) {
+      console.warn('[Meta Webhook Status Process Error]', e?.message);
+    }
+
+    return res.status(200).json({ status: 'ok' });
   } catch (err: any) {
-    console.error('[Meta Webhook Error]', err);
-    res.status(200).json({ status: 'error_handled' });
+    console.error('[Meta Webhook Error]', err?.message || err);
+    return res.status(200).json({ status: 'error_handled' });
+  }
+});
+
+// ====================================================
+// Integromat / Make OCR Scenario Webhook Endpoint
+// ====================================================
+app.post('/api/integromat/ocr-scenario', async (req, res) => {
+  try {
+    const { rawText, imageUrl, base64Image, existingAssets, metadata } = req.body || {};
+    const { IntegromatScenarioEngine } = await import('./services/ocr/integromatScenarioEngine.ts');
+    const result = await IntegromatScenarioEngine.executeScenario({
+      rawText,
+      imageUrl,
+      base64Image,
+      existingAssets,
+      metadata,
+    });
+    return res.status(200).json(result);
+  } catch (err: any) {
+    console.error('[Integromat Scenario Error]', err);
+    return res.status(500).json({ success: false, error: err?.message || 'Integromat Scenario Execution Failed' });
+  }
+});
+
+// ====================================================
+// Server-Side WhatsApp Production API Routes
+// ====================================================
+
+// Safe status check
+app.get('/api/whatsapp/status', async (_req, res) => {
+  try {
+    const { getWhatsAppConfigStatus } = await import('./src/services/whatsapp/MetaWhatsAppService.js');
+    return res.json({ success: true, ...getWhatsAppConfigStatus() });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Query approved templates
+app.get('/api/whatsapp/templates', async (_req, res) => {
+  try {
+    const { getWhatsAppTemplates } = await import('./src/services/whatsapp/MetaWhatsAppService.js');
+    const result = await getWhatsAppTemplates();
+    return res.status(result.success ? 200 : 400).json(result);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Trigger Welcome Notification (server-only; never expose Meta tokens to clients)
+app.post('/api/whatsapp/welcome', async (req, res) => {
+  try {
+    const internalSecret = String(process.env.WHATSAPP_INTERNAL_SECRET || '').trim();
+    const provided = String(req.headers['x-internal-secret'] || '').trim();
+    if (!internalSecret || provided !== internalSecret) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+    const { userId, phone, userName } = req.body || {};
+    if (!phone) {
+      return res.status(400).json({ success: false, error: 'Recipient phone number is required.' });
+    }
+    const { sendWelcomeNotification } = await import('./src/services/whatsapp/WhatsAppNotificationService.js');
+    const result = await sendWelcomeNotification({ userId, phone, userName });
+    return res.status(result.success ? 200 : 400).json(result);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Trigger WhatsApp OTP
+app.post('/api/whatsapp/otp/send', async (req, res) => {
+  try {
+    const { userId, phone, otp } = req.body || {};
+    if (!phone) {
+      return res.status(400).json({ success: false, error: 'Recipient phone number is required.' });
+    }
+    const { sendOtpNotification } = await import('./src/services/whatsapp/WhatsAppNotificationService.js');
+    const result = await sendOtpNotification({ userId, phone, otp });
+    return res.status(result.success ? 200 : 400).json(result);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Verify WhatsApp OTP
+app.post('/api/whatsapp/otp/verify', async (req, res) => {
+  try {
+    const { phone, otp } = req.body || {};
+    if (!phone || !otp) {
+      return res.status(400).json({ success: false, error: 'Phone number and OTP code are required.' });
+    }
+    const { verifyWhatsAppOtp } = await import('./src/services/whatsapp/WhatsAppNotificationService.js');
+    const result = await verifyWhatsAppOtp(phone, otp);
+    return res.status(result.success ? 200 : 400).json(result);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Trigger Document Expiry Reminder
+app.post('/api/whatsapp/expiry', async (req, res) => {
+  try {
+    const { userId, phone, customerName, vehicleName, docType, expiryDate, assetId } = req.body || {};
+    if (!phone || !expiryDate) {
+      return res.status(400).json({ success: false, error: 'Phone number and expiryDate are required.' });
+    }
+    const { sendExpiryReminder } = await import('./src/services/whatsapp/WhatsAppNotificationService.js');
+    const result = await sendExpiryReminder({
+      userId,
+      phone,
+      customerName,
+      vehicleName,
+      docType,
+      expiryDate,
+      assetId,
+    });
+    return res.status(result.success ? 200 : 400).json(result);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Trigger Service Reminder (Queue / Template Guard)
+app.post('/api/whatsapp/service', async (req, res) => {
+  try {
+    const { userId, phone, userName, vehicleName, odometer, daysLeft } = req.body || {};
+    const { sendServiceReminder } = await import('./src/services/whatsapp/WhatsAppNotificationService.js');
+    const result = await sendServiceReminder({
+      userId,
+      phone,
+      userName,
+      vehicleName,
+      odometer,
+      daysLeft,
+    });
+    return res.status(200).json(result);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Retrieve Delivery Audit Logs (Masked)
+app.get('/api/whatsapp/logs', async (req, res) => {
+  try {
+    const filterUserId = (req.query.userId as string) || null;
+    const { getNotificationAuditLogs } = await import('./src/services/whatsapp/WhatsAppNotificationService.js');
+    const logs = await getNotificationAuditLogs(filterUserId);
+    return res.json({ success: true, count: logs.length, logs });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 

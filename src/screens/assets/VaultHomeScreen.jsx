@@ -1,214 +1,287 @@
 /**
- * Document Vault — four primary household and vehicle buckets.
+ * Asset Doctor — Master Document Vault Screen
+ * Clean, organized document management with segmented tabs and instant scan action.
  */
 
-import React, { useMemo } from 'react';
-import { ScrollView, Text, Pressable, StyleSheet, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  ScrollView,
+  RefreshControl,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAssets } from '../../context/AssetProvider';
 import { useAuth } from '../../context/AuthProvider';
-import { Screen, GlassCard, GlassButton } from '../../components/ui/Glass';
-import { COLORS, SPACING } from '../../theme/branding';
+import { useThemeColors } from '../../context/ThemeProvider';
 import { Haptics } from '../../services/haptics';
-import { requireAuth, openLogin } from '../../navigation/authGate';
+import { requireAuth } from '../../navigation/authGate';
+import { openScanInvoice } from '../../navigation/navActions';
+import { formatDateIN, daysUntil } from '../../utils/dates';
+import { TAB_BAR_HEIGHT } from '../../components/CustomBottomTabBar';
 import {
-  FOLDER_META,
-  countAssetsByFolder,
-  filterAssetsByFolder,
-} from '../../utils/assetFolders';
-import { ItemDetailCard } from '../../components/ItemDetailCard';
-import { VehicleCard } from '../../components/vehicle/VehicleCard';
-import { VaultSleeveCard } from '../../components/VaultSleeveCard';
-import { ShareService } from '../../services/share/ShareService';
-import { DocumentVaultService } from '../../services/documents/DocumentVaultService';
-import { useTabSafeBottomPadding } from '../../utils/tabSafePadding';
+  AppHeader,
+  PrimaryButton,
+  FilterChip,
+  SearchBar,
+} from '../../components/design-system';
+import { DocumentCard, EmptyState } from '../../design-system';
+import { RADIUS, SPACING, TYPE, elevation } from '../../theme/tokens';
+
+const DOC_TABS = [
+  { id: 'all', label: 'All' },
+  { id: 'vehicles', label: 'Vehicles' },
+  { id: 'appliances', label: 'Appliances' },
+  { id: 'warranty', label: 'Warranty' },
+  { id: 'insurance', label: 'Insurance' },
+  { id: 'service', label: 'Service' },
+  { id: 'purchase', label: 'Purchase' },
+  { id: 'rc', label: 'RC' },
+  { id: 'puc', label: 'PUC' },
+];
+
+function docAccent(kind, colors) {
+  if (kind === 'insurance') return colors.docInsurance || colors.info;
+  if (kind === 'warranty') return colors.docWarranty || colors.primary;
+  if (kind === 'service') return colors.docService || colors.warning;
+  if (kind === 'purchase') return colors.docPurchase || colors.aiIndigo;
+  if (kind === 'rc') return colors.docRc || colors.violet;
+  if (kind === 'puc') return colors.docPuc || colors.aiCyan;
+  return colors.primary;
+}
 
 export function VaultHomeScreen({ navigation }) {
-  const { assets, loading } = useAssets();
-  const { isAuthenticated, user } = useAuth();
-  const counts = useMemo(() => countAssetsByFolder(assets), [assets]);
-  const bottomPad = useTabSafeBottomPadding();
+  const insets = useSafeAreaInsets();
+  const colors = useThemeColors();
+  const { assets, loading, refreshAssets } = useAssets();
+  const { isAuthenticated } = useAuth();
 
-  const openFolder = (folderId) => {
-    Haptics.tap();
-    navigation.navigate('CategoryFolders', { focusFolder: folderId });
+  const [activeTab, setActiveTab] = useState('all');
+  const [query, setQuery] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Extract all documents from all assets
+  const allDocuments = useMemo(() => {
+    const list = [];
+    const assetList = assets || [];
+
+    for (const a of assetList) {
+      const assetId = a.assetId || a.id;
+      const isVehicle = !!a.registration || a.categoryId === 'car' || a.categoryId === 'bike' || a.categoryId === 'scooter';
+
+      // 1. Purchase / Invoice
+      if (a.invoiceNumber || a.purchasePrice || a.invoiceDate || a.billStoragePath) {
+        list.push({
+          id: `${assetId}-invoice`,
+          assetId,
+          type: isVehicle ? 'Vehicle Purchase Invoice' : 'Purchase Invoice',
+          category: isVehicle ? 'vehicles' : 'appliances',
+          docKind: 'purchase',
+          assetName: a.assetName,
+          identifier: a.registration || a.serialNumber || a.model,
+          dateText: a.invoiceDate ? `Issued ${formatDateIN(a.invoiceDate)}` : 'Verified bill',
+          verified: true,
+        });
+      }
+
+      // 2. Insurance Policy
+      if (a.insurancePolicyNumber || a.insuranceExpiry) {
+        const insDays = daysUntil(a.insuranceExpiry);
+        list.push({
+          id: `${assetId}-insurance`,
+          assetId,
+          type: 'Insurance Policy',
+          category: 'insurance',
+          docKind: 'insurance',
+          assetName: a.assetName,
+          identifier: a.insurancePolicyNumber || a.registration,
+          dateText: a.insuranceExpiry ? `Valid until ${formatDateIN(a.insuranceExpiry)}` : 'Active Policy',
+          verified: true,
+          daysLeft: insDays,
+        });
+      }
+
+      // 3. PUC Certificate
+      if (a.pucExpiry) {
+        const pucDays = daysUntil(a.pucExpiry);
+        list.push({
+          id: `${assetId}-puc`,
+          assetId,
+          type: 'PUC Certificate',
+          category: 'vehicles',
+          docKind: 'puc',
+          assetName: a.assetName,
+          identifier: a.registration,
+          dateText: `Valid until ${formatDateIN(a.pucExpiry)}`,
+          verified: true,
+          daysLeft: pucDays,
+        });
+      }
+
+      // 4. Service Invoice
+      if (a.lastServiceDate || a.odometerKm) {
+        list.push({
+          id: `${assetId}-service`,
+          assetId,
+          type: 'Service Invoice',
+          category: 'service',
+          docKind: 'service',
+          assetName: a.assetName,
+          identifier: a.odometerKm ? `${a.odometerKm.toLocaleString()} KM` : a.registration,
+          dateText: a.lastServiceDate ? formatDateIN(a.lastServiceDate) : 'Service maintenance',
+          verified: true,
+        });
+      }
+
+      // 5. Warranty
+      if (a.warrantyExpiry || a.warrantyMonths) {
+        const warDays = daysUntil(a.warrantyExpiry);
+        list.push({
+          id: `${assetId}-warranty`,
+          assetId,
+          type: 'Warranty Card',
+          category: 'warranty',
+          docKind: 'warranty',
+          assetName: a.assetName,
+          identifier: a.serialNumber || a.imei,
+          dateText: a.warrantyExpiry ? `Valid until ${formatDateIN(a.warrantyExpiry)}` : 'Warranty active',
+          verified: true,
+          daysLeft: warDays,
+        });
+      }
+    }
+
+    return list;
+  }, [assets]);
+
+  // Tab & Search Filtering
+  const filteredDocs = useMemo(() => {
+    let list = allDocuments;
+    if (activeTab !== 'all') {
+      list = list.filter((d) => d.category === activeTab || d.docKind === activeTab);
+    }
+    const q = query.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((d) => {
+      const blob = `${d.type} ${d.assetName} ${d.identifier || ''}`.toLowerCase();
+      return blob.includes(q);
+    });
+  }, [allDocuments, activeTab, query]);
+
+  const onScan = () => {
+    Haptics.select();
+    openScanInvoice(navigation);
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    Haptics.select();
+    try {
+      if (refreshAssets) await refreshAssets();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   return (
-    <Screen>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}>
-        <Text style={styles.title}>Document Vault</Text>
-        <Text style={styles.sub}>
-          Keep warranties, invoices, service bills and ownership papers in one secure place
-        </Text>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <View style={{ paddingTop: Math.max(insets.top, 8) }}>
+        <AppHeader
+          title="Document Vault"
+          subtitle="Everything protecting your assets"
+          rightAction="Scan"
+          onRightAction={onScan}
+        />
+      </View>
 
-        {!loading && !(assets || []).length ? (
-          <GlassCard style={{ marginBottom: 14 }}>
-            <Text style={{ color: COLORS.text, fontWeight: '800', fontSize: 16 }}>
-              Keep your important documents in one secure place
-            </Text>
-            <Text style={{ color: COLORS.muted, marginTop: 8, lineHeight: 20 }}>
-              Add an asset, then scan purchase bills, warranty cards, or service records.
-            </Text>
-            <GlassButton
-              title="Add Your First Asset"
-              style={{ marginTop: 14 }}
-              onPress={() =>
-                requireAuth({
-                  isAuthenticated,
-                  navigation,
-                  message: 'Sign in to add assets to your vault.',
-                  onAuthed: () => navigation.navigate('AddAsset'),
-                })
-              }
+      <View style={styles.filterSection}>
+        <SearchBar
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search documents..."
+          style={{ marginHorizontal: SPACING.md }}
+        />
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabScroll}
+        >
+          {DOC_TABS.map((t) => (
+            <FilterChip
+              key={t.id}
+              label={t.label}
+              selected={activeTab === t.id}
+              onPress={() => setActiveTab(t.id)}
             />
-            <GlassButton
-              title="Scan Document"
-              variant="ghost"
-              style={{ marginTop: 8 }}
-              onPress={() =>
-                requireAuth({
-                  isAuthenticated,
-                  navigation,
-                  message: 'Sign in to scan documents.',
-                  onAuthed: () => navigation.getParent()?.navigate?.('ScanBill'),
-                })
+          ))}
+        </ScrollView>
+      </View>
+
+      <FlatList
+        data={filteredDocs}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <DocumentCard
+            documentType={item.type}
+            assetName={item.assetName}
+            dateText={item.dateText}
+            verified={item.verified === true}
+            needsReview={item.daysLeft != null && item.daysLeft < 0}
+            accent={docAccent(item.docKind, colors)}
+            onPress={() =>
+              navigation.navigate('AssetPassport', { assetId: item.assetId })
+            }
+            style={{ marginHorizontal: SPACING.md }}
+          />
+        )}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 24 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+          />
+        }
+        ListEmptyComponent={
+          loading ? null : (
+            <EmptyState
+              title={query ? 'No matching documents' : 'Your vault is ready.'}
+              message={
+                query
+                  ? 'Try a different asset name, policy number, or document type.'
+                  : 'Scan a bill, insurance policy or warranty card and Asset Doctor will file it for you.'
               }
+              ctaLabel="Scan a document"
+              onCta={onScan}
+              style={{ marginHorizontal: SPACING.md }}
             />
-          </GlassCard>
-        ) : null}
-
-        {!isAuthenticated ? (
-          <Pressable style={styles.syncBanner} onPress={() => openLogin(navigation)}>
-            <Text style={styles.syncTitle}>☁️ Sync & Backup</Text>
-            <Text style={styles.syncBody}>
-              Sign in to keep vault docs safe in the cloud across devices.
-            </Text>
-          </Pressable>
-        ) : null}
-
-        {Object.values(FOLDER_META).map((folder) => (
-          <VaultSleeveCard
-            key={folder.id}
-            title={folder.title}
-            subtitle={folder.subtitle}
-            accent={folder.accent}
-            iconKey={folder.iconKey || folder.id}
-            count={counts[folder.id] || 0}
-            countLabel={folder.countLabel}
-            onPress={() => openFolder(folder.id)}
-          >
-            {filterAssetsByFolder(assets, folder.id)
-              .slice(0, 2)
-              .map((a) => (
-                <View key={a.id || a.assetId} style={{ marginTop: 8 }}>
-                  {folder.id === 'vehicle' ? (
-                    <VehicleCard
-                      asset={a}
-                      showAccordion={false}
-                      onPress={() => {
-                        navigation.navigate('DocumentsVault', {
-                          assetId: a.assetId || a.id,
-                        });
-                      }}
-                    />
-                  ) : (
-                    <ItemDetailCard
-                      title={a.assetName}
-                      subtitle={a.storeName || a.categoryLabel}
-                      amount={a.value}
-                      registration={a.registration}
-                      warrantyExpiry={a.warrantyExpiry}
-                      pucExpiry={a.pucExpiry}
-                      insuranceExpiry={a.insuranceExpiry}
-                      nextServiceDue={a.nextServiceDue}
-                      onPress={() => {
-                        Haptics.tap();
-                        navigation.navigate('DocumentsVault', {
-                          assetId: a.assetId || a.id,
-                        });
-                      }}
-                    />
-                  )}
-                  <Pressable
-                    style={styles.wa}
-                    onPress={async () => {
-                      Haptics.tap();
-                      if (ShareService.isEmergencyShareEligible(a) && user?.uid) {
-                        const docs = await DocumentVaultService.listDocuments(
-                          user.uid,
-                          a.assetId || a.id,
-                        );
-                        await ShareService.shareEmergencyBundle({
-                          asset: a,
-                          documents: docs,
-                        });
-                        return;
-                      }
-                      await ShareService.sharePassportCard({
-                        asset: a,
-                        prefer: 'whatsapp',
-                      });
-                    }}
-                  >
-                    <Text style={styles.waText}>
-                      {ShareService.isEmergencyShareEligible(a) ? 'SOS PDF' : 'Share'}
-                    </Text>
-                  </Pressable>
-                </View>
-              ))}
-          </VaultSleeveCard>
-        ))}
-
-        {loading ? <Text style={styles.sub}>Loading…</Text> : null}
-
-        {!loading && assets.length === 0 ? (
-          <GlassCard style={{ marginTop: 8 }}>
-            <Text style={styles.sub}>Add an asset, then store RC / PUC / invoices here.</Text>
-            <GlassButton
-              title={isAuthenticated ? '+ Add Asset' : 'Sign in to save docs'}
-              style={{ marginTop: 12 }}
-              onPress={() =>
-                requireAuth({
-                  isAuthenticated,
-                  navigation,
-                  message: 'Sign in to save documents to your vault.',
-                  onAuthed: () =>
-                    navigation.getParent()?.navigate?.('Assets', { screen: 'AddAsset' }),
-                })
-              }
-            />
-          </GlassCard>
-        ) : null}
-      </ScrollView>
-    </Screen>
+          )
+        }
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: SPACING.lg },
-  title: { color: COLORS.text, fontSize: 26, fontWeight: '900' },
-  sub: { color: COLORS.muted, marginTop: 4, fontSize: 12 },
-  syncBanner: {
-    marginTop: 14,
-    marginBottom: 8,
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card,
+  root: {
+    flex: 1,
   },
-  syncTitle: { color: COLORS.text, fontWeight: '900', fontSize: 14 },
-  syncBody: { color: COLORS.muted, fontSize: 12, marginTop: 4, lineHeight: 17 },
-  wa: {
-    backgroundColor: '#128C7E',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginTop: 6,
-    alignSelf: 'flex-start',
+  filterSection: {
+    marginBottom: SPACING.xs,
   },
-  waText: { color: '#fff', fontWeight: '800', fontSize: 11 },
+  tabScroll: {
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.xs,
+  },
+  listContent: {
+    paddingTop: SPACING.xs,
+  },
 });
-
-export default VaultHomeScreen;

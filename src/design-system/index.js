@@ -20,10 +20,10 @@ export { LIGHT, DARK } from '../theme/palettes';
 export { COLORS, BRAND, buildNavTheme } from '../theme/branding';
 
 export {
-  SectionHeader,
-  FilterChip,
-  StatusBadge,
-  EmptyState,
+  SectionHeader as LegacySectionHeader,
+  FilterChip as LegacyFilterChip,
+  StatusBadge as LegacyStatusBadge,
+  EmptyState as LegacyEmptyState,
   SkeletonBlock,
   ErrorState,
   SyncStatusPill,
@@ -33,6 +33,30 @@ export {
   SurfaceCard,
   FieldLabel,
 } from '../components/ui/DesignSystem';
+
+export { PremiumIcon } from './icons';
+export * from './icons';
+export {
+  PremiumCard,
+  HeroCard,
+  GlassSurface,
+  SectionHeader,
+  StatusBadge,
+  ConfidenceBar,
+  ProgressRing,
+  CountUp,
+  ScanBeam,
+  PremiumButton,
+  IconButton,
+  SearchBar,
+  FilterChip,
+  EmptyState,
+  Skeleton,
+  MetricCard,
+  AssetCollectionCard,
+  InsightCard,
+  DocumentCard,
+} from './primitives';
 
 export { ConfirmDialog } from '../components/ConfirmDialog';
 export { HealthScoreExplain } from '../components/HealthScoreExplain';

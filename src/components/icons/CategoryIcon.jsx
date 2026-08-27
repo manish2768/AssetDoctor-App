@@ -8,10 +8,10 @@ import Svg, { Path, Rect, Circle, Line as SvgLine } from 'react-native-svg';
 
 import { COLORS } from '../../theme/branding';
 
-export function CategoryIcon({ name = 'other', size = 28, color = COLORS.emerald }) {
+export function CategoryIcon({ name = 'other', category, size = 28, color = COLORS.emerald }) {
   const s = size;
   const c = color;
-  const key = String(name).toLowerCase();
+  const key = String(category || name).toLowerCase();
 
   const glyph = (() => {
     switch (key) {

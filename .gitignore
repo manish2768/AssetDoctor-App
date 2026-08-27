@@ -14,3 +14,4 @@ credentials/
 android/keystore.properties
 scratch/
 dist-bundle-check/
+.whatsapp_*.json

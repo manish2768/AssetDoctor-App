@@ -143,28 +143,43 @@ export function calculateHealthScore(asset = {}) {
     },
   ];
 
+  const validScore = Number.isFinite(score) ? Math.round(clamp(score, 0, 100)) : 100;
+
   return {
-    score,
+    score: validScore,
     grade,
     band: grade,
     factors,
     tips: tips.slice(0, 4),
-    ageYears: Number(ageYears.toFixed(1)),
+    ageYears: Number.isFinite(ageYears) ? Number(ageYears.toFixed(1)) : 0,
     explainFactors,
   };
 }
 
 /**
- * Portfolio health = average of asset scores (empty → 100)
+ * Portfolio health = average of asset scores (empty → null or 100)
  */
 export function calculatePortfolioHealth(assets = []) {
-  if (!assets.length) return { score: 100, grade: 'Excellent', count: 0 };
-  const scores = assets.map((a) => calculateHealthScore(a).score);
-  const score = Math.round(scores.reduce((s, n) => s + n, 0) / scores.length);
+  if (!Array.isArray(assets) || !assets.length) {
+    return { score: null, grade: 'Building score', count: 0, isEmpty: true };
+  }
+  const validScores = assets
+    .map((a) => {
+      const res = calculateHealthScore(a);
+      const val = typeof res === 'number' ? res : res?.score;
+      return Number.isFinite(val) ? val : null;
+    })
+    .filter((s) => s !== null);
+
+  if (!validScores.length) {
+    return { score: null, grade: 'Building score', count: 0, isEmpty: true };
+  }
+
+  const score = Math.round(validScores.reduce((s, n) => s + n, 0) / validScores.length);
   let g = 'Critical';
   if (score >= 85) g = 'Excellent';
   else if (score >= 70) g = 'Good';
   else if (score >= 50) g = 'Fair';
   else if (score >= 30) g = 'At Risk';
-  return { score, grade: g, count: assets.length };
+  return { score, grade: g, count: assets.length, isEmpty: false };
 }

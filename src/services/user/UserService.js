@@ -55,7 +55,58 @@ function resolveDisplayName({ provided, existing, authDisplayName, phone } = {})
   );
 }
 
+/**
+ * Normalize phone numbers strictly to E.164 format (e.g. "+919918288299").
+ */
+export function normalizeE164Phone(value) {
+  if (!value) return '';
+  const trimmed = String(value).replace(/[^\d+]/g, '');
+  if (!trimmed) return '';
+  if (trimmed.startsWith('+')) return trimmed;
+  if (/^\d{10}$/.test(trimmed)) return `+91${trimmed}`;
+  if (trimmed.startsWith('91') && trimmed.length === 12) return `+${trimmed}`;
+  return `+${trimmed}`;
+}
+
 export class UserService {
+  /**
+   * Single identity resolution mechanism that looks up a customer by phone number.
+   * Handles all Indian & International formats (+91 99182 88299, 9918288299, +919918288299).
+   * @param {string} phoneNumber
+   * @returns {Promise<UserProfile | null>}
+   */
+  static async resolveCustomerByPhone(phoneNumber) {
+    if (!phoneNumber) return null;
+    const normalized = normalizeE164Phone(phoneNumber);
+    const rawDigits = normalized.replace(/\D/g, '');
+    const tenDigits = rawDigits.slice(-10);
+
+    const candidates = [
+      normalized,
+      rawDigits,
+      tenDigits,
+      `+91${tenDigits}`,
+      `91${tenDigits}`,
+    ];
+
+    try {
+      for (const phoneVariant of candidates) {
+        if (!phoneVariant) continue;
+        const q1 = await usersCollection().where('normalizedPhoneNumber', '==', phoneVariant).limit(1).get().catch(() => ({ empty: true }));
+        if (!q1.empty && q1.docs?.[0]) return { uid: q1.docs[0].id, customerId: q1.docs[0].id, ...q1.docs[0].data() };
+
+        const q2 = await usersCollection().where('phoneNumber', '==', phoneVariant).limit(1).get().catch(() => ({ empty: true }));
+        if (!q2.empty && q2.docs?.[0]) return { uid: q2.docs[0].id, customerId: q2.docs[0].id, ...q2.docs[0].data() };
+
+        const q3 = await usersCollection().where('phone', '==', phoneVariant).limit(1).get().catch(() => ({ empty: true }));
+        if (!q3.empty && q3.docs?.[0]) return { uid: q3.docs[0].id, customerId: q3.docs[0].id, ...q3.docs[0].data() };
+      }
+    } catch (e) {
+      console.warn('[UserService] resolveCustomerByPhone note:', e?.message);
+    }
+    return null;
+  }
+
   /**
    * Upsert Firebase Auth user into Firestore (merge-safe).
    * Call after successful Google or Phone sign-in.
@@ -84,7 +135,7 @@ export class UserService {
     }
 
     const prior = legacyExisting.data() || {};
-    const verifiedPhone =
+    const rawPhone =
       options.extra?.phoneNumber ||
       options.extra?.phone ||
       user.phoneNumber ||
@@ -92,19 +143,31 @@ export class UserService {
       prior.phone ||
       '';
 
+    const normalizedPhone = normalizeE164Phone(rawPhone);
+
     const resolvedName = resolveDisplayName({
       provided: options.extra?.name,
       existing: prior.name,
       authDisplayName: user.displayName,
-      phone: verifiedPhone,
+      phone: normalizedPhone || rawPhone,
     });
+
+    const isNewUser = !legacyExisting.exists && !existing.exists;
 
     /** @type {Partial<UserProfile>} */
     const payload = {
       uid: user.uid,
+      customerId: user.uid,
       email: user.email || prior.email || '',
-      phone: verifiedPhone,
-      phoneNumber: verifiedPhone,
+      phone: rawPhone || prior.phone || '',
+      phoneNumber: rawPhone || prior.phoneNumber || '',
+      normalizedPhoneNumber: normalizedPhone || prior.normalizedPhoneNumber || '',
+      whatsappNumber: normalizedPhone || prior.whatsappNumber || '',
+      whatsappLinked: Boolean(normalizedPhone || prior.whatsappLinked),
+      whatsappOptIn: typeof prior.whatsappOptIn === 'boolean' ? prior.whatsappOptIn : true,
+      whatsappOptInSource: prior.whatsappOptInSource || options.authProvider || 'signup',
+      welcomeMessageSent: Boolean(prior.welcomeMessageSent),
+      welcomeMessageSentAt: prior.welcomeMessageSentAt || null,
       name: resolvedName,
       photoURL: user.photoURL || prior.photoURL || '',
       authProvider: options.authProvider || prior.authProvider || 'unknown',
@@ -112,19 +175,14 @@ export class UserService {
       ...options.extra,
     };
 
-    // Keep resolved name even if extra omitted name / sent placeholder
-    payload.name = resolveDisplayName({
-      provided: payload.name,
-      existing: prior.name,
-      authDisplayName: user.displayName,
-      phone: verifiedPhone,
-    });
-    payload.phone = verifiedPhone || payload.phone || '';
-    payload.phoneNumber = verifiedPhone || payload.phoneNumber || '';
-
-    if (!legacyExisting.exists) {
+    if (isNewUser) {
       payload.createdAt = firestore.FieldValue.serverTimestamp();
+      payload.whatsappOptInAt = firestore.FieldValue.serverTimestamp();
       payload.address = options.extra?.address || '';
+      payload.welcomeExperiencePending = true;
+      payload.welcomeExperienceCompleted = false;
+      payload.welcomeExperienceVersion = '10.1';
+      payload.onboardingCompleted = false;
     }
 
     try {
@@ -133,10 +191,10 @@ export class UserService {
         legacyRef.set(payload, { merge: true }),
       ]);
     } catch (error) {
-      // Auth can succeed even if Firestore rules are not deployed yet
       console.warn('[UserService] profile write blocked:', error?.message || error);
       return {
         uid: user.uid,
+        customerId: user.uid,
         email: payload.email || '',
         phone: payload.phone || '',
         name: payload.name || '',
@@ -145,6 +203,51 @@ export class UserService {
         address: payload.address || '',
         pendingFirestoreSync: true,
       };
+    }
+
+    // First-time WhatsApp welcome: queue server-side. Never call Meta from the APK.
+    const shouldQueueWelcome =
+      Boolean(normalizedPhone) &&
+      payload.whatsappOptIn !== false &&
+      !prior.welcomeMessageSent &&
+      (isNewUser || prior.welcomeMessageQueued === false);
+
+    if (shouldQueueWelcome) {
+      try {
+        console.log('[WHATSAPP_TRACE] AUTH_SUCCESS', user.uid);
+        console.log('[WHATSAPP_TRACE] USER_CREATED', isNewUser ? 'new' : 'retry_unqueued');
+        console.log('[WHATSAPP_TRACE] NEW_USER_DETECTED', isNewUser);
+        const { enqueueWelcomeWhatsApp } = await import('../whatsapp/WhatsAppQueueService.js');
+        const welcomeResult = await enqueueWelcomeWhatsApp({
+          userId: user.uid,
+          phone: normalizedPhone,
+          userName: resolvedName || 'Valued Member',
+          customerType: 'NEW',
+        });
+        const queued = Boolean(welcomeResult?.success || welcomeResult?.duplicate);
+        await Promise.all([
+          userRef.set(
+            {
+              welcomeMessageQueued: queued,
+              welcomeMessageQueuedAt: queued ? new Date().toISOString() : null,
+            },
+            { merge: true },
+          ),
+          legacyRef.set(
+            {
+              welcomeMessageQueued: queued,
+              welcomeMessageQueuedAt: queued ? new Date().toISOString() : null,
+            },
+            { merge: true },
+          ),
+        ]).catch(() => {});
+      } catch (e) {
+        console.warn('[WHATSAPP_TRACE] WELCOME_EVENT_CREATE_FAILED', e?.message);
+        await Promise.all([
+          userRef.set({ welcomeMessageQueued: false }, { merge: true }),
+          legacyRef.set({ welcomeMessageQueued: false }, { merge: true }),
+        ]).catch(() => {});
+      }
     }
 
     try {
@@ -186,6 +289,28 @@ export class UserService {
 
     const snap = await userRef.get();
     return /** @type {UserProfile} */ (snap.data());
+  }
+
+  /**
+   * Persist first-time welcome completion. Never throws — signup/home must proceed.
+   */
+  static async markWelcomeExperienceComplete(uid) {
+    if (!uid) return { success: false };
+    const { buildWelcomeExperienceCompletePatch } = require('../onboarding/welcomeExperience');
+    const patch = {
+      ...buildWelcomeExperienceCompletePatch(),
+      updatedAt: firestore.FieldValue.serverTimestamp(),
+    };
+    try {
+      await Promise.all([
+        usersCollection().doc(uid).set(patch, { merge: true }),
+        legacyUsersCollection().doc(uid).set(patch, { merge: true }),
+      ]);
+      return { success: true };
+    } catch (error) {
+      console.warn('[UserService] welcome experience complete note:', error?.message || error);
+      return { success: false, error: error?.message };
+    }
   }
 
   /**
