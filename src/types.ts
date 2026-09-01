@@ -102,6 +102,7 @@ export interface Asset {
   maintenanceDueDate?: string; // YYYY-MM-DD for next maintenance / renewal
   maintenanceType?: string; // e.g., 'Insurance Renewal', 'RO Filter Replacement', 'Bike Service'
   serialNumber?: string;
+  imei?: string;
   vendor?: string;
   notes?: string;
   receiptImageUrl?: string;
@@ -110,6 +111,11 @@ export interface Asset {
   status: WarrantyStatus;
   gstin?: string;
   scamGuardStatus?: 'VERIFIED' | 'WARNING' | 'SUSPICIOUS_SCAM';
+  /** Original field-level OCR evidence retained separately from trusted asset values. */
+  ocrFieldEvidence?: Record<string, unknown>;
+  /** Every value written from the review form is explicitly user-verified. */
+  ocrFieldSources?: Record<string, 'OCR_DOCUMENT' | 'USER_VERIFIED'>;
+  ocrVerified?: boolean;
   serviceLogs?: ServiceLogEntry[];
   // Extended Mobile & Prediction Fields
   odometerKm?: number;
@@ -144,8 +150,8 @@ export interface ParsedInvoiceItem {
 
 export interface ReceiptScanResult {
   vendor?: string;
-  purchaseDate: string;
-  totalAmount: number;
+  purchaseDate: string | null;
+  totalAmount: number | null;
   gstin?: string;
   scamGuard?: ScamGuardAnalysis;
   items: ParsedInvoiceItem[];

@@ -12,21 +12,26 @@ import {
   Animated,
   Platform,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { AppLogo } from './AppLogo';
 import { BRAND, COLORS, FONTS, RADIUS, SPACING } from '../theme/branding';
 import { Haptics } from '../services/haptics';
+import { isWelcomeExperienceEligible } from '../services/onboarding/welcomeExperience';
 
-const GREETING_SESSION_KEY = 'asset_doctor_welcome_greeting_session_v1';
+/**
+ * Module-scoped flag — the true "session" boundary.
+ * It persists for the lifetime of the JS process and resets automatically when
+ * the app process restarts. This gives exactly one greeting per app session
+ * instead of one per navigation, re-render, or remount.
+ */
+let sessionGreetingShown = false;
 
 export async function markWelcomeGreetingSeenToday() {
-  try {
-    const today = new Date().toISOString().slice(0, 10);
-    await AsyncStorage.setItem(GREETING_SESSION_KEY, today);
-  } catch {
-    /* ignore */
-  }
+  // Mark the greeting as shown for this app session. Sessions are delimited by
+  // the module-scoped flag (reset on a fresh process). The new-vs-existing
+  // decision is owned by welcomeExperience.isWelcomeExperienceEligible(profile)
+  // (Firestore), so no per-day AsyncStorage bookkeeping is needed.
+  sessionGreetingShown = true;
 }
 
 function timeGreeting() {
@@ -106,19 +111,28 @@ export function WelcomeGreetingModal({ visible, displayName = 'Guest', onDismiss
 }
 
 /**
- * Show at most once per calendar day (device local).
+ * Decide whether the welcome greeting should show for this session.
+ *
+ * Gating:
+ *  - At most once per session (module-scoped flag resets on a fresh process).
+ *  - Only for users who are welcome-experience ELIGIBLE. Existing users
+ *    (who already completed onboarding / welcome experience) must NOT get the
+ *    onboarding greeting repeatedly on every app launch.
+ *
+ * The eligibility system in onboarding/welcomeExperience.js is the source of
+ * truth for "new vs existing user" (Firestore profile flags), not AsyncStorage.
+ *
+ * @param {object|null} profile - The authenticated user's Firestore profile.
  * @returns {Promise<boolean>}
  */
-export async function shouldShowWelcomeGreeting() {
-  try {
-    const today = new Date().toISOString().slice(0, 10);
-    const last = await AsyncStorage.getItem(GREETING_SESSION_KEY);
-    if (last === today) return false;
-    await AsyncStorage.setItem(GREETING_SESSION_KEY, today);
-    return true;
-  } catch {
-    return true;
-  }
+export async function shouldShowWelcomeGreeting(profile = null) {
+  // Existing / non-eligible users never see the onboarding greeting again.
+  if (!isWelcomeExperienceEligible(profile)) return false;
+  if (sessionGreetingShown) return false;
+  // Claim the greeting for this session up-front so concurrent effect runs /
+  // re-mounts can never show a duplicate.
+  sessionGreetingShown = true;
+  return true;
 }
 
 const styles = StyleSheet.create({

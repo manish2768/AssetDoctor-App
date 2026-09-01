@@ -2275,14 +2275,14 @@ function subscribeToFirestoreData() {
     renderActivityStream();
   });
 
-  // 5. Support Tickets (/supportTickets)
-  db.collection('supportTickets').orderBy('createdAt', 'desc').onSnapshot((snap) => {
+  // 5. Support Tickets (/support_tickets)
+  db.collection('support_tickets').orderBy('createdAt', 'desc').onSnapshot((snap) => {
     state.tickets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderTickets();
     updateKPIs();
     onFirestoreSnapshotReceived();
   }, (err) => {
-    console.error('[Firestore Error: supportTickets]', err.code, err.message);
+    console.error('[Firestore Error: support_tickets]', err.code, err.message);
     renderTickets();
   });
 
@@ -2462,9 +2462,9 @@ $('btnSendTicketReply')?.addEventListener('click', async () => {
       timestamp: new Date().toISOString()
     }];
 
-    await db.collection('supportTickets').doc(ticketId).update({
+    await db.collection('support_tickets').doc(ticketId).update({
       messages: updatedMessages,
-      status: resolve ? 'resolved' : (t.status || 'in_progress'),
+      status: resolve ? 'RESOLVED' : (t.status || 'IN_PROGRESS'),
       updatedAt: new Date().toISOString(),
       assignedAdmin: state.currentUser.email
     });
@@ -2475,7 +2475,7 @@ $('btnSendTicketReply')?.addEventListener('click', async () => {
       ticketId,
       t.userId,
       { status: t.status },
-      { status: resolve ? 'resolved' : t.status, reply },
+      { status: resolve ? 'RESOLVED' : t.status, reply },
       `Staff replied: ${reply}`
     );
 
@@ -3352,7 +3352,7 @@ function updateKPIs() {
   if ($('kpiAssets')) $('kpiAssets').textContent = (state.assets.length || 0).toLocaleString('en-IN');
   if ($('kpiDocuments')) $('kpiDocuments').textContent = (state.documents.length || 0).toLocaleString('en-IN');
   
-  const openCount = state.tickets.filter(t => t.status === 'open' || t.status === 'in_progress').length;
+  const openCount = state.tickets.filter(t => ['OPEN','IN_PROGRESS','WAITING_FOR_USER'].indexOf(String(t.status).toUpperCase()) >= 0).length;
   if ($('kpiTickets')) $('kpiTickets').textContent = openCount.toString();
   if ($('openTicketsBadge')) $('openTicketsBadge').textContent = openCount.toString();
   if ($('kpiOcrQueue')) $('kpiOcrQueue').textContent = (state.ocrQueue.length || 0).toString();

@@ -14,6 +14,7 @@ import { EXPIRY_ALERT_PROFILES } from '../../theme/branding';
 import { daysUntil } from '../../utils/dates';
 import { isAlertableStatus } from '../../constants/assetStatus';
 import { COLLECTIONS } from '../constants';
+import { resolveCanonicalAssetId, assetIdOf } from '../assets/assetIdentity';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -38,10 +39,6 @@ async function ensureAndroidChannel() {
     vibrationPattern: [0, 250, 200, 250],
     sound: 'default',
   });
-}
-
-function assetIdOf(asset) {
-  return asset?.assetId || asset?.id || null;
 }
 
 function notificationKey(assetId, field, alertDay) {
@@ -344,30 +341,79 @@ export class ExpiryAlertService {
     return urgent.sort((a, b) => a.days - b.days);
   }
 
-  /** In-app welcome notification (replaces WhatsApp welcome template). */
-  static async notifyWelcome({ name } = {}) {
+  /** User welcome notification (In-app notification + Meta WhatsApp Welcome Message). */
+  static async notifyWelcome({ name, phone, userId } = {}) {
     try {
       await ensureAndroidChannel();
-      const perm = await Notifications.getPermissionsAsync();
-      if (perm.status !== 'granted') {
-        const asked = await Notifications.requestPermissionsAsync();
-        if (asked.status !== 'granted') {
-          return { success: false, error: 'permission' };
+      const perm = await Notifications.getPermissionsAsync().catch(() => ({ status: 'undetermined' }));
+      if (perm.status === 'granted') {
+        const display = String(name || 'Asset Owner').trim() || 'Asset Owner';
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: 'Welcome to Asset Doctor',
+            body: `Hi ${display} — your smart asset vault is ready. We'll remind you before insurance, PUC, and warranty expiry.`,
+            data: { screen: 'Home', type: 'welcome' },
+            sound: true,
+          },
+          trigger: null,
+        }).catch(() => {});
+      }
+
+      // Queue server-side WhatsApp welcome. Never send Meta tokens from the client.
+      if (phone && userId) {
+        try {
+          const { enqueueWelcomeWhatsApp } = await import('../whatsapp/WhatsAppQueueService.js');
+          await enqueueWelcomeWhatsApp({
+            userId,
+            phone,
+            userName: name || 'Valued User',
+          });
+        } catch (e) {
+          console.warn('[ExpiryAlertService] WhatsApp welcome queue note:', e?.message);
         }
       }
-      const display = String(name || 'Asset Owner').trim() || 'Asset Owner';
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'Welcome to Asset Doctor',
-          body: `Hi ${display} — your smart asset vault is ready. We'll remind you before insurance, PUC, and warranty expiry.`,
-          data: { screen: 'Home', type: 'welcome' },
-          sound: true,
-        },
-        trigger: null,
-      });
+
       return { success: true };
     } catch (error) {
       return { success: false, error: error?.message || 'welcome notify failed' };
+    }
+  }
+
+  /**
+   * Dispatches WhatsApp Expiry Reminder for Insurance, PUC, or Warranty
+   */
+  static async dispatchWhatsAppExpiryAlert({
+    userId,
+    phone,
+    customerName,
+    asset,
+    field,
+    expiryDate,
+  }) {
+    if (!phone || !expiryDate) return { success: false, reason: 'missing_phone_or_date' };
+
+    const docTypeLabelMap = {
+      insuranceExpiry: 'Insurance',
+      pucExpiry: 'PUC',
+      warrantyExpiry: 'Warranty',
+    };
+
+    const docType = docTypeLabelMap[field] || 'Document';
+    const vehicleName = asset.registrationNumber || asset.assetName || 'Vehicle';
+
+    try {
+      const { WhatsAppService } = await import('../whatsapp/WhatsAppService.js');
+      return await WhatsAppService.sendExpiryReminder({
+        userId,
+        phone,
+        customerName: customerName || 'Valued Customer',
+        vehicleName,
+        docType,
+        expiryDate: String(expiryDate).slice(0, 10),
+        assetId: assetIdOf(asset),
+      });
+    } catch (err) {
+      return { success: false, error: err?.message };
     }
   }
 

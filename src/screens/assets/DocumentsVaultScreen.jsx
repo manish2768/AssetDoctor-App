@@ -27,6 +27,9 @@ import { Haptics } from '../../services/haptics';
 import { openLogin } from '../../navigation/authGate';
 import { openReviewInvoice } from '../../navigation/navActions';
 import { vaultCopyForAsset } from '../../design-system/assetIntelligenceSchema';
+import { AssetDoctorProtectedBadge } from '../../components/trust/AssetDoctorProtectedBadge';
+import { SmartDocumentActions } from '../../components/trust/SmartDocumentActions';
+import { resolveProtectionBadgeState } from '../../trust/protectionStatus';
 
 const FOLDER_ORDER = [
   'bill',
@@ -52,18 +55,15 @@ function folderIcon(typeId) {
 }
 
 function resolveDocStatus(item) {
-  if (item.needsReview) return { label: 'Needs Review', icon: '⚠️', tone: 'warning' };
-  if (item.verified || item.fieldStatus === 'verified') {
-    return { label: 'Verified', icon: '✓', tone: 'success' };
-  }
-  if (item.pendingSync) return { label: 'Pending Sync', icon: '↻', tone: 'muted' };
-  if (item.offlineCached) return { label: 'Offline', icon: '📴', tone: 'muted' };
-  if (item.processing) return { label: 'Processing', icon: '⏳', tone: 'info' };
-  if (item.expired) return { label: 'Expired', icon: '⏰', tone: 'danger' };
+  if (item.needsReview || item.needsManualReview) return { label: 'Needs Review', tone: 'warning' };
+  if (item.pendingSync) return { label: 'Pending Sync', tone: 'muted' };
+  if (item.offlineCached) return { label: 'Offline', tone: 'muted' };
+  if (item.processing) return { label: 'Processing', tone: 'info' };
+  if (item.expired) return { label: 'Expired', tone: 'danger' };
   if (item.status === 'pending' || item.fieldStatus === 'pending') {
-    return { label: 'Pending', icon: '…', tone: 'muted' };
+    return { label: 'Pending', tone: 'muted' };
   }
-  return { label: 'Pending', icon: '…', tone: 'muted' };
+  return { label: 'On file', tone: 'success' };
 }
 
 function formatDocDate(item) {
@@ -100,7 +100,7 @@ export function DocumentsVaultScreen({ route, navigation }) {
     ];
     return ordered.map((type) => ({
       type,
-      title: `${folderIcon(type)} ${folderLabel(type)}`,
+      title: `${folderLabel(type)}`,
       data: byType[type],
     }));
   }, [docs]);
@@ -165,21 +165,21 @@ export function DocumentsVaultScreen({ route, navigation }) {
           audit.duplicateMessage =
             'Duplicate bill detected (GSTIN + Total + Date already scanned).';
         }
+        // The universal pipeline is authoritative. SweetBill is retained as a
+        // separate audit signal and must not fill fields without provenance.
+        const invoicePayload = {
+          ...ocr.data,
+          needsManualReview: Boolean(ocr.data?.needsManualReview || ocr.needsManualReview),
+        };
         await saveParsedBillDraft(sweetBill, {
           imageUri: uri,
-          invoice: ocr.data,
+          invoice: invoicePayload,
           engine: ocr.engine,
         });
 
         openReviewInvoice({
           imageUri: uri,
-          invoice: {
-            ...ocr.data,
-            shopGstin: ocr.data.shopGstin || sweetBill.gstin || '',
-            invoiceDate: ocr.data.invoiceDate || sweetBill.invoiceDate,
-            totalAmount: ocr.data.totalAmount ?? sweetBill.totalAmount,
-            warrantyExpiry: ocr.data.warrantyExpiry || sweetBill.expiryDate,
-          },
+          invoice: invoicePayload,
           audit,
           engine: ocr.engine,
           energyHints: ocr.energyHints,
@@ -278,9 +278,7 @@ export function DocumentsVaultScreen({ route, navigation }) {
             }}
             style={[styles.chip, selectedType === t.id && styles.chipOn]}
           >
-            <Text style={styles.chipText}>
-              {t.icon} {t.label}
-            </Text>
+            <Text style={styles.chipText}>{t.label}</Text>
           </Pressable>
         ))}
       </View>
@@ -318,7 +316,7 @@ export function DocumentsVaultScreen({ route, navigation }) {
         ListEmptyComponent={
           <EmptyState
             icon="📄"
-            title="Keep your important documents in one secure place."
+            title="Keep your important documents in one place."
             message={vaultCopy.subtitle}
             ctaLabel={selectedType === 'bill' ? 'Scan Bill (AI OCR)' : 'Upload Selected Type'}
             onCta={pickAndUpload}
@@ -332,16 +330,19 @@ export function DocumentsVaultScreen({ route, navigation }) {
           const docDate = formatDocDate(item);
           const typeLabel = folderLabel(item.type);
           const assetLabel = asset?.nickname || asset?.assetName || 'This asset';
+          const badge = resolveProtectionBadgeState({ asset, documents: [item] });
           return (
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
               <Text style={styles.docTitle}>{item.label || typeLabel}</Text>
               <Text style={styles.docMeta} numberOfLines={1}>
-                {folderIcon(item.type)} {typeLabel} · {assetLabel}
+                {typeLabel} · {assetLabel}
               </Text>
+              <View style={{ marginTop: 6 }}>
+                <AssetDoctorProtectedBadge state={badge} compact />
+              </View>
               <View style={styles.statusRow}>
                 <View style={[styles.statusBadge, styles[`status_${status.tone}`]]}>
-                  <Text style={styles.statusIcon}>{status.icon}</Text>
                   <Text style={styles.statusText}>{status.label}</Text>
                 </View>
                 {docDate ? <Text style={styles.docDate}>{docDate}</Text> : null}
@@ -349,6 +350,25 @@ export function DocumentsVaultScreen({ route, navigation }) {
                   <Text style={styles.docDate}>Exp {String(item.expiryDate).slice(0, 10)}</Text>
                 ) : null}
               </View>
+              <SmartDocumentActions
+                documentType={item.type || typeLabel}
+                hasLinkedAsset={!!asset}
+                onAction={(action) => {
+                  if (action.action === 'passport') {
+                    navigation?.navigate?.('AssetPassport', { assetId });
+                    return;
+                  }
+                  if (action.action === 'scan') {
+                    pickAndUpload();
+                    return;
+                  }
+                  if (action.action === 'notifications') {
+                    navigation?.navigate?.('NotificationSettings');
+                    return;
+                  }
+                }}
+                style={{ marginTop: 8 }}
+              />
             </View>
             <Pressable
               style={styles.docWa}
@@ -361,7 +381,7 @@ export function DocumentsVaultScreen({ route, navigation }) {
                 if (!result.success) ui.error('Share document', result.error);
               }}
             >
-              <Text style={styles.docWaText}>💬</Text>
+              <Text style={styles.docWaText}>Share</Text>
             </Pressable>
             <Pressable onPress={() => onDelete(item)}>
               <Text style={styles.delete}>Delete</Text>

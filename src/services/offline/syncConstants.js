@@ -20,6 +20,7 @@ export const SYNC_ENTITY = Object.freeze({
   EXPENSE: 'EXPENSE',
   OCR: 'OCR',
   INVOICE: 'INVOICE',
+  LEARNING: 'LEARNING',
 });
 
 export const QUEUE_JOB_STATUS = Object.freeze({

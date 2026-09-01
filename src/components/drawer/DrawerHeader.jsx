@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
   },
   brandAccent: {
-    color: '#059669', // Emerald 600
+    color: '#14B8A6',
   },
   vaultPill: {
     backgroundColor: 'rgba(5, 150, 105, 0.12)',

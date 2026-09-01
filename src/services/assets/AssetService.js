@@ -28,6 +28,9 @@ import { SYNC_STATUS, SYNC_ENTITY, makeOperationId } from '../offline/syncConsta
 import { normalizeAssetList } from '../storageService';
 import { resolveVaultDocumentMeta } from '../ocr/documentTypeClassifier';
 import { toErrorMessage, runDetached } from '../../utils/errors';
+import { executeSoftDelete, userFacingDeleteError } from './assetDeleteFlow';
+import { AuditLogService, AUDIT_ACTIONS } from '../audit/AuditLogService';
+import { recordSecurityEvent } from '../security/securityAuditLog';
 import {
   persistScannedImage,
   uploadVaultInvoiceImage,
@@ -435,65 +438,84 @@ export class AssetService {
   }
 
   /**
-   * Soft-delete (preferred) — keeps history; CRON skips deletedAt != null
+   * Soft-delete (preferred) — keeps history; CRON skips deletedAt != null.
+   * Linked Documents stay under Users/{uid}/Assets/{assetId}/Documents (no extra collections).
    */
   static async softDeleteAsset(userId, assetId, options = {}) {
     Haptics.tap();
     try {
-      if (!options.skipOfflineQueue) {
-        const online = await ConnectivityService.isOnline();
-        if (!online) {
-          const operationId =
-            options.operationId ||
-            makeOperationId(SYNC_ENTITY.ASSET, assetId, 'DELETE');
-          await OfflineQueue.enqueue({
-            type: 'softDeleteAsset',
-            entityType: SYNC_ENTITY.ASSET,
-            entityId: assetId,
-            operationType: 'DELETE',
-            operationId,
-            payload: { userId, assetId, operationId, entityType: SYNC_ENTITY.ASSET, entityId: assetId },
-          });
-          await OfflineVaultCache.markAssetDeleted(userId, assetId);
-          Haptics.success();
-          return { success: true, queuedOffline: true };
-        }
-      }
-      await assetsRef(userId).doc(assetId).set(
-        {
-          deletedAt: firestore.FieldValue.serverTimestamp(),
-          status: ASSET_STATUS.RETIRED,
-          syncStatus: SYNC_STATUS.SYNCED,
-          updatedAt: firestore.FieldValue.serverTimestamp(),
+      const result = await executeSoftDelete({
+      userId,
+      assetId,
+      existingAsset: options.existingAsset || null,
+      options,
+      deps: {
+        isOnline: () => ConnectivityService.isOnline(),
+        getRemoteAsset: async (uid, id) => {
+          try {
+            const snap = await assetsRef(uid).doc(id).get();
+            if (!snap.exists) return { missing: true };
+            return { id: snap.id, ...snap.data() };
+          } catch {
+            return null;
+          }
         },
-        { merge: true },
-      );
-      await OfflineVaultCache.markAssetDeleted(userId, assetId);
+        persistRemoteSoftDelete: async (uid, id) => {
+          const ref = assetsRef(uid).doc(id);
+          const snap = await ref.get();
+          if (!snap.exists || snap.data()?.deletedAt) return;
+          await ref.set(
+            {
+              deletedAt: firestore.FieldValue.serverTimestamp(),
+              status: ASSET_STATUS.RETIRED,
+              syncStatus: SYNC_STATUS.SYNCED,
+              updatedAt: firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+        },
+        enqueue: (job) => OfflineQueue.enqueue(job),
+        removePendingJobs: async (uid, id) => {
+          await OfflineQueue.removeMatching('createAsset', { entityId: id });
+          await OfflineQueue.removeMatching('updateAsset', { entityId: id });
+          await OfflineQueue.removeMatching('uploadDocument', { assetId: id });
+          await OfflineQueue.removeMatching('uploadVaultInvoice', { assetId: id });
+        },
+        markCacheDeleted: (uid, id) => OfflineVaultCache.markAssetDeleted(uid, id),
+        markLinkedDocuments: (uid, id) => OfflineVaultCache.markAssetDocumentsDeleted(uid, id),
+        writeAudit: async ({ userId: uid, assetId: id, queuedOffline }) => {
+          await AuditLogService.log({
+            actorId: uid,
+            actorRole: 'user',
+            targetUserId: uid,
+            targetAssetId: id,
+            action: AUDIT_ACTIONS.ASSET_DELETED,
+            reason: queuedOffline ? 'offline_queued' : 'user_deleted',
+            newValue: { deleted: true, queuedOffline: Boolean(queuedOffline) },
+          });
+          await recordSecurityEvent(uid, 'ASSET_DELETED', {
+            assetId: id,
+            queuedOffline: queuedOffline ? '1' : '0',
+          });
+        },
+      },
+    });
+    if (result?.success) {
       Haptics.success();
-      return { success: true };
+      return result;
+    }
+    Haptics.error();
+    return {
+      ...result,
+      error: userFacingDeleteError(result?.technicalError || result?.error),
+    };
     } catch (error) {
       Haptics.error();
-      const shouldQueue = !options.skipOfflineQueue && isTransientError(error);
-      if (shouldQueue) {
-        try {
-          const operationId =
-            options.operationId ||
-            makeOperationId(SYNC_ENTITY.ASSET, assetId, 'DELETE');
-          await OfflineQueue.enqueue({
-            type: 'softDeleteAsset',
-            entityType: SYNC_ENTITY.ASSET,
-            entityId: assetId,
-            operationType: 'DELETE',
-            operationId,
-            payload: { userId, assetId, operationId },
-          });
-          await OfflineVaultCache.markAssetDeleted(userId, assetId);
-          return { success: true, queuedOffline: true };
-        } catch {
-          /* ignore */
-        }
-      }
-      return { success: false, error: toErrorMessage(error) };
+      return {
+        success: false,
+        error: userFacingDeleteError(error),
+        technicalError: toErrorMessage(error),
+      };
     }
   }
 
@@ -824,7 +846,8 @@ export class AssetService {
         async (error) => {
           Haptics.error();
           const cached = await OfflineVaultCache.getAssets(userId);
-          if (cached.length) onUpdate(normalizeAssetList(cached));
+          const active = normalizeAssetList(cached).filter((a) => !a.deletedAt);
+          if (active.length) onUpdate(active);
           else if (onError) onError(error);
           else onUpdate([]);
         },

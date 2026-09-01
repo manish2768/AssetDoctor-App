@@ -7,16 +7,17 @@ import {
   sendMetaWhatsAppMessage,
   normalizeWhatsAppNumber,
 } from '../../src/services/whatsapp/MetaWhatsAppService.js';
-
-const WELCOME_TEMPLATE = 'welcome_message';
-const WELCOME_LANGUAGE = 'en';
+import {
+  WELCOME_TEMPLATE_NAME,
+  WELCOME_TEMPLATE_LANGUAGE,
+} from '../../src/services/whatsapp/welcomeQueueContract.js';
 
 export async function dispatchQueuedWhatsApp(queueItem = {}) {
-  const templateKey = String(queueItem.templateKey || '').trim();
+  const templateKey = String(queueItem.templateKey || queueItem.templateName || '').trim();
   const phone = queueItem.recipientPhone || queueItem.phone;
   const userName = queueItem.payload?.userName || queueItem.userName || 'Valued User';
 
-  if (templateKey !== WELCOME_TEMPLATE) {
+  if (templateKey !== WELCOME_TEMPLATE_NAME) {
     return {
       success: false,
       errorCategory: 'UNSUPPORTED_TEMPLATE',
@@ -33,12 +34,12 @@ export async function dispatchQueuedWhatsApp(queueItem = {}) {
     };
   }
 
-  console.log('[WHATSAPP_TRACE] WHATSAPP_SEND_ATTEMPT', templateKey);
+  console.log('[WHATSAPP_TRACE] WHATSAPP_SEND_ATTEMPT', WELCOME_TEMPLATE_NAME);
 
   const result = await sendMetaWhatsAppMessage({
     to: recipient,
-    template: WELCOME_TEMPLATE,
-    languageCode: WELCOME_LANGUAGE,
+    template: WELCOME_TEMPLATE_NAME,
+    languageCode: WELCOME_TEMPLATE_LANGUAGE,
     components: [
       {
         type: 'body',

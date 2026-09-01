@@ -82,6 +82,10 @@ export function emptyVaultForAuthChange() {
   return [];
 }
 
+export function filterActiveAssets(list = []) {
+  return (Array.isArray(list) ? list : []).filter((row) => row && !row.deletedAt);
+}
+
 export default {
   assetKey,
   upsertAssetInList,
@@ -91,4 +95,5 @@ export default {
   shouldApplyCacheWarm,
   mergeRemoteWithPendingLocal,
   emptyVaultForAuthChange,
+  filterActiveAssets,
 };

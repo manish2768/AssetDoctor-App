@@ -1,177 +1,307 @@
-/**
- * Support Ticket Service — Asset Doctor Support & Help Desk
- * Manages user support tickets, status updates, priority tags, and conversation threads.
- */
+import { getApp } from 'firebase/app';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+  orderBy,
+} from 'firebase/firestore';
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { db } from '../../firebase';
 
-const TICKETS_STORAGE_KEY = 'asset_doctor_support_tickets_v1';
+const FUNCTIONS_REGION = 'asia-south1';
 
-export const TICKET_STATUS = Object.freeze({
-  OPEN: 'open',
-  IN_PROGRESS: 'in_progress',
-  WAITING_FOR_USER: 'waiting_for_user',
-  RESOLVED: 'resolved',
-  CLOSED: 'closed',
-});
+const functions = getFunctions(getApp(), FUNCTIONS_REGION);
 
-export const TICKET_PRIORITY = Object.freeze({
-  LOW: 'low',
-  MEDIUM: 'medium',
-  HIGH: 'high',
-  URGENT: 'urgent',
-});
+const createSupportTicketCallable = httpsCallable(
+  functions,
+  'createSupportTicket'
+);
 
-export const TICKET_CATEGORY = Object.freeze({
-  OCR_ISSUE: 'ocr_issue',
-  DOCUMENT_UPLOAD: 'document_upload',
-  SERVICE_REMINDER: 'service_reminder',
-  WARRANTY_TRACKING: 'warranty_tracking',
-  ACCOUNT_SECURITY: 'account_security',
-  BILLING_PLAN: 'billing_plan',
-  GENERAL_FEEDBACK: 'general_feedback',
-});
+const updateSupportTicketStatusCallable = httpsCallable(
+  functions,
+  'updateSupportTicketStatus'
+);
 
-function generateTicketId() {
-  const y = new Date().getFullYear();
-  const rand = Math.floor(1000 + Math.random() * 9000);
-  return `TICK-${y}-${rand}`;
+const addSupportTicketMessageCallable = httpsCallable(
+  functions,
+  'addSupportTicketMessage'
+);
+
+export const TICKET_STATUS = {
+  OPEN: 'OPEN',
+  IN_PROGRESS: 'IN_PROGRESS',
+  WAITING_FOR_USER: 'WAITING_FOR_USER',
+  RESOLVED: 'RESOLVED',
+  CLOSED: 'CLOSED',
+};
+
+export const TICKET_PRIORITY = {
+  LOW: 'LOW',
+  MEDIUM: 'MEDIUM',
+  HIGH: 'HIGH',
+  URGENT: 'URGENT',
+};
+
+function normalizeTicket(data, fallbackId = null) {
+  if (!data) return null;
+
+  return {
+    ...data,
+    id: data.id || fallbackId || data.ticketId || null,
+    ticketId: data.ticketId || fallbackId || null,
+    messages: Array.isArray(data.messages) ? data.messages : [],
+  };
 }
 
-export const SupportTicketService = {
+const SupportTicketService = {
   /**
-   * Create a new support ticket
+   * Create a support ticket.
+   *
+   * IMPORTANT:
+   * Ticket number is generated ONLY on the server.
+   * Mobile app never generates ticket numbers.
    */
   async createTicket({
     userId,
-    userEmail,
-    userName,
-    userPhone,
+    userEmail = '',
+    userName = '',
+    userPhone = '',
     assetId = null,
     assetName = null,
-    category = TICKET_CATEGORY.GENERAL_FEEDBACK,
+    category = 'GENERAL',
     subject,
     description,
     priority = TICKET_PRIORITY.MEDIUM,
   }) {
     if (!userId || !subject || !description) {
-      throw new Error('Missing required ticket fields: userId, subject, description');
+      throw new Error(
+        'Missing required ticket fields: userId, subject, description'
+      );
     }
 
-    const ticketId = generateTicketId();
-    const now = new Date().toISOString();
+    const result = await createSupportTicketCallable({
+      userName: String(userName || '').trim(),
+      userEmail: String(userEmail || '').trim(),
 
-    const newTicket = {
-      ticketId,
-      userId,
-      userEmail: userEmail || '',
-      userName: userName || '',
-      userPhone: userPhone || '',
-      assetId: assetId || null,
-      assetName: assetName || null,
-      category,
+      assetId: assetId ? String(assetId).trim() : null,
+      assetName: assetName ? String(assetName).trim() : null,
+
+      category: String(category || 'GENERAL').trim(),
       subject: String(subject).trim(),
       description: String(description).trim(),
       priority,
-      status: TICKET_STATUS.OPEN,
-      createdAt: now,
-      updatedAt: now,
+    });
+
+    const data = result?.data || {};
+
+    if (!data.success || !data.ticketId) {
+      throw new Error('Support ticket creation failed.');
+    }
+
+    /*
+     * Return the same shape expected by the existing UI.
+     * userId is retained locally in the returned object for compatibility,
+     * but the server remains the source of truth.
+     */
+    return {
+      ticketId: data.ticketId,
+      userId,
+      userEmail: String(userEmail || '').trim(),
+      userName: String(userName || '').trim(),
+      userPhone: String(userPhone || '').trim(),
+      assetId: assetId || null,
+      assetName: assetName || null,
+      category: String(category || 'GENERAL').trim(),
+      subject: String(subject).trim(),
+      description: String(description).trim(),
+      priority,
+      status: data.status || TICKET_STATUS.OPEN,
+      createdAt: null,
+      updatedAt: null,
       assignedAdmin: null,
-      messages: [
-        {
-          id: `msg-${Date.now()}-1`,
-          sender: 'user',
-          senderName: userName || 'User',
-          message: String(description).trim(),
-          timestamp: now,
-        },
-      ],
+      messages: [],
     };
-
-    const existing = await this.getAllTickets();
-    const updated = [newTicket, ...existing];
-    await AsyncStorage.setItem(TICKETS_STORAGE_KEY, JSON.stringify(updated));
-
-    return newTicket;
   },
 
   /**
-   * Get all tickets for a specific user
+   * Get all tickets for a specific user.
+   *
+   * Source of truth = Firestore.
+   * No AsyncStorage.
    */
   async getUserTickets(userId) {
     if (!userId) return [];
-    const all = await this.getAllTickets();
-    return all.filter((t) => t.userId === userId);
+
+    try {
+      const ticketsRef = collection(db, 'support_tickets');
+
+      const q = query(
+        ticketsRef,
+        where('userId', '==', userId),
+        orderBy('createdAt', 'desc')
+      );
+
+      const snapshot = await getDocs(q);
+
+      return snapshot.docs.map((ticketDoc) =>
+        normalizeTicket(ticketDoc.data(), ticketDoc.id)
+      );
+    } catch (error) {
+      console.error(
+        '[SupportTicketService] getUserTickets failed:',
+        error?.message || error
+      );
+
+      /*
+       * Firestore may require an index for the query above.
+       * Fall back to a simpler query so the app still works.
+       */
+      try {
+        const fallbackQuery = query(
+          collection(db, 'support_tickets'),
+          where('userId', '==', userId)
+        );
+
+        const snapshot = await getDocs(fallbackQuery);
+
+        const tickets = snapshot.docs.map((ticketDoc) =>
+          normalizeTicket(ticketDoc.data(), ticketDoc.id)
+        );
+
+        return tickets.sort((a, b) => {
+          const aTime = a.createdAt?.toMillis
+            ? a.createdAt.toMillis()
+            : 0;
+
+          const bTime = b.createdAt?.toMillis
+            ? b.createdAt.toMillis()
+            : 0;
+
+          return bTime - aTime;
+        });
+      } catch (fallbackError) {
+        console.error(
+          '[SupportTicketService] fallback query failed:',
+          fallbackError?.message || fallbackError
+        );
+
+        return [];
+      }
+    }
   },
 
   /**
-   * Get all tickets across all users (for Admin console)
+   * Get all tickets.
+   *
+   * Intended for admin-side usage.
    */
   async getAllTickets() {
     try {
-      const raw = await AsyncStorage.getItem(TICKETS_STORAGE_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
+      const snapshot = await getDocs(
+        collection(db, 'support_tickets')
+      );
+
+      return snapshot.docs.map((ticketDoc) =>
+        normalizeTicket(ticketDoc.data(), ticketDoc.id)
+      );
+    } catch (error) {
+      console.error(
+        '[SupportTicketService] getAllTickets failed:',
+        error?.message || error
+      );
+
       return [];
     }
   },
 
   /**
-   * Get single ticket by ID
+   * Get one ticket by server-generated ticket ID.
    */
   async getTicketById(ticketId) {
-    const all = await this.getAllTickets();
-    return all.find((t) => t.ticketId === ticketId) || null;
+    if (!ticketId) return null;
+
+    try {
+      const ticketRef = doc(
+        db,
+        'support_tickets',
+        String(ticketId)
+      );
+
+      const snapshot = await getDoc(ticketRef);
+
+      if (!snapshot.exists()) {
+        return null;
+      }
+
+      return normalizeTicket(snapshot.data(), snapshot.id);
+    } catch (error) {
+      console.error(
+        '[SupportTicketService] getTicketById failed:',
+        error?.message || error
+      );
+
+      return null;
+    }
   },
 
   /**
-   * Add a message / reply to an existing ticket
+   * Add a reply message through the backend.
+   *
+   * The Cloud Function enforces owner-isolation (a user may only reply to
+   * their own ticket) and derives sender identity from Firebase Auth, never
+   * from client-supplied fields.
    */
   async addMessage(ticketId, { sender, senderName, message }) {
-    if (!ticketId || !message) return null;
-    const all = await this.getAllTickets();
-    const idx = all.findIndex((t) => t.ticketId === ticketId);
-    if (idx === -1) return null;
-
-    const now = new Date().toISOString();
-    const msg = {
-      id: `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      sender: sender || 'user',
-      senderName: senderName || 'User',
-      message: String(message).trim(),
-      timestamp: now,
-    };
-
-    all[idx].messages = [...(all[idx].messages || []), msg];
-    all[idx].updatedAt = now;
-
-    if (sender === 'admin' && all[idx].status === TICKET_STATUS.OPEN) {
-      all[idx].status = TICKET_STATUS.WAITING_FOR_USER;
-    } else if (sender === 'user' && all[idx].status === TICKET_STATUS.WAITING_FOR_USER) {
-      all[idx].status = TICKET_STATUS.IN_PROGRESS;
+    if (!ticketId || !message) {
+      return null;
     }
 
-    await AsyncStorage.setItem(TICKETS_STORAGE_KEY, JSON.stringify(all));
-    return all[idx];
+    const result = await addSupportTicketMessageCallable({
+      ticketId: String(ticketId),
+      senderName: String(senderName || '').trim(),
+      message: String(message).trim(),
+    });
+
+    const data = result?.data || {};
+
+    if (!data.success) {
+      throw new Error('Support ticket reply failed.');
+    }
+
+    return {
+      ticketId: data.ticketId || ticketId,
+      message: data.message || { sender, senderName, message },
+    };
   },
 
   /**
-   * Update ticket status (e.g. resolve or close)
+   * Update ticket status through the backend.
    */
   async updateStatus(ticketId, nextStatus, adminId = null) {
-    const all = await this.getAllTickets();
-    const idx = all.findIndex((t) => t.ticketId === ticketId);
-    if (idx === -1) return null;
+    if (!ticketId || !nextStatus) {
+      return null;
+    }
 
-    const now = new Date().toISOString();
-    all[idx].status = nextStatus;
-    all[idx].updatedAt = now;
-    if (adminId) all[idx].assignedAdmin = adminId;
+    const result = await updateSupportTicketStatusCallable({
+      ticketId: String(ticketId),
+      status: String(nextStatus),
+    });
 
-    await AsyncStorage.setItem(TICKETS_STORAGE_KEY, JSON.stringify(all));
-    return all[idx];
+    const data = result?.data || {};
+
+    if (!data.success) {
+      throw new Error('Support ticket status update failed.');
+    }
+
+    return {
+      ticketId: data.ticketId || ticketId,
+      status: data.status || nextStatus,
+      assignedAdmin: adminId || null,
+    };
   },
 };
 

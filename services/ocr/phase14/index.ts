@@ -1,0 +1,11 @@
+export { OCR_ERROR, messageForCode } from './errorTaxonomy.ts';
+export { classifyDocumentIntelligence, UNKNOWN_DOCUMENT_STRUCTURE, DOCUMENT_TYPE_UNCERTAIN } from './documentTypeIntelligence.ts';
+export { looksLikeCurrency, hasCurrencyGlyph, currencyAsIdentifierVeto } from './currencyProtection.ts';
+export { validatePhase14Field } from './extendedValidators.ts';
+export { buildEnsembleCandidates, describeProviderAvailability } from './ensembleCandidates.ts';
+export { calibrateFieldConfidence, REVIEW_DECISION } from './semanticConfidence.ts';
+export { evaluateRelationalValidation } from './crossFieldHardening.ts';
+export { resolveAssetIdentity } from './assetIdentity.ts';
+export { evaluateLineItems, interpretImageQuality } from './guards.ts';
+export { hardenOcrUnderstanding } from './hardeningOrchestrator.ts';
+export { summarizeOcrHardeningDiagnostics, formatDiagnosticMetric } from './adminDiagnostics.ts';

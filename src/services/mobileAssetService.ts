@@ -44,6 +44,9 @@ export function normalizeAssetData(id: string, raw: any): Asset {
     maintenanceDueDate: raw.maintenanceDueDate || raw.nextServiceDue || undefined,
     maintenanceType: raw.maintenanceType || undefined,
     serialNumber: raw.serialNumber || raw.chassisNumber || raw.registration || undefined,
+    imei: /^\d{15}$/.test(String(raw.imei || '').replace(/\D/g, ''))
+      ? String(raw.imei).replace(/\D/g, '')
+      : undefined,
     vendor: raw.vendor || raw.dealer || raw.workshop || undefined,
     notes: raw.notes || '',
     receiptImageUrl: raw.receiptImageUrl || raw.documentUrl || undefined,

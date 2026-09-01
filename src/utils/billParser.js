@@ -1,8 +1,12 @@
-/**
- * Sweet Bill Checker — lightweight regex bill parser + duplicate detection.
- */
-
-import AsyncStorage from '@react-native-async-storage/async-storage';
+function getAsyncStorage() {
+  try {
+    // eslint-disable-next-line global-require
+    const mod = require('@react-native-async-storage/async-storage');
+    return mod?.default || mod;
+  } catch {
+    return null;
+  }
+}
 import { extractBillLineItems } from './billLineItems';
 
 const DUPLICATE_KEY = '@asset_doctor/sweet_bill_duplicates_v1';
@@ -176,7 +180,10 @@ export async function rememberBillFingerprint(parsedOrFingerprint) {
   if (!fingerprint) return;
   const list = await loadFingerprints();
   if (list.includes(fingerprint)) return;
-  await AsyncStorage.setItem(DUPLICATE_KEY, JSON.stringify([fingerprint, ...list].slice(0, 500)));
+  const storage = getAsyncStorage();
+  if (storage?.setItem) {
+    await storage.setItem(DUPLICATE_KEY, JSON.stringify([fingerprint, ...list].slice(0, 500)));
+  }
 }
 
 export async function saveParsedBillDraft(parsed, extras = {}) {
@@ -185,13 +192,17 @@ export async function saveParsedBillDraft(parsed, extras = {}) {
     ...extras,
     savedAt: new Date().toISOString(),
   };
-  await AsyncStorage.setItem('@asset_doctor/last_parsed_bill_v1', JSON.stringify(payload));
+  const storage = getAsyncStorage();
+  if (storage?.setItem) {
+    await storage.setItem('@asset_doctor/last_parsed_bill_v1', JSON.stringify(payload));
+  }
   return payload;
 }
 
 export async function loadParsedBillDraft() {
   try {
-    const raw = await AsyncStorage.getItem('@asset_doctor/last_parsed_bill_v1');
+    const storage = getAsyncStorage();
+    const raw = storage?.getItem ? await storage.getItem('@asset_doctor/last_parsed_bill_v1') : null;
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -200,7 +211,8 @@ export async function loadParsedBillDraft() {
 
 async function loadFingerprints() {
   try {
-    const raw = await AsyncStorage.getItem(DUPLICATE_KEY);
+    const storage = getAsyncStorage();
+    const raw = storage?.getItem ? await storage.getItem(DUPLICATE_KEY) : null;
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed.map(String) : [];
   } catch {

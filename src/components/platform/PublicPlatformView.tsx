@@ -25,6 +25,7 @@ import {
   Plus
 } from 'lucide-react';
 import { PublicHomepageView } from './PublicHomepageView';
+import { GooglePlayDownloadButton } from './GooglePlayDownloadButton';
 import { SmartKnowledgeHub } from './knowledge/SmartKnowledgeHub';
 import { UniversalDailyToolsHub } from './tools/UniversalDailyToolsHub';
 import { RepairVsReplaceTool } from './RepairVsReplaceTool';
@@ -454,6 +455,16 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
     }
   };
 
+  const trackAppDownload = () => {
+    AnalyticsService.trackEvent('app_download_click', {
+      path: '/',
+      metadata: {
+        platform: 'android',
+        destination: 'google_play'
+      }
+    });
+  };
+
   return (
     <div className="min-h-screen bg-[#070D18] text-slate-100 flex flex-col selection:bg-emerald-500 selection:text-slate-950">
       {/* Toast Notification */}
@@ -566,63 +577,77 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
         {/* Right: Guest vs Authenticated User Actions */}
         <div className="flex items-center gap-2">
           {currentUser ? (
-            <div className="relative">
-              <button
-                onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                className="px-3.5 py-2 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs font-bold text-slate-200 transition-all cursor-pointer flex items-center gap-2 shadow-md"
-              >
-                <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-[11px]">
-                  {currentUser.email ? currentUser.email.charAt(0).toUpperCase() : 'U'}
-                </div>
-                <span className="hidden sm:inline-block max-w-[130px] truncate text-slate-300">
-                  {currentUser.email || 'My Account'}
-                </span>
-              </button>
-
-              {/* Profile Dropdown */}
-              {isProfileMenuOpen && (
-                <div className="absolute right-0 mt-2 w-52 rounded-2xl bg-[#070D18] border border-slate-800 p-2 shadow-2xl space-y-1 z-50 text-xs animate-scale-up">
-                  <div className="px-3 py-2 border-b border-slate-800/80">
-                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Signed in as</span>
-                    <span className="font-bold text-white truncate block text-[11px]">
-                      {currentUser.email || 'Asset Doctor Member'}
-                    </span>
+            <div className="flex items-center gap-2">
+              <GooglePlayDownloadButton
+                variant="header"
+                placement="header_auth"
+                label="Download App"
+                size="sm"
+                className="hidden md:inline-flex"
+              />
+              <div className="relative">
+                <button
+                  onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                  className="px-3.5 py-2 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs font-bold text-slate-200 transition-all cursor-pointer flex items-center gap-2 shadow-md"
+                >
+                  <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-[11px]">
+                    {currentUser.email ? currentUser.email.charAt(0).toUpperCase() : 'U'}
                   </div>
+                  <span className="hidden sm:inline-block max-w-[130px] truncate text-slate-300">
+                    {currentUser.email || 'My Account'}
+                  </span>
+                </button>
 
-                  <button
-                    onClick={() => {
-                      setIsProfileMenuOpen(false);
-                      navigateToPath('/vault');
-                    }}
-                    className="w-full px-3 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-900 flex items-center gap-2 font-semibold transition cursor-pointer text-left"
-                  >
-                    <FolderLock className="w-4 h-4 text-emerald-400" />
-                    <span>My Asset Vault</span>
-                  </button>
+                {/* Profile Dropdown */}
+                {isProfileMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-52 rounded-2xl bg-[#070D18] border border-slate-800 p-2 shadow-2xl space-y-1 z-50 text-xs animate-scale-up">
+                    <div className="px-3 py-2 border-b border-slate-800/80">
+                      <span className="text-[10px] uppercase font-bold text-slate-500 block">Signed in as</span>
+                      <span className="font-bold text-white truncate block text-[11px]">
+                        {currentUser.email || 'Asset Doctor Member'}
+                      </span>
+                    </div>
 
-                  <button
-                    onClick={() => {
-                      setIsProfileMenuOpen(false);
-                      onOpenAppVault();
-                    }}
-                    className="w-full px-3 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-900 flex items-center gap-2 font-semibold transition cursor-pointer text-left"
-                  >
-                    <Shield className="w-4 h-4 text-teal-400" />
-                    <span>Open Native App UI</span>
-                  </button>
+                    <button
+                      onClick={() => {
+                        setIsProfileMenuOpen(false);
+                        navigateToPath('/vault');
+                      }}
+                      className="w-full px-3 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-900 flex items-center gap-2 font-semibold transition cursor-pointer text-left"
+                    >
+                      <FolderLock className="w-4 h-4 text-emerald-400" />
+                      <span>My Asset Vault</span>
+                    </button>
 
-                  <button
-                    onClick={handleSignOut}
-                    className="w-full px-3 py-2 rounded-xl text-rose-400 hover:bg-rose-500/10 flex items-center gap-2 font-semibold transition cursor-pointer text-left border-t border-slate-800/80 pt-2"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    <span>Sign Out</span>
-                  </button>
-                </div>
-              )}
+                    <button
+                      onClick={() => {
+                        setIsProfileMenuOpen(false);
+                        onOpenAppVault();
+                      }}
+                      className="w-full px-3 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-900 flex items-center gap-2 font-semibold transition cursor-pointer text-left"
+                    >
+                      <Shield className="w-4 h-4 text-teal-400" />
+                      <span>Open Native App UI</span>
+                    </button>
+
+                    <button
+                      onClick={handleSignOut}
+                      className="w-full px-3 py-2 rounded-xl text-rose-400 hover:bg-rose-500/10 flex items-center gap-2 font-semibold transition cursor-pointer text-left border-t border-slate-800/80 pt-2"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <div className="flex items-center gap-2">
+              <GooglePlayDownloadButton
+                variant="header"
+                placement="header"
+                label="Download Now"
+              />
               <button
                 onClick={() => {
                   setAuthContextMessage(undefined);

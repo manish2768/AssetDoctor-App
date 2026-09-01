@@ -10,7 +10,7 @@ import {
   POWERTRAIN,
   APPLIANCE_TYPE,
   classifyFromCategoryId,
-} from './assetTaxonomy';
+} from './assetTaxonomy.js';
 
 /** categoryId values that must never show battery health */
 const APPLIANCE_NO_BATTERY_IDS = new Set([

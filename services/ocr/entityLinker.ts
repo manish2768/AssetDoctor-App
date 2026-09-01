@@ -32,117 +32,291 @@ export class EntityLinker {
     }
 
     // Extract search keys from document data
-    const docReg = extractedData.serviceData?.vehicleRegistration?.value ||
-                   extractedData.insuranceData?.vehicleRegistration?.value ||
-                   extractedData.pucData?.registrationNumber?.value ||
-                   extractedData.rcData?.registrationNumber?.value ||
-                   extractedData.purchaseData?.vehicleRegistration?.value;
+    const s = extractedData.serviceData as any;
+    const ins = extractedData.insuranceData as any;
+    const puc = extractedData.pucData as any;
+    const rc = extractedData.rcData as any;
+    const p = extractedData.purchaseData as any;
 
-    const docVin = extractedData.serviceData?.vinOrChassis?.value ||
-                   extractedData.insuranceData?.vinOrChassis?.value ||
-                   extractedData.rcData?.chassisNumber?.value;
+    const docReg = s?.registration?.value ||
+                   s?.vehicleRegistration?.value ||
+                   ins?.vehicleRegistration?.value ||
+                   ins?.registration?.value ||
+                   puc?.registration?.value ||
+                   puc?.registrationNumber?.value ||
+                   rc?.registration?.value ||
+                   rc?.registrationNumber?.value ||
+                   p?.registration?.value ||
+                   p?.vehicleRegistration?.value;
 
-    const docEngine = extractedData.serviceData?.engineNumber?.value ||
-                      extractedData.insuranceData?.engineNumber?.value ||
-                      extractedData.rcData?.engineNumber?.value;
+    const docVin = s?.vinOrChassis?.value ||
+                   s?.chassisNumber?.value ||
+                   ins?.vinOrChassis?.value ||
+                   ins?.chassisNumber?.value ||
+                   rc?.chassisNumber?.value ||
+                   rc?.vinOrChassis?.value;
+
+    const docEngine = s?.engineNumber?.value ||
+                      ins?.engineNumber?.value ||
+                      rc?.engineNumber?.value;
 
     const docSerial = extractedData.purchaseData?.serialNumber?.value ||
+                      extractedData.electronicsData?.serialNumber?.value ||
                       extractedData.warrantyData?.serialNumber?.value ||
                       extractedData.applianceData?.serialNumber?.value;
 
+    const docImei = extractedData.electronicsData?.imei?.value;
+
     const docBrand = extractedData.purchaseData?.brand?.value ||
+                     extractedData.electronicsData?.brand?.value ||
                      extractedData.warrantyData?.brand?.value ||
                      extractedData.applianceData?.brand?.value ||
-                     extractedData.rcData?.maker?.value;
+                     extractedData.rcData?.maker?.value ||
+                     extractedData.serviceData?.vehicleMake?.value;
+
+    const docModel = extractedData.purchaseData?.model?.value ||
+                     extractedData.electronicsData?.model?.value ||
+                     extractedData.electronicsData?.productName?.value ||
+                     extractedData.purchaseData?.assetName?.value ||
+                     extractedData.applianceData?.model?.value ||
+                     extractedData.serviceData?.vehicleModel?.value ||
+                     extractedData.insuranceData?.vehicleModel?.value ||
+                     extractedData.rcData?.model?.value;
 
     const normDocReg = docReg ? ServiceExtractor.normalizeRegistration(docReg) : null;
+    const cleanDocVin = docVin ? String(docVin).toUpperCase().replace(/[^A-Z0-9]/g, '') : null;
+    const cleanDocEngine = docEngine ? String(docEngine).toUpperCase().replace(/[^A-Z0-9]/g, '') : null;
+    const cleanDocSerial = docSerial ? String(docSerial).toUpperCase().trim() : null;
+    const cleanDocImei = docImei ? String(docImei).replace(/\D/g, '') : null;
+
     const candidates: EntityLinkCandidate[] = [];
 
+    const finishExact = (
+      hits: EntityLinkCandidate[],
+      matchType: EntityLinkResult['matchType'],
+      confidence: number,
+      notesSingle: (hit: EntityLinkCandidate) => string,
+      notesMany: string,
+    ): EntityLinkResult | null => {
+      if (hits.length === 1) {
+        const hit = hits[0];
+        return {
+          matchedAssetId: hit.assetId,
+          confidence,
+          matchType,
+          isAutoLinked: true,
+          notes: notesSingle(hit),
+          candidates: hits,
+        };
+      }
+      if (hits.length > 1) {
+        return {
+          matchedAssetId: null,
+          confidence,
+          matchType,
+          isAutoLinked: false,
+          notes: notesMany,
+          candidates: hits,
+        };
+      }
+      return null;
+    };
+
+    // Priority 1: Exact Registration Number — collect ALL hits (never pick at random)
+    if (normDocReg) {
+      const hits: EntityLinkCandidate[] = [];
+      for (const asset of existingAssets) {
+        const assetReg = asset.registration ? ServiceExtractor.normalizeRegistration(asset.registration) : null;
+        if (assetReg && normDocReg === assetReg) {
+          const assetId = asset.id || (asset as any).assetId;
+          const assetName = asset.name || (asset as any).assetName || 'Vehicle';
+          hits.push({
+            assetId,
+            assetName,
+            matchScore: 100,
+            matchedFields: ['registration'],
+            isExactMatch: true,
+            status: 'EXACT_MATCH',
+          });
+        }
+      }
+      const exact = finishExact(
+        hits,
+        'EXACT_REGISTRATION',
+        0.99,
+        (hit) => `Exact registration match (${normDocReg}) -> Linked to asset "${hit.assetName}" (${hit.assetId})`,
+        `Multiple vault assets share registration ${normDocReg}. Confirm which entry to attach — auto-link blocked.`,
+      );
+      if (exact) return exact;
+    }
+
+    // Priority 2: Exact Chassis / VIN Number (min 10 chars)
+    if (cleanDocVin && cleanDocVin.length >= 8) {
+      const hits: EntityLinkCandidate[] = [];
+      for (const asset of existingAssets) {
+        const assetVin = String((asset as any).vinNumber || (asset as any).chassisNumber || (asset as any).vin || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (assetVin && assetVin.length >= 8 && cleanDocVin === assetVin) {
+          const assetId = asset.id || (asset as any).assetId;
+          const assetName = asset.name || (asset as any).assetName || 'Vehicle';
+          hits.push({
+            assetId,
+            assetName,
+            matchScore: 98,
+            matchedFields: ['chassisNumber'],
+            isExactMatch: true,
+            status: 'EXACT_MATCH',
+          });
+        }
+      }
+      const exact = finishExact(
+        hits,
+        'EXACT_VIN',
+        0.98,
+        (hit) => `Exact chassis/VIN match (${cleanDocVin}) -> Linked to asset "${hit.assetName}" (${hit.assetId})`,
+        `Multiple vault assets share chassis ${cleanDocVin}. Confirm which entry to attach — auto-link blocked.`,
+      );
+      if (exact) return exact;
+    }
+
+    // Priority 3: Exact Engine Number (min 6 chars)
+    if (cleanDocEngine && cleanDocEngine.length >= 6) {
+      const hits: EntityLinkCandidate[] = [];
+      for (const asset of existingAssets) {
+        const assetEngine = String((asset as any).engineNumber || (asset as any).engineNo || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (assetEngine && assetEngine.length >= 6 && cleanDocEngine === assetEngine) {
+          const assetId = asset.id || (asset as any).assetId;
+          const assetName = asset.name || (asset as any).assetName || 'Vehicle';
+          hits.push({
+            assetId,
+            assetName,
+            matchScore: 95,
+            matchedFields: ['engineNumber'],
+            isExactMatch: true,
+            status: 'EXACT_MATCH',
+          });
+        }
+      }
+      const exact = finishExact(
+        hits,
+        'EXACT_ENGINE',
+        0.96,
+        (hit) => `Exact engine number match (${cleanDocEngine}) -> Linked to asset "${hit.assetName}" (${hit.assetId})`,
+        `Multiple vault assets share engine ${cleanDocEngine}. Confirm which entry to attach — auto-link blocked.`,
+      );
+      if (exact) return exact;
+    }
+
+    // Priority 4: Exact Serial Number (min 5 chars)
+    if (cleanDocSerial && cleanDocSerial.length >= 5 && !/^(?:n\/a|na|nil|null|undefined|none)$/i.test(cleanDocSerial)) {
+      const hits: EntityLinkCandidate[] = [];
+      for (const asset of existingAssets) {
+        const assetSerial = String(asset.serialNumber || (asset as any).serial || '').toUpperCase().trim();
+        if (assetSerial && assetSerial.length >= 5 && cleanDocSerial === assetSerial) {
+          const assetId = asset.id || (asset as any).assetId;
+          const assetName = asset.name || (asset as any).assetName || 'Asset';
+          hits.push({
+            assetId,
+            assetName,
+            matchScore: 95,
+            matchedFields: ['serialNumber'],
+            isExactMatch: true,
+            status: 'EXACT_MATCH',
+          });
+        }
+      }
+      const exact = finishExact(
+        hits,
+        'EXACT_SERIAL',
+        0.95,
+        (hit) => `Exact serial number match (${cleanDocSerial}) -> Linked to asset "${hit.assetName}" (${hit.assetId})`,
+        `Multiple vault assets share serial ${cleanDocSerial}. Confirm which entry to attach — auto-link blocked.`,
+      );
+      if (exact) return exact;
+    }
+
+    // Priority 5: Exact IMEI (15 digits)
+    if (cleanDocImei && cleanDocImei.length === 15) {
+      const hits: EntityLinkCandidate[] = [];
+      for (const asset of existingAssets) {
+        const assetImei = String((asset as any).imei || '').replace(/\D/g, '');
+        if (assetImei && assetImei.length === 15 && cleanDocImei === assetImei) {
+          const assetId = asset.id || (asset as any).assetId;
+          const assetName = asset.name || (asset as any).assetName || 'Device';
+          hits.push({
+            assetId,
+            assetName,
+            matchScore: 97,
+            matchedFields: ['imei'],
+            isExactMatch: true,
+            status: 'EXACT_MATCH',
+          });
+        }
+      }
+      const exact = finishExact(
+        hits,
+        'EXACT_IMEI',
+        0.97,
+        (hit) => `Exact IMEI match (${cleanDocImei}) -> Linked to asset "${hit.assetName}" (${hit.assetId})`,
+        `Multiple vault assets share IMEI ${cleanDocImei}. Confirm which entry to attach — auto-link blocked.`,
+      );
+      if (exact) return exact;
+    }
+
+    // Priority 6: Strong Asset Name + Manufacturer Match (Fuzzy)
     for (const asset of existingAssets) {
+      const assetName = (asset.name || (asset as any).assetName || '').toLowerCase();
+      const assetBrand = (asset.brand || (asset as any).brandName || '').toLowerCase();
       const matchedFields: string[] = [];
       let score = 0;
 
-      // 1. Check Registration match (Highest Signal)
-      const assetReg = asset.registration ? ServiceExtractor.normalizeRegistration(asset.registration) : null;
-      if (normDocReg && assetReg && normDocReg === assetReg) {
-        score += 80;
-        matchedFields.push('registration');
-      }
-
-      // 2. Check VIN / Chassis match
-      if (docVin && asset.vinNumber && docVin.toUpperCase() === asset.vinNumber.toUpperCase()) {
-        score += 80;
-        matchedFields.push('vinOrChassis');
-      }
-
-      // 3. Check Serial Number match (Appliances)
-      if (docSerial && asset.serialNumber && docSerial.toUpperCase() === asset.serialNumber.toUpperCase()) {
-        score += 80;
-        matchedFields.push('serialNumber');
-      }
-
-      // 4. Check Engine Number match
-      if (docEngine && asset.engineNumber && docEngine.toUpperCase() === asset.engineNumber.toUpperCase()) {
-        score += 40;
-        matchedFields.push('engineNumber');
-      }
-
-      // 5. Check Brand / Name fuzzy similarity
-      if (docBrand && asset.brand && asset.brand.toLowerCase().includes(docBrand.toLowerCase())) {
-        score += 15;
+      if (docBrand && assetBrand && (assetBrand.includes(docBrand.toLowerCase()) || docBrand.toLowerCase().includes(assetBrand))) {
+        score += 35;
         matchedFields.push('brand');
       }
 
-      if (score > 0) {
+      if (docModel && assetName && docModel.length >= 3) {
+        const normModel = docModel.toLowerCase().trim();
+        if (assetName.includes(normModel) || normModel.includes(assetName)) {
+          score += 45;
+          matchedFields.push('model');
+        }
+      }
+
+      if (score >= 40) {
+        const assetId = asset.id || (asset as any).assetId;
         candidates.push({
-          assetId: asset.id,
-          assetName: asset.name,
+          assetId,
+          assetName: asset.name || (asset as any).assetName || 'Asset',
           matchScore: score,
           matchedFields,
-          isExactMatch: score >= 80,
-          status: score >= 80 ? 'EXACT_MATCH' : 'POSSIBLE_MATCH'
+          isExactMatch: false,
+          status: 'POSSIBLE_MATCH',
         });
       }
     }
 
-    // Sort by highest match score
     candidates.sort((a, b) => b.matchScore - a.matchScore);
 
     if (candidates.length > 0) {
       const top = candidates[0];
-      if (top.isExactMatch) {
-        let matchType: EntityLinkResult['matchType'] = 'EXACT_REGISTRATION';
-        if (top.matchedFields.includes('registration')) matchType = 'EXACT_REGISTRATION';
-        else if (top.matchedFields.includes('vinOrChassis')) matchType = 'EXACT_VIN';
-        else if (top.matchedFields.includes('serialNumber')) matchType = 'EXACT_SERIAL';
-
-        return {
-          matchedAssetId: top.assetId,
-          confidence: 0.98,
-          matchType,
-          isAutoLinked: true,
-          notes: `Exact entity match on ${top.matchedFields.join(', ')} -> Linked to asset "${top.assetName}" (${top.assetId})`,
-          candidates
-        };
-      } else {
-        return {
-          matchedAssetId: top.assetId,
-          confidence: 0.65,
-          matchType: 'FUZZY_NAME',
-          isAutoLinked: false,
-          notes: 'Possible asset match — review required before linking',
-          candidates
-        };
-      }
+      return {
+        matchedAssetId: top.assetId,
+        confidence: top.matchScore / 100,
+        matchType: 'FUZZY_NAME',
+        isAutoLinked: false,
+        notes: `Possible match on ${top.matchedFields.join(', ')} -> Review before linking to "${top.assetName}"`,
+        candidates,
+      };
     }
 
+    // Priority 7: No Match / User confirmation needed
     return {
       matchedAssetId: null,
       confidence: 0,
       matchType: 'NO_MATCH',
       isAutoLinked: false,
       notes: 'No matching asset found. New asset creation suggested.',
-      candidates: []
+      candidates: [],
     };
   }
 }

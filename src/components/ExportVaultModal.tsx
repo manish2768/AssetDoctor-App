@@ -96,7 +96,7 @@ export const ExportVaultModal: React.FC<ExportVaultModalProps> = ({
   <div class="container">
     <div class="header">
       <div>
-        <div class="logo">🛡️ AssetDoctor</div>
+        <div class="logo">ASSET DOCTOR</div>
         <div class="subtitle">Official Vault Summary & Warranty Certificate Backup • Generated ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
       </div>
       <div class="badge">ServiVault Verified</div>

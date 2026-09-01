@@ -4,11 +4,12 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Modal, Image, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Modal, Pressable } from 'react-native';
 
 import { useAuth } from '../../context/AuthProvider';
 import { useUiFeedback } from '../../context/UiFeedbackProvider';
 import { GlassCard, GlassInput, GlassButton } from '../ui/Glass';
+import { AppLogo } from '../AppLogo';
 import { BRAND, COLORS, SPACING } from '../../theme/branding';
 import { Haptics } from '../../services/haptics';
 import { normalizePhone } from '../../utils/profileSetup';
@@ -133,11 +134,7 @@ export function ProfileSetupModal() {
   return (
     <Modal visible animationType="slide" presentationStyle="fullScreen">
       <View style={styles.root}>
-        <Image
-          source={require('../../../assets/icon.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
+        <AppLogo size={72} style={styles.logo} />
         <Text style={styles.title}>Add a few details</Text>
         <Text style={styles.sub}>
           Optional — you can skip and use {BRAND.name} now. Link a mobile later in Settings.

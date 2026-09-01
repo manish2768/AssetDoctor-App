@@ -25,9 +25,10 @@ export async function compressScanImage(uri, opts = {}) {
       return uri;
     }
     const format = ImageManipulator.SaveFormat?.JPEG || 'jpeg';
+    const actions = opts.neverUpscale ? [] : [{ resize: { width: maxWidth } }];
     const result = await ImageManipulator.manipulateAsync(
       uri,
-      [{ resize: { width: maxWidth } }],
+      actions,
       { compress, format, base64: false },
     );
     return result?.uri || uri;

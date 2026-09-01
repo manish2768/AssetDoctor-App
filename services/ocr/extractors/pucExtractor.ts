@@ -1,85 +1,81 @@
 /**
- * Pollution Under Control (PUC) Certificate Extractor
- * Extracts emission readings, certificate number, validity dates, and testing center details.
+ * Asset Doctor — Indian PUC (Pollution Under Control) Extractor
+ * Extracts PUC certificate number, vehicle registration, issue date,
+ * expiry date, test centre code, and emission test status.
  */
 
-import type { PucCertificateData, ExtractedField, VerificationConfidenceTier } from '../types.ts';
-import { ServiceExtractor } from './serviceExtractor.ts';
+import type { ExtractedField, PucCertificateData } from '../types.ts';
+import { ServiceExtractor, createField as baseCreateField } from './serviceExtractor.ts';
+import { extractLabeledRegistration } from '../fieldSafety.ts';
 
-function createField<T>(
-  value: T | null,
-  confidence: number,
-  rawText: string,
-  sourceLabel?: string,
-  flag?: string
-): ExtractedField<T> {
-  const rounded = Math.round(confidence * 100) / 100;
-  let tier: VerificationConfidenceTier = 'NEEDS_VERIFICATION';
-  if (rounded >= 0.85) tier = 'VERIFIED';
-  else if (rounded >= 0.70) tier = 'NEEDS_REVIEW';
-
-  return {
-    value,
-    confidence: rounded,
-    rawText,
-    sourceLabel,
-    tier,
-    flag
-  };
+function createField<T>(value: T, confidence = 0.95, rawText = ''): ExtractedField<T> {
+  return baseCreateField(value, confidence, rawText, 'PUC Matcher', 'puc_pattern_matcher');
 }
 
 export class PucExtractor {
   public static extract(rawText: string): PucCertificateData {
-    const data: PucCertificateData = {};
+    const result: PucCertificateData = {};
+    const upper = rawText.toUpperCase();
 
-    // 1. REGISTRATION NUMBER
-    const regMatch = rawText.match(/(?:Vehicle\s*Reg(?:istration)?\.?\s*(?:No|Num)?|Regn\s*No)[:\s\.\-]*([A-Z0-9\s\-]{8,14})/i) ||
-                     rawText.match(/\b([A-Z]{2}[0-9]{2}[A-Z]{1,2}[0-9]{4})\b/i);
-    if (regMatch) {
-      const norm = ServiceExtractor.normalizeRegistration(regMatch[1]);
-      if (norm) {
-        data.registrationNumber = createField(norm, 0.98, regMatch[0], 'PUC Registration');
+    // 1. Vehicle Registration Number (Indian Format: UP32QU2187, DL01AB1234, MH02CD5678, etc.)
+    const labelledReg = extractLabeledRegistration(rawText);
+    const unlabelledRegMatch = labelledReg.value
+      ? null
+      : rawText.match(/\b([A-Z]{2}\s*[-]?\s*[0-9]{1,2}\s*[-]?\s*[A-Z]{1,3}\s*[-]?\s*[0-9]{4})\b/i);
+
+    if (labelledReg.value) {
+      result.registrationNumber = createField(labelledReg.value, labelledReg.valid ? 0.97 : 0.62, labelledReg.evidence);
+      result.registrationNumber.validationResult = labelledReg.valid ? 'PASS' : 'FAIL';
+    } else if (unlabelledRegMatch) {
+      const cleanReg = ServiceExtractor.normalizeRegistration(unlabelledRegMatch[1]);
+      if (cleanReg) {
+        result.registrationNumber = createField(cleanReg, 0.9, unlabelledRegMatch[0]);
       }
     }
 
-    // 2. CERTIFICATE NUMBER
-    const certMatch = rawText.match(/(?:Certificate\s*No|PUC\s*No|Certificate\s*Serial\s*No)[:\s\.\-]*([A-Za-z0-9\/\-_]{6,25})/i);
-    if (certMatch) {
-      data.certificateNumber = createField(certMatch[1].trim(), 0.95, certMatch[0], 'PUC Certificate No');
-    }
-
-    // 3. DATES (Issue & Expiry)
-    const issueMatch = rawText.match(/(?:Date\s*of\s*Test|Testing\s*Date|Issue\s*Date|Tested\s*On)[:\s\.\-]*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i);
-    if (issueMatch) {
-      const norm = ServiceExtractor.normalizeDate(issueMatch[1]);
-      if (norm) data.issueDate = createField(norm, 0.96, issueMatch[0], 'Issue Date');
-    }
-
-    const expMatch = rawText.match(/(?:Valid\s*Till|Valid\s*Up\s*To|Expiry\s*Date|Valid\s*Upto)[:\s\.\-]*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i);
-    if (expMatch) {
-      const norm = ServiceExtractor.normalizeDate(expMatch[1]);
-      if (norm) data.expiryDate = createField(norm, 0.97, expMatch[0], 'PUC Expiry Date');
-    }
-
-    // 4. FUEL TYPE & VEHICLE TYPE
-    const fuelMatch = rawText.match(/(?:Fuel|Fuel\s*Type)[:\s\.\-]*([A-Za-z]+)/i);
-    if (fuelMatch) {
-      const fuel = fuelMatch[1].toUpperCase();
-      if (/PETROL|DIESEL|CNG|LPG|ELECTRIC|HYBRID/.test(fuel)) {
-        data.fuelType = createField(fuel, 0.95, fuelMatch[0], 'Fuel Type');
+    // 2. PUC Certificate Number (e.g. PUC NO: DL01/2024/987123, PUC/UP32/88719, etc.)
+    const pucNumMatch = rawText.match(
+      /(?:PUC\s*(?:(?:CERTIFICATE\s*)?(?:NO|NUMBER)|CERTIFICATE|CODE)?|CERTIFICATE\s*NO)[\s.:#-]+([A-Z0-9\/-]{6,25})/i
+    );
+    if (pucNumMatch) {
+      const val = pucNumMatch[1].trim();
+      if (val && val !== (result.registrationNumber?.value || '___')) {
+        result.certificateNumber = createField(val, 0.94, pucNumMatch[0]);
       }
     }
 
-    // 5. EMISSION VALUES & STATUS
-    const coMatch = rawText.match(/(?:CO|Carbon\s*Monoxide)[:\s\.\-]*([0-9]+(?:\.[0-9]+)?\s*%?)/i);
-    const hcMatch = rawText.match(/(?:HC|Hydro\s*Carbon)[:\s\.\-]*([0-9]+\s*ppm)/i);
-    const emissionStr = [coMatch ? `CO: ${coMatch[1]}` : '', hcMatch ? `HC: ${hcMatch[1]}` : ''].filter(Boolean).join(', ');
-    if (emissionStr) {
-      data.emissionValues = createField(emissionStr, 0.91, emissionStr, 'Emission Readings');
+    // 3. Issue Date & Expiry / Validity Date
+    const dateMatches = Array.from(rawText.matchAll(/\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})\b/g));
+    const dates: string[] = [];
+    for (const m of dateMatches) {
+      const norm = ServiceExtractor.normalizeDate(m[0]);
+      if (norm) dates.push(norm);
     }
 
-    data.certificateStatus = createField('PASS (COMPLIANT)', 0.99, 'Standard PUC Compliant Status', 'Status Evaluator');
+    // Sort dates chronologically
+    const sortedDates = dates.sort();
+    if (sortedDates.length >= 2) {
+      result.issueDate = createField(sortedDates[0], 0.92, sortedDates[0]);
+      result.expiryDate = createField(sortedDates[sortedDates.length - 1], 0.96, sortedDates[sortedDates.length - 1]);
+    } else if (sortedDates.length === 1) {
+      const d = sortedDates[0];
+      const today = new Date().toISOString().split('T')[0];
+      if (d > today) {
+        result.expiryDate = createField(d, 0.90, d);
+      } else {
+        result.issueDate = createField(d, 0.90, d);
+      }
+    }
 
-    return data;
+    // 4. Emission Test Status
+    if (upper.includes('PASS') || upper.includes('COMPLIANT') || upper.includes('WITHIN LIMITS')) {
+      result.certificateStatus = createField('PASS', 0.98, 'COMPLIANT');
+    }
+
+    return result;
   }
+}
+
+export function extractPucData(rawText: string): PucCertificateData {
+  return PucExtractor.extract(rawText);
 }

@@ -61,6 +61,25 @@ export function safeNavigate(name, params = {}) {
   })();
 }
 
+/** Open the Assets tab list scoped to a stable category key. */
+export function openAssetCategoryList(category = 'all') {
+  const key = category && category !== 'all' ? String(category) : 'all';
+  try {
+    if (!navigationRef.isReady()) {
+      setTimeout(() => {
+        safeNavigate('Assets', { screen: 'AssetList', params: { category: key } }).catch(() => {});
+      }, 150);
+      return false;
+    }
+    navigationRef.navigate('Assets', { screen: 'AssetList', params: { category: key } });
+    return true;
+  } catch (error) {
+    console.warn('[nav] openAssetCategoryList:', error?.message || error);
+    safeNavigate('Assets', { screen: 'AssetList', params: { category: key } }).catch(() => {});
+    return false;
+  }
+}
+
 /** Open invoice scanner as root modal — never nests under Home tab. */
 export function openScanInvoice(params = {}) {
   try {

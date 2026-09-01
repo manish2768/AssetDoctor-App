@@ -506,8 +506,8 @@ export function DocumentCard({
 }) {
   const colors = useThemeColors();
   const bar = accent || colors.primary;
-  const statusLabel = needsReview ? 'Needs review' : verified ? 'Verified' : 'On file';
-  const tone = needsReview ? 'warning' : verified ? 'success' : 'neutral';
+  const statusLabel = needsReview ? 'Needs Review' : 'On file';
+  const tone = needsReview ? 'warning' : 'neutral';
   return (
     <Pressable
       onPress={() => {

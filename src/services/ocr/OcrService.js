@@ -18,12 +18,37 @@ export function emptyOcrResult() {
     storeName: '',
     purchaseDate: null,
     serialNumber: '',
+    imei: '',
     chassisNumber: '',
     warrantyExpiry: null,
     insuranceExpiry: null,
     /** Optional hint for UI — not an OCR field */
     category: ASSET_CATEGORIES.GENERAL,
   };
+}
+
+function buildFieldEvidence(lines, data) {
+  const evidence = {};
+  for (const field of OCR_FIELDS) {
+    const value = data?.[field];
+    if (value == null || String(value).trim() === '') continue;
+    const normalizedValue = String(value).replace(/\s+/g, '').toLowerCase();
+    const sourceText =
+      lines.find((line) => String(line).replace(/\s+/g, '').toLowerCase().includes(normalizedValue)) ||
+      String(value);
+    evidence[field] = {
+      field,
+      value,
+      confidence: 0.5,
+      sourceText,
+      sourceBoundingBox: null,
+      page: null,
+      evidenceType: 'ocr_document',
+      validationStatus: 'NEEDS_REVIEW',
+      validationResult: 'UNVALIDATED',
+    };
+  }
+  return evidence;
 }
 
 /**
@@ -86,9 +111,12 @@ export function extractReceiptData(mlKitText) {
       /^(?:vehicle|bike|car)\s*(?:model)?\s*[:\-]\s*(.+)$/i,
     ]) || '';
 
+    data.imei = matchLabeledValue(lines, [
+      /^(?:imei|imev)(?:\s*[12])?\s*[:\-#]?\s*(.+)$/i,
+    ]) || matchInline(blob, /(?:IMEI|IMEV)(?:\s*[12])?\s*[:\-#]?\s*([0-9\s-]{10,24})/i);
     data.serialNumber = matchLabeledValue(lines, [
-      /^(?:s(?:r|erial)?\.?\s*no\.?|serial(?:\s*number)?|imei)\s*[:\-#]?\s*(.+)$/i,
-    ]) || matchInline(blob, /(?:S(?:r|erial)?\.?\s*No\.?|Serial(?:\s*Number)?|IMEI)\s*[:\-#]?\s*([A-Z0-9\-\/]+)/i);
+      /^(?:s(?:r|erial)?\.?\s*no\.?|serial(?:\s*number)?)\s*[:\-#]?\s*(.+)$/i,
+    ]) || matchInline(blob, /(?:S(?:r|erial)?\.?\s*No\.?|Serial(?:\s*Number)?)\s*[:\-#]?\s*([A-Z0-9\-\/]+)/i);
 
     data.chassisNumber = matchLabeledValue(lines, [
       /^(?:chassis(?:\s*no\.?)?|vin|frame\s*no\.?)\s*[:\-#]?\s*(.+)$/i,
@@ -118,7 +146,7 @@ export function extractReceiptData(mlKitText) {
     // Strict: re-sanitize so no accidental extra keys leak through
     const clean = sanitizeOcrFields(data);
     Haptics.success();
-    return { success: true, data: clean };
+    return { success: true, data: clean, fieldEvidence: buildFieldEvidence(lines, clean) };
   } catch (error) {
     Haptics.error();
     return {
@@ -213,7 +241,7 @@ function inferCategory(data) {
   if (data.chassisNumber || /bike|car|vehicle|ronin|chassis|vin/i.test(data.assetName || '')) {
     return ASSET_CATEGORIES.VEHICLE;
   }
-  if (data.serialNumber || /tv|laptop|phone|appliance|electronics/i.test(data.assetName || '')) {
+  if (data.imei || data.serialNumber || /tv|laptop|phone|appliance|electronics/i.test(data.assetName || '')) {
     return ASSET_CATEGORIES.ELECTRONICS;
   }
   if (/property|house|home|rent|deed/i.test(data.assetName || '')) {

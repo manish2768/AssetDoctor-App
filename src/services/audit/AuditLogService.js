@@ -4,6 +4,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createSecureUuid } from '../security/secureId';
 
 const AUDIT_LOG_STORAGE_KEY = 'asset_doctor_audit_logs_v1';
 
@@ -47,7 +48,7 @@ export const AuditLogService = {
     if (!action) return null;
 
     const entry = {
-      id: `audit-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+      id: `audit-${createSecureUuid()}`,
       timestamp: new Date().toISOString(),
       actorId,
       actorRole,

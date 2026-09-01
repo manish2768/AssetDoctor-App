@@ -3,9 +3,9 @@
  * No AI. Does not invent odometer/battery values.
  */
 
-import { daysUntil } from '../../utils/dates';
-import { isAlertableStatus } from '../../constants/assetStatus';
-import { BATTERY_ALERT_THRESHOLDS } from '../health/healthScoreConfig';
+import { daysUntil } from '../../utils/dates.js';
+import { isAlertableStatus } from '../../constants/assetStatus.js';
+import { BATTERY_ALERT_THRESHOLDS } from '../health/healthScoreConfig.js';
 import {
   NOTIFICATION_TYPE,
   NOTIFICATION_PRIORITY,
@@ -15,8 +15,10 @@ import {
   resolvePriority,
   deepLinkFor,
   TYPE_TO_PREF_KEY,
-} from './notificationTypes';
-import { privacySafeAssetLabel } from '../security/privacyPrefs';
+} from './notificationTypes.js';
+import { privacySafeAssetLabel } from '../security/privacyPrefs.js';
+import { resolveCanonicalAssetId, assetIdOf } from '../assets/assetIdentity.js';
+import { resolveAssetCapabilities } from '../assets/assetCapabilities.js';
 
 /** Module cache — NotificationEngine / ExpiryAlertService may refresh. */
 let notificationPrivacyOn = true;
@@ -51,6 +53,12 @@ function enabledOffsets(prefs, type) {
 }
 
 function expiryCandidates(asset, userId, field, type, prefs, now) {
+  const aid = assetIdOf(asset);
+  if (!aid) return [];
+  const caps = resolveAssetCapabilities(asset);
+  if (type === NOTIFICATION_TYPE.PUC_EXPIRY && !caps.supportsPUC) return [];
+  if (type === NOTIFICATION_TYPE.INSURANCE_EXPIRY && !caps.supportsInsurance && !asset.insuranceExpiry) return [];
+
   const eventDate = asset?.[field];
   if (!eventDate) return [];
   const left = daysLeftFrom(eventDate, now);
@@ -64,7 +72,7 @@ function expiryCandidates(asset, userId, field, type, prefs, now) {
     const priority = resolvePriority(left);
     const identity = makeNotificationIdentity({
       userId,
-      assetId: assetIdOf(asset),
+      assetId: aid,
       notificationType: type,
       eventDate,
       reminderOffset: offset,
@@ -73,7 +81,7 @@ function expiryCandidates(asset, userId, field, type, prefs, now) {
       notificationId: identity,
       alertId: identity,
       userId,
-      assetId: assetIdOf(asset),
+      assetId: aid,
       notificationType: type,
       category: TYPE_TO_PREF_KEY[type] || 'Document',
       priority,
@@ -82,7 +90,7 @@ function expiryCandidates(asset, userId, field, type, prefs, now) {
       daysLeft: left,
       title: titleFor(type, asset, left),
       body: bodyFor(type, asset, left, offset),
-      deepLink: deepLinkFor(type, assetIdOf(asset)),
+      deepLink: deepLinkFor(type, aid),
       createdAt: new Date().toISOString(),
       isEstimate: false,
     });
@@ -123,6 +131,11 @@ function bodyFor(type, asset, daysLeft, offset) {
  */
 function batteryCandidates(asset, userId, prefs) {
   if (prefs?.Battery === false) return [];
+  const aid = assetIdOf(asset);
+  if (!aid) return [];
+  const caps = resolveAssetCapabilities(asset);
+  if (!caps.supportsBatteryHealth) return [];
+
   const health =
     asset?.batteryProfile?.healthPercent ??
     asset?.batteryHealthPercent ??
@@ -138,7 +151,7 @@ function batteryCandidates(asset, userId, prefs) {
   const type = NOTIFICATION_TYPE.BATTERY_HEALTH;
   const identity = makeNotificationIdentity({
     userId,
-    assetId: assetIdOf(asset),
+    assetId: aid,
     notificationType: type,
     eventDate: new Date().toISOString().slice(0, 10),
     reminderOffset: Math.round(pct),
@@ -148,13 +161,13 @@ function batteryCandidates(asset, userId, prefs) {
       notificationId: identity,
       alertId: identity,
       userId,
-      assetId: assetIdOf(asset),
+      assetId: aid,
       notificationType: type,
       category: 'Battery',
       priority,
       title: `Battery attention: ${nameOf(asset)}`,
       body: `Battery health ${pct}% (threshold ${attention}%). Not a universal failure standard.`,
-      deepLink: deepLinkFor(type, assetIdOf(asset)),
+      deepLink: deepLinkFor(type, aid),
       createdAt: new Date().toISOString(),
       isEstimate: asset?.batteryProfile?.isEstimate === true,
       batteryPercent: pct,
@@ -167,6 +180,9 @@ function batteryCandidates(asset, userId, prefs) {
  */
 function healthCandidates(asset, userId, prefs) {
   if (prefs?.Health === false) return [];
+  const aid = assetIdOf(asset);
+  if (!aid) return [];
+
   const score = asset?.assetHealthScore ?? asset?.healthScore;
   if (score == null || !Number.isFinite(Number(score))) return [];
   const s = Number(score);
@@ -176,7 +192,7 @@ function healthCandidates(asset, userId, prefs) {
   const type = NOTIFICATION_TYPE.ASSET_HEALTH;
   const identity = makeNotificationIdentity({
     userId,
-    assetId: assetIdOf(asset),
+    assetId: aid,
     notificationType: type,
     eventDate: new Date().toISOString().slice(0, 10),
     reminderOffset: Math.round(s),
@@ -186,13 +202,13 @@ function healthCandidates(asset, userId, prefs) {
       notificationId: identity,
       alertId: identity,
       userId,
-      assetId: assetIdOf(asset),
+      assetId: aid,
       notificationType: type,
       category: 'Health',
       priority,
       title: `Health attention: ${nameOf(asset)}`,
       body: `Health score ${s}/100 — needs attention.`,
-      deepLink: deepLinkFor(type, assetIdOf(asset)),
+      deepLink: deepLinkFor(type, aid),
       createdAt: new Date().toISOString(),
       healthScore: s,
     },
@@ -204,12 +220,17 @@ function healthCandidates(asset, userId, prefs) {
  */
 function energyCandidates(asset, userId, prefs) {
   if (prefs?.Energy === false) return [];
+  const aid = assetIdOf(asset);
+  if (!aid) return [];
+  const caps = resolveAssetCapabilities(asset);
+  if (!caps.supportsEnergyTracking) return [];
+
   const ep = asset?.energyProfile;
-  if (!ep || ep.anomaly !== true && !ep.usageAboveBaseline) return [];
+  if (!ep || (ep.anomaly !== true && !ep.usageAboveBaseline)) return [];
   const type = NOTIFICATION_TYPE.ENERGY_ALERT;
   const identity = makeNotificationIdentity({
     userId,
-    assetId: assetIdOf(asset),
+    assetId: aid,
     notificationType: type,
     eventDate: new Date().toISOString().slice(0, 10),
     reminderOffset: 0,
@@ -219,13 +240,13 @@ function energyCandidates(asset, userId, prefs) {
       notificationId: identity,
       alertId: identity,
       userId,
-      assetId: assetIdOf(asset),
+      assetId: aid,
       notificationType: type,
       category: 'Energy',
       priority: NOTIFICATION_PRIORITY.MEDIUM,
       title: `Energy note: ${nameOf(asset)}`,
       body: 'Estimated energy use is above your configured baseline (not a meter reading).',
-      deepLink: deepLinkFor(type, assetIdOf(asset)),
+      deepLink: deepLinkFor(type, aid),
       createdAt: new Date().toISOString(),
       isEstimate: true,
     },
@@ -233,10 +254,22 @@ function energyCandidates(asset, userId, prefs) {
 }
 
 /**
- * Odometer service — only when both due km and current odometer exist.
+ * Odometer service — only when both due km and current odometer exist,
+ * and the asset category actually supports odometer readings.
  */
 function odometerServiceCandidates(asset, userId, prefs) {
   if (prefs?.Service === false) return [];
+  const caps = resolveAssetCapabilities(asset);
+  if (!caps.supportsOdometer) return [];
+
+  const aid = assetIdOf(asset);
+  if (!aid) {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.warn('[notificationRules] odometerServiceCandidates skipped: missing canonical asset ID', asset);
+    }
+    return [];
+  }
+
   const dueKm = Number(asset?.nextServiceOdometerKm);
   const current = Number(asset?.odometerKm);
   if (!Number.isFinite(dueKm) || !Number.isFinite(current)) return [];
@@ -244,7 +277,7 @@ function odometerServiceCandidates(asset, userId, prefs) {
   const type = NOTIFICATION_TYPE.SERVICE_DUE;
   const identity = makeNotificationIdentity({
     userId,
-    assetId: assetIdOf(asset),
+    assetId: aid,
     notificationType: type,
     eventDate: `km_${dueKm}`,
     reminderOffset: 0,
@@ -254,13 +287,13 @@ function odometerServiceCandidates(asset, userId, prefs) {
       notificationId: identity,
       alertId: identity,
       userId,
-      assetId: assetIdOf(asset),
+      assetId: aid,
       notificationType: type,
       category: 'Service',
       priority: NOTIFICATION_PRIORITY.HIGH,
       title: `Service due (odometer): ${nameOf(asset)}`,
       body: `Odometer ${current} km reached service target ${dueKm} km.`,
-      deepLink: deepLinkFor(type, assetIdOf(asset)),
+      deepLink: deepLinkFor(type, aid),
       createdAt: new Date().toISOString(),
     },
   ];
@@ -364,10 +397,14 @@ export function buildUpcomingSummary(notifications = []) {
   return buckets;
 }
 
+export { resolveCanonicalAssetId, assetIdOf };
+
 export default {
   evaluateAssetNotifications,
   evaluatePortfolioNotifications,
   resolveNotificationRecipients,
   buildUpcomingSummary,
   FIELD_TO_TYPE,
+  resolveCanonicalAssetId,
+  assetIdOf,
 };

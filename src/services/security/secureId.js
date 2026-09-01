@@ -1,9 +1,17 @@
 /**
- * Cryptographically secure ID helpers (expo-crypto).
- * Prefer these over Math.random / Date.now for vault asset IDs and keys.
+ * Cryptographically secure ID helpers.
+ * Uses globalThis.crypto (after installSecureCrypto polyfill) when available,
+ * then expo-crypto, then SHA-256 DRBG. Never Math.random() for identifiers.
  */
 
-import * as Crypto from 'expo-crypto';
+import { ensureCryptoSurface } from '../../polyfills/installSecureCrypto.js';
+import { softwareRandomHex, softwareRandomUUID } from '../../polyfills/softwareCsprng.js';
+
+function bytesToHex(bytes) {
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
 
 /**
  * @param {number} byteCount
@@ -11,10 +19,26 @@ import * as Crypto from 'expo-crypto';
  */
 export function secureRandomHex(byteCount = 16) {
   const n = Math.max(1, Math.min(1024, Number(byteCount) || 16));
-  const bytes = Crypto.getRandomBytes(n);
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+  const bytes = new Uint8Array(n);
+  try {
+    const crypto = ensureCryptoSurface();
+    if (crypto?.getRandomValues) {
+      crypto.getRandomValues(bytes);
+      return bytesToHex(bytes);
+    }
+  } catch {
+    /* continue */
+  }
+  try {
+    const Crypto = require('expo-crypto');
+    if (Crypto?.getRandomBytes) {
+      const native = Crypto.getRandomBytes(n);
+      return bytesToHex(Array.from(native));
+    }
+  } catch {
+    /* continue */
+  }
+  return softwareRandomHex(n);
 }
 
 /**
@@ -29,14 +53,45 @@ export function createSecureAssetId() {
  * @returns {string} RFC4122 UUID v4
  */
 export function createSecureUuid() {
-  return Crypto.randomUUID();
+  try {
+    const crypto = ensureCryptoSurface();
+    if (typeof crypto?.randomUUID === 'function') {
+      const id = crypto.randomUUID();
+      if (id && typeof id === 'string') return id;
+    }
+  } catch {
+    /* continue */
+  }
+  try {
+    const Crypto = require('expo-crypto');
+    if (Crypto?.randomUUID) return Crypto.randomUUID();
+  } catch {
+    /* continue */
+  }
+  return softwareRandomUUID();
 }
 
 /**
- * Fill a TypedArray via expo-crypto (also used by crypto polyfill).
+ * Fill a TypedArray via universal crypto. Never throws; never uses Math.random.
  */
 export function getSecureRandomValues(typedArray) {
-  return Crypto.getRandomValues(typedArray);
+  if (!typedArray) return typedArray;
+  try {
+    const crypto = ensureCryptoSurface();
+    if (crypto?.getRandomValues) {
+      return crypto.getRandomValues(typedArray);
+    }
+  } catch {
+    /* continue */
+  }
+  try {
+    const Crypto = require('expo-crypto');
+    if (Crypto?.getRandomValues) return Crypto.getRandomValues(typedArray);
+  } catch {
+    /* continue */
+  }
+  const { fillSoftwareRandomValues } = require('../../polyfills/softwareCsprng');
+  return fillSoftwareRandomValues(typedArray);
 }
 
 export default {

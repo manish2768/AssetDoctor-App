@@ -6,8 +6,8 @@
  * Legacy rows may only have id — resolve via assetIdOf, never invent a second system.
  */
 
-import { classifyFromCategoryId } from './assetTaxonomy';
-import { secureRandomHex } from '../security/secureId';
+import { classifyFromCategoryId } from './assetTaxonomy.js';
+import { secureRandomHex } from '../security/secureId.js';
 
 function randomHex(len = 6) {
   const n = Math.max(1, Math.min(32, Number(len) || 6));
@@ -19,17 +19,25 @@ function randomHex(len = 6) {
 
 /**
  * Resolve canonical asset identity from a vault record.
- * Prefer assetId; fall back to legacy id only. Returns null when neither exists.
- * @param {{ assetId?: string, id?: string }|null|undefined} asset
+ * Supports assetId, legacy id, asset_id, and documentId. Returns string | null.
+ * Never throws ReferenceError or exceptions on malformed objects or non-objects.
+ * @param {{ assetId?: string, id?: string, asset_id?: string, documentId?: string }|null|undefined} asset
  * @returns {string|null}
  */
-export function assetIdOf(asset) {
+export function resolveCanonicalAssetId(asset) {
   if (!asset || typeof asset !== 'object') return null;
   const primary = asset.assetId != null ? String(asset.assetId).trim() : '';
   if (primary) return primary;
   const legacy = asset.id != null ? String(asset.id).trim() : '';
-  return legacy || null;
+  if (legacy) return legacy;
+  const snake = asset.asset_id != null ? String(asset.asset_id).trim() : '';
+  if (snake) return snake;
+  const doc = asset.documentId != null ? String(asset.documentId).trim() : '';
+  if (doc) return doc;
+  return null;
 }
+
+export const assetIdOf = resolveCanonicalAssetId;
 
 /**
  * @returns {string} e.g. AST-AC-7F29A1
@@ -74,6 +82,7 @@ export function parseAssetQrPayload(raw) {
 }
 
 export default {
+  resolveCanonicalAssetId,
   assetIdOf,
   createPublicAssetId,
   buildAssetQrPayload,

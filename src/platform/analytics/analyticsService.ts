@@ -14,7 +14,9 @@ export type AnalyticsEventType =
   | 'search_performed'
   | 'cta_clicked'
   | 'auth_started'
-  | 'auth_completed';
+  | 'auth_completed'
+  | 'app_download_click'
+  | 'google_play_download_click';
 
 export interface AnalyticsEvent {
   eventType: AnalyticsEventType;

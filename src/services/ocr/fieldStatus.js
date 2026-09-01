@@ -158,7 +158,6 @@ export function buildFieldStatusMap(data = {}) {
       });
     }
     const prior = existing[key];
-    if (prior && hasVal(prior.value) && !hasVal(value)) return prior;
     const c = Number(svc[key] ?? conf[key] ?? fallbackConf);
     const ev = evidence[key];
     let status = FIELD_STATUS.VALID;
@@ -177,7 +176,7 @@ export function buildFieldStatusMap(data = {}) {
     insurer: put('insurer', data.insurer || data.shopName, 0.8, '', FIELD_SOURCE.OCR),
     policyNumber: put(
       'policyNumber',
-      data.policyNumber || (String(data.documentKind || '').includes('insurance') ? data.invoiceNumber : ''),
+      data.policyNumber,
       0.8,
     ),
     policyHolder: put('policyHolder', data.policyHolder || data.customerName, 0.75),

@@ -4,7 +4,6 @@
  */
 
 import { toVaultValue } from '../../utils/parseMoneyValue';
-import { lookupBrandHelpline } from '../../constants/brandDirectory';
 
 export const PURCHASE_CATEGORIES = Object.freeze({
   VEHICLES: 'Vehicles',
@@ -69,16 +68,12 @@ export function emptyInvoiceData() {
 export function invoiceToAssetForm(invoice = {}, extras = {}) {
   const selectedItem = extras.item || null;
   const productName = selectedItem?.name || invoice.productName || '';
-  const imei = String(invoice.imei || selectedItem?.imei || '').replace(/\D/g, '').slice(0, 15);
+  const imeiRaw = String(invoice.imei || selectedItem?.imei || '').replace(/\D/g, '');
+  const imei = imeiRaw.length === 15 ? imeiRaw : '';
   const serialRaw = String(invoice.serialNumber || selectedItem?.serialNumber || '').trim();
-  const serialDigits = serialRaw.replace(/\D/g, '');
-  const serialNumber =
-    serialDigits.length === 15 ? '' : serialRaw || (imei ? '' : '');
+  const serialNumber = serialRaw;
   const purchaseDate = invoice.invoiceDate || null;
   let warrantyExpiry = invoice.warrantyExpiry || null;
-  if (!warrantyExpiry && purchaseDate && invoice.warrantyPeriodMonths) {
-    warrantyExpiry = addMonthsIso(purchaseDate, Number(invoice.warrantyPeriodMonths));
-  }
 
   // Prefer line amount only when positive; else Grand Total / Amount Payable
   const itemAmt = selectedItem?.amount != null ? Number(selectedItem.amount) : null;
@@ -88,8 +83,7 @@ export function invoiceToAssetForm(invoice = {}, extras = {}) {
     0,
   );
 
-  const brandName = guessBrand(productName);
-  const helpline = lookupBrandHelpline(`${brandName} ${productName}`);
+  const brandName = String(invoice.brand || '').trim();
   const smartCategory =
     selectedItem?.smartCategory || invoice.smartCategory || extras.smartCategory || '';
   const categoryId =
@@ -124,14 +118,17 @@ export function invoiceToAssetForm(invoice = {}, extras = {}) {
         : ''),
     storeName: invoice.shopName || '',
     purchaseDate,
-    serialNumber: serialNumber || (imei ? imei : ''),
+    // IMEI and serial number are distinct fields. Never show an IMEI as a serial.
+    serialNumber,
     imei,
     chassisNumber: invoice.chassisNumber || '',
     engineNumber: invoice.engineNumber || '',
     warrantyExpiry: isInsuranceDoc || isPucDoc ? null : warrantyExpiry,
+    warrantyStart: isInsuranceDoc || isPucDoc ? null : invoice.warrantyStart || null,
+    warrantyNeedsReview: Boolean(invoice.warrantyNeedsReview),
     value: isAttachDoc ? 0 : lineValue,
-    supportPhone: invoice.shopPhone || helpline?.phone || '',
-    brandName: guessBrand(safeName || productName),
+    supportPhone: invoice.shopPhone || '',
+    brandName,
     registration: isVehicle || isAttachDoc ? String(invoice.registration || '').trim() : '',
     // Buyer / owner — never leave blank when OCR found a name
     customerName: String(invoice.customerName || '').trim(),
@@ -191,6 +188,10 @@ export function invoiceToAssetForm(invoice = {}, extras = {}) {
       subtotal: invoice.subtotal,
       paymentMode: invoice.paymentMode || '',
       warrantyPeriodMonths: invoice.warrantyPeriodMonths,
+      warrantyExpiry: invoice.warrantyExpiry || null,
+      warrantyStart: invoice.warrantyStart || null,
+      warrantyNeedsReview: Boolean(invoice.warrantyNeedsReview),
+      warrantyText: invoice.warrantyText || '',
       purchaseCategory: invoice.purchaseCategory,
       smartCategory,
       documentType: invoice.documentType || docType,
@@ -204,6 +205,7 @@ export function invoiceToAssetForm(invoice = {}, extras = {}) {
       items: invoice.items || [],
       lineItem: selectedItem || null,
       imei,
+      serialNumber,
       sweetBillAudit: extras.audit || null,
     },
   };

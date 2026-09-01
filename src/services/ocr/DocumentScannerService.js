@@ -10,11 +10,9 @@
 import { Linking, Platform } from 'react-native';
 
 import {
-  compressScanImage,
-  SCAN_IMAGE_COMPRESS,
-  SCAN_IMAGE_MAX_WIDTH,
-} from '../../utils/compressScanImage';
-import { getImageManipulator, getImagePicker } from '../../utils/safeNativeModules';
+  preprocessScanImage,
+} from './scanImagePreprocess';
+import { getImagePicker } from '../../utils/safeNativeModules';
 
 /** Soft-load ML Kit scanner — missing native binary must not crash at import. */
 function getDocumentScanner() {
@@ -55,30 +53,16 @@ function galleryOptions(ImagePicker) {
   };
 }
 
-/** Resize + JPEG compress (EXIF-upright) immediately after capture/pick. */
+/** Canonical preprocess (1800 / 0.88, never upscale) immediately after capture/pick. */
 async function compressCapturedUri(uri) {
   if (!uri) return uri;
   try {
-    const ImageManipulator = getImageManipulator();
-    if (ImageManipulator?.manipulateAsync) {
-      const manipulated = await ImageManipulator.manipulateAsync(
-        uri,
-        [{ resize: { width: SCAN_IMAGE_MAX_WIDTH } }],
-        {
-          compress: SCAN_IMAGE_COMPRESS,
-          format: ImageManipulator.SaveFormat?.JPEG || 'jpeg',
-          base64: false,
-        },
-      );
-      if (manipulated?.uri) return manipulated.uri;
-    }
+    const pre = await preprocessScanImage(uri, { base64: false });
+    if (pre?.uri) return pre.uri;
   } catch (error) {
-    console.warn('[DocumentScanner] manipulator failed:', error?.message || error);
+    console.warn('[DocumentScanner] preprocess failed:', error?.message || error);
   }
-  return compressScanImage(uri, {
-    maxWidth: SCAN_IMAGE_MAX_WIDTH,
-    compress: SCAN_IMAGE_COMPRESS,
-  });
+  return uri;
 }
 
 function normalizeFileUri(path) {

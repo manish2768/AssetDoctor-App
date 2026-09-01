@@ -416,7 +416,9 @@ export function AssetPassportScreen({ route, navigation }) {
   };
   const openEnergyDetail = () => {
     Haptics.tap();
-    navigation?.navigate?.('AssetEnergy', { assetId: asset.assetId || asset.id });
+    navigation?.navigate?.('ApplianceEnergyDetail', {
+      assetId: asset.assetId || asset.id,
+    });
   };
   const openVault = () => {
     Haptics.tap();

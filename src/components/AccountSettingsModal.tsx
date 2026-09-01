@@ -230,9 +230,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
         {/* Modal Header */}
         <div className="p-5 border-b border-slate-800 bg-slate-900/90 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-              <User className="w-5 h-5" />
-            </div>
+            <AssetDoctorLogo size="sm" />
             <div>
               <h2 className="text-lg font-bold text-white">
                 Account Settings & Preferences

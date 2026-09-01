@@ -6,7 +6,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Animated, Text, Vibration } from 'react-native';
 
 import { AppLogo } from '../../components/AppLogo';
-import { BRAND, COLORS, FONTS, SPACING } from '../../theme/branding';
+import { FONTS, SPACING } from '../../theme/branding';
+import { BRAND_NAVY, BRAND_TEAL, BRAND_WORDMARK } from '../../theme/brandAssets';
 import { BrandFooter } from '../../components/ui/Glass';
 import { Haptics } from '../../services/haptics';
 import { OtaUpdateService } from '../../services/updates/OtaUpdateService';
@@ -124,8 +125,14 @@ export function SplashScreen({ onFinish, holdMs = FALLBACK_MS }) {
         }}
       >
         <View style={styles.heroCard}>
-          <AppLogo size={120} />
+          <View style={styles.glow} pointerEvents="none" />
+          <AppLogo size={128} />
         </View>
+        <Text style={styles.wordmark} accessibilityRole="header">
+          <Text style={styles.wordmarkPrimary}>{BRAND_WORDMARK.primary}</Text>
+          {' '}
+          <Text style={styles.wordmarkAccent}>{BRAND_WORDMARK.accent}</Text>
+        </Text>
         <Animated.View style={{ opacity: greet, alignItems: 'center' }}>
           <Text style={styles.hello}>{hello}</Text>
           {displayName ? (
@@ -133,7 +140,6 @@ export function SplashScreen({ onFinish, holdMs = FALLBACK_MS }) {
               {displayName}
             </Text>
           ) : null}
-          <Text style={styles.tag}>{BRAND.name}</Text>
           <Text style={styles.sub}>Your smart vault for vehicles, warranties &amp; renewals</Text>
         </Animated.View>
         <BrandFooter />
@@ -147,7 +153,7 @@ export default SplashScreen;
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.bg,
+    backgroundColor: BRAND_NAVY,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -155,21 +161,34 @@ const styles = StyleSheet.create({
     width: 160,
     height: 160,
     borderRadius: 40,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(13,148,136,0.16)',
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  glow: {
+    position: 'absolute',
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: 'rgba(20,184,166,0.16)',
+  },
+  wordmark: {
     marginBottom: SPACING.md,
-    shadowColor: '#0A1628',
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 4,
+    textAlign: 'center',
+    letterSpacing: 2.4,
+    fontSize: 13,
+    fontFamily: FONTS.bold,
+    fontWeight: '800',
+  },
+  wordmarkPrimary: {
+    color: '#F8FAFC',
+  },
+  wordmarkAccent: {
+    color: BRAND_TEAL,
   },
   hello: {
-    color: COLORS.text,
+    color: '#F8FAFC',
     fontFamily: FONTS.bold,
     fontSize: 26,
     fontWeight: '800',
@@ -178,23 +197,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   fullName: {
-    color: COLORS.muted,
+    color: '#94A3B8',
     fontFamily: FONTS.medium,
     fontSize: 15,
     fontWeight: '600',
     marginTop: 4,
     textAlign: 'center',
   },
-  tag: {
-    color: COLORS.emerald,
-    fontFamily: FONTS.bold,
-    fontSize: 14,
-    fontWeight: '700',
-    marginTop: 10,
-    textAlign: 'center',
-  },
   sub: {
-    color: COLORS.muted,
+    color: '#94A3B8',
     fontFamily: FONTS.regular,
     fontSize: 13,
     fontWeight: '500',

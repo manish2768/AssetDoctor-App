@@ -12,3 +12,7 @@
 -keep class com.facebook.react.turbomodule.** { *; }
 
 # Add any project specific keep options here:
+-dontwarn com.horcrux.svg.**
+-keep class com.horcrux.svg.** { *; }
+-dontwarn com.swmansion.gesturehandler.**
+-keep class com.swmansion.gesturehandler.** { *; }

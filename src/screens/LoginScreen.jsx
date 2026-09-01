@@ -423,11 +423,6 @@ const styles = StyleSheet.create({
   logoWrap: {
     alignSelf: 'center',
     marginBottom: 10,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(37,99,235,0.18)',
   },
   brand: {
     color: COLORS.text,

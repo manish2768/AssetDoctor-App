@@ -30,6 +30,13 @@ import {
   loadLocalProfile,
   saveLocalProfile,
 } from '../../utils/userProfileStorage';
+import { AssetDoctorProtectedBadge } from '../../components/trust/AssetDoctorProtectedBadge';
+import {
+  profileProtectionChecklist,
+  calculateProtectionScore,
+  resolveProtectionBadgeState,
+} from '../../trust/protectionStatus';
+import { appVersionLabel } from '../../utils/appInfo';
 
 
 const DEFAULT_AVATARS = [
@@ -115,6 +122,24 @@ export function ProfileScreen({ navigation }) {
     }
     return n ? Math.round(total / n) : null;
   }, [assets]);
+
+  const protectionIdentity = useMemo(() => {
+    const userShape = {
+      name: profile?.name || name,
+      displayName: authDisplayName,
+      phone: profile?.phone || profile?.phoneNumber || mobile,
+      phoneNumber: profile?.phoneNumber || mobile,
+      whatsappOptIn: profile?.whatsappOptIn,
+      pincode: profile?.pincode || pincode,
+      city: profile?.city || city,
+    };
+    const list = (assets || []).filter((a) => !a.isDemo && !a.deletedAt);
+    return {
+      checklist: profileProtectionChecklist(userShape, list, []),
+      score: calculateProtectionScore({ user: userShape, assets: list, documents: [] }),
+      badge: resolveProtectionBadgeState({ user: userShape, documents: [] }),
+    };
+  }, [profile, name, authDisplayName, mobile, pincode, city, assets]);
 
   const hydrateFromSources = async () => {
     const local = await loadLocalProfile();
@@ -384,6 +409,35 @@ export function ProfileScreen({ navigation }) {
           ) : null}
         </GlassCard>
 
+        <GlassCard style={{ marginTop: 12 }}>
+          <Text style={styles.editTitle}>Your Protection Identity</Text>
+          <View style={{ marginTop: 8 }}>
+            <AssetDoctorProtectedBadge state={protectionIdentity.badge} />
+          </View>
+          <Text style={[styles.sub, { marginTop: 10 }]}>
+            Protection Score {protectionIdentity.score.display}
+          </Text>
+          {protectionIdentity.checklist.items.map((item) => (
+            <Text key={item.id} style={[styles.rowValue, { marginTop: 6 }]}>
+              {item.complete ? 'Complete' : 'Needs setup'} · {item.label}
+            </Text>
+          ))}
+          <View style={styles.statRow}>
+            <View style={styles.statChip}>
+              <Text style={styles.statNum}>{protectionIdentity.checklist.assetsProtected}</Text>
+              <Text style={styles.statLabel}>Assets Protected</Text>
+            </View>
+            <View style={styles.statChip}>
+              <Text style={styles.statNum}>{protectionIdentity.checklist.documentsProtected}</Text>
+              <Text style={styles.statLabel}>Documents Protected</Text>
+            </View>
+            <View style={styles.statChip}>
+              <Text style={styles.statNum}>{protectionIdentity.checklist.upcomingAttention}</Text>
+              <Text style={styles.statLabel}>Upcoming Attention</Text>
+            </View>
+          </View>
+        </GlassCard>
+
         {editing ? (
           <GlassCard style={{ marginTop: 12 }}>
             <Text style={styles.editTitle}>Edit your details</Text>
@@ -539,15 +593,15 @@ export function ProfileScreen({ navigation }) {
         )}
 
         <View style={styles.scoreWrap}>
-          <Text style={styles.scoreLabel}>Vault protection score</Text>
+          <Text style={styles.scoreLabel}>Asset Health</Text>
           <Text style={styles.scoreValue}>
             {vaultHealth == null ? '—' : vaultHealth}
             {vaultHealth != null ? <Text style={styles.scoreUnit}> / 100</Text> : null}
           </Text>
           <Text style={styles.scoreHint}>
             {vaultHealth == null
-              ? 'Add assets to see your vault health from real documents and coverage.'
-              : 'Average health of assets in your vault.'}
+              ? 'Add assets to see Asset Health from real documents and coverage.'
+              : 'Average Asset Health of assets in your vault. Separate from Protection Score.'}
           </Text>
         </View>
 
@@ -591,12 +645,12 @@ export function ProfileScreen({ navigation }) {
             style={styles.settingItem}
             onPress={() => {
               Haptics.tap();
-              navigation?.navigate?.('SettingsHome');
+              navigation?.navigate?.('PrivacySecurity');
             }}
           >
             <View style={{ flex: 1 }}>
-              <Text style={styles.familyTitle}>Privacy & Sync</Text>
-              <Text style={styles.sub}>Offline storage and encrypted cloud backup</Text>
+              <Text style={styles.familyTitle}>Privacy & Trust Center</Text>
+              <Text style={styles.sub}>How your data, documents, and notifications are handled</Text>
             </View>
             <Text style={styles.chevron}>›</Text>
           </Pressable>
@@ -630,7 +684,7 @@ export function ProfileScreen({ navigation }) {
           >
             <View style={{ flex: 1 }}>
               <Text style={styles.familyTitle}>About Asset Doctor</Text>
-              <Text style={styles.sub}>{BRAND.creatorCredit} · v1.0.0</Text>
+              <Text style={styles.sub}>{appVersionLabel()}</Text>
             </View>
             <Text style={styles.chevron}>›</Text>
           </Pressable>

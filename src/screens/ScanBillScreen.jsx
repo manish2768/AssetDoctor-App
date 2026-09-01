@@ -15,7 +15,6 @@ import {
   ScrollView,
   Dimensions,
 } from 'react-native';
-import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PrivacyVaultTag } from '../components/PrivacyVaultTag';
 import { COLORS, RADIUS, SPACING } from '../theme/branding';
@@ -30,7 +29,6 @@ import {
   openAppSettings,
   pickGalleryImage,
 } from '../services/ocr/DocumentScannerService';
-import { compressScanImage } from '../utils/compressScanImage';
 import { getImagePicker } from '../utils/safeNativeModules';
 import { runSweetBillChecker } from '../services/SweetBillChecker';
 import { InvoiceOfflineCache } from '../services/ocr/InvoiceOfflineCache';
@@ -49,9 +47,6 @@ import { markScanSession } from '../utils/scanNavGuard';
 const AUTO_OPEN_MS = 280;
 const SCREEN_H = Dimensions.get('window').height;
 const FRAME_HEIGHT = Math.round(SCREEN_H * 0.46);
-/** Compress before OCR — single high-quality pass (avoid double JPEG crush). */
-const SCAN_MAX_WIDTH = 1800;
-const SCAN_COMPRESS = 0.88;
 /** ImagePicker fallback when ML Kit document scanner is unavailable. */
 const PICKER_OPTIONS = {
   mediaTypes: ['images'],
@@ -83,41 +78,12 @@ function reportScanError(error) {
 }
 
 /**
- * Single high-quality preprocess + base64 for Vision/Gemini (no double compress).
+ * Canonical preprocess + base64 for Vision (no extra JPEG when already preprocessed).
+ * alreadyPreprocessed means capture already ran scanImagePreprocess.
  */
-async function prepareScanImage(capturedUri) {
-  if (!capturedUri) return { uri: '', base64: null, steps: [] };
-  try {
-    const { preprocessScanImage } = require('../services/ocr/scanImagePreprocess');
-    const pre = await preprocessScanImage(capturedUri, {
-      maxWidth: SCAN_MAX_WIDTH,
-      compress: SCAN_COMPRESS,
-    });
-    const sourceUri = pre?.uri || capturedUri;
-    // Base64 only (no second resize/compress) for multimodal Gemini
-    const withB64 = await manipulateAsync(sourceUri, [], {
-      compress: 1,
-      format: SaveFormat.JPEG,
-      base64: true,
-    });
-    return {
-      uri: withB64?.uri || sourceUri,
-      base64: withB64?.base64 || null,
-      steps: [...(pre?.steps || []), 'base64_passthrough'],
-    };
-  } catch (error) {
-    console.error('[ScanBillScreen Error]:', error);
-  }
-  try {
-    const fallbackUri = await compressScanImage(capturedUri, {
-      maxWidth: SCAN_MAX_WIDTH,
-      compress: SCAN_COMPRESS,
-    });
-    return { uri: fallbackUri || capturedUri, base64: null, steps: ['fallback'] };
-  } catch (fallbackErr) {
-    console.error('[ScanBillScreen Error]:', fallbackErr);
-    return { uri: capturedUri, base64: null, steps: ['passthrough'] };
-  }
+async function prepareScanImage(capturedUri, opts = {}) {
+  const { prepareScanImageForOcr } = require('../services/ocr/scanImagePreprocess');
+  return prepareScanImageForOcr(capturedUri, opts);
 }
 
 /** Map OCR payload → review fields with null-safe defaults (never crash). */
@@ -190,9 +156,8 @@ function mapOcrToInvoiceFields(parsedData = {}) {
       src.serialNumber ||
       src.serial_number ||
       extract.serial_number ||
-      src.imei ||
       '',
-    imei: src.imei || src.serialNumber || extract.serial_number || '',
+    imei: src.imei || extract.imei || '',
     registration:
       src.registration ||
       extract.vehicle_registration_number ||
@@ -202,12 +167,25 @@ function mapOcrToInvoiceFields(parsedData = {}) {
     warrantyExpiry:
       src.warrantyExpiry ||
       extract.expiry_date ||
-      src.calculatedExpiryDate ||
       '',
-    insuranceExpiry: src.insuranceExpiry || '',
+    insuranceExpiry: src.insuranceExpiry || src.policyEndDate || '',
     pucExpiry: src.pucExpiry || '',
     chassisNumber: src.chassisNumber || extract.chassis_or_frame_no || '',
     engineNumber: src.engineNumber || extract.engine_number || '',
+    odometerKm: src.odometerKm ?? src.odometerReading ?? extract.odometer_reading ?? null,
+    odometerReading: src.odometerReading ?? src.odometerKm ?? extract.odometer_reading ?? null,
+    workshopName: src.workshopName || src.shopName || '',
+    idv: src.idv ?? extract.idv ?? null,
+    premium: src.premium ?? extract.premium ?? null,
+    policyNumber: src.policyNumber || extract.policy_number || '',
+    policyStartDate: src.policyStartDate || extract.policy_start_date || '',
+    policyEndDate: src.policyEndDate || extract.policy_end_date || '',
+    serviceData: src.serviceData || null,
+    insuranceData: src.insuranceData || null,
+    purchaseData: src.purchaseData || null,
+    universalOcr: src.universalOcr || null,
+    classification: src.classification || null,
+    fieldConfidenceMap: src.fieldConfidenceMap || null,
     confidence: src.confidence ?? null,
     needsManualReview: Boolean(src.needsManualReview),
     category: src.category || src.smartCategory || extract.category || '',
@@ -235,6 +213,11 @@ function emptyFallbackInvoice() {
     purchaseCategory: '',
     items: [],
     ocrExtract: {},
+    classifiedDocumentType: 'UNREADABLE_DOCUMENT',
+    geminiDocumentType: 'UNREADABLE_DOCUMENT',
+    needsManualReview: true,
+    fieldStatuses: {},
+    fieldEvidence: {},
   };
 }
 
@@ -361,7 +344,7 @@ function buildSafeReviewParams({
     extractedData: safeExtracted,
     assetData: safeInvoice,
     parsedData: safeInvoice,
-    audit: audit && typeof audit === 'object' ? stripHeavyFields(audit) : { flags: [], canSave: true },
+    audit: audit && typeof audit === 'object' ? stripHeavyFields(audit) : { flags: [], canSave: false },
     engine: engine || 'unknown',
     energyHints: energyHints && typeof energyHints === 'object' ? energyHints : null,
     sweetBill: sweetBill && typeof sweetBill === 'object' ? stripHeavyFields(sweetBill) : {},
@@ -429,10 +412,13 @@ function ScanBillScreenInner({ navigation }) {
   const { user } = useAuth();
   const { assets } = useAssets();
   const ui = useUiFeedback();
-  // TODO: RE-ENABLE AUTH REQUIREMENT BEFORE PRODUCTION — isAuthenticated gate removed for scan testing
+  // Dual-mode camera state: 'VAULT' (permanent archival) vs 'LIVE' (zero-storage fast fill)
+  const [scannerMode, setScannerMode] = useState('VAULT');
   const [cameraPermission, setCameraPermission] = useState('loading'); // loading|granted|denied|undetermined
   const [processing, setProcessing] = useState(false);
   const [processLabel, setProcessLabel] = useState('Reading document…');
+  const [processingStage, setProcessingStage] = useState('CAPTURED'); // CAPTURED | OCR_EXTRACTING | IDENTIFYING | VERIFYING
+  const [processingDuration, setProcessingDuration] = useState(0);
   const [lastError, setLastError] = useState('');
   const [autoArmed, setAutoArmed] = useState(false);
   const [reviewPayload, setReviewPayload] = useState(null);
@@ -442,8 +428,26 @@ function ScanBillScreenInner({ navigation }) {
   const autoTimer = useRef(null);
   const tickTimer = useRef(null);
   const ocrTimer = useRef(null);
+  const processingTimer = useRef(null);
   const capturing = useRef(false);
   const startedRef = useRef(false);
+  const scanGenRef = useRef(0);
+  const scanSessionIdRef = useRef('');
+
+  useEffect(() => {
+    if (processing) {
+      setProcessingDuration(0);
+      processingTimer.current = setInterval(() => {
+        setProcessingDuration((d) => d + 1);
+      }, 1000);
+    } else {
+      if (processingTimer.current) clearInterval(processingTimer.current);
+      processingTimer.current = null;
+    }
+    return () => {
+      if (processingTimer.current) clearInterval(processingTimer.current);
+    };
+  }, [processing]);
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -518,45 +522,70 @@ function ScanBillScreenInner({ navigation }) {
   }, [ui]);
 
   const processImageWithGemini = useCallback(
-    async (uri) => {
+    async (uri, processOpts = {}) => {
       if (!uri) {
         setLastError('Could not capture image. Please try again.');
         setProcessLabel('Failed');
         return;
       }
+      const generation = ++scanGenRef.current;
+      const scanSessionId =
+        processOpts.scanSessionId ||
+        `scan_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      scanSessionIdRef.current = scanSessionId;
+      const isStale = () =>
+        generation !== scanGenRef.current || scanSessionIdRef.current !== scanSessionId;
+
       setProcessing(true);
       setLastError('');
-      setProcessLabel('Uploading…');
+      setProcessLabel('Image captured');
+      setProcessingStage('CAPTURED');
+      setProcessingDuration(0);
       Haptics.tap();
 
       let optimizedUri = uri;
       let optimizedBase64 = null;
+      let imageWidth = null;
+      let imageHeight = null;
+      const t0 = Date.now();
+      const preprocessStarted = Date.now();
       try {
-        // Compress BEFORE OCR — width 1000 @ 0.5 JPEG (+ base64 for Vision/Gemini)
         try {
-          setProcessLabel('Processing…');
-          const compressedImage = await prepareScanImage(uri);
+          setProcessLabel('Extracting text…');
+          setProcessingStage('OCR_EXTRACTING');
+          const compressedImage = await prepareScanImage(uri, {
+            alreadyPreprocessed: Boolean(processOpts.alreadyPreprocessed),
+          });
           optimizedUri = compressedImage?.uri || uri;
           optimizedBase64 = compressedImage?.base64 || null;
+          imageWidth = compressedImage?.width || null;
+          imageHeight = compressedImage?.height || null;
         } catch (compressErr) {
           console.error('[ScanBillScreen Error]:', compressErr);
           optimizedUri = uri;
           optimizedBase64 = null;
         }
+        const preprocessMs = Date.now() - preprocessStarted;
 
-        setProcessLabel('Checking image quality…');
+        if (isStale()) return;
+
+        setProcessLabel('Extracting text…');
+        setProcessingStage('OCR_EXTRACTING');
+
+        let ocr = null;
+        let ocrFailed = false;
+        let ocrFailMessage = '';
+        let quality = { ok: true };
+
+        const ocrStarted = Date.now();
         try {
-          const { assessScanImageQuality } = require('../services/ocr/scanQualityGate');
-          const { appendOcrTrail } = require('../services/ocr/ocrDebugTrail');
-          const quality = await assessScanImageQuality(optimizedUri, {
+          const qualityMod = require('../services/ocr/scanQualityGate');
+          quality = await qualityMod.assessScanImageQuality(optimizedUri, {
             base64: optimizedBase64,
+            width: imageWidth,
+            height: imageHeight,
           });
-          appendOcrTrail({
-            stage: 'IMAGE_PREPROCESSING',
-            imageQualityScore: quality.score,
-            qualityCode: quality.code,
-          });
-          if (!quality.ok) {
+          if (quality && quality.ok === false) {
             setProcessing(false);
             setProcessLabel('Failed');
             const tips = (quality.tips || []).slice(0, 5).map((t) => `• ${t}`).join('\n');
@@ -568,24 +597,29 @@ function ScanBillScreenInner({ navigation }) {
             Haptics.error();
             return;
           }
-        } catch (qErr) {
-          console.warn('[ScanBill] quality gate skipped', qErr?.message || qErr);
-        }
 
-        setProcessLabel('Reading document…');
-        let ocr = null;
-        let ocrFailed = false;
-        let ocrFailMessage = '';
-
-        // Pass compressed uri + base64 (prefer base64 so OCR skips re-reading full file)
-        try {
+          const { collectVaultedDocsFromAssets } = require('../services/ocr/vaultedDocCollector');
           ocr = await CloudVisionOcrService.recognizeInvoice(optimizedUri, {
             base64: optimizedBase64,
+            alreadyPreprocessed: Boolean(processOpts.alreadyPreprocessed),
+            scanSessionId,
+            existingAssets: assets || [],
+            existingVaultedDocs: collectVaultedDocsFromAssets(assets || []),
+            skipAi: false,
+            t0ScanInitiated: t0,
           });
-          if (!ocr?.success) {
-            ocrFailed = true;
-            ocrFailMessage =
-              ocr?.error || 'Could not auto-fill details, please enter manually';
+          try {
+            const { appendOcrTrail } = require('../services/ocr/ocrDebugTrail');
+            appendOcrTrail({
+              stage: 'IMAGE_PREPROCESSING',
+              imageQualityScore: quality.score,
+              qualityCode: quality.code,
+              preprocessMs,
+              ocrMs: Date.now() - ocrStarted,
+              scanSessionId,
+            });
+          } catch {
+            /* optional */
           }
         } catch (ocrErr) {
           console.error('[ScanBillScreen Error]:', ocrErr);
@@ -594,9 +628,37 @@ function ScanBillScreenInner({ navigation }) {
             ocrErr?.message || 'Could not auto-fill details, please enter manually';
         }
 
-        setProcessLabel('Extracting information…');
-        // brief pause before match label for UX sequencing
-        setProcessLabel('Matching with your assets…');
+        if (isStale()) {
+          console.log('[OCR] discarded stale session', scanSessionId);
+          return;
+        }
+
+        if (quality && quality.ok === false) {
+          setProcessing(false);
+          setProcessLabel('Failed');
+          const tips = (quality.tips || []).slice(0, 5).map((t) => `• ${t}`).join('\n');
+          setLastError(
+            `${quality.message || 'Image quality is too low to read this document clearly.'}${
+              tips ? `\n${tips}` : ''
+            }\nTap Scan document to retake.`,
+          );
+          Haptics.error();
+          return;
+        }
+
+        if (!ocrFailed && !ocr?.success) {
+          ocrFailed = true;
+          ocrFailMessage = ocr?.error || 'Could not auto-fill details, please enter manually';
+        }
+
+        setProcessLabel('Identifying document…');
+        setProcessingStage('IDENTIFYING');
+        if (isStale()) {
+          console.log('[OCR] discarded stale session', scanSessionId);
+          return;
+        }
+        setProcessLabel('Verifying fields & matching assets…');
+        setProcessingStage('VERIFYING');
 
         const mappedInvoice = ocrFailed
           ? emptyFallbackInvoice()
@@ -619,34 +681,33 @@ function ScanBillScreenInner({ navigation }) {
             );
           }
           mappedInvoice.confidence = confidence;
-          mappedInvoice.needsManualReview =
-            ocrFailed || needsManualReview(confidence, OCR_CONFIDENCE_THRESHOLD);
+          mappedInvoice.needsManualReview = Boolean(
+            ocrFailed ||
+              needsManualReview(confidence, OCR_CONFIDENCE_THRESHOLD) ||
+              ocr?.needsManualReview ||
+              ocr?.data?.needsManualReview ||
+              ocr?.data?.providerConflict,
+          );
           if (ocr?.data?.fieldConfidence) {
             mappedInvoice.fieldConfidence = ocr.data.fieldConfidence;
             mappedInvoice.fieldConfidenceReasons = ocr.data.fieldConfidenceReasons || {};
             mappedInvoice.lowConfidenceFields = ocr.data.lowConfidenceFields || [];
           } else {
-            try {
-              const { scoreFieldConfidences } = require('../services/ocr/fieldConfidence');
-              const fc = scoreFieldConfidences(mappedInvoice);
-              mappedInvoice.fieldConfidence = fc.fields;
-              mappedInvoice.fieldConfidenceReasons = fc.reasons;
-              mappedInvoice.lowConfidenceFields = fc.lowFields;
-              if (fc.lowFields.includes('productName') || fc.lowFields.includes('price')) {
-                mappedInvoice.needsManualReview = true;
-              }
-            } catch {
-              /* optional */
-            }
+            mappedInvoice.needsManualReview = true;
           }
         } catch {
           mappedInvoice.confidence = confidence;
-          mappedInvoice.needsManualReview = ocrFailed || confidence < 85;
+          mappedInvoice.needsManualReview = Boolean(
+            ocrFailed ||
+              confidence < 85 ||
+              ocr?.needsManualReview ||
+              ocr?.data?.needsManualReview,
+          );
         }
 
         let audit = {
           flags: [],
-          canSave: true,
+          canSave: false,
           manualEntry: ocrFailed || Boolean(mappedInvoice.needsManualReview),
           confidence: mappedInvoice.confidence,
           needsManualReview: Boolean(mappedInvoice.needsManualReview),
@@ -671,6 +732,13 @@ function ScanBillScreenInner({ navigation }) {
               audit.duplicateMessage =
                 'Duplicate bill detected (GSTIN + Total + Date already scanned).';
               audit.flags = [...(audit.flags || []), 'duplicate_bill_fingerprint'];
+            }
+            const vaultDup = ocr?.data?.duplicateCheck || ocr?.data?.universalOcr?.duplicateCheck;
+            if (vaultDup?.isDuplicate) {
+              audit.isDuplicate = true;
+              audit.canSave = false;
+              audit.duplicateMessage = vaultDup.reason || 'This document already exists in your vault.';
+              audit.flags = [...(audit.flags || []), 'vault_duplicate_identity'];
             }
           } catch (auditErr) {
             console.warn('[ScanBill] audit skipped:', auditErr?.message);
@@ -701,57 +769,10 @@ function ScanBillScreenInner({ navigation }) {
           console.warn('[ScanBill] cache save skipped:', cacheErr?.message);
         }
 
-        let documentIntelligence = null;
-        try {
-          const { runDocumentIntelligence } = require('../services/ocr/documentIntelligenceDecision');
-          const { classifyDocumentIntelligence } = require('../services/ocr/classifyDocumentIntelligence');
-          const { appendOcrTrail } = require('../services/ocr/ocrDebugTrail');
-          const rawSample = String(ocr?.rawText || '').slice(0, 4000);
-          const classified = classifyDocumentIntelligence(rawSample, {
-            productName: mappedInvoice.productName,
-            shopName: mappedInvoice.shopName,
-            geminiDocumentType: mappedInvoice.document_type || ocr?.data?.document_type,
-          });
-          mappedInvoice.documentTypeV2 = classified.documentType;
-          mappedInvoice.documentTypeLabel = classified.documentTypeLabel;
-          mappedInvoice.documentTypeConfidence = classified.confidence;
-          if (!mappedInvoice.scanDocumentType && classified.legacyScanDocumentType) {
-            mappedInvoice.scanDocumentType = classified.legacyScanDocumentType;
-          }
-          documentIntelligence = runDocumentIntelligence(
-            {
-              ...mappedInvoice,
-              document_type: classified.documentType,
-              rawText: rawSample,
-            },
-            assets || [],
-            {
-              rawText: rawSample,
-              imageQualityOk: true,
-              processingMethod: ocr?.engine || 'vision+gemini',
-              documentTypeConfidence: classified.confidence,
-              failureReason: ocrFailed ? ocrFailMessage : null,
-            },
-          );
-          if (documentIntelligence?.amountValidation?.needsUserVerify) {
-            mappedInvoice.needsManualReview = true;
-            audit.needsManualReview = true;
-            audit.manualEntry = true;
-            audit.flags = [
-              ...(audit.flags || []),
-              documentIntelligence.amountValidation.flag || 'amount_mismatch',
-            ];
-            audit.amountMessage = documentIntelligence.amountValidation.message;
-          }
-          appendOcrTrail({
-            stage: 'DOCUMENT_INTELLIGENCE',
-            documentType: classified.documentType,
-            diAction: documentIntelligence?.decision?.action,
-            matchTier: documentIntelligence?.match?.tier,
-          });
-        } catch (diErr) {
-          console.warn('[ScanBill] document intelligence skipped:', diErr?.message || diErr);
-        }
+        // Legacy document intelligence and adaptive hardening are diagnostics,
+        // not extraction sources. They are intentionally excluded from the
+        // save payload so learned guesses cannot overwrite OCR evidence.
+        const documentIntelligence = null;
 
         // Offline: queue OCR retry when capture succeeded but engines failed
         if (ocrFailed && optimizedUri) {
@@ -767,9 +788,13 @@ function ScanBillScreenInner({ navigation }) {
         }
 
         // 3) ALWAYS open ReviewAsset — success OR OCR failure. NEVER Home.
+        if (isStale()) {
+          console.log('[OCR] discarded stale session', scanSessionId);
+          return;
+        }
         Haptics.success();
         goToReviewAsset(navigation, {
-          scanId: cached.scanId,
+          scanId: scanSessionId || cached.scanId,
           imageUri: cached.localImageUri || optimizedUri,
           assetData: mappedInvoice,
           invoice: mappedInvoice,
@@ -805,7 +830,7 @@ function ScanBillScreenInner({ navigation }) {
           invoice: emptyFallbackInvoice(),
           extractedData: emptyFallbackInvoice(),
           parsedData: emptyFallbackInvoice(),
-          audit: { flags: ['ocr_failed'], canSave: true, manualEntry: true },
+          audit: { flags: ['ocr_failed'], canSave: false, manualEntry: true },
           engine: 'manual',
           energyHints: null,
           sweetBill: {},
@@ -831,7 +856,7 @@ function ScanBillScreenInner({ navigation }) {
    * Avoids native OOM from sync heavy work right after ImagePicker returns.
    */
   const scheduleOcrAfterPaint = useCallback(
-    (uri) => {
+    (uri, scheduleOpts = {}) => {
       if (!uri) {
         capturing.current = false;
         setLastError('Could not capture image. Please try again.');
@@ -845,10 +870,15 @@ function ScanBillScreenInner({ navigation }) {
       setLastError('');
       Haptics.tap();
 
+      const alreadyPreprocessed =
+        scheduleOpts.alreadyPreprocessed !== undefined
+          ? Boolean(scheduleOpts.alreadyPreprocessed)
+          : true;
+
       if (ocrTimer.current) clearTimeout(ocrTimer.current);
       ocrTimer.current = setTimeout(() => {
         const run = () => {
-          processImageWithGemini(uri).catch((error) => {
+          processImageWithGemini(uri, { alreadyPreprocessed }).catch((error) => {
             console.error('OCR Error:', error);
             // DO NOT NAVIGATE TO HOME — always ReviewAsset with empty fields
             goToReviewAsset(navigation, {
@@ -857,7 +887,7 @@ function ScanBillScreenInner({ navigation }) {
               assetData: emptyFallbackInvoice(),
               invoice: emptyFallbackInvoice(),
               parsedData: emptyFallbackInvoice(),
-              audit: { flags: ['ocr_failed'], canSave: true, manualEntry: true },
+              audit: { flags: ['ocr_failed'], canSave: false, manualEntry: true },
               engine: 'manual',
               ocrFailed: true,
               hasOcrError: true,
@@ -882,6 +912,7 @@ function ScanBillScreenInner({ navigation }) {
   const launchCameraCapture = useCallback(async () => {
     if (capturing.current || processing) return;
     capturing.current = true;
+    scanGenRef.current += 1;
     clearAutoTimers();
     setAutoArmed(true);
     setLastError('');
@@ -941,17 +972,13 @@ function ScanBillScreenInner({ navigation }) {
 
       setAutoArmed(false);
 
-      let compressedUri = uri;
-      try {
-        const compressedImage = await prepareScanImage(uri);
-        compressedUri = compressedImage?.uri || uri;
-      } catch (compressErr) {
-        console.error('[ScanBillScreen Error]:', compressErr);
-        compressedUri = uri;
-      }
+      // URI is already canonically preprocessed (1800 / 0.88, never upscale):
+      //   - captureDocumentImage → preprocessScanImage
+      //   - safeLaunchCameraAsync fallback → prepareScanImageForOcr
+      // alreadyPreprocessed means: do not JPEG re-encode; read base64 only.
 
       // Defer OCR — let loading UI paint first (prevents Android OOM)
-      scheduleOcrAfterPaint(compressedUri);
+      scheduleOcrAfterPaint(uri);
     } catch (error) {
       capturing.current = false;
       startedRef.current = false;
@@ -972,6 +999,7 @@ function ScanBillScreenInner({ navigation }) {
   const launchGalleryPicker = useCallback(async () => {
     if (capturing.current || processing) return;
     capturing.current = true;
+    scanGenRef.current += 1;
     clearAutoTimers();
     setAutoArmed(false);
     setLastError('');
@@ -1029,18 +1057,8 @@ function ScanBillScreenInner({ navigation }) {
         return;
       }
 
-      let compressedUri = uri;
-      try {
-        const compressedImage = await prepareScanImage(uri);
-        compressedUri = compressedImage?.uri || uri;
-      } catch (compressErr) {
-        console.error('[ScanBillScreen Error]:', compressErr);
-        setLastError('Could not compress this photo. Trying original image…');
-        compressedUri = uri;
-      }
-
       // Defer OCR — let loading UI paint first (prevents Android OOM)
-      scheduleOcrAfterPaint(compressedUri);
+      scheduleOcrAfterPaint(uri, { alreadyPreprocessed: true });
     } catch (error) {
       capturing.current = false;
       startedRef.current = false;
@@ -1230,6 +1248,37 @@ function ScanBillScreenInner({ navigation }) {
           </Text>
           <PrivacyVaultTag style={{ marginTop: 10, alignSelf: 'flex-start' }} />
 
+          {/* Dual-Mode Camera Selector */}
+          <View style={styles.modeSelector}>
+            <Pressable
+              style={[styles.modeTab, scannerMode === 'VAULT' && styles.modeTabActive]}
+              onPress={() => {
+                Haptics.tap();
+                setScannerMode('VAULT');
+              }}
+            >
+              <Text style={[styles.modeTabText, scannerMode === 'VAULT' && styles.modeTabTextActive]}>
+                🗄️ Document Vault
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.modeTab, scannerMode === 'LIVE' && styles.modeTabActive]}
+              onPress={() => {
+                Haptics.tap();
+                setScannerMode('LIVE');
+              }}
+            >
+              <Text style={[styles.modeTabText, scannerMode === 'LIVE' && styles.modeTabTextActive]}>
+                ⚡ Live Fast Fill
+              </Text>
+            </Pressable>
+          </View>
+          <Text style={styles.modeDesc}>
+            {scannerMode === 'VAULT'
+              ? 'Permanent Archival — Auto-crops, deskews & stores securely in Document Vault.'
+              : 'Zero-Storage Live Scan — Fills asset forms instantly without saving images.'}
+          </Text>
+
           {autoArmed && !processing ? (
             <View style={styles.countdownStrip}>
               <Text style={styles.countdownLabel}>Opening document scanner…</Text>
@@ -1321,7 +1370,80 @@ function ScanBillScreenInner({ navigation }) {
         <View style={styles.blockingOverlay} pointerEvents="auto">
           <ActivityIndicator size="large" color={COLORS.emerald} />
           <Text style={styles.overlayTitle}>{processLabel}</Text>
-          <Text style={styles.overlaySub}>Please wait — do not close the app.</Text>
+          
+          {/* Progressive Stage Steps */}
+          <View style={styles.stageProgressWrap}>
+            <Text style={[styles.stageStepText, { color: COLORS.emerald }]}>
+              ✓ Image captured
+            </Text>
+            <Text
+              style={[
+                styles.stageStepText,
+                {
+                  color:
+                    processingStage === 'OCR_EXTRACTING' ||
+                    processingStage === 'IDENTIFYING' ||
+                    processingStage === 'VERIFYING'
+                      ? COLORS.emerald
+                      : COLORS.muted,
+                },
+              ]}
+            >
+              {processingStage === 'OCR_EXTRACTING' ? '● Extracting text…' : '✓ Text extracted'}
+            </Text>
+            <Text
+              style={[
+                styles.stageStepText,
+                {
+                  color:
+                    processingStage === 'IDENTIFYING' || processingStage === 'VERIFYING'
+                      ? COLORS.emerald
+                      : COLORS.muted,
+                },
+              ]}
+            >
+              {processingStage === 'IDENTIFYING'
+                ? '● Identifying document…'
+                : processingStage === 'VERIFYING'
+                ? '✓ Document identified'
+                : '○ Identifying document'}
+            </Text>
+            <Text
+              style={[
+                styles.stageStepText,
+                {
+                  color: processingStage === 'VERIFYING' ? COLORS.emerald : COLORS.muted,
+                },
+              ]}
+            >
+              {processingStage === 'VERIFYING'
+                ? '● Verifying fields & matching…'
+                : '○ Verifying fields'}
+            </Text>
+          </View>
+
+          {processingDuration >= 8 ? (
+            <View style={styles.longWaitCard}>
+              <Text style={styles.longWaitTitle}>Taking longer than usual…</Text>
+              <Text style={styles.longWaitSub}>
+                Network connection is slow. You can continue waiting or scan again.
+              </Text>
+              <View style={styles.longWaitActions}>
+                <Pressable
+                  onPress={() => {
+                    Haptics.tap();
+                    setProcessing(false);
+                    startAutoFocusCapture();
+                  }}
+                  style={styles.longWaitRetryBtn}
+                >
+                  <Text style={styles.longWaitRetryText}>Scan again</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <Text style={styles.overlaySub}>Please wait — do not close the app.</Text>
+          )}
         </View>
       ) : null}
     </Screen>
@@ -1368,6 +1490,45 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
     fontSize: 14,
     lineHeight: 21,
+  },
+  modeSelector: {
+    flexDirection: 'row',
+    marginTop: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: RADIUS.md || 12,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  modeTab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: (RADIUS.md || 12) - 4,
+  },
+  modeTabActive: {
+    backgroundColor: COLORS.emerald || '#0F766E',
+    shadowColor: COLORS.emerald || '#0F766E',
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  modeTabText: {
+    color: COLORS.muted || '#9CA3AF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  modeTabTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  modeDesc: {
+    marginTop: 8,
+    color: COLORS.muted || '#9CA3AF',
+    fontSize: 12,
+    lineHeight: 16,
+    fontStyle: 'italic',
   },
   countdownStrip: {
     marginTop: 14,
@@ -1504,6 +1665,60 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
     fontWeight: '600',
     fontSize: 14,
+  },
+  stageProgressWrap: {
+    marginTop: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: RADIUS.md,
+    alignItems: 'flex-start',
+    gap: 6,
+    width: '100%',
+    maxWidth: 320,
+  },
+  stageStepText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  longWaitCard: {
+    marginTop: 16,
+    backgroundColor: 'rgba(217, 119, 6, 0.18)',
+    borderColor: 'rgba(217, 119, 6, 0.4)',
+    borderWidth: 1,
+    padding: 14,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 320,
+  },
+  longWaitTitle: {
+    color: '#FBBF24',
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  longWaitSub: {
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 10,
+    lineHeight: 16,
+  },
+  longWaitActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  longWaitRetryBtn: {
+    backgroundColor: '#D97706',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: RADIUS.sm,
+  },
+  longWaitRetryText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
   },
 });
 

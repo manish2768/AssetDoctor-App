@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Grand-total selection — never pick the largest number on the page.
  * Priority: Grand Total → Amount Payable → Total Invoice Value → Invoice Total → consistent line total.
  * Glued tax (1830.43 → 183043) must lose to labeled 23999.
@@ -11,7 +11,7 @@ import {
   isLikelyGluedTaxTotal,
   resolveBestPurchaseTotal,
   parseIndianAmountInWords,
-} from './invoiceAmountGuard';
+} from './invoiceAmountGuard.js';
 
 const LABEL_PRIORITY = [
   { id: 'grand_total', re: /grand\s*tot[ae]l/i },
@@ -21,6 +21,13 @@ const LABEL_PRIORITY = [
   { id: 'net_total', re: /net\s*total|net\s*amount/i },
   { id: 'total_amount', re: /total\s*amount(?:\s*payable)?/i },
   { id: 'ex_showroom', re: /ex[\s\-]?showroom\s*price|on[\s\-]?road\s*price/i },
+  { id: 'total_price', re: /total\s*price/i },
+  { id: 'final_amount', re: /final\s*amount|payable\s*amount|total\s*payable/i },
+  // Abbreviated "TOT" footer label (e.g. "TOT: 260"). Word-bounded so it never
+  // collides with "TOTAL"/"total amount". Lowest priority among labeled totals.
+  { id: 'tot', re: /\btot\b/i },
+  // Bare "Total:" / "Total ₹" footer label not already matched above.
+  { id: 'total_bare', re: /\btotal\b:(?!\s*amount)|\btotal\b(?!\s*(?:amount|price|payable|invoice|value|tax))/i },
 ];
 
 /** Parser crumbs like qty=1 becoming ₹4 must not beat a real retail total. */

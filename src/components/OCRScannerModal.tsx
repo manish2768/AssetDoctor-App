@@ -5,7 +5,6 @@ import {
   X,
   FileCheck2,
   Sparkles,
-  Receipt,
   CheckCircle2,
   Calendar,
   IndianRupee,
@@ -54,10 +53,12 @@ export const OCRScannerModal: React.FC<OCRScannerModalProps> = ({
   const mediaStreamRef = useRef<MediaStream | null>(null);
 
   // Multi-item scanning & Scam Guard state
-  const [vendor, setVendor] = useState<string>('Flipkart India Pvt Ltd');
-  const [purchaseDate, setPurchaseDate] = useState<string>('2026-02-14');
-  const [gstin, setGstin] = useState<string>('29AABCU9603R1ZM');
+  const [vendor, setVendor] = useState<string>('');
+  const [purchaseDate, setPurchaseDate] = useState<string>('');
+  const [gstin, setGstin] = useState<string>('');
   const [parsedItems, setParsedItems] = useState<ParsedInvoiceItem[]>([]);
+  const [extractionEvidence, setExtractionEvidence] = useState<Record<string, unknown>>({});
+  const [verifiedForSave, setVerifiedForSave] = useState(false);
   const [hasScanned, setHasScanned] = useState(false);
   const [showScamDetails, setShowScamDetails] = useState<boolean>(true);
 
@@ -115,10 +116,12 @@ export const OCRScannerModal: React.FC<OCRScannerModalProps> = ({
     setImagePreview(null);
     setIsScanning(false);
     setScanStep('');
-    setVendor('Flipkart India Pvt Ltd');
-    setPurchaseDate('2026-02-14');
-    setGstin('29AABCU9603R1ZM');
+    setVendor('');
+    setPurchaseDate('');
+    setGstin('');
     setParsedItems([]);
+    setExtractionEvidence({});
+    setVerifiedForSave(false);
     setHasScanned(false);
     setDragActive(false);
     setShowScamDetails(true);
@@ -173,56 +176,6 @@ export const OCRScannerModal: React.FC<OCRScannerModalProps> = ({
     reader.readAsDataURL(file);
   };
 
-  const triggerPresetScan = (sampleType: 'flipkart_multi_item' | 'croma_tv' | 'suspicious_fake') => {
-    if (sampleType === 'flipkart_multi_item') {
-      setImagePreview('https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=600&q=80');
-      triggerScan({ sampleType });
-    } else if (sampleType === 'croma_tv') {
-      setImagePreview('https://images.unsplash.com/photo-1593784991095-a205069470b6?auto=format&fit=crop&w=600&q=80');
-      triggerScan({ sampleType });
-    } else {
-      // Suspicious fake sample bill
-      setImagePreview('https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=600&q=80');
-      setIsScanning(true);
-      setHasScanned(false);
-      setScanStep('Running AI Scam Guard Verification & GSTIN Checks...');
-      setTimeout(() => {
-        populateExtractedData({
-          vendor: 'Cheapest Deals Wholesale (Cash Only)',
-          purchaseDate: '2026-03-01',
-          totalAmount: 3000,
-          gstin: 'INVALID_GST_999',
-          items: [
-            {
-              id: 'item-fake-1',
-              itemName: 'iPhone 16 Pro Max 1TB (Sealed Box)',
-              brand: 'Apple',
-              price: 1500,
-              warrantyMonths: 12,
-              category: 'Gadgets',
-              serialNumber: 'DUPLICATE-SN-999',
-              notes: 'Suspicious Cash Receipt - Unrealistically Low Price & Invalid GSTIN',
-              selected: true,
-            },
-            {
-              id: 'item-fake-2',
-              itemName: 'iPhone 16 Pro Max 1TB (Sealed Box)',
-              brand: 'Apple',
-              price: 1500,
-              warrantyMonths: 12,
-              category: 'Gadgets',
-              serialNumber: 'DUPLICATE-SN-999',
-              notes: 'Duplicate Item Line Alert',
-              selected: true,
-            },
-          ],
-        });
-        setIsScanning(false);
-        setHasScanned(true);
-      }, 1000);
-    }
-  };
-
   const triggerScan = async (payload: { base64Image?: string; mimeType?: string; sampleType?: string }) => {
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       setIsScanning(true);
@@ -268,44 +221,27 @@ export const OCRScannerModal: React.FC<OCRScannerModalProps> = ({
 
       const resData = await response.json();
 
-      if (resData.success && resData.data) {
+      const evidence = resData?.data?.fieldEvidence;
+      const hasEvidence =
+        evidence &&
+        typeof evidence === 'object' &&
+        Object.values(evidence).some(
+          (field: any) => field && (field.sourceText || field.evidenceType === 'user_verified'),
+        );
+      if (resData.success && resData.data && hasEvidence) {
         populateExtractedData(resData.data);
       } else {
-        throw new Error(resData.error || 'Failed to scan receipt');
+        throw new Error(resData.error || 'OCR returned no verifiable field evidence');
       }
     } catch (err: any) {
       console.error('Scan Error:', err);
-      // Smart Fallback Multi-Item Data (Flipkart Multi-Item Invoice)
-      populateExtractedData({
-        vendor: 'Flipkart India Pvt Ltd',
-        purchaseDate: '2026-02-14',
-        totalAmount: 27298,
-        gstin: '29AABCU9603R1ZM',
-        items: [
-          {
-            id: 'item-1',
-            itemName: 'Nothing Phone (3a) Lite (128GB, White)',
-            brand: 'Nothing',
-            price: 23999,
-            warrantyMonths: 12,
-            category: 'Gadgets',
-            serialNumber: 'NT-PH3A-884102',
-            notes: 'Flipkart Tax Invoice - 1 Year Nothing Brand Warranty',
-            selected: true,
-          },
-          {
-            id: 'item-2',
-            itemName: 'CMF Buds 2 Plus ANC Wireless Earbuds',
-            brand: 'CMF by Nothing',
-            price: 3299,
-            warrantyMonths: 12,
-            category: 'Gadgets',
-            serialNumber: 'CMF-BD2P-99120',
-            notes: 'Flipkart Verified Order - 50dB ANC Wireless Earbuds with 1 Year Warranty',
-            selected: true,
-          },
-        ],
-      });
+      setVendor('');
+      setPurchaseDate('');
+      setGstin('');
+      setParsedItems([]);
+      setExtractionEvidence({});
+      setVerifiedForSave(false);
+      setScanStep('OCR unavailable. No values were populated; enter and verify details manually.');
     } finally {
       setIsScanning(false);
       setHasScanned(true);
@@ -313,21 +249,27 @@ export const OCRScannerModal: React.FC<OCRScannerModalProps> = ({
   };
 
   const populateExtractedData = (data: ReceiptScanResult) => {
-    setVendor(data.vendor || 'Flipkart India Pvt Ltd');
-    setPurchaseDate(data.purchaseDate || '2026-02-14');
-    setGstin(data.gstin || (data.vendor?.toLowerCase().includes('croma') ? '27AAACI0348E1Z8' : '29AABCU9603R1ZM'));
+    setExtractionEvidence(
+      data && typeof (data as any).fieldEvidence === 'object'
+        ? (data as any).fieldEvidence
+        : {},
+    );
+    setVerifiedForSave(false);
+    setVendor(data.vendor || '');
+    setPurchaseDate(data.purchaseDate || '');
+    setGstin(data.gstin || '');
 
     if (data.items && data.items.length > 0) {
       setParsedItems(
         data.items.map((it, idx) => ({
           id: it.id || `item-${idx + 1}-${Date.now()}`,
           itemName: it.itemName,
-          brand: it.brand || 'Nothing',
+          brand: it.brand || '',
           price: it.price,
-          warrantyMonths: it.warrantyMonths || 12,
+          warrantyMonths: it.warrantyMonths || 0,
           category: it.category || 'Gadgets',
-          serialNumber: it.serialNumber || `SN-${Math.floor(100000 + Math.random() * 900000)}`,
-          notes: it.notes || 'Extracted via Gemini Multi-Item OCR Scanner',
+          serialNumber: it.serialNumber || '',
+          notes: it.notes || 'Extracted via Multi-Item OCR Scanner',
           selected: it.selected !== undefined ? it.selected : true,
         }))
       );
@@ -337,12 +279,12 @@ export const OCRScannerModal: React.FC<OCRScannerModalProps> = ({
         {
           id: `item-1-${Date.now()}`,
           itemName: data.itemName,
-          brand: data.brand || 'Generic',
+          brand: data.brand || '',
           price: data.price || 0,
-          warrantyMonths: data.warrantyMonths || 12,
+          warrantyMonths: data.warrantyMonths || 0,
           category: data.category || 'Gadgets',
-          serialNumber: data.serialNumber || `SN-${Math.floor(100000 + Math.random() * 900000)}`,
-          notes: data.notes || 'Added via AI OCR Scanner',
+          serialNumber: data.serialNumber || '',
+          notes: data.notes || 'Added via OCR Scanner',
           selected: true,
         },
       ]);
@@ -365,11 +307,11 @@ export const OCRScannerModal: React.FC<OCRScannerModalProps> = ({
     const newItem: ParsedInvoiceItem = {
       id: `item-${Date.now()}`,
       itemName: 'Additional Invoice Item',
-      brand: vendor || 'Generic',
-      price: 1000,
-      warrantyMonths: 12,
+      brand: vendor || '',
+      price: 0,
+      warrantyMonths: 0,
       category: 'Gadgets',
-      serialNumber: `SN-${Math.floor(100000 + Math.random() * 900000)}`,
+      serialNumber: '',
       notes: 'Manually added line item',
       selected: true,
     };
@@ -398,11 +340,15 @@ export const OCRScannerModal: React.FC<OCRScannerModalProps> = ({
   const handleSaveAllAssets = (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedItems.length === 0) return;
+    if (!verifiedForSave) {
+      setScanStep('Review every extracted value and confirm verification before saving.');
+      return;
+    }
 
     selectedItems.forEach((item, index) => {
       const { expiryDate, daysRemaining, status } = calculateWarrantyStatus(
         purchaseDate,
-        item.warrantyMonths || 12
+        item.warrantyMonths || 0
       );
 
       const uniqueId = `ast-${Date.now()}-${index}-${Math.floor(Math.random() * 100000)}`;
@@ -414,16 +360,27 @@ export const OCRScannerModal: React.FC<OCRScannerModalProps> = ({
         category: item.category,
         price: Number(item.price) || 0,
         purchaseDate,
-        warrantyMonths: Number(item.warrantyMonths) || 12,
+        warrantyMonths: Number(item.warrantyMonths) || 0,
         expiryDate,
         daysRemaining,
         status,
-        serialNumber: item.serialNumber || `SN-${Math.floor(100000 + Math.random() * 900000)}`,
-        vendor: vendor || 'Flipkart India Pvt Ltd',
-        notes: item.notes || 'Added via AI OCR Multi-Item Scanner',
+        serialNumber: item.serialNumber || '',
+        vendor: vendor || '',
+        notes: item.notes || 'Added via OCR Scanner',
         receiptImageUrl: imagePreview || undefined,
         gstin,
         scamGuardStatus: scamGuard.status,
+        ocrFieldEvidence: extractionEvidence,
+        ocrFieldSources: {
+          vendor: 'USER_VERIFIED',
+          purchaseDate: 'USER_VERIFIED',
+          gstin: 'USER_VERIFIED',
+          itemName: 'USER_VERIFIED',
+          price: 'USER_VERIFIED',
+          warrantyMonths: 'USER_VERIFIED',
+          serialNumber: 'USER_VERIFIED',
+        },
+        ocrVerified: true,
       };
 
       onAddAsset(newAsset);
@@ -627,76 +584,8 @@ export const OCRScannerModal: React.FC<OCRScannerModalProps> = ({
                 </div>
               )}
 
-              {/* Sample Preset Bills */}
-              <div className="mt-6">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                  <Receipt className="w-3.5 h-3.5 text-teal-400" />
-                  Try Sample Invoices & AI Scam Guard Test Cases:
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => triggerPresetScan('flipkart_multi_item')}
-                    className="p-3.5 rounded-2xl bg-slate-950 border border-teal-500/30 hover:border-teal-500 hover:bg-slate-900 text-left transition-all cursor-pointer group shadow-lg shadow-teal-500/5"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs font-bold text-slate-200 group-hover:text-teal-400">
-                        🛍️ Flipkart Invoice
-                      </div>
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">
-                        98% Safe
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-slate-400 mt-1 line-clamp-1">
-                      Nothing Phone (3a) + CMF Buds
-                    </div>
-                    <div className="text-xs font-mono font-bold text-teal-400 mt-1.5">
-                      ₹27,298
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => triggerPresetScan('croma_tv')}
-                    className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-cyan-500 hover:bg-slate-900 text-left transition-all cursor-pointer group"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs font-bold text-slate-200 group-hover:text-cyan-400">
-                        📺 Croma TV Bill
-                      </div>
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300">
-                        95% Safe
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-slate-400 mt-1 line-clamp-1">
-                      LG 65" QNED 4K Smart TV
-                    </div>
-                    <div className="text-xs font-mono font-bold text-cyan-400 mt-1.5">
-                      ₹1,15,000
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => triggerPresetScan('suspicious_fake')}
-                    className="p-3.5 rounded-2xl bg-slate-950 border border-rose-500/30 hover:border-rose-500 hover:bg-slate-900 text-left transition-all cursor-pointer group shadow-lg shadow-rose-500/5"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs font-bold text-slate-200 group-hover:text-rose-400">
-                        🚨 Fake Bill Test
-                      </div>
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 animate-pulse">
-                        Scam Alert
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-slate-400 mt-1 line-clamp-1">
-                      Unreal price + Duplicate SN
-                    </div>
-                    <div className="text-xs font-mono font-bold text-rose-400 mt-1.5">
-                      ₹3,000 (Low Risk)
-                    </div>
-                  </button>
-                </div>
+              <div className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-950/20 p-4 text-xs text-amber-200">
+                Sample invoice presets are disabled in production. Upload a real document so every saved value has document evidence.
               </div>
             </div>
           )}
@@ -1052,6 +941,16 @@ export const OCRScannerModal: React.FC<OCRScannerModalProps> = ({
                   </div>
                 </div>
 
+                <label className="flex items-start gap-2 text-[11px] text-amber-200 max-w-sm">
+                  <input
+                    type="checkbox"
+                    checked={verifiedForSave}
+                    onChange={(e) => setVerifiedForSave(e.target.checked)}
+                    className="mt-0.5 accent-teal-500"
+                  />
+                  <span>I reviewed these values against the document and verify them before adding assets to the Vault.</span>
+                </label>
+
                 <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
                   <button
                     type="button"
@@ -1080,4 +979,3 @@ export const OCRScannerModal: React.FC<OCRScannerModalProps> = ({
     </div>
   );
 };
-

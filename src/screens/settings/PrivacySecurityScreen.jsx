@@ -150,8 +150,30 @@ export function PrivacySecurityScreen({ navigation }) {
       style={styles.root}
       contentContainerStyle={{ padding: 16, paddingBottom: 48, paddingTop: insets.top + 8 }}
     >
-      <Text style={styles.heading}>Privacy & Security</Text>
-      <Text style={styles.sub}>Only settings that are implemented are shown.</Text>
+      <Text style={styles.heading}>Trust Center</Text>
+      <Text style={styles.sub}>
+        How Asset Doctor handles your data. Only controls that exist on this account are shown.
+      </Text>
+
+      <Text style={styles.section}>Your data</Text>
+      <View style={styles.card}>
+        <Text style={styles.rowTitle}>Documents</Text>
+        <Text style={styles.muted}>
+          Documents stay in your vault and are processed for organisation and expiry tracking. We do not claim government verification or certification.
+        </Text>
+        <Pressable
+          style={styles.linkBtn}
+          onPress={() => {
+            Haptics.tap();
+            navigation?.navigate?.('NotificationSettings');
+          }}
+        >
+          <Text style={styles.linkText}>Manage notifications</Text>
+        </Pressable>
+        <Text style={[styles.muted, { marginTop: 8 }]}>
+          WhatsApp messages are sent only when account opt-in is true. Change this from account settings on web, or contact support if you need it updated on this device.
+        </Text>
+      </View>
 
       <Text style={styles.section}>Appearance</Text>
       <View style={styles.card}>
@@ -224,10 +246,10 @@ export function PrivacySecurityScreen({ navigation }) {
           <Text style={styles.linkText}>Enable Vault Lock</Text>
         </Pressable>
         <Pressable style={styles.linkBtn} onPress={onExport} disabled={busy}>
-          <Text style={styles.linkText}>Export my data (JSON metadata)</Text>
+          <Text style={styles.linkText}>Download my data</Text>
         </Pressable>
         <Pressable style={styles.linkBtn} onPress={onDeleteAccount} disabled={busy}>
-          <Text style={[styles.linkText, { color: '#B91C1C' }]}>Request account deletion</Text>
+          <Text style={[styles.linkText, { color: '#B91C1C' }]}>Delete account</Text>
         </Pressable>
       </View>
     </ScrollView>

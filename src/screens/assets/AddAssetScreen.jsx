@@ -35,7 +35,6 @@ import { calculateResaleValue } from '../../utils/resaleCalculator';
 import { formatINR, formatINRExact } from '../../utils/format';
 import { toVaultValue } from '../../utils/parseMoneyValue';
 import { normalizeStoredDate } from '../../utils/dates';
-import { lookupBrandHelpline } from '../../constants/brandDirectory';
 import {
   defaultWattsForCategory,
   defaultPowerFactorForCategory,
@@ -121,6 +120,21 @@ function categoryIdFromOcr(data) {
   return data?.serialNumber ? 'appliance' : 'other';
 }
 
+function isValidImei(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (!/^\d{15}$/.test(digits)) return false;
+  let sum = 0;
+  for (let index = 0; index < digits.length; index += 1) {
+    let digit = Number(digits[index]);
+    if (index % 2 === 1) {
+      digit *= 2;
+      if (digit > 9) digit -= 9;
+    }
+    sum += digit;
+  }
+  return sum % 10 === 0;
+}
+
 export function AddAssetScreen({ navigation, route }) {
   const editingId = route?.params?.assetId || null;
   const openScanner = Boolean(route?.params?.openScanner);
@@ -159,6 +173,7 @@ export function AddAssetScreen({ navigation, route }) {
   );
   const [registration, setRegistration] = useState(existing?.registration || '');
   const [serialNumber, setSerialNumber] = useState(existing?.serialNumber || '');
+  const [imei, setImei] = useState(existing?.imei || '');
   const [chassisNumber, setChassisNumber] = useState(existing?.chassisNumber || '');
   const [rtoCode, setRtoCode] = useState(existing?.rtoCode || '');
   const [fuelNorm, setFuelNorm] = useState(existing?.fuelNorm || '');
@@ -205,6 +220,9 @@ export function AddAssetScreen({ navigation, route }) {
   const [scanUri, setScanUri] = useState(null);
   const [scanDocumentType, setScanDocumentType] = useState('bill');
   const [scanHint, setScanHint] = useState('');
+  const [ocrFieldEvidence, setOcrFieldEvidence] = useState({});
+  const [ocrNeedsReview, setOcrNeedsReview] = useState(false);
+  const [ocrReviewed, setOcrReviewed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
@@ -238,6 +256,7 @@ export function AddAssetScreen({ navigation, route }) {
     setWarrantyMonths(existing.warrantyMonths != null ? String(existing.warrantyMonths) : '12');
     setRegistration(existing.registration || '');
     setSerialNumber(existing.serialNumber || '');
+    setImei(existing.imei || '');
     setChassisNumber(existing.chassisNumber || '');
     setRtoCode(existing.rtoCode || '');
     setFuelNorm(existing.fuelNorm || '');
@@ -294,10 +313,15 @@ export function AddAssetScreen({ navigation, route }) {
 
       const ocr = await OcrService.recognizeFromImage(uri);
       if (ocr?.success && ocr.data) {
+        const evidence = ocr.fieldEvidence || {};
+        setOcrFieldEvidence(evidence);
+        setOcrNeedsReview(Object.keys(evidence).length > 0);
+        setOcrReviewed(false);
         if (ocr.data.assetName && !assetName) setAssetName(ocr.data.assetName);
         if (ocr.data.storeName && !storeName) setStoreName(ocr.data.storeName);
         if (ocr.data.purchaseDate && !purchaseDate) setPurchaseDate(ocr.data.purchaseDate);
         if (ocr.data.serialNumber && !serialNumber) setSerialNumber(ocr.data.serialNumber);
+        if (ocr.data.imei && !imei) setImei(ocr.data.imei);
         if (ocr.data.chassisNumber && !chassisNumber) setChassisNumber(ocr.data.chassisNumber);
         if (ocr.data.warrantyExpiry && !warrantyExpiry) {
           setWarrantyExpiry(ocr.data.warrantyExpiry);
@@ -327,9 +351,15 @@ export function AddAssetScreen({ navigation, route }) {
           setScanHint('Auto-tagged — confirm every field, then Save to Vault');
         }
       } else if (ocr?.needsNative) {
+        setOcrFieldEvidence({});
+        setOcrNeedsReview(false);
+        setOcrReviewed(false);
         setScanHint('Photo attached — fill name & save to auto-vault (OCR optional on device)');
       }
     } catch (e) {
+      setOcrFieldEvidence({});
+      setOcrNeedsReview(false);
+      setOcrReviewed(false);
       ui.error('Scan', e?.message || 'Could not open camera');
     }
   };
@@ -377,13 +407,9 @@ export function AddAssetScreen({ navigation, route }) {
   const resolveWarrantyExpiry = () => {
     const override = normalizeStoredDate(warrantyExpiry);
     if (override) return override;
-    const months = Number(warrantyMonths);
-    const purchaseIso = normalizeStoredDate(purchaseDate);
-    if (!purchaseIso || !months) return null;
-    const d = new Date(`${purchaseIso}T00:00:00`);
-    if (Number.isNaN(d.getTime())) return null;
-    d.setMonth(d.getMonth() + months);
-    return d.toISOString().slice(0, 10);
+    // An OCR date plus a default warranty duration is not document evidence.
+    // Only an explicit expiry entered by the user or read from the document is saved.
+    return null;
   };
 
   const buildPayload = () => {
@@ -406,6 +432,9 @@ export function AddAssetScreen({ navigation, route }) {
       lastServiceDate: normalizeStoredDate(installationDate),
       registration: vehicle ? registration : '',
       serialNumber,
+      imei: isValidImei(imei)
+        ? String(imei).replace(/\D/g, '')
+        : '',
       chassisNumber: vehicle ? chassisNumber : '',
       rtoCode: vehicle ? rtoCode.trim() || extractRtoCode(registration) || '' : '',
       fuelNorm: vehicle ? fuelNorm.trim() || '' : '',
@@ -424,10 +453,14 @@ export function AddAssetScreen({ navigation, route }) {
       scanDocumentType,
       brandName: brandName.trim(),
       supportPhone:
-        supportPhone.trim() ||
-        lookupBrandHelpline(`${brandName} ${assetName}`)?.phone ||
-        '',
+        supportPhone.trim(),
       supportUrl: supportUrl.trim(),
+      ocrFieldEvidence,
+      ocrFieldSources: Object.keys(ocrFieldEvidence).reduce((out, key) => {
+        out[key] = ocrReviewed ? 'USER_VERIFIED' : 'OCR_DOCUMENT';
+        return out;
+      }, {}),
+      ocrVerified: ocrReviewed,
     };
   };
 
@@ -444,6 +477,10 @@ export function AddAssetScreen({ navigation, route }) {
     }
     if (!categoryId) {
       setError('Pick what you are adding first');
+      return;
+    }
+    if (ocrNeedsReview && !ocrReviewed) {
+      setError('Review the scanned values against the document, then confirm before saving.');
       return;
     }
     setBusy(true);
@@ -511,6 +548,19 @@ export function AddAssetScreen({ navigation, route }) {
               </Pressable>
             ))}
           </View>
+          {ocrNeedsReview ? (
+            <Pressable
+              onPress={() => setOcrReviewed((current) => !current)}
+              style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}
+            >
+              <Text style={{ color: ocrReviewed ? COLORS.emerald : COLORS.muted, fontSize: 14 }}>
+                {ocrReviewed ? '☑' : '☐'}
+              </Text>
+              <Text style={{ color: COLORS.text, marginLeft: 8, flex: 1 }}>
+                I reviewed the scanned values against the document and verify them.
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : scanHint ? (
         <Text style={styles.scanHint}>{scanHint}</Text>
@@ -652,7 +702,13 @@ export function AddAssetScreen({ navigation, route }) {
           <Field label="Brand" value={brandName} onChangeText={setBrandName} placeholder="Samsung, Apple…" />
           <Field label="Model" value={modelName} onChangeText={setModelName} placeholder="Galaxy S24 Ultra" />
           <Field
-            label="IMEI / serial number"
+            label="IMEI"
+            value={imei}
+            onChangeText={setImei}
+            placeholder="15 digits (optional)"
+          />
+          <Field
+            label="Serial number"
             value={serialNumber}
             onChangeText={setSerialNumber}
             placeholder="Optional"

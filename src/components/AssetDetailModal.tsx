@@ -153,13 +153,11 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
         }
       );
 
-      if (scanRes.extractedData.odometerKm && onUpdateAsset) {
-        onUpdateAsset({
-          ...asset,
-          odometerKm: scanRes.extractedData.odometerKm,
-          serviceDate: scanRes.extractedData.serviceDate || asset.serviceDate
-        });
-      }
+      setOcrMessage(
+        scanRes.state === 'COMPLETED'
+          ? 'OCR complete. Review the extracted values before updating this asset.'
+          : 'OCR needs review. No asset fields were changed.',
+      );
       setTimeout(() => setIsUploadingBill(false), 2000);
     };
     reader.readAsDataURL(file);
@@ -201,7 +199,7 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
                     {asset.brand || asset.category}
                   </span>
                   <span className="text-xs text-slate-400 font-mono">
-                    {capabilities.primaryIdentifierLabel}: {asset.registration || asset.serialNumber || 'SN-N/A'}
+                    {capabilities.primaryIdentifierLabel}: {asset.registration || asset.serialNumber || '—'}
                   </span>
                 </div>
               </div>
@@ -529,7 +527,7 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
                     <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
                       <span className="text-[10px] text-slate-400 font-semibold block uppercase">IMEI / Serial</span>
                       <span className="text-xs font-black text-white font-mono truncate block">
-                        {asset.serialNumber || 'SN-VERIFIED'}
+                        {asset.serialNumber || '—'}
                       </span>
                     </div>
                     <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">

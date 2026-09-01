@@ -12,6 +12,13 @@ credentials/
 *.jks
 *.aab
 android/keystore.properties
-scratch/
-dist-bundle-check/
+fixtures/ocr/real-private/
+!fixtures/ocr/real-private/.gitkeep
 .whatsapp_*.json
+*.apk
+dist-bundle-check/
+scratch/
+Users/
+*.before-message-fix
+offline-ocr-lab/
+

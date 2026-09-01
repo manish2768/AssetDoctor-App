@@ -42,6 +42,7 @@ export const OCR_FIELDS = Object.freeze([
   'storeName',
   'purchaseDate',
   'serialNumber',
+  'imei',
   'chassisNumber',
   'warrantyExpiry',
   'insuranceExpiry',

@@ -97,7 +97,7 @@ export class OfflineVaultCache {
       (a.assetId || a.id) === assetId
         ? {
             ...a,
-            deletedAt: new Date().toISOString(),
+            deletedAt: a.deletedAt || new Date().toISOString(),
             status: 'retired',
             syncStatus: SYNC_STATUS.PENDING_DELETE,
             pendingSync: true,
@@ -105,6 +105,26 @@ export class OfflineVaultCache {
         : a,
     );
     await this.cacheAssets(userId, next);
+  }
+
+  /**
+   * Soft-delete linked vault documents for an asset (same Documents cache key).
+   * Does not invent collections; files are retained until remote purge.
+   */
+  static async markAssetDocumentsDeleted(userId, assetId) {
+    if (!userId || !assetId) return [];
+    const existing = await this.listDocuments(userId, assetId);
+    if (!existing.length) return [];
+    const deletedAt = new Date().toISOString();
+    const next = existing.map((doc) => ({
+      ...doc,
+      deletedAt: doc.deletedAt || deletedAt,
+      assetDeletedAt: doc.assetDeletedAt || deletedAt,
+      pendingSync: true,
+      syncStatus: SYNC_STATUS.PENDING_DELETE,
+    }));
+    await EncryptedVaultStorage.setJSON(DOC_KEY(userId, assetId), next);
+    return next;
   }
 
   static async listRepairLogs(userId, assetId) {

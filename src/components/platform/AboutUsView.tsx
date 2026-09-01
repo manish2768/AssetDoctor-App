@@ -18,6 +18,9 @@ import {
   CheckCircle2
 } from 'lucide-react';
 
+import { AssetDoctorLogo } from '../AssetDoctorLogo';
+import { GooglePlayDownloadButton } from './GooglePlayDownloadButton';
+
 interface AboutUsViewProps {
   onOpenVaultApp: () => void;
   onExploreAssets: () => void;
@@ -33,6 +36,9 @@ export const AboutUsView: React.FC<AboutUsViewProps> = ({
     <div className="w-full space-y-16 sm:space-y-20 max-w-5xl mx-auto px-4 sm:px-6 py-6 animate-fade-in">
       {/* 1. HERO SECTION */}
       <section className="text-center space-y-4 sm:space-y-6 pt-2 sm:pt-4 max-w-4xl mx-auto">
+        <div className="flex justify-center">
+          <AssetDoctorLogo size="lg" />
+        </div>
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-black uppercase tracking-wider font-mono shadow-sm">
           <Sparkles className="w-3.5 h-3.5" />
           <span>The Asset Doctor Story</span>
@@ -341,6 +347,13 @@ export const AboutUsView: React.FC<AboutUsViewProps> = ({
             <span>Start Managing Your Assets</span>
             <ArrowRight className="w-4 h-4" />
           </button>
+          <GooglePlayDownloadButton
+            variant="hero"
+            placement="about_cta"
+            label="Download Now"
+            sublabel="Google Play"
+            showChevron
+          />
           <button
             onClick={onExploreTools}
             className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm transition-all cursor-pointer border border-slate-800 hover:border-slate-700 flex items-center justify-center gap-2"

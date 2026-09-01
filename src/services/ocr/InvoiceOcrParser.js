@@ -5,6 +5,7 @@
 
 import { emptyInvoiceData, PURCHASE_CATEGORIES, addMonthsIso } from './invoiceSchema';
 import { extractBillLineItems, pickPrimaryItem } from '../../utils/billLineItems';
+import { extractWarrantyFromDocument } from './warrantyExtraction';
 import {
   classifyInvoiceSmartCategory,
   SMART_CATEGORIES,
@@ -122,14 +123,6 @@ export function parseInvoiceText(rawText) {
   // Grand Total ALWAYS preferred over taxable+tax repair
   const labeledGrand = extractGrandTotal(lines, blob, data.invoiceNumber);
   data.totalAmount = labeledGrand;
-  if (data.totalAmount == null || data.totalAmount <= 0) {
-    if (data.subtotal != null && data.subtotal > 0) {
-      const tax = data.taxAmount ?? sumNullable(data.cgst, data.sgst, data.igst);
-      if (tax != null && tax > 28) {
-        data.totalAmount = roundMoney(Number(data.subtotal) + Number(tax));
-      }
-    }
-  }
 
   data.paymentMode = normalizePaymentMode(
     matchLabeledValue(lines, [
@@ -150,30 +143,14 @@ export function parseInvoiceText(rawText) {
   if (data.subtotal == null && data.itemsSubtotal != null) {
     data.subtotal = data.itemsSubtotal;
   }
-  // Do NOT overwrite a labeled Grand Total with subtotal+tax
-  if ((data.totalAmount == null || data.totalAmount <= 0) && data.itemsSubtotal != null && data.itemsSubtotal > 0) {
-    const tax = data.taxAmount ?? sumNullable(data.cgst, data.sgst, data.igst);
-    if (tax != null && tax > 28) {
-      data.totalAmount = roundMoney(Number(data.itemsSubtotal) + Number(tax));
-    } else {
-      // Marketplace invoices: line "Total" column often equals grand total
-      const primary = pickPrimaryItem(data.items);
-      if (primary?.amount > 0) data.totalAmount = primary.amount;
-    }
-  }
 
   data.productName = extractProductName(lines, data.items);
   const primaryItem = pickPrimaryItem(data.items);
-  data.imei = extractImei(lines, blob) || primaryItem?.imei || '';
+  data.imei = extractImei(lines, blob) || '';
   data.serialNumber =
     extractSerial(lines, blob) || primaryItem?.serialNumber || '';
   data.chassisNumber = extractChassis(lines, blob);
   data.engineNumber = extractEngineNumber(lines, blob);
-  // If serial accidentally held an IMEI, move it
-  if (!data.imei && /^\d{15}$/.test(String(data.serialNumber || '').replace(/\D/g, ''))) {
-    data.imei = String(data.serialNumber).replace(/\D/g, '').slice(0, 15);
-    data.serialNumber = '';
-  }
   data.registration = extractVehicleRegistration(lines, blob);
 
   // Guard: never keep IMEI / toll-free / 10-digit IDs / invoice numbers as grand total
@@ -194,55 +171,41 @@ export function parseInvoiceText(rawText) {
   if (data.totalAmount != null && isImplausiblePurchaseTotal(data.totalAmount, data)) {
     data.totalAmount = null;
   }
-  // Prefer labeled grand total; else highest non-fee line (ignore Handling Fee ₹0)
-  if ((data.totalAmount == null || data.totalAmount <= 0) && data.items?.length) {
-    const primary = pickPrimaryItem(data.items);
-    if (
-      primary?.amount > 0 &&
-      !looksLikeIdentifierDigits(String(Math.round(primary.amount))) &&
-      !isTollFreeOrHelplineAmount(primary.amount) &&
-      !isImplausiblePurchaseTotal(primary.amount, data)
-    ) {
-      data.totalAmount = primary.amount;
-    }
-  }
 
-  // Vehicle invoices: rebuild from taxable + GST when Net Total OCR failed
-  if (
-    (data.totalAmount == null || data.totalAmount <= 0) &&
-    data.subtotal != null &&
-    data.subtotal > 1000
-  ) {
-    const tax = data.taxAmount ?? sumNullable(data.cgst, data.sgst, data.igst);
-    if (tax != null && tax > 28) {
-      data.totalAmount = roundMoney(Number(data.subtotal) + Number(tax));
-    } else if (data.subtotal >= 10000) {
-      // Sub Total on TVS dealer invoices often already equals Net Total
-      data.totalAmount = roundMoney(Number(data.subtotal));
-    }
-  }
-  if (
-    (data.taxAmount == null || data.taxAmount <= 0) &&
-    data.totalAmount != null &&
-    data.subtotal != null &&
-    data.totalAmount > data.subtotal + 1
-  ) {
-    data.taxAmount = roundMoney(Number(data.totalAmount) - Number(data.subtotal));
-  }
+  // Improved warranty extraction — broad OCR-tolerant variants
+  const warrantyScan = extractWarrantyFromDocument(blob, {
+    productLineIndex: lines.findIndex((l) =>
+      isGoodProductName(l) && data.productName && l.toUpperCase().includes(String(data.productName).toUpperCase()),
+    ),
+    productName: data.productName,
+  });
+  data.warrantyPeriodMonths =
+    warrantyScan.warrantyMonths || parseWarrantyMonths(blob, lines);
 
-  data.warrantyPeriodMonths = parseWarrantyMonths(blob, lines);
-  if (data.invoiceDate && data.warrantyPeriodMonths) {
-    data.warrantyExpiry = addMonthsIso(data.invoiceDate, data.warrantyPeriodMonths);
-  } else {
-    data.warrantyExpiry = parseDateFromMatch(
-      matchLabeledValue(lines, [
-        /^(?:warranty)\s*(?:expiry|exp(?:ires)?|till|until|end)?\s*[:\-]\s*(.+)$/i,
-      ]) ||
-        matchInline(
-          blob,
-          /Warranty\s*(?:Expiry|Exp(?:ires)?|Till|Until)?\s*[:\-]?\s*([0-9]{1,4}[\/\-.][0-9]{1,2}[\/\-.][0-9]{1,4})/i,
-        ),
-    );
+  const explicitWarrantyExpiry = parseDateFromMatch(
+    matchLabeledValue(lines, [
+      /^(?:warranty)\s*(?:expiry|exp(?:ires)?|till|until|end|valid\s*(?:till|until))?\s*[:\-]\s*(.+)$/i,
+    ]) ||
+      matchInline(
+        blob,
+        /Warranty\s*(?:Expiry|Exp(?:ires)?|Till|Until|Valid\s*(?:Till|Until))?\s*[:\-]?\s*([0-9]{1,4}[\/\-.][0-9]{1,2}[\/\-.][0-9]{1,4})/i,
+      ),
+  );
+
+  // Warranty Expiry = Invoice/Purchase Date + warranty duration (never guessed
+  // from nothing; if the duration was read but the purchase date is missing we
+  // flag the review so the user confirms before it is treated as accurate).
+  data.warrantyExpiry =
+    explicitWarrantyExpiry ||
+    (data.warrantyPeriodMonths != null
+      ? addMonthsIso(data.invoiceDate, data.warrantyPeriodMonths)
+      : null);
+  if (
+    data.warrantyPeriodMonths != null &&
+    data.invoiceDate == null &&
+    explicitWarrantyExpiry == null
+  ) {
+    data.warrantyNeedsReview = true;
   }
 
   data.purchaseCategory = inferPurchaseCategory(data, blob);
@@ -859,23 +822,12 @@ function extractImei(lines, blob) {
     if (hit) return hit;
   }
 
-  // Standalone 15-digit only near phone/IMEI context — never near GST lines
-  if (/\b(?:imei|mobile|phone|handset)\b/i.test(blob)) {
-    const compact = String(blob).replace(/(\d)\s+(?=\d)/g, '$1');
-    for (const m of compact.matchAll(/\b([0-9]{15})\b/g)) {
-      const idx = m.index || 0;
-      const near = compact.slice(Math.max(0, idx - 40), idx + 40);
-      if (TAX_NEAR.test(near)) continue;
-      if (/\b(?:cgst|sgst|igst|gstin)\b/i.test(near)) continue;
-      return m[1];
-    }
-  }
   return '';
 }
 
 function normalizeImeiDigits(raw) {
   const digits = String(raw || '').replace(/\D/g, '');
-  if (digits.length >= 14 && digits.length <= 17) return digits.slice(0, 15);
+  if (digits.length === 15) return digits;
   return '';
 }
 
@@ -936,16 +888,9 @@ function extractVehicleRegistration(lines, blob) {
   const candidate = cleanValue(labeled).toUpperCase().replace(/\s+/g, '');
   if (candidate && isIndianPlate(candidate)) return formatPlate(candidate);
 
-  // Only scan free text if this looks like a vehicle invoice
-  if (!/\b(?:vehicle|chassis|vin|rc\b|motor|bike|car|scooter|regn)\b/i.test(blob)) {
-    return '';
-  }
-  const m = String(blob)
-    .toUpperCase()
-    .match(/\b([A-Z]{2}\s?-?\s?[0-9]{1,2}\s?-?\s?[A-Z]{1,3}\s?-?\s?[0-9]{4})\b/);
-  if (!m) return '';
-  const plate = m[1].replace(/[\s-]/g, '');
-  return isIndianPlate(plate) ? formatPlate(plate) : '';
+  // A plate-shaped token without a registration label is not enough evidence.
+  // It may be an order, part, or other document identifier.
+  return '';
 }
 
 function isIndianPlate(plate) {

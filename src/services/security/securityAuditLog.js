@@ -3,6 +3,7 @@
  */
 
 import { EncryptedVaultStorage } from './EncryptedVaultStorage';
+import { createSecureUuid } from './secureId';
 
 const KEY = (uid) => `@asset_doctor/security_audit_v1/${uid || 'guest'}`;
 const MAX = 100;
@@ -11,7 +12,7 @@ export async function recordSecurityEvent(userId, type, meta = {}) {
   if (!userId || !type) return;
   const list = (await EncryptedVaultStorage.getJSON(KEY(userId), [])) || [];
   const row = {
-    id: `sec_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    id: `sec_${createSecureUuid()}`,
     type: String(type).slice(0, 64),
     at: new Date().toISOString(),
     meta: sanitizeMeta(meta),

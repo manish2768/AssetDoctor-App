@@ -33,7 +33,7 @@ export class AssetPassportService {
    * Create public-safe passport representation from an internal Asset
    * STRICT PRIVACY WHITELIST: Zero emails, phones, notes, or private invoices.
    */
-  public static createPublicPassport(asset: Asset, isPublic = true): PublicAssetPassport {
+  public static createPublicPassport(asset: Asset, isPublic = false): PublicAssetPassport {
     // Generate deterministic public verification ID based on asset ID
     const publicId = `pass_${asset.id.replace(/[^a-zA-Z0-9]/g, '').substring(0, 16)}`;
     const serviceCount = asset.serviceLogs ? asset.serviceLogs.length : 0;

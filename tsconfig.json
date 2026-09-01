@@ -12,6 +12,7 @@
     "skipLibCheck": true,
     "moduleResolution": "bundler",
     "isolatedModules": true,
+    "types": ["node"],
     "moduleDetection": "force",
     "allowJs": true,
     "jsx": "react-jsx",
@@ -22,5 +23,19 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "include": [
+    "services/ocr/**/*",
+    "types.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "public",
+    "android",
+    "ios",
+    ".expo",
+    "src/App.tsx",
+    "src/components/platform"
+  ]
 }

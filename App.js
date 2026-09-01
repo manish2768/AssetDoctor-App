@@ -1,5 +1,6 @@
 import 'react-native-gesture-handler';
 import 'react-native-reanimated';
+import './src/polyfills/installSecureCrypto';
 
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 

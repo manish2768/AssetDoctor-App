@@ -11,7 +11,6 @@ import {
   ScrollView,
   Pressable,
   ActivityIndicator,
-  Share,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -22,12 +21,11 @@ import { useUiFeedback } from '../../context/UiFeedbackProvider';
 import { Haptics } from '../../services/haptics';
 import { calculateHealthScore } from '../../utils/healthScore';
 import { formatDateIN, daysUntil } from '../../utils/dates';
-import { formatINR } from '../../utils/format';
+import { formatINRCompact, formatOwnershipDuration } from '../../utils/format';
 import { calculateCostToUse } from '../../utils/costToUse';
 import { resolveAssetCapabilities } from '../../services/assets/assetCapabilities';
 import {
   IconButton,
-  StatusBadge,
   HealthScore,
   SectionHeader,
   MetricCard,
@@ -35,10 +33,29 @@ import {
   DocumentRow,
   PrimaryButton,
   SecondaryButton,
+  EmptyState,
 } from '../../components/design-system';
 import { PremiumIcon } from '../../design-system/icons';
 import { CategoryIcon } from '../../components/icons/CategoryIcon';
+import { QuickFuelLogModal } from '../../components/fuel/QuickFuelLogModal';
 import { RADIUS, SPACING, TYPE, elevation } from '../../theme/tokens';
+import { AssetDoctorProtectedBadge } from '../../components/trust/AssetDoctorProtectedBadge';
+import { ProtectionScoreCard } from '../../components/trust/ProtectionScoreCard';
+import { SharePassportSheet } from '../../components/trust/SharePassportSheet';
+import { TAB_BAR_HEIGHT } from '../../theme/tabMetrics';
+import {
+  DELETE_UX,
+  userFacingDeleteError,
+} from '../../services/assets/assetDeleteFlow';
+import {
+  resolveProtectionBadgeState,
+  calculateProtectionScore,
+  buildAssetTimeline,
+  passportIdentityFields,
+  passportProtectionFields,
+  passportServiceFields,
+  emptyStateForKind,
+} from '../../trust/protectionStatus';
 
 export function AssetPassportScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
@@ -51,6 +68,8 @@ export function AssetPassportScreen({ route, navigation }) {
   const asset = getAsset(assetId);
 
   const [deleting, setDeleting] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [fuelOpen, setFuelOpen] = useState(false);
 
   if (!asset) {
     return (
@@ -71,14 +90,10 @@ export function AssetPassportScreen({ route, navigation }) {
 
   // Calculate Ownership Duration
   const purchaseDate = asset.purchaseDate || asset.invoiceDate || asset.createdAt;
-  const ownershipYears = useMemo(() => {
-    if (!purchaseDate) return '1 yr';
-    const start = new Date(purchaseDate).getTime();
-    if (isNaN(start)) return '1 yr';
-    const diffDays = Math.max(1, (Date.now() - start) / (1000 * 60 * 60 * 24));
-    const yrs = (diffDays / 365.25).toFixed(1);
-    return `${yrs} yrs`;
-  }, [purchaseDate]);
+  const ownershipYears = useMemo(
+    () => formatOwnershipDuration(purchaseDate),
+    [purchaseDate],
+  );
 
   // Estimated Current Value
   const purchasePrice = Number(asset.purchasePrice || asset.invoiceAmount || asset.totalAmount || 0);
@@ -98,7 +113,6 @@ export function AssetPassportScreen({ route, navigation }) {
         name: asset.insurerName || 'Vehicle Insurance',
         identifier: asset.insurancePolicyNumber || asset.registration,
         dateText: asset.insuranceExpiry ? `Valid until ${formatDateIN(asset.insuranceExpiry)}` : '',
-        verified: true,
         daysLeft: insDays,
       });
     }
@@ -111,7 +125,6 @@ export function AssetPassportScreen({ route, navigation }) {
         name: 'Pollution Under Control',
         identifier: asset.registration,
         dateText: `Valid until ${formatDateIN(asset.pucExpiry)}`,
-        verified: true,
         daysLeft: pucDays,
       });
     }
@@ -123,7 +136,6 @@ export function AssetPassportScreen({ route, navigation }) {
         name: asset.workshopName || 'Authorized Service',
         identifier: asset.odometerKm ? `${asset.odometerKm.toLocaleString()} KM` : '',
         dateText: asset.lastServiceDate ? formatDateIN(asset.lastServiceDate) : 'Latest service recorded',
-        verified: true,
       });
     }
 
@@ -135,7 +147,6 @@ export function AssetPassportScreen({ route, navigation }) {
         name: asset.brand || asset.manufacturer || asset.assetName,
         identifier: asset.serialNumber || asset.imei,
         dateText: `Valid until ${formatDateIN(asset.warrantyExpiry)}`,
-        verified: true,
         daysLeft: warDays,
       });
     }
@@ -143,66 +154,40 @@ export function AssetPassportScreen({ route, navigation }) {
     return docs;
   }, [asset]);
 
-  // Timeline Events
-  const timelineEvents = useMemo(() => {
-    const events = [];
+  const timelineEvents = useMemo(
+    () =>
+      buildAssetTimeline(asset, []).map((ev) => ({
+        id: ev.id,
+        date: formatDateIN(ev.date),
+        title: ev.title,
+        subtitle: ev.subtitle,
+      })),
+    [asset],
+  );
 
-    if (purchaseDate) {
-      events.push({
-        id: 'ev-purch',
-        date: formatDateIN(purchaseDate),
-        title: 'Asset Added & Protected',
-        subtitle: purchasePrice > 0 ? `Registered with value ₹${purchasePrice.toLocaleString()}` : 'Initial record created',
-      });
-    }
+  const protection = useMemo(
+    () => calculateProtectionScore({ asset, documents: linkedDocs }),
+    [asset, linkedDocs],
+  );
+  const protectionBadge = useMemo(
+    () => resolveProtectionBadgeState({ asset, documents: linkedDocs }),
+    [asset, linkedDocs],
+  );
+  const identityRows = passportIdentityFields(asset);
+  const protectionRows = passportProtectionFields(asset);
+  const serviceRows = passportServiceFields(asset);
 
-    if (asset.lastServiceDate) {
-      events.push({
-        id: 'ev-svc',
-        date: formatDateIN(asset.lastServiceDate),
-        title: 'Service Maintenance Recorded',
-        subtitle: asset.odometerKm ? `Odometer: ${asset.odometerKm.toLocaleString()} KM` : 'Service completed',
-      });
-    }
-
-    if (asset.insuranceExpiry) {
-      events.push({
-        id: 'ev-ins',
-        date: formatDateIN(asset.insuranceExpiry),
-        title: 'Insurance Expiry Target',
-        subtitle: asset.insurerName || 'Coverage policy',
-      });
-    }
-
-    if (!events.length) {
-      events.push({
-        id: 'ev-default',
-        date: formatDateIN(new Date().toISOString()),
-        title: 'Asset Active in Vault',
-        subtitle: 'All document records synced securely',
-      });
-    }
-
-    return events;
-  }, [asset, purchaseDate, purchasePrice]);
-
-  const onShare = async () => {
+  const onShare = () => {
     Haptics.tap();
-    try {
-      await Share.share({
-        message: `Asset Doctor Passport: ${asset.assetName} (${asset.registration || asset.serialNumber || 'Protected'})\nHealth Score: ${health}/100\nManaged securely via Asset Doctor.`,
-        title: `${asset.assetName} Passport`,
-      });
-    } catch (e) {
-      // Ignored
-    }
+    setShareOpen(true);
   };
 
   const onDelete = async () => {
     const ok = await ui.confirm({
-      title: 'Delete Asset?',
-      message: `Are you sure you want to remove ${asset.assetName} from your vault?`,
-      confirmLabel: 'Delete',
+      title: DELETE_UX.confirmTitle,
+      message: DELETE_UX.confirmMessage,
+      confirmLabel: DELETE_UX.confirmLabel,
+      cancelLabel: DELETE_UX.cancelLabel,
       destructive: true,
     });
     if (!ok) return;
@@ -211,10 +196,25 @@ export function AssetPassportScreen({ route, navigation }) {
     try {
       const res = await removeAsset(asset.assetId || asset.id, asset.billStoragePath);
       if (res?.success) {
-        navigation.goBack();
+        ui.success(DELETE_UX.success);
+        if (navigation.getParent()) {
+          navigation.getParent().navigate('Assets');
+        } else if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          navigation.navigate('Assets');
+        }
       } else {
-        ui.error('Delete failed', res?.error || 'Please try again.');
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.warn('[AssetPassport] delete failed', res?.technicalError || res?.error);
+        }
+        ui.error(DELETE_UX.failureTitle, userFacingDeleteError(res?.technicalError || res?.error));
       }
+    } catch (error) {
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.warn('[AssetPassport] delete failed', error);
+      }
+      ui.error(DELETE_UX.failureTitle, userFacingDeleteError(error));
     } finally {
       setDeleting(false);
     }
@@ -244,7 +244,10 @@ export function AssetPassportScreen({ route, navigation }) {
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 28 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* ASSET PASSPORT HERO */}
@@ -263,23 +266,41 @@ export function AssetPassportScreen({ route, navigation }) {
                 color={colors.primary}
               />
             </View>
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={[TYPE.h1, { color: colors.text }]} numberOfLines={1}>
+            <View style={styles.passportIdentity}>
+              <Text style={[TYPE.h1, { color: colors.text }]} numberOfLines={1} ellipsizeMode="tail">
                 {asset.assetName}
               </Text>
-              <Text style={[TYPE.bodySmall, { color: colors.textMuted, marginTop: 2 }]}>
-                {asset.registration ? `${asset.registration} · ` : ''}
+              {asset.registration ? (
+                <Text
+                  style={[TYPE.bodySmall, styles.nowrapValue, { color: colors.textMuted, marginTop: 2 }]}
+                  numberOfLines={1}
+                  ellipsizeMode="middle"
+                >
+                  {asset.registration}
+                </Text>
+              ) : null}
+              <Text style={[TYPE.caption, { color: colors.textMuted, marginTop: 2 }]} numberOfLines={1}>
                 {asset.categoryLabel || asset.category || 'Asset'}
               </Text>
             </View>
-            <HealthScore score={health} />
+            <HealthScore score={health} style={styles.passportBadge} />
           </View>
+          <View style={{ marginTop: SPACING.sm }}>
+            <AssetDoctorProtectedBadge state={protectionBadge} />
+          </View>
+          <Text style={[TYPE.caption, { color: colors.textMuted, marginTop: 8 }]}>
+            Asset Health: {typeof health === 'number' ? health : health?.score ?? '—'}
+          </Text>
 
           {/* Quick Identity Tags */}
           <View style={styles.identityTagRow}>
             {asset.registration ? (
               <View style={[styles.idTag, { backgroundColor: colors.surfaceMuted, borderColor: colors.border }]}>
-                <Text style={[TYPE.caption, { color: colors.text, fontWeight: '700' }]}>
+                <Text
+                  style={[TYPE.caption, styles.nowrapValue, { color: colors.text, fontWeight: '700' }]}
+                  numberOfLines={1}
+                  ellipsizeMode="middle"
+                >
                   REG: {asset.registration}
                 </Text>
               </View>
@@ -301,25 +322,123 @@ export function AssetPassportScreen({ route, navigation }) {
           </View>
         </View>
 
-        {/* OVERVIEW SECTION */}
-        <SectionHeader title="Overview" />
+        <ProtectionScoreCard protection={protection} style={{ marginTop: SPACING.sm }} />
+
+        <SectionHeader title="Overview" style={{ marginTop: SPACING.md }} />
         <View style={styles.metricGrid}>
           <MetricCard
             title="Purchase"
-            value={purchasePrice > 0 ? formatINR(purchasePrice) : '—'}
+            value={purchasePrice > 0 ? formatINRCompact(purchasePrice) : '—'}
+            compactValue={purchasePrice > 0 ? formatINRCompact(purchasePrice) : '—'}
             subtitle={purchaseDate ? formatDateIN(purchaseDate) : 'Not recorded'}
           />
           <MetricCard
             title="Current Value"
-            value={currentValue ? formatINR(currentValue) : '—'}
+            value={currentValue ? formatINRCompact(currentValue) : '—'}
+            compactValue={currentValue ? formatINRCompact(currentValue) : '—'}
             subtitle="Estimated"
           />
           <MetricCard
             title="Ownership"
             value={ownershipYears}
+            compactValue={ownershipYears}
             subtitle="Active"
           />
         </View>
+
+        {identityRows.length ? (
+          <>
+            <SectionHeader title="Identity" style={{ marginTop: SPACING.md }} />
+            <View style={[styles.timelineCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              {identityRows.map((row) => (
+                <View key={row.label} style={{ marginBottom: 8 }}>
+                  <Text style={[TYPE.micro, { color: colors.textMuted }]}>{row.label}</Text>
+                  <Text style={[TYPE.body, { color: colors.text, fontWeight: '600' }]} numberOfLines={2}>
+                    {String(row.value)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </>
+        ) : null}
+
+        <SectionHeader title="Protection" style={{ marginTop: SPACING.md }} />
+        {protectionRows.length ? (
+          <View style={[styles.timelineCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            {protectionRows.map((row) => (
+              <View key={row.label} style={{ marginBottom: 8 }}>
+                <Text style={[TYPE.micro, { color: colors.textMuted }]}>{row.label}</Text>
+                <Text style={[TYPE.body, { color: colors.text, fontWeight: '600' }]} numberOfLines={2}>
+                  {String(row.value)}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <EmptyState
+            title={emptyStateForKind(isVehicle ? 'insurance' : 'warranty').title}
+            message={emptyStateForKind(isVehicle ? 'insurance' : 'warranty').body}
+            ctaLabel={emptyStateForKind(isVehicle ? 'insurance' : 'warranty').cta}
+            onCta={() => navigation.getParent()?.navigate?.('ScanBill')}
+          />
+        )}
+
+        {serviceRows.length ? (
+          <>
+            <SectionHeader title="Service" style={{ marginTop: SPACING.md }} />
+            <View style={[styles.timelineCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              {serviceRows.map((row) => (
+                <View key={row.label} style={{ marginBottom: 8 }}>
+                  <Text style={[TYPE.micro, { color: colors.textMuted }]}>{row.label}</Text>
+                  <Text style={[TYPE.body, { color: colors.text, fontWeight: '600' }]} numberOfLines={2}>
+                    {String(row.value)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </>
+        ) : isVehicle ? (
+          <>
+            <SectionHeader title="Service" style={{ marginTop: SPACING.md }} />
+            <EmptyState
+              title={emptyStateForKind('service').title}
+              message={emptyStateForKind('service').body}
+              ctaLabel={emptyStateForKind('service').cta}
+              onCta={() => navigation.getParent()?.navigate?.('ScanBill')}
+            />
+          </>
+        ) : null}
+
+        {/* FUEL & MILEAGE SECTION (vehicles only) */}
+        {caps.supportsFuelTracking ? (
+          <>
+            <SectionHeader title="Fuel & Mileage" style={{ marginTop: SPACING.md }} />
+            <View style={[styles.fuelWrap, { marginBottom: SPACING.sm }]}>
+              <Text style={[TYPE.body, { color: colors.text, fontWeight: '600' }]}>
+                Track full-tank refills to see real mileage (km/L), distance and ₹/km.
+              </Text>
+              <View style={styles.fuelActions}>
+                <PrimaryButton
+                  title="+ Log Fuel"
+                  onPress={() => {
+                    Haptics.tap();
+                    setFuelOpen(true);
+                  }}
+                  size="md"
+                  style={{ flex: 1, marginRight: SPACING.xs }}
+                />
+                <SecondaryButton
+                  title="History"
+                  onPress={() =>
+                    navigation.navigate('FuelVault', { assetId: asset.assetId || asset.id })
+                  }
+                  size="md"
+                  style={{ flex: 1, marginLeft: SPACING.xs }}
+                />
+              </View>
+            </View>
+          </>
+        ) : null}
 
         {/* DOCUMENTS SECTION */}
         <SectionHeader
@@ -335,48 +454,86 @@ export function AssetPassportScreen({ route, navigation }) {
               assetName={doc.name}
               identifier={doc.identifier}
               dateText={doc.dateText}
-              verified={doc.verified}
+              verified={false}
+              onPress={() =>
+                navigation.navigate('DocumentsVault', { assetId: asset.assetId || asset.id })
+              }
             />
           ))
         ) : (
-          <View style={[styles.noDocsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[TYPE.caption, { color: colors.textMuted }]}>
-              No documents linked to this asset yet. Scan a bill to link automatically.
-            </Text>
-          </View>
+          <EmptyState
+            title={emptyStateForKind('document').title}
+            message={emptyStateForKind('document').body}
+            ctaLabel="Scan Document"
+            onCta={() => navigation.getParent()?.navigate?.('ScanBill')}
+          />
         )}
 
         {/* TIMELINE SECTION */}
         <SectionHeader title="Timeline" style={{ marginTop: SPACING.md }} />
-        <View style={[styles.timelineCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          {timelineEvents.map((ev, idx) => (
-            <TimelineItem
-              key={ev.id}
-              date={ev.date}
-              title={ev.title}
-              subtitle={ev.subtitle}
-              isLast={idx === timelineEvents.length - 1}
-            />
-          ))}
-        </View>
+        {timelineEvents.length ? (
+          <View style={[styles.timelineCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            {timelineEvents.map((ev, idx) => (
+              <TimelineItem
+                key={ev.id}
+                date={ev.date}
+                title={ev.title}
+                subtitle={ev.subtitle}
+                isLast={idx === timelineEvents.length - 1}
+              />
+            ))}
+          </View>
+        ) : (
+          <Text style={[TYPE.caption, { color: colors.textMuted }]}>
+            No dated events on file yet.
+          </Text>
+        )}
 
         {/* ACTIONS */}
         <View style={styles.actionButtonsWrap}>
           <PrimaryButton
-            title="Scan Document for this Asset"
+            title="Scan Document"
             onPress={() => navigation.getParent()?.navigate?.('ScanBill')}
             size="md"
             style={{ marginBottom: SPACING.xs }}
           />
           <SecondaryButton
-            title={deleting ? 'Deleting...' : 'Delete Asset'}
+            title="Add Service Record"
+            onPress={() => navigation.getParent()?.navigate?.('ScanBill')}
+            size="md"
+            style={{ marginBottom: SPACING.xs }}
+          />
+          <SecondaryButton
+            title="Add Document"
+            onPress={() => navigation.navigate('DocumentsVault', { assetId: asset.assetId || asset.id })}
+            size="md"
+            style={{ marginBottom: SPACING.xs }}
+          />
+          <SecondaryButton
+            title="Share Passport"
+            onPress={onShare}
+            size="md"
+            style={{ marginBottom: SPACING.xs }}
+          />
+          <SecondaryButton
+            title={deleting ? DELETE_UX.processing : DELETE_UX.confirmLabel}
             onPress={onDelete}
             disabled={deleting}
             size="md"
             textStyle={{ color: colors.danger }}
           />
+          {deleting ? (
+            <View style={styles.deletingRow}>
+              <ActivityIndicator size="small" color={colors.danger} />
+              <Text style={[TYPE.caption, { color: colors.textMuted, marginLeft: 8 }]}>
+                {DELETE_UX.processing}
+              </Text>
+            </View>
+          ) : null}
         </View>
       </ScrollView>
+      <SharePassportSheet visible={shareOpen} onClose={() => setShareOpen(false)} asset={asset} ui={ui} />
+      <QuickFuelLogModal visible={fuelOpen} asset={asset} onClose={() => setFuelOpen(false)} />
     </View>
   );
 }
@@ -406,6 +563,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  passportIdentity: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: 12,
+    marginRight: 8,
+  },
+  passportBadge: {
+    flexShrink: 0,
+  },
+  nowrapValue: {
+    flexShrink: 0,
+  },
   passportIconBox: {
     width: 52,
     height: 52,
@@ -430,6 +599,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginHorizontal: -4,
+    flexWrap: 'nowrap',
   },
   noDocsCard: {
     padding: SPACING.md,
@@ -445,5 +615,18 @@ const styles = StyleSheet.create({
   },
   actionButtonsWrap: {
     marginTop: SPACING.lg,
+  },
+  fuelWrap: {
+    paddingHorizontal: SPACING.xs,
+  },
+  fuelActions: {
+    flexDirection: 'row',
+    marginTop: SPACING.sm,
+  },
+  deletingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: SPACING.sm,
   },
 });

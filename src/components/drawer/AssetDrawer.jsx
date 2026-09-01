@@ -1,3 +1,4 @@
+
 /**
  * Asset Doctor — Master Universal Asset Drawer Component
  * 
@@ -26,19 +27,110 @@ import { navigationRef, openScanInvoice } from '../../navigation/navActions';
 import {
   MAIN_NAV_ITEMS,
   ASSET_CATEGORIES_CONFIG,
-  INTELLIGENCE_NAV_ITEMS,
-  SMART_TOOLS_ITEMS,
-  ACCOUNT_NAV_ITEMS,
   getActiveNavSection,
 } from '../../navigation/navigationConfig';
+import { resolveAssetCategory } from '../../utils/categoryNormalization';
 
 import { DrawerHeader } from './DrawerHeader';
-import { ScannerHeroCard } from './ScannerHeroCard';
 import { UniversalSearchEntry } from './UniversalSearchEntry';
 import { DrawerSection } from './DrawerSection';
 import { DrawerItem } from './DrawerItem';
 import { DrawerFooter } from './DrawerFooter';
 import { SyncEngine } from '../../services/offline/SyncEngine';
+
+/**
+ * De-duplicated intelligence, tools and account destinations.
+ * Each points to a unique screen registered in RootNavigator, so repeated
+ * targets (e.g. AssetAnalytics, VaultHome) appear at most once in the drawer.
+ */
+const INTELLIGENCE_NAV = [
+  {
+    id: 'asset_health',
+    label: 'Asset Health & Analytics',
+    subtitle: 'Live health scores & portfolio insights',
+    icon: 'spark',
+    route: 'Home',
+    params: { screen: 'AssetAnalytics' },
+  },
+  {
+    id: 'maintenance',
+    label: 'Maintenance',
+    subtitle: 'Service logs, repairs & workshop records',
+    icon: 'wrench',
+    route: 'Home',
+    params: { screen: 'Maintenance' },
+  },
+  {
+    id: 'fuel_mileage',
+    label: 'Fuel & Mileage',
+    subtitle: 'Refuels, odometer & efficiency',
+    icon: 'zap',
+    route: 'Home',
+    params: { screen: 'FuelVault' },
+  },
+  {
+    id: 'energy_nig',
+    label: 'Energy / NIG',
+    subtitle: 'Network & home energy intelligence',
+    icon: 'chart',
+    route: 'Home',
+    params: { screen: 'EnergyOverview' },
+  },
+];
+
+const TOOLS_NAV = [
+  {
+    id: 'universal_search',
+    label: 'Universal Search',
+    subtitle: 'Search serial, IMEI, plate or policy',
+    icon: 'search',
+    route: 'Home',
+    params: { screen: 'GlobalSearch' },
+  },
+];
+
+const ACCOUNT_NAV = [
+  {
+    id: 'profile',
+    label: 'Profile',
+    subtitle: 'Your details & preferences',
+    icon: 'user',
+    route: 'Profile',
+    params: { screen: 'ProfileHome' },
+  },
+  {
+    id: 'privacy_security',
+    label: 'Privacy & Security',
+    subtitle: 'Biometric lock & encrypted storage',
+    icon: 'lock',
+    route: 'Profile',
+    params: { screen: 'PrivacySecurity' },
+  },
+  {
+    id: 'settings',
+    label: 'Settings',
+    subtitle: 'Notifications, currency, theme & sound',
+    icon: 'settings',
+    route: 'Profile',
+    params: { screen: 'SettingsHome' },
+  },
+  {
+    id: 'about',
+    label: 'About',
+    subtitle: 'Version, credits & licenses',
+    icon: 'shield-check',
+    route: 'Profile',
+    params: { screen: 'About' },
+  },
+  {
+    id: 'support',
+    label: 'Support',
+    subtitle: 'Contact, report issue & feedback',
+    icon: 'message',
+    route: 'Profile',
+    params: { screen: 'ContactUs' },
+  },
+];
 
 export function AssetDrawer() {
   const { isOpen, closeDrawer, animatedProgress } = useDrawer();
@@ -49,6 +141,7 @@ export function AssetDrawer() {
   const colors = useThemeColors();
 
   const drawerWidth = Math.min(width * 0.82, 340);
+  const activeAssets = (assets || []).filter((a) => !a.isArchived).length;
 
   // Compute category counts dynamically across all assets
   const categoryCounts = useMemo(() => {
@@ -63,20 +156,13 @@ export function AssetDrawer() {
 
     for (const a of assets || []) {
       if (a.isArchived) continue;
-      const cat = String(a.categoryId || a.category || '').toLowerCase();
-      if (['bike', 'car', 'scooter', 'ev', 'vehicle', 'motorcycle', 'commercial'].some((k) => cat.includes(k))) {
-        counts.vehicles += 1;
-      } else if (['ac', 'fridge', 'washer', 'washing_machine', 'tv', 'microwave', 'geyser', 'appliance'].some((k) => cat.includes(k))) {
-        counts.home_appliances += 1;
-      } else if (['phone', 'mobile', 'laptop', 'tablet', 'gadget', 'camera', 'console', 'electronics'].some((k) => cat.includes(k))) {
-        counts.gadgets_electronics += 1;
-      } else if (['equipment', 'generator', 'inverter', 'solar', 'tool', 'machinery'].some((k) => cat.includes(k))) {
-        counts.equipment_machinery += 1;
-      } else if (['business', 'commercial', 'office', 'pos'].some((k) => cat.includes(k))) {
-        counts.business_assets += 1;
-      } else {
-        counts.other_assets += 1;
-      }
+      const resolved = resolveAssetCategory(a) || 'other';
+      if (resolved === 'vehicle') counts.vehicles += 1;
+      else if (resolved === 'home') counts.home_appliances += 1;
+      else if (resolved === 'gadget') counts.gadgets_electronics += 1;
+      else if (resolved === 'equipment') counts.equipment_machinery += 1;
+      else if (resolved === 'business') counts.business_assets += 1;
+      else counts.other_assets += 1;
     }
     return counts;
   }, [assets]);
@@ -186,28 +272,26 @@ export function AssetDrawer() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
           >
-            {/* Prominent Scan & Identify Hero Card */}
-            <ScannerHeroCard
-              onPress={() => handleNavigate({ isHeroScanner: true })}
-            />
-
             {/* Universal Search Entry */}
             <UniversalSearchEntry onPress={handleSearchPress} />
 
-            {/* 1. Main Navigation */}
+            {/* 1. Core — Scan, Home, Assets, Docs, Alerts, Profile */}
             <DrawerSection title="Core" isCollapsible={false}>
-              {getActiveNavSection(MAIN_NAV_ITEMS)
-                .filter((it) => !it.isHeroScanner)
-                .map((item) => (
+              {getActiveNavSection(MAIN_NAV_ITEMS).map((item) => {
+                const isTotalAssets = item.id === 'my_assets';
+                const count = isTotalAssets && activeAssets > 0 ? `${activeAssets}` : item.badge;
+                return (
                   <DrawerItem
                     key={item.id}
                     icon={item.icon}
                     label={item.label}
                     subtitle={item.subtitle}
-                    badge={item.badge}
+                    badge={count}
+                    badgeColor={item.isHeroScanner ? '#14B8A6' : undefined}
                     onPress={() => handleNavigate(item)}
                   />
-                ))}
+                );
+              })}
             </DrawerSection>
 
             {/* 2. Universal Asset Categories */}
@@ -234,13 +318,13 @@ export function AssetDrawer() {
               })}
             </DrawerSection>
 
-            {/* 3. Asset Intelligence */}
+            {/* 3. Intelligence */}
             <DrawerSection
               title="Intelligence"
               isCollapsible={true}
               defaultExpanded={true}
             >
-              {getActiveNavSection(INTELLIGENCE_NAV_ITEMS).map((item) => (
+              {INTELLIGENCE_NAV.map((item) => (
                 <DrawerItem
                   key={item.id}
                   icon={item.icon}
@@ -252,13 +336,13 @@ export function AssetDrawer() {
               ))}
             </DrawerSection>
 
-            {/* 4. Smart Tools */}
+            {/* 4. Tools */}
             <DrawerSection
-              title="Smart Tools"
+              title="Tools"
               isCollapsible={true}
               defaultExpanded={false}
             >
-              {getActiveNavSection(SMART_TOOLS_ITEMS).map((item) => (
+              {TOOLS_NAV.map((item) => (
                 <DrawerItem
                   key={item.id}
                   icon={item.icon}
@@ -270,13 +354,13 @@ export function AssetDrawer() {
               ))}
             </DrawerSection>
 
-            {/* 5. Account & Security */}
+            {/* 5. Account */}
             <DrawerSection
               title="Account"
               isCollapsible={true}
               defaultExpanded={false}
             >
-              {getActiveNavSection(ACCOUNT_NAV_ITEMS).map((item) => (
+              {ACCOUNT_NAV.map((item) => (
                 <DrawerItem
                   key={item.id}
                   icon={item.icon}
@@ -318,6 +402,7 @@ const styles = StyleSheet.create({
     elevation: 24,
   },
   scrollContent: {
-    paddingBottom: 24,
+    paddingBottom: 32,
+    paddingTop: 4,
   },
 });

@@ -20,50 +20,89 @@ export const SMART_CATEGORY_OPTIONS = Object.freeze([
   { id: SMART_CATEGORIES.OTHER, label: 'Other', icon: 'other' },
 ]);
 
-const RULES = [
-  {
-    id: SMART_CATEGORIES.ACCESSORIES,
-    // Accessories first so "phone case" / "charger" win over Gadgets
-    re: /\b(?:charger|cable|cover|case|adapter|earphone|earbuds?|power\s*bank|screen\s*guard|tempered\s*glass|usb|type[\s\-]?c)\b/i,
-  },
-  {
-    id: SMART_CATEGORIES.VEHICLES,
-    // Vehicles before gadgets so "TVS RONIN" / dealer invoices never fall to Other
-    re: /\b(?:bike|motorcycle|scooter|activa|helmet|tyre|tire|engine\s*oil|chassis|frame\s*no|engine\s*no|vin|service|puc|rc\b|two[\s\-]?wheeler|four[\s\-]?wheeler|\bcar\b|suv|sedan|pulsar|ronin|splendor|apache|jupiter|ntorq|unicorn|shine|passion|avenger|\btvs\b|hero\s*moto|bajaj|yamaha|honda|suzuki|royal\s*enfield|ktm|ather|ola\s*s1|ex[\s\-]?showroom|hsrp|motor\s*vehicle|vehicle\s*invoice|dealer\s*invoice|insurance\s*polic|motor\s*insurance|certificate\s*of\s*insurance|raftaar|moto\s*legends)\b/i,
-  },
-  {
-    id: SMART_CATEGORIES.GADGETS,
-    re: /\b(?:phone|mobile|handset|smartphone|tablet|ipad|laptop|notebook|imei|iphone|nothing\s*phone|galaxy|oneplus|realme|xiaomi|redmi|pixel)\b/i,
-  },
-  {
-    id: SMART_CATEGORIES.HOME_APPLIANCES,
-    re: /\b(?:\bac\b|air[\s\-]?conditioner|inverter\s*ac|fridge|refrigerator|television|\btv\b|smart\s*tv|washing\s*machine|washer|microwave|oven|geyser|water\s*heater|dishwasher|cooler|chimney|induction)\b/i,
-  },
-];
+// Accessories first so "phone case" / "charger" win over Gadgets.
+const ACCESSORY_RULE = {
+  id: SMART_CATEGORIES.ACCESSORIES,
+  re: /\b(?:charger|cable|cover|case|adapter|earphone|earbuds?|power\s*bank|screen\s*guard|tempered\s*glass|usb|type[\s\-]?c)\b/i,
+};
+
+// Product-grained evidence. High-value, specific tokens only — a gadget purchase
+// invoice must land here before any broad vehicle keyword is even considered.
+const GADGET_RULE = {
+  id: SMART_CATEGORIES.GADGETS,
+  re: /\b(?:phone|mobile|handset|smartphone|tablet|ipad|laptop|notebook|macbook|imei|iphone|nothing\s*phone|galaxy|oneplus|realme|xiaomi|redmi|pixel|vivo|oppo|motorola|airpods|earbud|smartwatch|camera)\b/i,
+};
+
+const HOME_RULE = {
+  id: SMART_CATEGORIES.HOME_APPLIANCES,
+  re: /\b(?:\bac\b|air[\s\-]?conditioner|inverter\s*ac|fridge|refrigerator|television|\btv\b|smart\s*tv|washing\s*machine|washer|microwave|oven|geyser|water\s*heater|dishwasher|cooler|chimney|induction)\b/i,
+};
+
+// Vehicle rule: only *combination* evidence (vehicle token + id/model hint) is
+// trusted. Removed noisy single keywords (bare "service", "car", bare brand
+// names) that previously hijacked gadget / appliance & even generic invoices.
+const VEHICLE_RULE = {
+  id: SMART_CATEGORIES.VEHICLES,
+  re: /\b(?:bike|motorcycle|scooter|activa|chassis|frame\s*(?:no|number)|engine\s*(?:no|number)|\bvin\b|ex[\s\-]?showroom|\bhsrp\b|two[\s\-]?wheeler|four[\s\-]?wheeler|motor\s*vehicle|vehicle\s*invoice|dealer\s*invoice|vehicle\s*registration|registration\s*(?:no|number)|odo(?:meter)?\s*(?:reading|km)\b|pulsar|ronin|splendor|apache|jupiter|ntorq|unicorn|shine|passion|avenger|royal\s*enfield|ktm)\b/i,
+};
+
+// Recognised Indian automobile brands/models used as vehicle evidence.
+// IMPORTANT: used ONLY in combination with an id hint / vehicle doc flag —
+// a bare brand token must never force Vehicle by itself.
+const VEHICLE_BRAND_RE =
+  /\b(?:maruti|suzuki|hyundai|tata\s*motors|mahindra|toyota|honda|cars|royal\s*enfield|bajaj|yamaha|hero\s*moto\s?corp|tvs\s*motor|ktm|ather|ola\s*s1|revolt|benelli|duke|ktm|access\s*125|baleno|swift|dzire|i20|creta|nios|nexon)\b/i;
+
+const RULES = [ACCESSORY_RULE, GADGET_RULE, HOME_RULE, VEHICLE_RULE];
 
 /**
  * Classify free text into a smart category bucket.
+ *
+ * NOTE: Category must NEVER default to Vehicle. Hints (chassis / engine /
+ * registration / isVehicleInvoice / documentKind) are only *evidence boosts*,
+ * not an unconditional override. A gadget invoice whose text merely shares a
+ * generic keyword must not be classified Vehicle.
+ *
  * @param {string} text
- * @param {{ documentKind?: string, isVehicleInvoice?: boolean, chassisNumber?: string, engineNumber?: string, registration?: string }} [hints]
+ * @param {{ documentKind?: string, isVehicleInvoice?: boolean, chassisNumber?: string, engineNumber?: string, registration?: string, productName?: string }} [hints]
  * @returns {string} SMART_CATEGORIES value
  */
 export function classifySmartCategory(text = '', hints = {}) {
-  if (
-    hints.isVehicleInvoice ||
-    hints.chassisNumber ||
-    hints.engineNumber ||
-    hints.registration ||
-    ['insurance', 'puc', 'rc', 'vehicle_invoice', 'warranty'].includes(
-      String(hints.documentKind || '').toLowerCase(),
+  const hay = String(text || '').trim();
+  const product = String(hints.productName || '').trim();
+  const blob = `${product} ${hay}`.trim();
+  if (!blob) return SMART_CATEGORIES.OTHER;
+
+  // Accessory first so "phone case" / "charger" win over generic Gadgets.
+  if (ACCESSORY_RULE.re.test(blob)) return SMART_CATEGORIES.ACCESSORIES;
+
+  // Strong, product-specific positive evidence wins next.
+  if (GADGET_RULE.re.test(blob)) return SMART_CATEGORIES.GADGETS;
+  if (HOME_RULE.re.test(blob)) return SMART_CATEGORIES.HOME_APPLIANCES;
+
+  // Combined vehicle evidence: require BOTH a vehicle token in the text AND
+  // at least one corroborating hint (model/id) OR a clearly vehicle label.
+  const vehicleHintCount =
+    (String(hints.chassisNumber || '').replace(/\s/g, '').length >= 8 ? 1 : 0) +
+    (String(hints.engineNumber || '').replace(/\s/g, '').length >= 8 ? 1 : 0) +
+    (/^[A-Z]{2}[0-9]{1,2}[A-Z]{1,3}[0-9]{4}$/i.test(
+      String(hints.registration || '').replace(/[\s-]/g, ''),
     )
-  ) {
+      ? 1
+      : 0);
+  const docIsVehicleOnly =
+    ['insurance', 'puc', 'rc', 'vehicle_invoice'].includes(
+      String(hints.documentKind || '').toLowerCase(),
+    ) && /\b(?:motor\s*vehicle|chassis|engine\s*(?:no|number|n[o°])|vehicle\s*invoice|registration\s*(?:no|number))\b/i.test(blob);
+
+  // Vehicle classification is allowed ONLY when we have combined evidence:
+  // a vehicle token AND a corroborating id (chassis/engine/registration) OR an
+  // explicit vehicle document/label. A bare model/brand alone never forces it.
+  const hasVehicleToken =
+    VEHICLE_RULE.re.test(blob) || VEHICLE_BRAND_RE.test(blob);
+  if (hasVehicleToken && (vehicleHintCount >= 1 || docIsVehicleOnly || hints.isVehicleInvoice)) {
     return SMART_CATEGORIES.VEHICLES;
   }
-  const hay = String(text || '');
-  if (!hay.trim()) return SMART_CATEGORIES.OTHER;
-  for (const rule of RULES) {
-    if (rule.re.test(hay)) return rule.id;
-  }
+
   return SMART_CATEGORIES.OTHER;
 }
 

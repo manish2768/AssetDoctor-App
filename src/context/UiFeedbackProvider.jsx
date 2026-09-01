@@ -18,6 +18,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useThemeColors } from './ThemeProvider';
 import { RADIUS, SPACING, TYPE } from '../theme/tokens';
 import { bindUiFeedbackBridge } from './uiFeedbackBridge';
+import { TOAST_ABOVE_NAV_PX } from '../theme/tabMetrics';
 
 const UiFeedbackContext = createContext(null);
 
@@ -138,7 +139,7 @@ function ToastHost({ toast, opacity }) {
         styles.toastWrap,
         {
           opacity,
-          bottom: Math.max(insets.bottom, 12) + 72,
+          bottom: Math.max(insets.bottom, 12) + TOAST_ABOVE_NAV_PX,
         },
       ]}
       accessibilityLiveRegion="polite"

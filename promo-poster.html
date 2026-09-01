@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Asset Doctor — Promotional Poster</title>
+<style>
+  :root{
+    --navy:#050A0F;
+    --slate:#0B1622;
+    --slate2:#0E1A28;
+    --emerald:#10B981;
+    --emerald-bright:#34D399;
+    --teal:#14B8A6;
+    --cyan:#22D3EE;
+    --mint:#6EE7B7;
+    --text:#E6F4F1;
+    --muted:#8FB5B0;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    background:#020408;
+    font-family:'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+  /* Poster canvas fixed size — screenshot at 2x for 8k */
+  .poster{
+    width:1500px;
+    height:1100px;
+    position:relative;
+    overflow:hidden;
+    background:
+      radial-gradient(1200px 600px at 78% -5%, rgba(34,211,238,0.10), transparent 60%),
+      radial-gradient(1000px 700px at 8% 110%, rgba(16,185,129,0.12), transparent 60%),
+      linear-gradient(135deg, #050A0F 0%, #0B1622 55%, #07101B 100%);
+    display:flex;
+    flex-direction:column;
+  }
+
+  /* Grid + scanline overlay for tech feel */
+  .grid-overlay{
+    position:absolute;inset:0;pointer-events:none;opacity:.5;
+    background-image:
+      linear-gradient(rgba(34,211,238,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(34,211,238,0.05) 1px, transparent 1px);
+    background-size:54px 54px;
+    mask-image:radial-gradient(1200px 800px at 50% 40%, black 30%, transparent 80%);
+    -webkit-mask-image:radial-gradient(1200px 800px at 50% 40%, black 30%, transparent 80%);
+  }
+  .glow-orb{position:absolute;border-radius:50%;filter:blur(90px);pointer-events:none;}
+  .orb-cyan{width:420px;height:420px;background:rgba(34,211,238,0.14);top:-120px;right:140px;}
+  .orb-green{width:460px;height:460px;background:rgba(16,185,129,0.16);bottom:-160px;left:-80px;}
+
+  /* Header */
+  .head{
+    position:relative;z-index:5;
+    padding:48px 64px 10px 64px;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .logo{display:flex;align-items:center;gap:14px;}
+  .logo svg{width:64px;height:64px;filter:drop-shadow(0 0 14px rgba(20,184,166,0.6));}
+  .logo-name{font-size:34px;font-weight:800;color:var(--text);letter-spacing:.5px;}
+  .logo-name span{background:linear-gradient(90deg,var(--teal),var(--mint));-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .logo-tag{font-size:13px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;font-weight:600;}
+  .badge-pill{
+    padding:12px 22px;border-radius:40px;font-size:14px;font-weight:600;color:var(--mint);
+    border:1px solid rgba(34,211,238,0.35);background:rgba(14,26,40,0.6);letter-spacing:1px;
+    box-shadow:0 0 22px rgba(34,211,238,0.15);backdrop-filter:blur(6px);
+    display:flex;align-items:center;gap:10px;
+  }
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--emerald);box-shadow:0 0 10px var(--emerald);animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+  /* Main = left copy+boy, right phone */
+  .main{
+    position:relative;z-index:5;flex:1;
+    display:flex;gap:40px;padding:20px 64px 30px 64px;align-items:center;
+  }
+
+  /* LEFT side */
+  .left{flex:0 0 44%;position:relative;display:flex;flex-direction:column;justify-content:center;}
+  .headline{
+    font-size:64px;line-height:1.05;font-weight:900;color:var(--text);letter-spacing:-1px;
+  }
+  .headline .accent{
+    background:linear-gradient(90deg,var(--emerald-bright),var(--cyan));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .sub{
+    margin-top:22px;font-size:22px;color:var(--muted);line-height:1.5;max-width:520px;font-weight:400;
+  }
+  .chips{margin-top:26px;display:flex;gap:14px;flex-wrap:wrap;}
+  .chip{
+    padding:10px 18px;border-radius:26px;font-size:15px;font-weight:600;color:var(--mint);
+    background:rgba(20,184,166,0.10);border:1px solid rgba(110,231,183,0.28);backdrop-filter:blur(4px);
+    display:flex;align-items:center;gap:9px;letter-spacing:.3px;
+  }
+  .chip svg{width:16px;height:16px;}
+
+  /* Boy + hologram */
+  .boy-wrap{position:relative;margin-top:34px;width:560px;height:340px;left:-10px;}
+  .holo{
+    position:absolute;inset:0;
+    background:
+      linear-gradient(160deg, transparent 30%, rgba(34,211,238,0.08) 45%, transparent 60%),
+      linear-gradient(15deg, transparent 40%, rgba(16,185,129,0.06) 52%, transparent 68%);
+    pointer-events:none;
+  }
+  .holo-lines{position:absolute;inset:0;opacity:.5;background-image:linear-gradient(rgba(110,231,183,0.30) 1px, transparent 1px);background-size:100% 22px;mask-image:linear-gradient(180deg,transparent,black 30%,black 70%,transparent);-webkit-mask-image:linear-gradient(180deg,transparent,black 30%,black 70%,transparent);}
+  .floating-code{position:absolute;font-family:'Consolas','Courier New',monospace;color:rgba(110,231,183,0.55);font-size:13px;text-shadow:0 0 10px rgba(34,211,238,0.4);letter-spacing:.5px;white-space:pre;animation:floaty 5s ease-in-out infinite;}
+  .fc1{top:6px;left:30px;}
+  .fc2{top:52px;right:-6px;animation-delay:.8s;}
+  .fc3{bottom:8px;left:120px;animation-delay:1.6s;}
+  .fc4{top:120px;right:60px;animation-delay:2.2s;}
+  @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+
+  /* Boy illustration (SVG) */
+  .boy-svg{position:absolute;z-index:2;bottom:0;left:50px;filter:drop-shadow(0 22px 40px rgba(0,0,0,0.5));}
+  .desk-glow{position:absolute;z-index:1;bottom:90px;left:40px;width:500px;height:150px;background:linear-gradient(120deg,rgba(34,211,238,0.25),rgba(16,185,129,0.2));filter:blur(40px);border-radius:50%;}
+
+  /* RIGHT side — phone */
+  .right{flex:1;position:relative;display:flex;align-items:center;justify-content:center;}
+  .ring{position:absolute;width:720px;height:720px;border-radius:50%;border:1px solid rgba(34,211,238,0.16);animation:spin 40s linear infinite;}
+  .ring2{width:560px;height:560px;border-color:rgba(110,231,183,0.14);animation-duration:28s;animation-direction:reverse;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .phone{
+    position:relative;z-index:4;width:340px;height:690px;border-radius:46px;
+    background:linear-gradient(145deg,#F7FBFB,#D8E7E6);
+    padding:14px;box-shadow:
+      0 0 0 2px #0A111A,
+      0 30px 70px rgba(0,0,0,0.6),
+      0 0 60px rgba(34,211,238,0.25),
+      inset 0 0 20px rgba(255,255,255,0.6);
+    transform:rotate(-6deg);
+  }
+  .screen{
+    width:100%;height:100%;border-radius:34px;overflow:hidden;position:relative;
+    background:linear-gradient(165deg,#07111F,#0E1A28);display:flex;flex-direction:column;
+  }
+  .notch{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:100px;height:24px;background:#04080D;border-radius:0 0 16px 16px;z-index:8;}
+  .screen-pad{padding:44px 16px 16px 16px;display:flex;flex-direction:column;gap:12px;height:100%;}
+
+  .statusbar{display:flex;justify-content:space-between;font-size:11px;color:var(--mint);font-weight:600;}
+  .appname{font-size:16px;font-weight:800;color:var(--text);display:flex;align-items:center;gap:8px;}
+  .appname svg{width:22px;height:22px;}
+
+  .hero-card{
+    background:linear-gradient(135deg, rgba(20,184,166,0.18), rgba(34,211,238,0.08));
+    border:1px solid rgba(110,231,183,0.35);border-radius:20px;padding:16px;
+  }
+  .score-row{display:flex;align-items:center;justify-content:space-between;}
+  .score-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:600;}
+  .score-num{font-size:44px;font-weight:900;color:#A7F3D0;text-shadow:0 0 18px rgba(16,185,129,0.5);}
+  .score-num small{font-size:18px;color:var(--muted);font-weight:600;}
+  .ring-score{
+    width:86px;height:86px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    background:conic-gradient(var(--emerald) 0 98%, rgba(255,255,255,0.08) 98% 100%);
+  }
+  .ring-score-inner{width:66px;height:66px;border-radius:50%;background:#0A141F;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#A7F3D0;}
+
+  .gauge-card{border:1px solid rgba(34,211,238,0.22);background:rgba(10,20,31,0.7);border-radius:18px;padding:14px;}
+  .gauge-label{font-size:10px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;font-weight:600;}
+  .gauge-val{font-size:34px;font-weight:900;color:#E0FBFF;letter-spacing:-.5px;}
+  .gauge-val small{font-size:15px;color:var(--cyan);font-weight:700;}
+  .meter{height:8px;border-radius:6px;background:#14222F;overflow:hidden;margin-top:8px;}
+  .meter-fill{height:100%;width:72%;border-radius:6px;background:linear-gradient(90deg,var(--emerald),var(--cyan));box-shadow:0 0 12px var(--cyan);}
+
+  .passport{
+    display:flex;align-items:center;gap:10px;border:1px solid rgba(16,185,129,0.4);
+    background:linear-gradient(90deg,rgba(16,185,129,0.14),rgba(34,211,238,0.06));
+    border-radius:16px;padding:12px;margin-top:auto;
+  }
+  .passport .pshield{width:42px;height:42px;flex:none;}
+  .passport-txt{flex:1;}
+  .passport-txt .p1{font-size:11px;color:var(--mint);font-weight:800;letter-spacing:.6px;}
+  .passport-txt .p2{font-size:10px;color:var(--muted);}
+  .passport .pve{font-size:19px;font-weight:900;color:#A7F3D0;}
+
+  .bottom-bar{
+    display:flex;align-items:center;gap:10px;
+    border-top:1px solid rgba(110,231,183,0.16);padding-top:12px;
+  }
+  .nav-dot{flex:1;height:5px;border-radius:4px;background:rgba(110,231,183,0.2);}
+  .nav-dot.active{background:linear-gradient(90deg,var(--emerald),var(--cyan));box-shadow:0 0 8px var(--cyan);}
+
+  /* FOOTER */
+  .foot{
+    position:relative;z-index:5;
+    padding:10px 64px 46px 64px;display:flex;align-items:center;justify-content:space-between;
+  }
+  .googlebadge{
+    display:flex;align-items:center;gap:14px;padding:14px 22px;border-radius:14px;
+    background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.14);
+    backdrop-filter:blur(8px);box-shadow:0 8px 30px rgba(0,0,0,0.3);
+  }
+  .googlebadge .gplay{width:44px;height:44px;}
+  .gb-txt{display:flex;flex-direction:column;line-height:1.1;}
+  .gb-txt .t1{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;}
+  .gb-txt .t2{font-size:20px;font-weight:800;color:#fff;}
+
+  .qr-wrap{display:flex;align-items:center;gap:16px;}
+  .qr-box{
+    position:relative;width:92px;height:92px;border-radius:14px;
+    background:#fff;padding:8px;
+    box-shadow:0 0 0 1px rgba(110,231,183,0.4),0 0 24px rgba(34,211,238,0.25);
+  }
+  .qr-box .qrcode{width:100%;height:100%;display:block;}
+  .qr-box .shield{position:absolute;bottom:-12px;right:-12px;width:38px;height:38px;filter:drop-shadow(0 0 10px rgba(16,185,129,0.7));}
+  .qr-caption{display:flex;flex-direction:column;color:var(--muted);font-size:13px;line-height:1.4;}
+  .qr-caption strong{color:var(--mint);font-size:15px;}
+</style>
+</head>
+<body>
+  <div class="poster" id="poster">
+    <div class="grid-overlay"></div>
+    <div class="glow-orb orb-cyan"></div>
+    <div class="glow-orb orb-green"></div>
+
+    <!-- HEADER -->
+    <header class="head">
+      <div class="logo">
+        <svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+          <defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14B8A6"/><stop offset="1" stop-color="#6EE7B7"/></linearGradient></defs>
+          <rect width="512" height="512" rx="114" fill="#07111F"/>
+          <path d="M256 70 C334 108 402 108 416 120 C416 272 362 392 256 462 C150 392 96 272 96 120 C110 108 178 108 256 70 Z" fill="#07111F" stroke="url(#g1)" stroke-width="16" stroke-linejoin="round"/>
+          <path d="M256 142 L332 348 H298 L278 294 H234 L214 348 H180 Z M242 258 H270 L256 216 Z" fill="#fff"/>
+          <path d="M150 258 H214 L230 258 L246 204 L262 312 L278 258 L294 258 H362" fill="none" stroke="url(#g1)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div>
+          <div class="logo-name">Asset <span>Doctor</span></div>
+          <div class="logo-tag">Digital Vehicle Passport</div>
+        </div>
+      </div>
+      <div class="badge-pill"><span class="dot"></span> AI-Powered Vehicle Intelligence</div>
+    </header>
+
+    <!-- MAIN -->
+    <div class="main">
+      <!-- LEFT -->
+      <div class="left">
+        <div class="headline">Track Real<br>Mileage &amp; <span class="accent">Vehicle Health</span></div>
+        <div class="sub">Monitor fuel consumption, driving efficiency and complete vehicle health — all from the palm of your hand.</div>
+        <div class="chips">
+          <div class="chip"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2 4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z" stroke="#6EE7B7" stroke-width="2"/></svg> Official Passport</div>
+          <div class="chip"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#6EE7B7" stroke-width="2"/><path d="M12 7v5l3 2" stroke="#6EE7B7" stroke-width="2"/></svg> Real-time Insights</div>
+        </div>
+
+        <!-- Boy -->
+        <div class="boy-wrap">
+          <div class="holo"></div>
+          <div class="holo-lines"></div>
+          <div class="desk-glow"></div>
+          <div class="floating-code fc1">const health = <span style="color:var(--cyan)">engine.scan()</span>;</div>
+          <div class="floating-code fc2">mileage = {rate: 44.5}</div>
+          <div class="floating-code fc3">vehicle.syncPassport();</div>
+          <div class="floating-code fc4">score → 98/100</div>
+
+          <svg class="boy-svg" width="470" height="300" viewBox="0 0 470 300">
+            <!-- desk -->
+            <rect x="20" y="210" width="430" height="26" rx="6" fill="#0C1926" stroke="rgba(110,231,183,0.18)"/>
+            <rect x="20" y="210" width="430" height="10" rx="5" fill="#0F2131"/>
+            <!-- laptop base -->
+            <rect x="95" y="160" width="300" height="52" rx="9" fill="#12202E"/>
+            <!-- laptop screen -->
+            <path d="M118 162 L352 162 Q378 162 378 188 L378 224 L92 224 L92 188 Q92 162 118 162 Z" fill="#0A141F" stroke="url(#scrGrad)" stroke-width="2"/>
+            <rect x="100" y="170" width="270" height="46" rx="3" fill="#0E1F30" opacity="0.9"/>
+            <defs><linearGradient id="scrGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14B8A6"/><stop offset="1" stop-color="#22D3EE"/></linearGradient></defs>
+            <!-- screen content mini -->
+            <line x1="112" y1="184" x2="360" y2="184" stroke="rgba(110,231,183,0.5)" stroke-width="3"/>
+            <line x1="112" y1="196" x2="330" y2="196" stroke="rgba(34,211,238,0.4)" stroke-width="3"/>
+            <line x1="112" y1="208" x2="344" y2="208" stroke="rgba(16,185,129,0.4)" stroke-width="3"/>
+            <!-- arms / shoulders -->
+            <path d="M120 214 L160 256 M352 214 L314 256" stroke="url(#scrGrad)" stroke-width="4" opacity="0.6"/>
+            <!-- body -->
+            <rect x="210" y="150" width="60" height="60" rx="14" fill="#18repo" opacity="0"/>
+            <path d="M180 300 L211 250 L259 250 L290 300 Z" fill="#20repo" opacity="0"/>
+            <g transform="translate(208,96)">
+              <!-- torso -->
+              <path d="M52 150 Q60 92 74 70 L-74 70 Q-60 92 -52 150 Z" fill="linear-gradient(#14B8A6,#0E2F3A)" opacity="0"/>
+              <ellipse cx="0" cy="70" rx="74" ry="26" fill="#1E3A4A"/>
+              <!-- hoodie body -->
+              <path d="M-74 88 Q-80 120 -70 210 L70 210 Q80 120 74 88 Z" fill="#17354A" stroke="#2A5C72" stroke-width="2"/>
+              <path d="M-66 96 Q-72 130 -64 200 L64 200 Q72 130 66 96 Z" fill="none" stroke="rgba(110,231,183,0.5)" stroke-width="2"/>
+              <!-- head -->
+              <ellipse cx="0" cy="6" rx="46" ry="48" fill="#B9875C"/>
+              <path d="M-46 40 Q-40 -14 0 -20 Q40 -14 46 40 Q30 12 0 10 Q-30 12 -46 40 Z" fill="#4A2E1B"/>
+              <!-- hair -->
+              <path d="M-44 -6 Q-40 -52 0 -56 Q40 -52 44 -6 Q20 -34 0 -36 Q-20 -34 -44 -6 Z" fill="#2A1A0F"/>
+              <!-- face -->
+              <circle cx="-16" cy="4" r="4" fill="#3A2417"/>
+              <circle cx="16" cy="4" r="4" fill="#3A2417"/>
+              <path d="M-12 18 Q0 26 12 18" stroke="#3A2417" stroke-width="3" fill="none" stroke-linecap="round"/>
+              <!-- arms -->
+              <path d="M-70 100 Q-110 150 -100 196 L-56 196 Q-66 150 -64 100 Z" fill="#17354A"/>
+              <path d="M70 100 Q110 150 100 196 L56 196 Q66 150 64 100 Z" fill="#17354A"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <!-- RIGHT -->
+      <div class="right">
+        <div class="ring"></div>
+        <div class="ring ring2"></div>
+        <div class="phone">
+          <div class="screen">
+            <div class="notch"></div>
+            <div class="screen-pad">
+              <div class="statusbar"><span>9:41</span><span>Asset Doctor</span></div>
+              <div class="appname">
+                <svg viewBox="0 0 512 512"><rect width="512" height="512" rx="114" fill="#07111F"/><path d="M256 142 L332 348 H298 L278 294 H234 L214 348 H180 Z M242 258 H270 L256 216 Z" fill="#fff"/><path d="M150 258 H214 L230 258 L246 204 L262 312 L278 258 L294 258 H362" fill="none" stroke="#14B8A6" stroke-width="10"/></svg>
+                Dashboard
+              </div>
+
+              <div class="hero-card">
+                <div class="score-label">Vehicle Health Score</div>
+                <div class="score-row">
+                  <div class="score-num">98<small>/100</small></div>
+                  <div class="ring-score"><div class="ring-score-inner">98</div></div>
+                </div>
+              </div>
+
+              <div class="gauge-card">
+                <div class="gauge-label">Real-time Mileage</div>
+                <div style="display:flex;justify-content:space-between;align-items:flex-end;">
+                  <div class="gauge-val">44.5 <small>km/l</small></div>
+                  <div style="font-size:11px;color:var(--emerald);font-weight:700;">▲ Optimal</div>
+                </div>
+                <div class="meter"><div class="meter-fill"></div></div>
+              </div>
+
+              <div class="passport">
+                <svg class="pshield" viewBox="0 0 512 512"><path d="M256 70 C334 108 402 108 416 120 C416 272 362 392 256 462 C150 392 96 272 96 120 C110 108 178 108 256 70 Z" fill="#07111F" stroke="#14B8A6" stroke-width="14"/><path d="M256 142 L332 348 H298 L278 294 H234 L214 348 H180 Z M242 258 H270 L256 216 Z" fill="#fff"/></svg>
+                <div class="passport-txt">
+                  <div class="p1">Digital Vehicle Passport</div>
+                  <div class="p2">Verified · Valid passport</div>
+                </div>
+                <div class="pve">✓</div>
+              </div>
+
+              <div class="bottom-bar">
+                <div class="nav-dot active"></div>
+                <div class="nav-dot"></div>
+                <div class="nav-dot"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="foot">
+      <div class="googlebadge">
+        <svg class="gplay" viewBox="0 0 512 512"><path d="M97 32 L294 256 L97 480 L97 32 Z" fill="#00C4FF"/><path d="M97 32 L294 256 L408 142 Z" fill="#FFDA00"/><path d="M408 370 L294 256 L97 480 Z" fill="#FF004C"/><path d="M97 32 L294 256 L408 142" fill="none" stroke="white" stroke-width="6"/><path d="M97 480 L294 256 L408 370" fill="none" stroke="white" stroke-width="6"/></svg>
+        <div class="gb-txt">
+          <span class="t1">Get it on</span>
+          <span class="t2">Google Play</span>
+        </div>
+      </div>
+
+      <div class="qr-wrap">
+        <div class="qr-box">
+          <svg class="qrcode" viewBox="0 0 100 100" shape-rendering="crispEdges">
+            <rect width="100" height="100" fill="#fff"/>
+            <!-- finder patterns -->
+            <g fill="#050A0F"><rect x="4" y="4" width="24" height="24" rx="2"/><rect x="10" y="10" width="12" height="12"/><rect x="72" y="4" width="24" height="24" rx="2"/><rect x="78" y="10" width="12" height="12"/><rect x="4" y="72" width="24" height="24" rx="2"/><rect x="10" y="78" width="12" height="12"/></g>
+            <!-- data bits -->
+            <g fill="#050A0F">
+              <rect x="34" y="4" width="6" height="6"/><rect x="42" y="10" width="6" height="6"/><rect x="50" y="6" width="6" height="6"/><rect x="60" y="12" width="6" height="6"/>
+              <rect x="4" y="32" width="6" height="6"/><rect x="14" y="34" width="6" height="14"/><rect x="24" y="34" width="6" height="6"/><rect x="34" y="30" width="6" height="6"/><rect x="44" y="34" width="6" height="6"/><rect x="56" y="30" width="6" height="6"/><rect x="64" y="34" width="6" height="6"/><rect x="72" y="30" width="6" height="6"/>
+              <rect x="34" y="42" width="6" height="6"/><rect x="46" y="44" width="6" height="6"/><rect x="56" y="44" width="6" height="6"/><rect x="4" y="46" width="6" height="6"/><rect x="10" y="54" width="6" height="6"/><rect x="20" y="56" width="6" height="6"/><rect x="30" y="54" width="6" height="6"/><rect x="42" y="54" width="6" height="6"/><rect x="52" y="56" width="6" height="6"/><rect x="64" y="54" width="6" height="6"/><rect x="74" y="56" width="6" height="6"/>
+              <rect x="30" y="62" width="6" height="6"/><rect x="40" y="66" width="6" height="6"/><rect x="50" y="64" width="6" height="6"/><rect x="60" y="64" width="6" height="6"/><rect x="70" y="66" width="6" height="6"/><rect x="78" y="72" width="6" height="6"/><rect x="50" y="74" width="6" height="6"/><rect x="60" y="74" width="6" height="6"/><rect x="34" y="76" width="6" height="6"/><rect x="42" y="78" width="6" height="6"/><rect x="72" y="80" width="6" height="6"/><rect x="30" y="84" width="6" height="6"/><rect x="40" y="86" width="6" height="6"/><rect x="52" y="86" width="6" height="6"/><rect x="62" y="88" width="6" height="6"/><rect x="20" y="90" width="6" height="6"/><rect x="78" y="90" width="6" height="6"/>
+            </g>
+          </svg>
+          <svg class="shield" viewBox="0 0 512 512"><path d="M256 64 C336 108 410 108 424 120 C424 288 368 400 256 452 C144 400 88 288 88 120 C102 108 176 108 256 64 Z" fill="#10B981" stroke="#fff" stroke-width="18"/><path d="M232 268 L210 246 L196 260 L232 296 L302 226 L288 212 Z" fill="#fff"/></svg>
+        </div>
+        <div class="qr-caption">
+          <strong>Scan to Download</strong>
+          <span>Visit Google Play<br>to get the app</span>
+        </div>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

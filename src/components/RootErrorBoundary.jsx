@@ -16,6 +16,7 @@ import {
 import Constants from 'expo-constants';
 
 import { BRAND, COLORS } from '../theme/branding';
+import { AppLogo } from './AppLogo';
 
 function reportCrashEmail(error) {
   try {
@@ -77,6 +78,7 @@ export class RootErrorBoundary extends Component {
       return (
         <SafeAreaView style={styles.crash} accessibilityRole="alert">
           <View style={styles.crashInner}>
+            <AppLogo size={48} style={{ marginBottom: 8 }} />
             <Text style={styles.crashBrand}>{BRAND.name}</Text>
             <Text style={styles.crashTitle}>Oops, something went wrong</Text>
             <Text style={styles.crashSub}>

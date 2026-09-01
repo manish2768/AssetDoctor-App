@@ -19,6 +19,14 @@ import {
 
 export { LIGHT, DARK } from './palettes';
 export {
+  BRAND_NAVY,
+  BRAND_MIDNIGHT,
+  BRAND_TEAL,
+  BRAND_MINT,
+  BRAND_PUBLIC,
+  BRAND_WORDMARK,
+} from './brandAssets';
+export {
   FONTS,
   TYPE,
   SPACING,

@@ -6,7 +6,6 @@
 import React, { useMemo, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   FlatList,
   ScrollView,
@@ -15,26 +14,35 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAssets } from '../../context/AssetProvider';
-import { useAuth } from '../../context/AuthProvider';
 import { useThemeColors } from '../../context/ThemeProvider';
 import { Haptics } from '../../services/haptics';
-import { requireAuth } from '../../navigation/authGate';
 import { openScanInvoice } from '../../navigation/navActions';
 import { formatDateIN, daysUntil } from '../../utils/dates';
 import { TAB_BAR_HEIGHT } from '../../components/CustomBottomTabBar';
 import {
   AppHeader,
-  PrimaryButton,
   FilterChip,
   SearchBar,
 } from '../../components/design-system';
-import { DocumentCard, EmptyState } from '../../design-system';
-import { RADIUS, SPACING, TYPE, elevation } from '../../theme/tokens';
+import { EmptyState } from '../../design-system';
+import { DocumentVaultCard } from '../../components/trust/DocumentVaultCard';
+import { SPACING } from '../../theme/tokens';
+import { resolveAssetCategory } from '../../utils/categoryNormalization';
+import { ShareService } from '../../services/share/ShareService';
+import { useUiFeedback } from '../../context/UiFeedbackProvider';
 
-const DOC_TABS = [
+const CATEGORY_TABS = [
   { id: 'all', label: 'All' },
-  { id: 'vehicles', label: 'Vehicles' },
-  { id: 'appliances', label: 'Appliances' },
+  { id: 'vehicle', label: 'Vehicles' },
+  { id: 'gadget', label: 'Gadgets' },
+  { id: 'home', label: 'Home & Appliances' },
+  { id: 'equipment', label: 'Equipment' },
+  { id: 'business', label: 'Business' },
+  { id: 'other', label: 'Other' },
+];
+
+const DOC_TYPE_TABS = [
+  { id: 'all', label: 'All types' },
   { id: 'warranty', label: 'Warranty' },
   { id: 'insurance', label: 'Insurance' },
   { id: 'service', label: 'Service' },
@@ -43,22 +51,13 @@ const DOC_TABS = [
   { id: 'puc', label: 'PUC' },
 ];
 
-function docAccent(kind, colors) {
-  if (kind === 'insurance') return colors.docInsurance || colors.info;
-  if (kind === 'warranty') return colors.docWarranty || colors.primary;
-  if (kind === 'service') return colors.docService || colors.warning;
-  if (kind === 'purchase') return colors.docPurchase || colors.aiIndigo;
-  if (kind === 'rc') return colors.docRc || colors.violet;
-  if (kind === 'puc') return colors.docPuc || colors.aiCyan;
-  return colors.primary;
-}
-
 export function VaultHomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const { assets, loading, refreshAssets } = useAssets();
-  const { isAuthenticated } = useAuth();
+  const ui = useUiFeedback();
 
+  const [categoryTab, setCategoryTab] = useState('all');
   const [activeTab, setActiveTab] = useState('all');
   const [query, setQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -70,20 +69,19 @@ export function VaultHomeScreen({ navigation }) {
 
     for (const a of assetList) {
       const assetId = a.assetId || a.id;
-      const isVehicle = !!a.registration || a.categoryId === 'car' || a.categoryId === 'bike' || a.categoryId === 'scooter';
+      const categoryKey = resolveAssetCategory(a) || 'other';
 
       // 1. Purchase / Invoice
       if (a.invoiceNumber || a.purchasePrice || a.invoiceDate || a.billStoragePath) {
         list.push({
           id: `${assetId}-invoice`,
           assetId,
-          type: isVehicle ? 'Vehicle Purchase Invoice' : 'Purchase Invoice',
-          category: isVehicle ? 'vehicles' : 'appliances',
+          type: 'Purchase Invoice',
+          categoryKey,
           docKind: 'purchase',
           assetName: a.assetName,
           identifier: a.registration || a.serialNumber || a.model,
-          dateText: a.invoiceDate ? `Issued ${formatDateIN(a.invoiceDate)}` : 'Verified bill',
-          verified: true,
+          dateText: a.invoiceDate ? `Issued ${formatDateIN(a.invoiceDate)}` : 'On file',
         });
       }
 
@@ -94,12 +92,11 @@ export function VaultHomeScreen({ navigation }) {
           id: `${assetId}-insurance`,
           assetId,
           type: 'Insurance Policy',
-          category: 'insurance',
+          categoryKey,
           docKind: 'insurance',
           assetName: a.assetName,
           identifier: a.insurancePolicyNumber || a.registration,
-          dateText: a.insuranceExpiry ? `Valid until ${formatDateIN(a.insuranceExpiry)}` : 'Active Policy',
-          verified: true,
+          dateText: a.insuranceExpiry ? `Expires ${formatDateIN(a.insuranceExpiry)}` : 'On file',
           daysLeft: insDays,
         });
       }
@@ -111,12 +108,11 @@ export function VaultHomeScreen({ navigation }) {
           id: `${assetId}-puc`,
           assetId,
           type: 'PUC Certificate',
-          category: 'vehicles',
+          categoryKey,
           docKind: 'puc',
           assetName: a.assetName,
           identifier: a.registration,
-          dateText: `Valid until ${formatDateIN(a.pucExpiry)}`,
-          verified: true,
+          dateText: `Expires ${formatDateIN(a.pucExpiry)}`,
           daysLeft: pucDays,
         });
       }
@@ -127,12 +123,11 @@ export function VaultHomeScreen({ navigation }) {
           id: `${assetId}-service`,
           assetId,
           type: 'Service Invoice',
-          category: 'service',
+          categoryKey,
           docKind: 'service',
           assetName: a.assetName,
           identifier: a.odometerKm ? `${a.odometerKm.toLocaleString()} KM` : a.registration,
-          dateText: a.lastServiceDate ? formatDateIN(a.lastServiceDate) : 'Service maintenance',
-          verified: true,
+          dateText: a.lastServiceDate ? formatDateIN(a.lastServiceDate) : 'Service record on file',
         });
       }
 
@@ -143,12 +138,11 @@ export function VaultHomeScreen({ navigation }) {
           id: `${assetId}-warranty`,
           assetId,
           type: 'Warranty Card',
-          category: 'warranty',
+          categoryKey,
           docKind: 'warranty',
           assetName: a.assetName,
           identifier: a.serialNumber || a.imei,
-          dateText: a.warrantyExpiry ? `Valid until ${formatDateIN(a.warrantyExpiry)}` : 'Warranty active',
-          verified: true,
+          dateText: a.warrantyExpiry ? `Expires ${formatDateIN(a.warrantyExpiry)}` : 'Warranty on file',
           daysLeft: warDays,
         });
       }
@@ -157,11 +151,13 @@ export function VaultHomeScreen({ navigation }) {
     return list;
   }, [assets]);
 
-  // Tab & Search Filtering
   const filteredDocs = useMemo(() => {
     let list = allDocuments;
+    if (categoryTab !== 'all') {
+      list = list.filter((d) => d.categoryKey === categoryTab);
+    }
     if (activeTab !== 'all') {
-      list = list.filter((d) => d.category === activeTab || d.docKind === activeTab);
+      list = list.filter((d) => d.docKind === activeTab);
     }
     const q = query.trim().toLowerCase();
     if (!q) return list;
@@ -169,7 +165,7 @@ export function VaultHomeScreen({ navigation }) {
       const blob = `${d.type} ${d.assetName} ${d.identifier || ''}`.toLowerCase();
       return blob.includes(q);
     });
-  }, [allDocuments, activeTab, query]);
+  }, [allDocuments, categoryTab, activeTab, query]);
 
   const onScan = () => {
     Haptics.select();
@@ -210,7 +206,21 @@ export function VaultHomeScreen({ navigation }) {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.tabScroll}
         >
-          {DOC_TABS.map((t) => (
+          {CATEGORY_TABS.map((t) => (
+            <FilterChip
+              key={t.id}
+              label={t.label}
+              selected={categoryTab === t.id}
+              onPress={() => setCategoryTab(t.id)}
+            />
+          ))}
+        </ScrollView>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabScroll}
+        >
+          {DOC_TYPE_TABS.map((t) => (
             <FilterChip
               key={t.id}
               label={t.label}
@@ -224,20 +234,43 @@ export function VaultHomeScreen({ navigation }) {
       <FlatList
         data={filteredDocs}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <DocumentCard
-            documentType={item.type}
-            assetName={item.assetName}
-            dateText={item.dateText}
-            verified={item.verified === true}
-            needsReview={item.daysLeft != null && item.daysLeft < 0}
-            accent={docAccent(item.docKind, colors)}
-            onPress={() =>
-              navigation.navigate('AssetPassport', { assetId: item.assetId })
-            }
-            style={{ marginHorizontal: SPACING.md }}
-          />
-        )}
+        renderItem={({ item }) => {
+          const parent = (assets || []).find((a) => (a.assetId || a.id) === item.assetId);
+          return (
+            <DocumentVaultCard
+              item={item}
+              asset={parent}
+              onView={() => navigation.navigate('AssetPassport', { assetId: item.assetId })}
+              onShare={async () => {
+                const result = await ShareService.quickShareDocuments({
+                  asset: parent,
+                  documents: [item],
+                });
+                if (!result?.success) ui.info('Share', result?.error || 'Could not share this document.');
+              }}
+              onMoreAction={(id, doc, reason) => {
+                if (id === 'unavailable') {
+                  ui.info('Unavailable', reason || 'This action is not available yet.');
+                  return;
+                }
+                if (id === 'share') {
+                  ShareService.quickShareDocuments({ asset: parent, documents: [doc] });
+                  return;
+                }
+                if (id === 'scan_another') {
+                  onScan();
+                  return;
+                }
+                if (id === 'delete' || id === 'download' || id === 'view') {
+                  navigation.navigate('DocumentsVault', { assetId: item.assetId });
+                  return;
+                }
+                ui.info('Unavailable', 'This action is not available in the current vault service.');
+              }}
+              style={{ marginHorizontal: SPACING.md }}
+            />
+          );
+        }}
         contentContainerStyle={[
           styles.listContent,
           { paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 24 },

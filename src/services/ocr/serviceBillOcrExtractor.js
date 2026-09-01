@@ -44,12 +44,17 @@ function isUiPlaceholder(value) {
 }
 
 function fieldResult(value, confidence, source, evidence, meta = {}) {
+  const v = value == null || value === '' ? null : value;
+  const c = confidence == null ? 0 : confidence;
   const sourceText = meta.sourceText != null ? meta.sourceText : evidence || null;
   const sourceLabel = meta.sourceLabel != null ? meta.sourceLabel : null;
   const extractionMethod = meta.extractionMethod != null ? meta.extractionMethod : source || null;
+  const status = v == null ? 'NOT_FOUND' : (c >= 0.85 ? 'VERIFIED' : (c >= 0.70 ? 'HIGH_CONFIDENCE' : 'NEEDS_REVIEW'));
   return {
-    value: value == null || value === '' ? null : value,
-    confidence: confidence == null ? 0 : confidence,
+    value: v,
+    confidence: c,
+    status,
+    sourceType: meta.sourceType || 'OCR_DOCUMENT',
     sourceText,
     sourceLabel,
     extractionMethod,

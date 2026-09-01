@@ -10,13 +10,18 @@ import { useThemeColors } from '../../context/ThemeProvider';
 import { Haptics } from '../../services/haptics';
 import { FONTS } from '../../theme/branding';
 import { RADIUS } from '../../theme/tokens';
+import { appVersion, appVersionCode } from '../../utils/appInfo';
+
+import { useDrawer } from '../../context/DrawerContext';
 
 export function DrawerFooter({ onAuthAction }) {
   const { isAuthenticated, signOut } = useAuth();
+  const { closeDrawer } = useDrawer();
   const colors = useThemeColors();
 
   const handleAuthPress = async () => {
     Haptics.impactLight();
+    closeDrawer?.();
     if (isAuthenticated) {
       try {
         await signOut?.();
@@ -55,7 +60,7 @@ export function DrawerFooter({ onAuthAction }) {
       </View>
 
       <Text style={[styles.versionText, { color: colors.textMuted || '#94A3B8' }]}>
-        Asset Doctor v1.0.67 (122) · Universal Intelligence Platform
+        Asset Doctor v{appVersion()} ({appVersionCode()}) · Universal Intelligence Platform
       </Text>
     </View>
   );

@@ -56,6 +56,23 @@
   input:focus, textarea:focus, select:focus { outline: none; }
   .table-row:hover { background: rgba(148,163,184,0.05); }
   .modal-backdrop { background: rgba(2, 6, 23, 0.85); backdrop-filter: blur(8px); }
+  .ad-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .ad-table-scroll table { min-width: 720px; }
+  .ad-sticky-head thead th { position: sticky; top: 0; z-index: 1; background: rgba(15,23,42,0.96); }
+  .bi-grid { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+  @media (min-width: 768px) { .bi-grid { grid-template-columns: 1fr 1fr; } }
+  details.bi-group { border: 1px solid rgba(255,255,255,0.08); border-radius: 1rem; background: rgba(15,23,42,0.55); }
+  details.bi-group > summary {
+    list-style: none; cursor: pointer; padding: 1rem 1.25rem;
+    font-size: 11px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: #94a3b8;
+  }
+  details.bi-group > summary::-webkit-details-marker { display: none; }
+  details.bi-group[open] > summary { border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .ad-donut-seg:hover { filter: brightness(1.15); }
+  #tab-dashboard { overflow-x: hidden; }
+  @media (max-width: 1024px) {
+    main { overflow-x: hidden; }
+  }
 </style>
 </head>
 <body class="bg-slate-950 text-slate-200 min-h-screen antialiased selection:bg-brand-500/30 selection:text-brand-200">
@@ -157,19 +174,19 @@
         <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
         <i data-lucide="users" class="w-4 h-4"></i>
         <span>Customers 360</span>
-        <span id="sidebarUserCount" class="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30">18</span>
+        <span id="sidebarUserCount" class="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30">—</span>
       </button>
       <button data-tab="assets" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
         <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
         <i data-lucide="boxes" class="w-4 h-4"></i>
         <span>Asset 360</span>
-        <span id="sidebarAssetCount" class="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">22</span>
+        <span id="sidebarAssetCount" class="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">—</span>
       </button>
       <button data-tab="documents" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
         <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
         <i data-lucide="file-text" class="w-4 h-4"></i>
         <span>Document Vault</span>
-        <span id="sidebarDocCount" class="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30">1</span>
+        <span id="sidebarDocCount" class="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30">—</span>
       </button>
 
       <p class="px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1 mt-4">Surveillance &amp; Quality</p>
@@ -177,13 +194,19 @@
         <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
         <i data-lucide="calendar-clock" class="w-4 h-4"></i>
         <span>Expiry Surveillance</span>
-        <span id="sidebarExpiryAlerts" class="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">8</span>
+        <span id="sidebarExpiryAlerts" class="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">—</span>
       </button>
       <button data-tab="ocr_review" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
         <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
         <i data-lucide="scan-search" class="w-4 h-4"></i>
         <span>OCR Control Center</span>
         <span id="ocrQueueBadge" class="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">0</span>
+      </button>
+      <button data-tab="learning" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
+        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
+        <i data-lucide="brain" class="w-4 h-4"></i>
+        <span>Learning Center</span>
+        <span id="learningBadge" class="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">—</span>
       </button>
       <button data-tab="service" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
         <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
@@ -242,12 +265,24 @@
     <!-- Top Header -->
     <header class="sticky top-0 z-30 glass-strong border-b border-white/10">
       <div class="h-16 flex items-center justify-between gap-3 px-4 sm:px-6">
-        <div class="flex items-center gap-3">
-          <div id="dbStatusBadge" class="flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 shrink-0">
+        <div class="flex items-center gap-2 min-w-0">
+          <div>
+            <p class="text-[10px] font-bold uppercase tracking-widest text-slate-500 leading-none">Asset Doctor</p>
+            <p class="text-xs font-black text-white tracking-tight">Master Control</p>
+          </div>
+          <div id="dbStatusBadge" class="hidden sm:flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 shrink-0">
             <span class="w-2 h-2 rounded-full bg-emerald-400 pulse-dot"></span>
             <span id="dbStatusText" class="text-xs font-semibold text-emerald-300">Live Firestore Connected</span>
           </div>
-
+          <div id="sysChipFirestoreWrap" class="hidden xl:flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-bold text-slate-300">
+            <span id="sysChipFirestore">SYNCING</span>
+          </div>
+          <div id="sysChipWhatsappWrap" class="hidden xl:flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-bold text-slate-300">
+            <span id="sysChipWhatsapp">WHATSAPP STANDBY</span>
+          </div>
+          <div class="hidden xl:flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-bold text-slate-300">
+            <span id="sysChipOcr">OCR N/A</span>
+          </div>
           <div class="flex items-center gap-2 rounded-full border border-brand-500/30 bg-brand-500/10 px-3 py-1 shrink-0">
             <i data-lucide="shield-check" class="w-3.5 h-3.5 text-brand-300"></i>
             <span id="activeRoleBadge" class="text-xs font-bold text-brand-300">SUPER ADMIN</span>
@@ -258,7 +293,7 @@
         <div class="flex-1 max-w-md hidden md:block">
           <div class="relative">
             <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
-            <input id="headerGlobalSearch" type="text" placeholder="Global search customers, assets, documents, UIDs... (⌘K)"
+            <input id="headerGlobalSearch" type="text" placeholder="Search customer, phone, asset, registration, document, invoice, template, notification, UID…"
               class="w-full rounded-xl bg-slate-900/80 border border-white/10 pl-10 pr-12 py-1.5 text-xs text-white placeholder-slate-500 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition cursor-pointer" readonly />
             <kbd class="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] font-mono text-slate-400">⌘K</kbd>
           </div>
@@ -285,140 +320,258 @@
 
       <!-- ===================== MODULE 1: COMMAND CENTER ===================== -->
       <section id="tab-dashboard" class="tab-panel active space-y-6">
-        <!-- 8 Live KPI Cards Grid -->
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <!-- 1. Total Customers -->
-          <div onclick="switchTab('users')" class="glass border border-white/10 rounded-2xl p-5 hover:border-brand-500/40 cursor-pointer transition">
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Total Customers</span>
-              <i data-lucide="users" class="w-5 h-5 text-brand-400"></i>
-            </div>
-            <p id="kpiUsers" class="text-3xl font-black text-white tabular-nums">18</p>
-            <p class="text-[11px] text-slate-400 mt-1">Live customer accounts</p>
-          </div>
-
-          <!-- 2. Total Assets -->
-          <div onclick="switchTab('assets')" class="glass border border-white/10 rounded-2xl p-5 hover:border-cyan-500/40 cursor-pointer transition">
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Total Assets Vaulted</span>
-              <i data-lucide="boxes" class="w-5 h-5 text-cyan-400"></i>
-            </div>
-            <p id="kpiAssets" class="text-3xl font-black text-white tabular-nums">22</p>
-            <p class="text-[11px] text-slate-400 mt-1">Vehicles &amp; appliances</p>
-          </div>
-
-          <!-- 3. Documents Vaulted -->
-          <div onclick="switchTab('documents')" class="glass border border-white/10 rounded-2xl p-5 hover:border-violet-500/40 cursor-pointer transition">
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Documents Vaulted</span>
-              <i data-lucide="file-text" class="w-5 h-5 text-violet-400"></i>
-            </div>
-            <p id="kpiDocuments" class="text-3xl font-black text-white tabular-nums">1</p>
-            <p class="text-[11px] text-slate-400 mt-1">Invoices, policies &amp; RCs</p>
-          </div>
-
-          <!-- 4. OCR Review Queue -->
-          <div onclick="switchTab('ocr_review')" class="glass border border-white/10 rounded-2xl p-5 hover:border-amber-500/40 cursor-pointer transition">
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide">OCR Review Queue</span>
-              <i data-lucide="scan-search" class="w-5 h-5 text-amber-400"></i>
-            </div>
-            <p id="kpiOcrQueue" class="text-3xl font-black text-white tabular-nums">0</p>
-            <p class="text-[11px] text-slate-400 mt-1">Pending manual checks</p>
-          </div>
-
-          <!-- 5. Expiring Insurance -->
-          <div onclick="switchTab('expiry'); filterExpiryType('Insurance');" class="glass border border-white/10 rounded-2xl p-5 hover:border-rose-500/40 cursor-pointer transition">
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Expiring Insurance</span>
-              <i data-lucide="shield-alert" class="w-5 h-5 text-rose-400"></i>
-            </div>
-            <p id="kpiExpiringInsurance" class="text-3xl font-black text-rose-400 tabular-nums">8</p>
-            <p class="text-[11px] text-slate-400 mt-1">Due within 30 days / expired</p>
-          </div>
-
-          <!-- 6. Expiring Warranty -->
-          <div onclick="switchTab('expiry'); filterExpiryType('Warranty');" class="glass border border-white/10 rounded-2xl p-5 hover:border-amber-500/40 cursor-pointer transition">
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Expiring Warranty</span>
-              <i data-lucide="shield" class="w-5 h-5 text-amber-400"></i>
-            </div>
-            <p id="kpiExpiringWarranty" class="text-3xl font-black text-amber-300 tabular-nums">0</p>
-            <p class="text-[11px] text-slate-400 mt-1">Due within 30 days / expired</p>
-          </div>
-
-          <!-- 7. Expiring PUC -->
-          <div onclick="switchTab('expiry'); filterExpiryType('PUC');" class="glass border border-white/10 rounded-2xl p-5 hover:border-yellow-500/40 cursor-pointer transition">
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Expiring PUC</span>
-              <i data-lucide="gauge" class="w-5 h-5 text-yellow-400"></i>
-            </div>
-            <p id="kpiExpiringPUC" class="text-3xl font-black text-yellow-300 tabular-nums">0</p>
-            <p class="text-[11px] text-slate-400 mt-1">Due within 30 days / expired</p>
-          </div>
-
-          <!-- 8. Open Support Tickets -->
-          <div onclick="switchTab('tickets')" class="glass border border-white/10 rounded-2xl p-5 hover:border-cyan-500/40 cursor-pointer transition">
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Open Support Tickets</span>
-              <i data-lucide="life-buoy" class="w-5 h-5 text-cyan-400"></i>
-            </div>
-            <p id="kpiTickets" class="text-3xl font-black text-white tabular-nums">0</p>
-            <p class="text-[11px] text-slate-400 mt-1">Customer inquiries</p>
-          </div>
-        </div>
-
-        <!-- Quick Expiry Surveillance Strip -->
         <div class="glass border border-white/10 rounded-2xl p-5">
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
             <div>
-              <h2 class="text-white font-bold text-sm flex items-center gap-2">
-                <i data-lucide="calendar-clock" class="w-4 h-4 text-brand-400"></i> Active Expiry Surveillance Radar
-              </h2>
-              <p class="text-xs text-slate-400 mt-0.5">Real-time status calculated from stored insurance, warranty, and PUC dates.</p>
+              <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-300">Asset Doctor</p>
+              <h1 class="text-2xl font-black text-white tracking-tight mt-0.5">Master Control</h1>
+              <p class="text-xs text-slate-400 mt-1">Enterprise operations console · live Firestore aggregation only</p>
             </div>
-            <div class="flex items-center gap-3">
-              <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
-                <span class="w-2 h-2 rounded-full bg-rose-400"></span>
-                <span id="radarExpiredCount">8</span> Expired
-              </span>
-              <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                <span class="w-2 h-2 rounded-full bg-amber-400"></span>
-                <span id="radarExp30Count">0</span> &le; 30 Days
-              </span>
-              <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-                <span id="radarHealthyCount">15</span> Healthy
-              </span>
-              <button onclick="switchTab('expiry')" class="px-3 py-1 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold transition">
-                Open Radar &rarr;
-              </button>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]">
+              <div class="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2">
+                <p class="text-slate-500 uppercase font-bold">Last sync</p>
+                <p id="sysLastSync" class="text-slate-200 font-mono mt-0.5">—</p>
+              </div>
+              <div class="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2">
+                <p class="text-slate-500 uppercase font-bold">Last webhook</p>
+                <p id="sysLastWebhook" class="text-slate-200 font-mono mt-0.5">Not verified</p>
+              </div>
+              <div class="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2">
+                <p class="text-slate-500 uppercase font-bold">Last notification</p>
+                <p id="sysLastNotification" class="text-slate-200 font-mono mt-0.5 truncate">No data yet</p>
+              </div>
+              <div class="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2">
+                <p class="text-slate-500 uppercase font-bold">System uptime</p>
+                <p id="sysUptime" class="text-slate-200 font-mono mt-0.5">N/A</p>
+              </div>
             </div>
           </div>
         </div>
 
-        <div class="grid lg:grid-cols-3 gap-6">
-          <div class="lg:col-span-2 glass border border-white/10 rounded-2xl p-5">
-            <div class="flex items-center justify-between mb-3">
+        <div class="flex flex-wrap items-center gap-2">
+          <select id="adminFilterCategory" onchange="applyAdminFilters()" class="rounded-xl bg-slate-900/80 border border-white/10 px-3 py-2 text-xs text-white">
+            <option value="ALL">All categories</option>
+            <option value="vehicle">Vehicles</option>
+            <option value="gadget">Gadgets</option>
+            <option value="home">Home &amp; Appliances</option>
+            <option value="equipment">Equipment</option>
+            <option value="business">Business</option>
+            <option value="other">Other</option>
+          </select>
+          <select id="adminFilterSeverity" onchange="applyAdminFilters()" class="rounded-xl bg-slate-900/80 border border-white/10 px-3 py-2 text-xs text-white">
+            <option value="ALL">All severities</option>
+            <option value="CRITICAL">Critical</option>
+            <option value="HIGH">High</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="LOW">Low</option>
+          </select>
+          <p class="text-[10px] text-slate-500">Filters apply to insights and Asset 360. KPIs remain full-population counts.</p>
+        </div>
+
+        <div class="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3">
+          <button type="button" onclick="switchTab('users')" class="glass border border-white/10 rounded-2xl p-4 text-left hover:border-brand-500/40 transition">
+            <div class="flex items-center justify-between mb-1"><span class="text-[10px] font-bold uppercase text-slate-400">Customers</span><i data-lucide="users" class="w-4 h-4 text-brand-400"></i></div>
+            <p id="kpiUsers" class="text-2xl font-black text-white tabular-nums">—</p>
+            <p id="kpiUsersHint" class="text-[10px] text-slate-500 mt-1">Live accounts</p>
+          </button>
+          <button type="button" onclick="switchTab('assets')" class="glass border border-white/10 rounded-2xl p-4 text-left hover:border-cyan-500/40 transition">
+            <div class="flex items-center justify-between mb-1"><span class="text-[10px] font-bold uppercase text-slate-400">Assets</span><i data-lucide="boxes" class="w-4 h-4 text-cyan-400"></i></div>
+            <p id="kpiAssets" class="text-2xl font-black text-white tabular-nums">—</p>
+            <p id="kpiAssetsHint" class="text-[10px] text-slate-500 mt-1">Vaulted items</p>
+          </button>
+          <button type="button" onclick="switchTab('documents')" class="glass border border-white/10 rounded-2xl p-4 text-left hover:border-violet-500/40 transition">
+            <div class="flex items-center justify-between mb-1"><span class="text-[10px] font-bold uppercase text-slate-400">Documents</span><i data-lucide="file-text" class="w-4 h-4 text-violet-400"></i></div>
+            <p id="kpiDocuments" class="text-2xl font-black text-white tabular-nums">—</p>
+            <p id="kpiDocumentsHint" class="text-[10px] text-slate-500 mt-1">Stored scans</p>
+          </button>
+          <button type="button" onclick="switchTab('expiry')" class="glass border border-white/10 rounded-2xl p-4 text-left hover:border-emerald-500/40 transition">
+            <div class="flex items-center justify-between mb-1"><span class="text-[10px] font-bold uppercase text-slate-400">Active warranties</span><i data-lucide="shield" class="w-4 h-4 text-emerald-400"></i></div>
+            <p id="kpiActiveWarranties" class="text-2xl font-black text-white tabular-nums">—</p>
+            <p id="kpiWarrantyHint" class="text-[10px] text-slate-500 mt-1">Not expired</p>
+          </button>
+          <button type="button" onclick="switchTab('expiry')" class="glass border border-white/10 rounded-2xl p-4 text-left hover:border-amber-500/40 transition">
+            <div class="flex items-center justify-between mb-1"><span class="text-[10px] font-bold uppercase text-slate-400">Expiring soon</span><i data-lucide="calendar-clock" class="w-4 h-4 text-amber-400"></i></div>
+            <p id="kpiExpiringSoon" class="text-2xl font-black text-white tabular-nums">—</p>
+            <p id="kpiExpiringHint" class="text-[10px] text-slate-500 mt-1">≤30 days / expired</p>
+          </button>
+          <button type="button" onclick="switchTab('whatsapp'); switchWhatsappSubView('queue');" class="glass border border-white/10 rounded-2xl p-4 text-left hover:border-amber-500/40 transition">
+            <div class="flex items-center justify-between mb-1"><span class="text-[10px] font-bold uppercase text-slate-400">Pending WA</span><i data-lucide="list-ordered" class="w-4 h-4 text-amber-400"></i></div>
+            <p id="kpiPendingNotifications" class="text-2xl font-black text-white tabular-nums">—</p>
+            <p id="kpiPendingHint" class="text-[10px] text-slate-500 mt-1">Queue</p>
+          </button>
+          <button type="button" onclick="switchTab('whatsapp')" class="glass border border-white/10 rounded-2xl p-4 text-left hover:border-emerald-500/40 transition">
+            <div class="flex items-center justify-between mb-1"><span class="text-[10px] font-bold uppercase text-slate-400">WA delivery</span><i data-lucide="radio" class="w-4 h-4 text-emerald-400"></i></div>
+            <p id="kpiWaDeliveryRate" class="text-xl font-black text-white tabular-nums">—</p>
+            <p id="kpiWaRateHint" class="text-[10px] text-slate-500 mt-1">From queue</p>
+          </button>
+          <button type="button" onclick="switchTab('ocr_review')" class="glass border border-white/10 rounded-2xl p-4 text-left hover:border-amber-500/40 transition">
+            <div class="flex items-center justify-between mb-1"><span class="text-[10px] font-bold uppercase text-slate-400">OCR review</span><i data-lucide="scan-search" class="w-4 h-4 text-amber-400"></i></div>
+            <p id="kpiOcrQueue" class="text-2xl font-black text-white tabular-nums">—</p>
+            <p id="kpiOcrHint" class="text-[10px] text-slate-500 mt-1">Manual queue</p>
+          </button>
+        </div>
+
+        <div class="hidden">
+          <span id="kpiExpiringInsurance">0</span>
+          <span id="kpiExpiringWarranty">0</span>
+          <span id="kpiExpiringPUC">0</span>
+          <span id="kpiTickets">0</span>
+          <div id="intelligenceInsights"></div>
+          <div id="smartAlertsList"></div>
+          <div id="chartExpiryRisk"></div>
+          <input type="hidden" id="growthRange" value="30" />
+          <input type="hidden" id="biRangeValue" value="30D" />
+        </div>
+
+        <div class="glass border border-white/10 rounded-2xl p-5 lg:p-6">
+          <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-5">
+            <div>
+              <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-rose-300/80">Active Expiry Surveillance Radar</p>
+              <h2 class="text-white font-bold text-base mt-0.5">Protection risk across Insurance, Warranty and PUC</h2>
+            </div>
+            <button type="button" onclick="switchTab('expiry')" class="shrink-0 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-200 text-[11px] font-bold px-3.5 py-2 transition">
+              Open Radar →
+            </button>
+          </div>
+          <div class="grid grid-cols-3 gap-2 sm:gap-3 mb-5">
+            <div class="rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-center">
+              <p class="text-[9px] uppercase font-bold tracking-wider text-rose-300">Expired</p>
+              <p id="radarExpiredCount" class="text-2xl font-black text-white tabular-nums mt-1">—</p>
+            </div>
+            <div class="rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-center">
+              <p class="text-[9px] uppercase font-bold tracking-wider text-amber-300">≤30 Days</p>
+              <p id="radarExp30Count" class="text-2xl font-black text-white tabular-nums mt-1">—</p>
+            </div>
+            <div class="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3 text-center">
+              <p class="text-[9px] uppercase font-bold tracking-wider text-emerald-300">Healthy</p>
+              <p id="radarHealthyCount" class="text-2xl font-black text-white tabular-nums mt-1">—</p>
+            </div>
+          </div>
+          <div id="radarRiskBars"><p class="text-xs text-slate-500 text-center py-4">Loading…</p></div>
+        </div>
+
+        <section class="space-y-4" aria-labelledby="biHeading">
+          <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+            <div>
+              <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-300/80">Analytics</p>
+              <h2 id="biHeading" class="text-xl font-black text-white tracking-tight mt-0.5">Business Intelligence</h2>
+              <p class="text-xs text-slate-400 mt-1">Real-time health, growth and risk across the Asset Doctor ecosystem.</p>
+            </div>
+            <div class="flex items-center gap-1 rounded-xl border border-white/10 bg-slate-900/70 p-1" role="group" aria-label="Analytics time range">
+              <button type="button" data-bi-range="7D" onclick="setAnalyticsRange('7D')" class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-white/10 text-slate-400">7D</button>
+              <button type="button" data-bi-range="30D" onclick="setAnalyticsRange('30D')" class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-brand-500/40 bg-brand-500/20 text-brand-200">30D</button>
+              <button type="button" data-bi-range="90D" onclick="setAnalyticsRange('90D')" class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-white/10 text-slate-400">90D</button>
+              <button type="button" data-bi-range="ALL" onclick="setAnalyticsRange('ALL')" class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-white/10 text-slate-400">ALL</button>
+            </div>
+          </div>
+
+          <div class="glass border border-cyan-500/20 rounded-2xl p-5">
+            <h3 class="text-white font-bold text-sm flex items-center gap-2 mb-3">
+              <i data-lucide="sparkles" class="w-4 h-4 text-cyan-400"></i> Today’s Asset Doctor Intelligence
+            </h3>
+            <div id="biExecutiveSummary" class="grid sm:grid-cols-2 gap-2">
+              <p class="text-xs text-slate-500 py-4 text-center sm:col-span-2">Loading…</p>
+            </div>
+          </div>
+
+          <div class="bi-grid">
+            <div class="glass border border-white/10 rounded-2xl p-5">
+              <h3 class="text-white font-bold text-sm mb-1">Customer &amp; Asset Growth</h3>
+              <p class="text-[11px] text-slate-500 mb-3">Timestamped createdAt records only. Time filter applies here.</p>
+              <div id="chartAssetGrowth"><p class="text-xs text-slate-500 py-8 text-center">Loading…</p></div>
+            </div>
+            <div class="glass border border-white/10 rounded-2xl p-5">
+              <h3 class="text-white font-bold text-sm mb-1">Asset Portfolio</h3>
+              <p class="text-[11px] text-slate-500 mb-3">Live vault mix. Click a category to open Asset 360.</p>
+              <div id="chartAssetPortfolio"><p class="text-xs text-slate-500 py-8 text-center">Loading…</p></div>
+            </div>
+          </div>
+
+          <details class="bi-group" open>
+            <summary>Trust Layer</summary>
+            <div class="p-4 sm:p-5">
+              <div class="rounded-2xl border border-white/8 bg-slate-950/40 p-4">
+                <h3 class="text-white font-bold text-sm mb-3">Protection Status</h3>
+                <p class="text-[11px] text-slate-500 mb-3">Live counts only. Missing telemetry shows No data yet.</p>
+                <div id="chartTrustLayer"><p class="text-xs text-slate-500 py-8 text-center">Loading…</p></div>
+              </div>
+            </div>
+          </details>
+
+          <details class="bi-group" open>
+            <summary>Document / OCR / Health Analytics</summary>
+            <div class="p-4 sm:p-5 grid gap-4 md:grid-cols-2">
+              <div class="rounded-2xl border border-white/8 bg-slate-950/40 p-4">
+                <h3 class="text-white font-bold text-sm mb-3">Document Intelligence</h3>
+                <div id="chartDocumentIntel"><p class="text-xs text-slate-500 py-8 text-center">Loading…</p></div>
+              </div>
+              <div class="rounded-2xl border border-white/8 bg-slate-950/40 p-4">
+                <h3 class="text-white font-bold text-sm mb-3">Asset Health</h3>
+                <div id="chartAssetHealth"><p class="text-xs text-slate-500 py-8 text-center">Loading…</p></div>
+              </div>
+              <div class="rounded-2xl border border-white/8 bg-slate-950/40 p-4 md:col-span-2">
+                <h3 class="text-white font-bold text-sm mb-3">OCR Quality</h3>
+                <div id="chartOcrPerf"><p class="text-xs text-slate-500 py-8 text-center">Loading…</p></div>
+              </div>
+            </div>
+          </details>
+
+          <details class="bi-group" open>
+            <summary>WhatsApp / Expiry Analytics</summary>
+            <div class="p-4 sm:p-5 grid gap-4 md:grid-cols-2">
+              <div class="rounded-2xl border border-white/8 bg-slate-950/40 p-4">
+                <div class="flex items-center justify-between mb-3">
+                  <h3 class="text-white font-bold text-sm">WhatsApp Automation</h3>
+                  <button type="button" onclick="switchTab('whatsapp'); switchWhatsappSubView('queue');" class="text-[10px] font-bold text-brand-300">Open queue</button>
+                </div>
+                <div id="chartWhatsappPerf"><p class="text-xs text-slate-500 py-8 text-center">Loading…</p></div>
+                <div id="dashQueueMini" class="mt-4"></div>
+              </div>
+              <div class="rounded-2xl border border-white/8 bg-slate-950/40 p-4">
+                <h3 class="text-white font-bold text-sm mb-3">Protection &amp; Expiry Risk</h3>
+                <div id="chartProtectionRisk"><p class="text-xs text-slate-500 py-8 text-center">Loading…</p></div>
+              </div>
+            </div>
+          </details>
+        </section>
+
+        <div class="glass border border-white/10 rounded-2xl p-5 lg:p-6">
+          <h2 class="text-white font-bold text-base mb-1 flex items-center gap-2">
+            <i data-lucide="brain" class="w-4 h-4 text-indigo-400"></i> Executive Intelligence
+          </h2>
+          <p class="text-[11px] text-slate-500 mb-4">Deterministic statements from live Firestore aggregates. No estimated values.</p>
+          <div id="executiveInsights" class="grid md:grid-cols-2 gap-3"></div>
+        </div>
+
+        <div class="glass border border-white/10 rounded-2xl p-5">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+            <div>
               <h2 class="text-white font-bold text-sm flex items-center gap-2">
                 <i data-lucide="activity" class="w-4 h-4 text-brand-400"></i> Real-Time Customer Activity &amp; Inquiries
               </h2>
-              <span class="text-[10px] text-brand-300 font-mono flex items-center gap-1">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot"></span> LIVE STREAM
-              </span>
+              <p class="text-[10px] text-slate-500 font-mono mt-0.5">/adminActivity</p>
             </div>
-            <div id="dashboardActivityStream" class="space-y-2 text-xs text-slate-300 max-h-[380px] overflow-y-auto pr-1">
-              <p class="text-slate-500 py-4 text-center">Loading live activity...</p>
+            <div class="flex flex-wrap gap-1" role="group" aria-label="Activity filter">
+              <button type="button" data-activity-filter="all" onclick="setActivityFilter('all')" class="activity-filter-btn px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase border border-brand-500/40 bg-brand-500/20 text-brand-200">All</button>
+              <button type="button" data-activity-filter="ocr" onclick="setActivityFilter('ocr')" class="activity-filter-btn px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase border border-white/10 text-slate-400">OCR</button>
+              <button type="button" data-activity-filter="assets" onclick="setActivityFilter('assets')" class="activity-filter-btn px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase border border-white/10 text-slate-400">Assets</button>
+              <button type="button" data-activity-filter="documents" onclick="setActivityFilter('documents')" class="activity-filter-btn px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase border border-white/10 text-slate-400">Documents</button>
+              <button type="button" data-activity-filter="customers" onclick="setActivityFilter('customers')" class="activity-filter-btn px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase border border-white/10 text-slate-400">Customers</button>
+              <button type="button" data-activity-filter="support" onclick="setActivityFilter('support')" class="activity-filter-btn px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase border border-white/10 text-slate-400">Support</button>
             </div>
           </div>
+          <div id="dashboardActivityStream" class="space-y-2 text-xs text-slate-300 max-h-[360px] overflow-y-auto pr-1">
+            <p class="text-slate-500 py-4 text-center">No recent customer activity recorded.</p>
+          </div>
+        </div>
 
-          <div class="glass border border-white/10 rounded-2xl p-5">
-            <h2 class="text-white font-bold text-sm mb-3 flex items-center gap-2">
-              <i data-lucide="shield-alert" class="w-4 h-4 text-amber-400"></i> Security &amp; Audit Trail
-            </h2>
-            <div id="dashboardAuditStream" class="space-y-2 text-xs text-slate-300 max-h-[380px] overflow-y-auto pr-1">
-              <p class="text-slate-500 py-4 text-center">Loading audit events...</p>
-            </div>
+        <div class="glass border border-white/10 rounded-2xl p-5">
+          <div class="flex items-center justify-between gap-3 mb-3">
+            <h2 class="text-white font-bold text-sm">Security &amp; Audit Trail</h2>
+            <button type="button" onclick="switchTab('audit')" class="text-[11px] font-bold text-brand-300 hover:text-brand-200">View full audit trail →</button>
+          </div>
+          <div id="dashboardAuditStream" class="space-y-2 text-xs text-slate-300 max-h-[240px] overflow-y-auto pr-1">
+            <p class="text-slate-500 py-4 text-center">No recent audit events.</p>
           </div>
         </div>
       </section>
@@ -443,16 +596,18 @@
             <table class="min-w-full text-xs">
               <thead>
                 <tr class="text-left uppercase tracking-wider text-slate-400 bg-white/5 text-[10px]">
-                  <th class="px-4 py-3 font-semibold">Customer / UID</th>
-                  <th class="px-4 py-3 font-semibold">Contact Details</th>
-                  <th class="px-4 py-3 font-semibold">Address / City</th>
-                  <th class="px-4 py-3 font-semibold">Vaulted Assets</th>
-                  <th class="px-4 py-3 font-semibold">Activity / Status</th>
+                  <th class="px-4 py-3 font-semibold">Customer</th>
+                  <th class="px-4 py-3 font-semibold">Phone</th>
+                  <th class="px-4 py-3 font-semibold">Joined</th>
+                  <th class="px-4 py-3 font-semibold">Assets / Docs</th>
+                  <th class="px-4 py-3 font-semibold">Warranties / Expiry</th>
+                  <th class="px-4 py-3 font-semibold">WhatsApp</th>
+                  <th class="px-4 py-3 font-semibold">Health</th>
                   <th class="px-4 py-3 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
               <tbody id="usersTableBody" class="divide-y divide-white/5">
-                <tr><td colspan="6" class="text-center py-6 text-slate-500">Loading customer accounts...</td></tr>
+                <tr><td colspan="8" class="text-center py-6 text-slate-500">Loading customer accounts...</td></tr>
               </tbody>
             </table>
           </div>
@@ -470,6 +625,15 @@
               <p class="text-xs text-slate-400 mt-0.5">Real-time inventory of all customer vehicles, bikes, and appliances.</p>
             </div>
             <div class="flex items-center gap-3">
+              <select id="assetFilterCategory" onchange="renderAssets()" class="rounded-xl bg-slate-900/80 border border-white/10 px-3 py-2 text-xs text-white">
+                <option value="ALL">All categories</option>
+                <option value="vehicle">Vehicles</option>
+                <option value="gadget">Gadgets</option>
+                <option value="home">Home &amp; Appliances</option>
+                <option value="equipment">Equipment</option>
+                <option value="business">Business</option>
+                <option value="other">Other</option>
+              </select>
               <input id="assetSearchInput" type="text" placeholder="Search by asset, brand, reg, owner UID..."
                 class="rounded-xl bg-slate-900/80 border border-white/10 px-3.5 py-2 text-xs text-white placeholder-slate-500 w-72 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition" />
             </div>
@@ -580,17 +744,131 @@
 
       <!-- ===================== MODULE 6: OCR CONTROL CENTER ===================== -->
       <section id="tab-ocr_review" class="tab-panel space-y-4">
+        <div class="glass border border-white/10 rounded-2xl p-5">
+          <h2 class="text-white font-bold text-base flex items-center gap-2">
+            <i data-lucide="scan-search" class="w-4 h-4 text-amber-400"></i> OCR Control Center
+          </h2>
+          <p class="text-xs text-slate-400 mt-0.5">Monitoring only. Google is primary cloud, Azure is fallback, ML Kit is candidate/local. Extraction logic is not modified here.</p>
+          <div class="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3 mt-4">
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3"><p class="text-[10px] uppercase text-slate-500 font-bold">Processed</p><p id="ocrKpiProcessed" class="text-lg font-black text-white mt-1">—</p></div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3"><p class="text-[10px] uppercase text-slate-500 font-bold">Successful</p><p id="ocrKpiSuccess" class="text-lg font-black text-white mt-1">—</p></div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3"><p class="text-[10px] uppercase text-slate-500 font-bold">Needs review</p><p id="ocrKpiReview" class="text-lg font-black text-amber-300 mt-1">—</p></div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3"><p class="text-[10px] uppercase text-slate-500 font-bold">Failed</p><p id="ocrKpiFailed" class="text-lg font-black text-white mt-1">—</p></div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3"><p class="text-[10px] uppercase text-slate-500 font-bold">Avg time</p><p id="ocrKpiAvgTime" class="text-sm font-bold text-slate-300 mt-1">Telemetry unavailable</p></div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3"><p class="text-[10px] uppercase text-slate-500 font-bold">Google</p><p id="ocrKpiGoogle" class="text-sm font-bold text-slate-300 mt-1">Telemetry unavailable</p></div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3"><p class="text-[10px] uppercase text-slate-500 font-bold">Azure fallback</p><p id="ocrKpiAzure" class="text-sm font-bold text-slate-300 mt-1">Telemetry unavailable</p></div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3"><p class="text-[10px] uppercase text-slate-500 font-bold">ML Kit</p><p id="ocrKpiMlkit" class="text-sm font-bold text-slate-300 mt-1">Telemetry unavailable</p></div>
+          </div>
+        </div>
         <div class="glass border border-white/10 rounded-2xl overflow-hidden">
-          <div class="p-5 border-b border-white/10 flex items-center justify-between">
-            <div>
-              <h2 class="text-white font-bold text-base flex items-center gap-2">
-                <i data-lucide="scan-search" class="w-4 h-4 text-amber-400"></i> OCR Control &amp; Manual Correction Queue
-              </h2>
-              <p class="text-xs text-slate-400 mt-0.5">Documents flagged for inspection, raw text extraction, and administrative corrections.</p>
-            </div>
+          <div class="p-5 border-b border-white/10">
+            <h3 class="text-white font-bold text-sm">Problem Documents</h3>
+            <p class="text-[11px] text-slate-500 mt-0.5">From /ocrReviewQueue. Provider column is N/A unless the queue document stores engine identity.</p>
+          </div>
+          <div class="ad-table-scroll">
+            <table class="min-w-full text-xs">
+              <thead>
+                <tr class="text-left uppercase tracking-wider text-slate-400 bg-white/5 text-[10px]">
+                  <th class="px-3 py-2.5 font-semibold">Document</th>
+                  <th class="px-3 py-2.5 font-semibold">Type</th>
+                  <th class="px-3 py-2.5 font-semibold">Customer</th>
+                  <th class="px-3 py-2.5 font-semibold">Confidence</th>
+                  <th class="px-3 py-2.5 font-semibold">Issues</th>
+                  <th class="px-3 py-2.5 font-semibold">Provider</th>
+                  <th class="px-3 py-2.5 font-semibold">Created</th>
+                  <th class="px-3 py-2.5 font-semibold">Status</th>
+                </tr>
+              </thead>
+              <tbody id="ocrProblemTable" class="divide-y divide-white/5"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="glass border border-white/10 rounded-2xl overflow-hidden">
+          <div class="p-5 border-b border-white/10">
+            <h3 class="text-white font-bold text-sm">Manual correction queue</h3>
           </div>
           <div class="p-5 space-y-3" id="ocrQueueContainer">
             <p class="text-slate-500 py-6 text-center text-xs">No pending OCR reviews.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== MODULE 6b: LEARNING CENTER ===================== -->
+      <section id="tab-learning" class="tab-panel space-y-4">
+        <div class="glass border border-white/10 rounded-2xl p-5">
+          <h2 class="text-white font-bold text-base flex items-center gap-2">
+            <i data-lucide="brain" class="w-4 h-4 text-cyan-400"></i> Document Learning Center
+          </h2>
+          <p class="text-xs text-slate-400 mt-0.5">Live correction events and promoted patterns from /document_intelligence_feedback. One correction is a signal, not a production rule.</p>
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3"><p class="text-[10px] uppercase text-slate-500 font-bold">Learning events</p><p id="learnKpiEvents" class="text-lg font-black text-white mt-1">No learning data yet</p></div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3"><p class="text-[10px] uppercase text-slate-500 font-bold">Emerging</p><p id="learnKpiEmerging" class="text-lg font-black text-amber-300 mt-1">No learning data yet</p></div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3"><p class="text-[10px] uppercase text-slate-500 font-bold">Trusted</p><p id="learnKpiTrusted" class="text-lg font-black text-emerald-300 mt-1">No learning data yet</p></div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3"><p class="text-[10px] uppercase text-slate-500 font-bold">Rejected</p><p id="learnKpiRejected" class="text-lg font-black text-slate-300 mt-1">No learning data yet</p></div>
+          </div>
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3"><p class="text-[10px] uppercase text-slate-500 font-bold">Docs processed</p><p id="learnKpiProcessed" class="text-lg font-black text-white mt-1">No data yet</p></div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3"><p class="text-[10px] uppercase text-slate-500 font-bold">Fields needing review</p><p id="learnKpiReviewFields" class="text-lg font-black text-amber-300 mt-1">No data yet</p></div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3"><p class="text-[10px] uppercase text-slate-500 font-bold">Provider disagreement</p><p id="learnKpiDisagree" class="text-lg font-black text-cyan-300 mt-1">No data yet</p></div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3"><p class="text-[10px] uppercase text-slate-500 font-bold">Asset match conflicts</p><p id="learnKpiConflicts" class="text-lg font-black text-rose-300 mt-1">No data yet</p></div>
+          </div>
+          <div class="mt-3" id="learnFailureTypes"><p class="text-slate-500 text-xs">No data yet</p></div>
+          <p id="learnRealDocTelemetry" class="text-xs text-slate-400 mt-3">No real-document telemetry yet</p>
+        </div>
+        <div class="grid lg:grid-cols-2 gap-4">
+          <div class="glass border border-white/10 rounded-2xl overflow-hidden">
+            <div class="p-5 border-b border-white/10">
+              <h3 class="text-white font-bold text-sm">Fields most frequently corrected</h3>
+            </div>
+            <div class="p-5" id="learnFieldsList"><p class="text-slate-500 text-xs">No learning data yet</p></div>
+          </div>
+          <div class="glass border border-white/10 rounded-2xl overflow-hidden">
+            <div class="p-5 border-b border-white/10">
+              <h3 class="text-white font-bold text-sm">Document types with most errors</h3>
+            </div>
+            <div class="p-5" id="learnTypesList"><p class="text-slate-500 text-xs">No learning data yet</p></div>
+          </div>
+        </div>
+        <div class="glass border border-white/10 rounded-2xl overflow-hidden">
+          <div class="p-5 border-b border-white/10">
+            <h3 class="text-white font-bold text-sm">Emerging / Trusted / Rejected patterns</h3>
+          </div>
+          <div class="ad-table-scroll">
+            <table class="min-w-full text-xs">
+              <thead>
+                <tr class="text-left uppercase tracking-wider text-slate-400 bg-white/5 text-[10px]">
+                  <th class="px-3 py-2.5 font-semibold">Status</th>
+                  <th class="px-3 py-2.5 font-semibold">Document type</th>
+                  <th class="px-3 py-2.5 font-semibold">Field</th>
+                  <th class="px-3 py-2.5 font-semibold">Pattern</th>
+                  <th class="px-3 py-2.5 font-semibold">Evidence</th>
+                </tr>
+              </thead>
+              <tbody id="learnPatternTable" class="divide-y divide-white/5">
+                <tr><td colspan="5" class="text-center py-6 text-slate-500">No learning data yet</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="glass border border-white/10 rounded-2xl overflow-hidden">
+          <div class="p-5 border-b border-white/10">
+            <h3 class="text-white font-bold text-sm">Learning events</h3>
+          </div>
+          <div class="ad-table-scroll">
+            <table class="min-w-full text-xs">
+              <thead>
+                <tr class="text-left uppercase tracking-wider text-slate-400 bg-white/5 text-[10px]">
+                  <th class="px-3 py-2.5 font-semibold">When</th>
+                  <th class="px-3 py-2.5 font-semibold">Type</th>
+                  <th class="px-3 py-2.5 font-semibold">Field</th>
+                  <th class="px-3 py-2.5 font-semibold">Correction</th>
+                  <th class="px-3 py-2.5 font-semibold">Shapes</th>
+                </tr>
+              </thead>
+              <tbody id="learnEventTable" class="divide-y divide-white/5">
+                <tr><td colspan="5" class="text-center py-6 text-slate-500">No learning data yet</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </section>
@@ -605,15 +883,15 @@
           <div class="grid sm:grid-cols-3 gap-4 mb-4">
             <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
               <p class="text-[11px] uppercase font-bold text-slate-400">Upcoming Services</p>
-              <p id="kpiUpcomingServices" class="text-2xl font-black text-white mt-1">0</p>
+              <p id="kpiUpcomingServices" class="text-2xl font-black text-white mt-1">N/A</p>
             </div>
             <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
               <p class="text-[11px] uppercase font-bold text-slate-400">Overdue Maintenance</p>
-              <p id="kpiOverdueServices" class="text-2xl font-black text-rose-400 mt-1">0</p>
+              <p id="kpiOverdueServices" class="text-2xl font-black text-rose-400 mt-1">N/A</p>
             </div>
             <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
               <p class="text-[11px] uppercase font-bold text-slate-400">Completed Service Logs</p>
-              <p id="kpiCompletedServices" class="text-2xl font-black text-emerald-400 mt-1">0</p>
+              <p id="kpiCompletedServices" class="text-2xl font-black text-emerald-400 mt-1">N/A</p>
             </div>
           </div>
         </div>
@@ -640,68 +918,90 @@
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
             <div>
               <h2 class="text-white font-bold text-base flex items-center gap-2">
-                <i data-lucide="message-square" class="w-4 h-4 text-emerald-400"></i> WhatsApp Business Automation &amp; Template Control
+                <i data-lucide="message-square" class="w-4 h-4 text-emerald-400"></i> WhatsApp Business Automation
               </h2>
-              <p class="text-xs text-slate-400 mt-0.5">Meta WhatsApp Cloud API integration, template approval lifecycle, and delivery surveillance.</p>
+              <p class="text-xs text-slate-400 mt-0.5">Automated customer communication for Asset Doctor. Registry status is not the same as Meta approval.</p>
             </div>
             <div class="flex items-center gap-2 flex-wrap">
-              <span class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5">
-                <span class="w-2 h-2 rounded-full bg-emerald-400 pulse-dot"></span>
-                Automation: <strong class="text-white">ACTIVE (IST)</strong>
-              </span>
               <button onclick="openNewTemplateModal()" class="px-3 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-brand-500/20 transition">
                 <i data-lucide="plus" class="w-3.5 h-3.5"></i> Create Template
               </button>
             </div>
           </div>
 
-          <!-- Meta Connection Status Bar -->
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/10 mb-6">
-            <div class="flex items-center gap-2.5">
-              <span class="w-2 h-2 rounded-full bg-amber-400"></span>
-              <div>
-                <p class="text-[10px] text-slate-400 uppercase font-bold">Meta Cloud API</p>
-                <p class="text-xs font-bold text-white">STANDBY (v20.0)</p>
-              </div>
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <p class="text-[10px] uppercase font-bold text-slate-500">Meta Cloud API</p>
+              <p id="waHeroApi" class="text-sm font-black text-white mt-1">STANDBY</p>
+              <p class="text-[10px] text-slate-500 mt-1">Inferred from queue — not a live Graph ping</p>
             </div>
-            <div class="flex items-center gap-2.5">
-              <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-              <div>
-                <p class="text-[10px] text-slate-400 uppercase font-bold">Webhook Service</p>
-                <p class="text-xs font-bold text-emerald-300">ACTIVE (/api/webhook/whatsapp)</p>
-              </div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <p class="text-[10px] uppercase font-bold text-slate-500">Webhook</p>
+              <p id="waHeroWebhook" class="text-sm font-black text-white mt-1">NOT VERIFIED</p>
+              <p class="text-[10px] text-slate-500 mt-1">Delivery events on queue docs</p>
             </div>
-            <div class="flex items-center gap-2.5">
-              <span class="w-2 h-2 rounded-full bg-brand-400"></span>
-              <div>
-                <p class="text-[10px] text-slate-400 uppercase font-bold">Consent Enforced</p>
-                <p class="text-xs font-bold text-brand-300">whatsappOptIn (Per User)</p>
-              </div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <p class="text-[10px] uppercase font-bold text-slate-500">Template health</p>
+              <p class="text-sm font-black text-white mt-1"><span id="waHeroTplActive">0</span> deliverable</p>
+              <p class="text-[10px] text-slate-400 mt-1"><span id="waHeroTplPending">0</span> pending · <span id="waHeroTplRejected">0</span> rejected</p>
+              <p id="waHeroTplNote" class="text-[10px] text-amber-300 mt-1"></p>
             </div>
-            <div class="flex items-center gap-2.5">
-              <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
-              <div>
-                <p class="text-[10px] text-slate-400 uppercase font-bold">Deduplication</p>
-                <p class="text-xs font-bold text-cyan-300">Composite Idempotency</p>
-              </div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <p class="text-[10px] uppercase font-bold text-slate-500">Delivery health</p>
+              <p id="waHeroDelivery" class="text-sm font-black text-white mt-1">No data yet</p>
+              <p class="text-[10px] text-slate-500 mt-1">delivered+read / terminal statuses</p>
             </div>
           </div>
 
+          <div id="welcomeTemplateBanner" class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 mb-6 text-xs text-amber-100">
+            Checking welcome template registry…
+          </div>
+
+          <div class="rounded-xl border border-white/10 bg-slate-900/50 p-4 mb-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+              <div>
+                <h3 class="text-white font-bold text-sm">Welcome Message — Production Status</h3>
+                <p class="text-[11px] text-slate-400 mt-0.5">Template <span class="font-mono text-brand-300">welcome_message</span> · language <span class="font-mono">en</span> · {{1}} = customer name. HEALTHY is never shown unless confirmed.</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" id="btnProbeWhatsappOps" onclick="probeWhatsAppOpsHealth()" class="px-3 py-1.5 rounded-xl bg-white/5 text-[11px] font-bold text-white">Probe functions</button>
+                <button type="button" id="btnTestWelcomeFlow" onclick="runAdminTestWelcome()" class="px-3 py-1.5 rounded-xl bg-brand-600 text-[11px] font-bold text-white">Test Welcome Flow</button>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 text-[11px]">
+              <div class="rounded-lg border border-white/10 p-3"><p class="text-slate-500 uppercase font-bold">Template</p><p class="text-white font-mono mt-1">welcome_message</p></div>
+              <div class="rounded-lg border border-white/10 p-3"><p class="text-slate-500 uppercase font-bold">Meta status</p><p id="waProdMetaStatus" class="text-amber-200 font-bold mt-1">UNKNOWN</p></div>
+              <div class="rounded-lg border border-white/10 p-3"><p class="text-slate-500 uppercase font-bold">Function</p><p id="waProdFunction" class="text-amber-200 font-bold mt-1">UNKNOWN</p></div>
+              <div class="rounded-lg border border-white/10 p-3"><p class="text-slate-500 uppercase font-bold">Credentials</p><p id="waProdCredentials" class="text-amber-200 font-bold mt-1">UNKNOWN</p></div>
+              <div class="rounded-lg border border-white/10 p-3"><p class="text-slate-500 uppercase font-bold">Webhook</p><p id="waProdWebhook" class="text-amber-200 font-bold mt-1">UNKNOWN</p></div>
+              <div class="rounded-lg border border-white/10 p-3"><p class="text-slate-500 uppercase font-bold">Queue</p><p id="waProdQueue" class="text-amber-200 font-bold mt-1">UNKNOWN</p></div>
+              <div class="rounded-lg border border-white/10 p-3"><p class="text-slate-500 uppercase font-bold">Last welcome</p><p id="waProdLastWelcome" class="text-slate-200 font-mono mt-1">No data yet</p></div>
+              <div class="rounded-lg border border-white/10 p-3"><p class="text-slate-500 uppercase font-bold">Last result</p><p id="waProdLastResult" class="text-slate-200 font-bold mt-1">No data yet</p></div>
+            </div>
+            <p id="waProdProbeNote" class="text-[10px] text-slate-500 mt-3">Probe requires a deployed whatsappOpsHealth function and this admin session. Until then every row stays UNKNOWN.</p>
+          </div>
+
           <!-- Sub-View Navigation Tabs -->
-          <div class="flex items-center gap-2 border-b border-white/10 pb-3 mb-6">
-            <button id="btnWhatsappSubTemplates" onclick="switchWhatsappSubView('templates')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-white/10 text-white flex items-center gap-1.5 transition">
+          <div class="flex items-center gap-2 border-b border-white/10 pb-3 mb-6 overflow-x-auto">
+            <button id="btnWhatsappSubTemplates" onclick="switchWhatsappSubView('templates')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-white/10 text-white flex items-center gap-1.5 transition whitespace-nowrap">
               <i data-lucide="layout-template" class="w-3.5 h-3.5 text-emerald-400"></i> Template Manager (<span id="countWhatsappTemplates">0</span>)
             </button>
-            <button id="btnWhatsappSubQueue" onclick="switchWhatsappSubView('queue')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white flex items-center gap-1.5 transition">
-              <i data-lucide="list-ordered" class="w-3.5 h-3.5 text-amber-400"></i> Notification Queue Stream (<span id="countWhatsappQueue">0</span>)
+            <button id="btnWhatsappSubQueue" onclick="switchWhatsappSubView('queue')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white flex items-center gap-1.5 transition whitespace-nowrap">
+              <i data-lucide="list-ordered" class="w-3.5 h-3.5 text-amber-400"></i> Notification Queue (<span id="countWhatsappQueue">0</span>)
+            </button>
+            <button id="btnWhatsappSubWelcome" onclick="switchWhatsappSubView('welcome')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white flex items-center gap-1.5 transition whitespace-nowrap">
+              <i data-lucide="user-plus" class="w-3.5 h-3.5 text-cyan-400"></i> Welcome Diagnostics
+            </button>
+            <button id="btnWhatsappSubPerf" onclick="switchWhatsappSubView('perf')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white flex items-center gap-1.5 transition whitespace-nowrap">
+              <i data-lucide="bar-chart-3" class="w-3.5 h-3.5 text-brand-400"></i> Delivery Analytics
             </button>
           </div>
 
           <!-- SUB-VIEW 1: TEMPLATE MANAGER -->
           <div id="whatsappViewTemplates" class="space-y-4">
-            <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div class="grid grid-cols-2 sm:grid-cols-6 gap-3">
               <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3 text-center">
-                <span class="text-[10px] text-slate-400 uppercase font-bold block">Total Templates</span>
+                <span class="text-[10px] text-slate-400 uppercase font-bold block">Registered</span>
                 <span id="kpiTplTotal" class="text-xl font-black text-white mt-1 block tabular-nums">0</span>
               </div>
               <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3 text-center">
@@ -709,18 +1009,23 @@
                 <span id="kpiTplDraft" class="text-xl font-black text-slate-400 mt-1 block tabular-nums">0</span>
               </div>
               <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3 text-center">
+                <span class="text-[10px] text-slate-400 uppercase font-bold block">Not submitted</span>
+                <span id="kpiTplNotSubmitted" class="text-xl font-black text-amber-200 mt-1 block tabular-nums">0</span>
+              </div>
+              <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3 text-center">
                 <span class="text-[10px] text-slate-400 uppercase font-bold block">Pending Meta</span>
                 <span id="kpiTplPending" class="text-xl font-black text-amber-300 mt-1 block tabular-nums">0</span>
               </div>
               <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3 text-center">
-                <span class="text-[10px] text-slate-400 uppercase font-bold block">Approved</span>
+                <span class="text-[10px] text-slate-400 uppercase font-bold block">Approved by Meta</span>
                 <span id="kpiTplApproved" class="text-xl font-black text-emerald-400 mt-1 block tabular-nums">0</span>
               </div>
               <div class="rounded-xl border border-white/10 bg-slate-900/60 p-3 text-center">
-                <span class="text-[10px] text-slate-400 uppercase font-bold block">Rejected</span>
-                <span id="kpiTplRejected" class="text-xl font-black text-rose-400 mt-1 block tabular-nums">0</span>
+                <span class="text-[10px] text-slate-400 uppercase font-bold block">Deliverable</span>
+                <span id="kpiTplDeliverable" class="text-xl font-black text-brand-300 mt-1 block tabular-nums">0</span>
               </div>
             </div>
+            <p class="text-[11px] text-slate-500">Registered in Asset Doctor ≠ submitted to Meta ≠ approved by Meta ≠ actually deliverable. Admin “Submit” only writes PENDING to Firestore and does not call Graph API.</p>
 
             <!-- Templates Table -->
             <div class="rounded-xl border border-white/10 overflow-hidden">
@@ -734,16 +1039,17 @@
                 <table class="min-w-full text-xs">
                   <thead>
                     <tr class="text-left uppercase tracking-wider text-slate-400 bg-white/5 text-[10px]">
-                      <th class="px-4 py-2.5 font-semibold">Template Key / Name</th>
-                      <th class="px-4 py-2.5 font-semibold">Meta Name</th>
+                      <th class="px-4 py-2.5 font-semibold">Template</th>
+                      <th class="px-4 py-2.5 font-semibold">Meta name</th>
                       <th class="px-4 py-2.5 font-semibold">Category</th>
-                      <th class="px-4 py-2.5 font-semibold">Variables</th>
-                      <th class="px-4 py-2.5 font-semibold">Approval Status</th>
+                      <th class="px-4 py-2.5 font-semibold">Registered</th>
+                      <th class="px-4 py-2.5 font-semibold">Meta lifecycle</th>
+                      <th class="px-4 py-2.5 font-semibold">Deliverable</th>
                       <th class="px-4 py-2.5 font-semibold text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody id="whatsappTemplatesTableBody" class="divide-y divide-white/5">
-                    <tr><td colspan="6" class="text-center py-6 text-slate-500 text-xs">Loading WhatsApp templates...</td></tr>
+                    <tr><td colspan="7" class="text-center py-6 text-slate-500 text-xs">Loading WhatsApp templates...</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -796,20 +1102,82 @@
                 <table class="min-w-full text-xs">
                   <thead>
                     <tr class="text-left uppercase tracking-wider text-slate-400 bg-white/5 text-[10px]">
-                      <th class="px-4 py-2.5 font-semibold">Scheduled / Created</th>
-                      <th class="px-4 py-2.5 font-semibold">Recipient Phone / UID</th>
-                      <th class="px-4 py-2.5 font-semibold">Template Key</th>
-                      <th class="px-4 py-2.5 font-semibold">Asset / Context</th>
+                      <th class="px-4 py-2.5 font-semibold">Customer</th>
+                      <th class="px-4 py-2.5 font-semibold">Asset / event</th>
+                      <th class="px-4 py-2.5 font-semibold">Template</th>
+                      <th class="px-4 py-2.5 font-semibold">Scheduled</th>
                       <th class="px-4 py-2.5 font-semibold">Status</th>
-                      <th class="px-4 py-2.5 font-semibold text-right">Idempotency Key</th>
+                      <th class="px-4 py-2.5 font-semibold">Attempts</th>
+                      <th class="px-4 py-2.5 font-semibold">Last error</th>
+                      <th class="px-4 py-2.5 font-semibold text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody id="notificationQueueTableBody" class="divide-y divide-white/5">
-                    <tr><td colspan="6" class="text-center py-6 text-slate-500 text-xs">No pending notifications in queue.</td></tr>
+                    <tr><td colspan="8" class="text-center py-6 text-slate-500 text-xs">No pending notifications in queue.</td></tr>
                   </tbody>
                 </table>
               </div>
             </div>
+          </div>
+
+          <div id="whatsappViewWelcome" class="hidden space-y-4">
+            <div class="rounded-xl border border-white/10 bg-slate-900/40 p-4">
+              <h3 class="text-white font-bold text-sm">Welcome Message Diagnostics</h3>
+              <p class="text-[11px] text-slate-400 mt-1">Production send path: signup → UserService.syncUserToFirestore → notification_queue/welcome_{uid} → Cloud Function onWhatsAppQueueCreate → Meta template <span class="font-mono text-brand-300">welcome_message</span> (en, body {{1}}=name). Admin registry is not the send gate. Do not submit a new Meta template named customer_welcome from this console.</p>
+              <div class="mt-3 flex flex-wrap items-center gap-2">
+                <select id="welcomeDiagCustomer" onchange="window.ADIntel && ADIntel.renderWelcomeDiagnostics(state)" class="rounded-xl bg-slate-900 border border-white/10 px-3 py-2 text-xs text-white min-w-[240px]"></select>
+                <button type="button" onclick="window.ADIntel && ADIntel.renderWelcomeDiagnostics(state)" class="px-3 py-2 rounded-xl bg-white/5 text-xs font-bold text-white">Run</button>
+              </div>
+            </div>
+            <div id="welcomeDiagStages" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+            <div class="rounded-xl border border-white/10 overflow-hidden">
+              <div class="p-3 bg-white/5 border-b border-white/10">
+                <h3 class="text-xs font-bold text-white">Recent welcome queue (signup diagnostics)</h3>
+                <p class="text-[10px] text-slate-500 mt-0.5">From /notification_queue. Phones masked. Tokens never shown.</p>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="min-w-full text-xs">
+                  <thead>
+                    <tr class="text-left uppercase tracking-wider text-slate-400 bg-white/5 text-[10px]">
+                      <th class="px-3 py-2 font-semibold">Customer</th>
+                      <th class="px-3 py-2 font-semibold">Phone</th>
+                      <th class="px-3 py-2 font-semibold">Opt-in</th>
+                      <th class="px-3 py-2 font-semibold">Queue</th>
+                      <th class="px-3 py-2 font-semibold">Template</th>
+                      <th class="px-3 py-2 font-semibold">wamid</th>
+                      <th class="px-3 py-2 font-semibold">Created</th>
+                      <th class="px-3 py-2 font-semibold">Sent</th>
+                      <th class="px-3 py-2 font-semibold">Delivered</th>
+                      <th class="px-3 py-2 font-semibold">Read</th>
+                      <th class="px-3 py-2 font-semibold">Failure</th>
+                    </tr>
+                  </thead>
+                  <tbody id="welcomeSignupTable" class="divide-y divide-white/5"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div id="whatsappViewPerf" class="hidden space-y-4">
+            <div class="flex items-center justify-between gap-3">
+              <h3 class="text-white font-bold text-sm">WhatsApp Notification Performance</h3>
+              <select id="waPerfRange" onchange="window.ADIntel && ADIntel.renderWhatsAppHero(state)" class="rounded-lg bg-slate-900 border border-white/10 px-2 py-1 text-[10px] text-white">
+                <option value="24h">24H</option>
+                <option value="7d">7D</option>
+                <option value="30d" selected>30D</option>
+                <option value="90d">90D</option>
+              </select>
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+              <div class="rounded-xl border border-white/10 p-3"><p class="text-[10px] uppercase text-slate-500 font-bold">Delivery rate</p><p id="waPerfDelivery" class="text-lg font-black text-white mt-1">No data yet</p></div>
+              <div class="rounded-xl border border-white/10 p-3"><p class="text-[10px] uppercase text-slate-500 font-bold">Failure rate</p><p id="waPerfFailure" class="text-lg font-black text-white mt-1">No data yet</p></div>
+              <button type="button" onclick="switchWhatsappSubView('queue')" class="rounded-xl border border-white/10 p-3 text-left hover:border-rose-500/40">
+                <p class="text-[10px] uppercase text-slate-500 font-bold">Read rate</p>
+                <p id="waPerfRead" class="text-lg font-black text-white mt-1">No data yet</p>
+                <p class="text-[10px] text-slate-500 mt-1">Open queue for failed records</p>
+              </button>
+            </div>
+            <div id="waPerfChart"></div>
           </div>
         </div>
       </section>
@@ -1099,40 +1467,41 @@
           <h2 class="text-white font-bold text-base flex items-center gap-2 mb-1">
             <i data-lucide="settings" class="w-4 h-4 text-slate-300"></i> Backend Control &amp; Data Sync Diagnostics
           </h2>
-          <p class="text-xs text-slate-400 mb-6">Real-time status of backend services, database sync verification, and live paths.</p>
+          <p class="text-xs text-slate-400 mb-6">Status is HEALTHY only when this console can confirm it. Secrets and Meta tokens are never rendered.</p>
+          <div id="systemHealthGrid" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6"></div>
           <div class="space-y-3 text-xs">
             <div class="flex items-center justify-between border-b border-white/10 pb-3">
               <div>
                 <p class="font-bold text-white">Firebase Project ID</p>
                 <p class="text-slate-400 font-mono">assetdoctor-5fd25</p>
               </div>
-              <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300">CONNECTED</span>
+              <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300">PROJECT ID KNOWN</span>
             </div>
             <div class="flex items-center justify-between border-b border-white/10 pb-3">
               <div>
                 <p class="font-bold text-white">Firestore Database</p>
                 <p class="text-slate-400 font-mono">(default)</p>
               </div>
-              <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300">SYNC STATUS: CONNECTED</span>
+              <span id="settingsFsStatus" class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300">SYNCING</span>
             </div>
             <div class="flex items-center justify-between border-b border-white/10 pb-3">
               <div>
                 <p class="font-bold text-white">Customer Data Paths</p>
-                <p class="text-slate-400 font-mono">/users and /Users (18 live customer records)</p>
+                <p class="text-slate-400 font-mono">/users and /Users (<span id="settingsUserCount">—</span> live records)</p>
               </div>
               <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300">STREAMING</span>
             </div>
             <div class="flex items-center justify-between border-b border-white/10 pb-3">
               <div>
                 <p class="font-bold text-white">Asset Subcollection Path</p>
-                <p class="text-slate-400 font-mono">/Users/{uid}/Assets/{assetId} (22 vaulted assets)</p>
+                <p class="text-slate-400 font-mono">/Users/{uid}/Assets/{assetId} (<span id="settingsAssetCount">—</span> vaulted)</p>
               </div>
               <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300">STREAMING</span>
             </div>
             <div class="flex items-center justify-between border-b border-white/10 pb-3">
               <div>
                 <p class="font-bold text-white">Document Vault Subcollection</p>
-                <p class="text-slate-400 font-mono">/Users/{uid}/Assets/{assetId}/Documents (1 vaulted scan)</p>
+                <p class="text-slate-400 font-mono">Documents collection group (<span id="settingsDocCount">—</span> visible)</p>
               </div>
               <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300">STREAMING</span>
             </div>
@@ -1153,6 +1522,13 @@
           </div>
         </div>
       </section>
+
+      <footer class="glass border border-white/10 rounded-2xl px-5 py-3 flex flex-wrap items-center justify-between gap-3 text-[10px] text-slate-500">
+        <span>Asset Doctor Master Control · admin console</span>
+        <span>Last sync: <span id="footerLastSync" class="font-mono text-slate-300">—</span></span>
+        <span>Environment: production project assetdoctor-5fd25</span>
+        <span>Backend: <span id="footerBackendHealth" class="font-mono text-slate-300">Unknown</span></span>
+      </footer>
 
     </main>
   </div>
@@ -1889,6 +2265,7 @@
 <!-- 13. TOAST NOTIFICATION CONTAINER (Replaces alert()) -->
 <div id="adminToastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm pointer-events-none"></div>
 
+<script src="./js/admin-intelligence.js"></script>
 <script>
 // Firebase Production Configuration
 const firebaseConfig = {
@@ -1915,6 +2292,7 @@ const state = {
   auditLogs: [],
   activities: [],
   ocrQueue: [],
+  learningFeedback: [],
   expiries: [],
   notifications: [],
   templates: [],
@@ -1974,6 +2352,7 @@ function getRelativeTimeString(ts) {
 
 function updateConnectionStatus(status, errorMsg = '') {
   connectionStatus = status;
+  window.__adConnectionStatus = status;
   const badge = $('dbStatusBadge');
   const text = $('dbStatusText');
   if (!badge || !text) return;
@@ -2216,6 +2595,49 @@ function switchTab(tabId) {
     refreshWebsiteAnalytics();
   }
   if (window.lucide) lucide.createIcons();
+}
+
+function setAnalyticsRange(range) {
+  window.__adAnalyticsRange = range;
+  const el = $('biRangeValue');
+  if (el) el.value = range;
+  const gr = $('growthRange');
+  if (gr) gr.value = range === '7D' ? '7' : range === '90D' ? '90' : range === 'ALL' ? '3650' : '30';
+  if (window.ADIntel) {
+    ADIntel.invalidateBiCache();
+    ADIntel.renderCommandCenter(state);
+  }
+}
+
+function openPortfolioCategory(key) {
+  if ($('assetFilterCategory')) $('assetFilterCategory').value = key;
+  if ($('adminFilterCategory')) $('adminFilterCategory').value = key;
+  switchTab('assets');
+  renderAssets();
+}
+
+function setActivityFilter(kind) {
+  window.__adActivityFilter = kind || 'all';
+  document.querySelectorAll('.activity-filter-btn').forEach((btn) => {
+    const on = btn.getAttribute('data-activity-filter') === window.__adActivityFilter;
+    btn.classList.toggle('bg-brand-500/20', on);
+    btn.classList.toggle('text-brand-200', on);
+    btn.classList.toggle('border-brand-500/40', on);
+    btn.classList.toggle('text-slate-400', !on);
+    btn.classList.toggle('border-white/10', !on);
+  });
+  renderActivityStream();
+}
+
+function maskSensitiveAuditText(value) {
+  let s = String(value || '');
+  s = s.replace(/\+?\d[\d\s-]{8,}\d/g, (m) => {
+    const digits = m.replace(/\D/g, '');
+    if (digits.length < 8) return '••••';
+    return '+' + digits.slice(0, 2) + '••••••' + digits.slice(-4);
+  });
+  s = s.replace(/(token|secret|password|credential)[=:\s]+[^\s,;]+/gi, '$1=••••');
+  return s;
 }
 
 document.querySelectorAll('.nav-item').forEach(btn => {
@@ -2558,14 +2980,14 @@ function subscribeToFirestoreData() {
     renderActivityStream();
   });
 
-  // 5. Support Tickets (/supportTickets)
-  db.collection('supportTickets').orderBy('createdAt', 'desc').onSnapshot((snap) => {
+  // 5. Support Tickets (/support_tickets)
+  db.collection('support_tickets').orderBy('createdAt', 'desc').onSnapshot((snap) => {
     state.tickets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderTickets();
     updateKPIs();
     onFirestoreSnapshotReceived();
   }, (err) => {
-    console.error('[Firestore Error: supportTickets]', err.code, err.message);
+    console.error('[Firestore Error: support_tickets]', err.code, err.message);
     renderTickets();
   });
 
@@ -2588,6 +3010,16 @@ function subscribeToFirestoreData() {
   }, (err) => {
     console.error('[Firestore Error: ocrReviewQueue]', err.code, err.message);
     renderOcrQueue();
+  });
+
+  // 7b. Document Intelligence Learning (/document_intelligence_feedback)
+  db.collection('document_intelligence_feedback').limit(300).onSnapshot((snap) => {
+    state.learningFeedback = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderLearningCenter();
+    onFirestoreSnapshotReceived();
+  }, (err) => {
+    console.warn('[Firestore: document_intelligence_feedback]', err.message);
+    renderLearningCenter();
   });
 
   // 8. Notification Queue (/notification_queue)
@@ -2745,9 +3177,9 @@ $('btnSendTicketReply')?.addEventListener('click', async () => {
       timestamp: new Date().toISOString()
     }];
 
-    await db.collection('supportTickets').doc(ticketId).update({
+    await db.collection('support_tickets').doc(ticketId).update({
       messages: updatedMessages,
-      status: resolve ? 'resolved' : (t.status || 'in_progress'),
+      status: resolve ? 'RESOLVED' : (t.status || 'IN_PROGRESS'),
       updatedAt: new Date().toISOString(),
       assignedAdmin: state.currentUser.email
     });
@@ -2758,7 +3190,7 @@ $('btnSendTicketReply')?.addEventListener('click', async () => {
       ticketId,
       t.userId,
       { status: t.status },
-      { status: resolve ? 'resolved' : t.status, reply },
+      { status: resolve ? 'RESOLVED' : t.status, reply },
       `Staff replied: ${reply}`
     );
 
@@ -3100,93 +3532,234 @@ function deleteDocument(docId) {
 
 function renderWhatsappTemplates() {
   const templates = state.templates || [];
-  
-  const draftCount = templates.filter(t => t.status === 'draft').length;
-  const pendingCount = templates.filter(t => t.status === 'pending' || t.metaStatus === 'PENDING').length;
-  const approvedCount = templates.filter(t => t.status === 'approved' || t.metaStatus === 'APPROVED').length;
-  const rejectedCount = templates.filter(t => t.status === 'rejected' || t.metaStatus === 'REJECTED').length;
+  const summary = window.ADIntel ? ADIntel.summarizeTemplates(templates) : null;
 
   if ($('countWhatsappTemplates')) $('countWhatsappTemplates').textContent = templates.length.toString();
   if ($('kpiTplTotal')) $('kpiTplTotal').textContent = templates.length.toString();
-  if ($('kpiTplDraft')) $('kpiTplDraft').textContent = draftCount.toString();
-  if ($('kpiTplPending')) $('kpiTplPending').textContent = pendingCount.toString();
-  if ($('kpiTplApproved')) $('kpiTplApproved').textContent = approvedCount.toString();
-  if ($('kpiTplRejected')) $('kpiTplRejected').textContent = rejectedCount.toString();
+  if (summary) {
+    if ($('kpiTplDraft')) $('kpiTplDraft').textContent = summary.draft.toString();
+    if ($('kpiTplPending')) $('kpiTplPending').textContent = summary.pending.toString();
+    if ($('kpiTplApproved')) $('kpiTplApproved').textContent = summary.approved.toString();
+    if ($('kpiTplNotSubmitted')) $('kpiTplNotSubmitted').textContent = summary.notSubmitted.toString();
+    if ($('kpiTplDeliverable')) $('kpiTplDeliverable').textContent = summary.deliverable.toString();
+  }
 
   const tbody = $('whatsappTemplatesTableBody');
   if (!tbody) return;
 
   if (!templates.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-6 text-slate-500 text-xs">No WhatsApp templates registered yet. Click &quot;Create Template&quot; to begin.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-6 text-slate-500 text-xs">No WhatsApp templates registered yet. Click &quot;Create Template&quot; to begin.</td></tr>';
+    if (window.ADIntel) ADIntel.renderWhatsAppHero(state);
     return;
   }
 
   tbody.innerHTML = templates.map(tpl => {
-    const metaStatus = tpl.metaStatus || 'NOT_SUBMITTED';
+    const life = window.ADIntel ? ADIntel.classifyTemplateLifecycle(tpl) : { label: tpl.metaStatus || 'NOT_SUBMITTED', registered: true, deliverable: false };
+    const metaStatus = life.label;
     const statusBadge = metaStatus === 'APPROVED' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' :
                         metaStatus === 'PENDING' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
                         metaStatus === 'REJECTED' ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' :
                         'bg-slate-700/50 text-slate-400 border-slate-600/30';
-
-    const activeBadge = tpl.isActive ? '<span class="text-emerald-400 font-bold ml-1.5 text-[10px]">&#9679; ACTIVE</span>' : '<span class="text-slate-500 ml-1.5 text-[10px]">&#9679; INACTIVE</span>';
-    const varCount = (tpl.variables || []).length;
+    const welcomeMark = (tpl.templateKey === 'welcome_message' || tpl.metaTemplateName === 'welcome_message')
+      ? '<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-cyan-500/20 text-cyan-300">CUSTOMER WELCOME</span>'
+      : '';
 
     return `
       <tr class="table-row">
         <td class="px-4 py-3">
-          <p class="font-bold text-white text-xs">${tpl.displayName || tpl.templateKey}</p>
+          <p class="font-bold text-white text-xs">${tpl.displayName || tpl.templateKey}${welcomeMark}</p>
           <span class="font-mono text-[10px] text-brand-300">${tpl.templateKey}</span>
         </td>
-        <td class="px-4 py-3 font-mono text-[11px] text-slate-300">
-          ${tpl.metaTemplateName || '—'}
-        </td>
+        <td class="px-4 py-3 font-mono text-[11px] text-slate-300">${tpl.metaTemplateName || '—'}</td>
         <td class="px-4 py-3">
-          <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-white/5 border border-white/10 uppercase text-slate-300">
-            ${tpl.category || 'UTILITY'}
-          </span>
+          <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-white/5 border border-white/10 uppercase text-slate-300">${tpl.category || 'UTILITY'}</span>
           <span class="block text-[9px] text-slate-500 font-mono mt-0.5">${tpl.language || 'en_US'}</span>
         </td>
-        <td class="px-4 py-3 font-mono text-[11px] text-slate-300">
-          ${varCount} variables
-        </td>
+        <td class="px-4 py-3 text-[11px] text-emerald-300 font-bold">YES</td>
         <td class="px-4 py-3">
-          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase ${statusBadge}">
-            ${metaStatus}
-          </span>
-          ${activeBadge}
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase ${statusBadge}">${metaStatus}</span>
           ${tpl.rejectionReason ? `<span class="block text-[9px] text-rose-400 mt-0.5 max-w-[160px] truncate" title="${tpl.rejectionReason}">${tpl.rejectionReason}</span>` : ''}
+          <span class="block text-[9px] text-slate-500 mt-0.5">Not the same as Meta Graph approval unless APPROVED</span>
         </td>
+        <td class="px-4 py-3 text-[11px] font-bold ${life.deliverable ? 'text-emerald-300' : 'text-slate-500'}">${life.deliverable ? 'YES' : 'NO'}</td>
         <td class="px-4 py-3 text-right space-x-1 whitespace-nowrap">
-          <button onclick="openEditTemplateModal('${tpl.id || tpl.templateKey}')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-brand-300 font-bold text-[11px] transition">
-            Preview / Edit
-          </button>
-          <button onclick="toggleTemplateActive('${tpl.id || tpl.templateKey}')" class="px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-slate-300 text-[11px] transition">
-            ${tpl.isActive ? 'Deactivate' : 'Activate'}
-          </button>
-          <button onclick="duplicateTemplate('${tpl.id || tpl.templateKey}')" class="px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-slate-400 text-[11px] transition" title="Duplicate">
-            Copy
-          </button>
+          <button onclick="openEditTemplateModal('${tpl.id || tpl.templateKey}')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-brand-300 font-bold text-[11px] transition">Preview / Edit</button>
+          <button onclick="toggleTemplateActive('${tpl.id || tpl.templateKey}')" class="px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-slate-300 text-[11px] transition">${tpl.isActive ? 'Deactivate' : 'Activate'}</button>
+          <button onclick="duplicateTemplate('${tpl.id || tpl.templateKey}')" class="px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-slate-400 text-[11px] transition">Copy</button>
         </td>
       </tr>
     `;
   }).join('');
+  if (window.ADIntel) ADIntel.renderWhatsAppHero(state);
 }
 
 function switchWhatsappSubView(view) {
-  if (view === 'templates') {
-    $('whatsappViewTemplates').classList.remove('hidden');
-    $('whatsappViewQueue').classList.add('hidden');
-    $('btnWhatsappSubTemplates').classList.add('bg-white/10', 'text-white');
-    $('btnWhatsappSubTemplates').classList.remove('text-slate-400');
-    $('btnWhatsappSubQueue').classList.remove('bg-white/10', 'text-white');
-    $('btnWhatsappSubQueue').classList.add('text-slate-400');
-  } else {
-    $('whatsappViewTemplates').classList.add('hidden');
-    $('whatsappViewQueue').classList.remove('hidden');
-    $('btnWhatsappSubQueue').classList.add('bg-white/10', 'text-white');
-    $('btnWhatsappSubQueue').classList.remove('text-slate-400');
-    $('btnWhatsappSubTemplates').classList.remove('bg-white/10', 'text-white');
-    $('btnWhatsappSubTemplates').classList.add('text-slate-400');
+  const views = {
+    templates: $('whatsappViewTemplates'),
+    queue: $('whatsappViewQueue'),
+    welcome: $('whatsappViewWelcome'),
+    perf: $('whatsappViewPerf'),
+  };
+  const buttons = {
+    templates: $('btnWhatsappSubTemplates'),
+    queue: $('btnWhatsappSubQueue'),
+    welcome: $('btnWhatsappSubWelcome'),
+    perf: $('btnWhatsappSubPerf'),
+  };
+  Object.keys(views).forEach((key) => {
+    if (views[key]) views[key].classList.toggle('hidden', key !== view);
+    if (buttons[key]) {
+      if (key === view) {
+        buttons[key].classList.add('bg-white/10', 'text-white');
+        buttons[key].classList.remove('text-slate-400');
+      } else {
+        buttons[key].classList.remove('bg-white/10', 'text-white');
+        buttons[key].classList.add('text-slate-400');
+      }
+    }
+  });
+  if (view === 'welcome' && window.ADIntel) ADIntel.renderWelcomeDiagnostics(state);
+  if (view === 'welcome') renderWelcomeSignupTable();
+  if (view === 'perf' && window.ADIntel) ADIntel.renderWhatsAppHero(state);
+  if (window.lucide) lucide.createIcons();
+}
+
+const WHATSAPP_FUNCTIONS_BASE = 'https://asia-south1-assetdoctor-5fd25.cloudfunctions.net';
+state.whatsappOps = { probed: false, function: 'UNKNOWN', credentials: 'UNKNOWN', webhookVerify: 'UNKNOWN' };
+
+function welcomeQueueItems() {
+  return (state.notifications || []).filter((n) =>
+    n.templateKey === 'welcome_message' || n.templateName === 'welcome_message' || n.eventType === 'user_welcome' || n.type === 'WELCOME'
+  );
+}
+
+function renderWelcomeProductionStatus() {
+  const items = welcomeQueueItems();
+  const last = items[0];
+  const stuck = items.some((n) => {
+    const age = Date.parse(n.createdAt || '') ? Date.now() - Date.parse(n.createdAt) : 0;
+    return (n.status === 'queued' || n.status === 'sending') && age > 120000;
+  });
+  const confirmedSend = items.some((n) => {
+    const s = String(n.status || '').toLowerCase();
+    return (s === 'sent' || s === 'delivered' || s === 'read') && n.wamid;
+  });
+  let queueLabel = 'EMPTY';
+  if (items.length && stuck) queueLabel = 'STUCK';
+  else if (confirmedSend) queueLabel = 'HEALTHY';
+  else if (items.length) queueLabel = 'HAS ITEMS';
+  if ($('waProdQueue')) $('waProdQueue').textContent = queueLabel;
+  if ($('waProdLastWelcome')) $('waProdLastWelcome').textContent = last && last.createdAt ? String(last.createdAt) : 'No data yet';
+  if ($('waProdLastResult')) {
+    const raw = String((last && last.status) || '').toLowerCase();
+    let lastResult = 'No data yet';
+    if (raw === 'sent' || raw === 'delivered' || raw === 'read') lastResult = 'SUCCESS';
+    else if (raw === 'failed') lastResult = 'FAILED';
+    else if (raw === 'skipped') lastResult = 'SKIPPED';
+    else if (raw) lastResult = raw.toUpperCase();
+    $('waProdLastResult').textContent = lastResult;
+  }
+  if ($('waProdMetaStatus')) $('waProdMetaStatus').textContent = 'UNKNOWN';
+  const ops = state.whatsappOps || {};
+  if ($('waProdFunction')) $('waProdFunction').textContent = ops.function || 'UNKNOWN';
+  if ($('waProdCredentials')) $('waProdCredentials').textContent = ops.credentials || 'UNKNOWN';
+  if ($('waProdWebhook')) {
+    const delivered = items.some((n) => n.status === 'delivered' || n.status === 'read');
+    if (ops.webhookVerify === 'CONFIGURED' && delivered) $('waProdWebhook').textContent = 'ACTIVE';
+    else if (ops.webhookVerify === 'CONFIGURED') $('waProdWebhook').textContent = 'NOT VERIFIED';
+    else if (delivered) $('waProdWebhook').textContent = 'EVENTS SEEN';
+    else $('waProdWebhook').textContent = ops.webhookVerify || 'UNKNOWN';
+  }
+  renderWelcomeSignupTable();
+}
+
+function renderWelcomeSignupTable() {
+  const tbody = $('welcomeSignupTable');
+  if (!tbody) return;
+  const mask = window.ADIntel ? ADIntel.maskPhone : (v) => '••••';
+  const items = welcomeQueueItems();
+  if (!items.length) {
+    tbody.innerHTML = '<tr><td colspan="11" class="text-center py-6 text-slate-500 text-xs">No welcome queue documents yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = items.map((item) => {
+    const user = (state.users || []).find((u) => (u.uid || u.id) === item.userId) || {};
+    const opt = user.whatsappOptIn === false ? 'false' : user.whatsappOptIn === true ? 'true' : 'UNKNOWN';
+    return `<tr class="table-row">
+      <td class="px-3 py-2 text-white">${item.customerName || user.name || item.userId || '—'}</td>
+      <td class="px-3 py-2 font-mono text-[11px]">${item.phoneMasked || item.maskedPhone || mask(item.recipientPhone)}</td>
+      <td class="px-3 py-2">${opt}</td>
+      <td class="px-3 py-2 uppercase font-bold">${item.status || '—'}</td>
+      <td class="px-3 py-2 font-mono">${item.templateName || item.templateKey || 'welcome_message'}</td>
+      <td class="px-3 py-2 font-mono text-[10px] text-slate-400">${item.wamid ? String(item.wamid).slice(0, 18) + '…' : '—'}</td>
+      <td class="px-3 py-2 text-[10px] text-slate-400">${item.createdAt || '—'}</td>
+      <td class="px-3 py-2 text-[10px]">${item.sentAt || '—'}</td>
+      <td class="px-3 py-2 text-[10px]">${item.deliveredAt || '—'}</td>
+      <td class="px-3 py-2 text-[10px]">${item.readAt || '—'}</td>
+      <td class="px-3 py-2 text-[10px] text-rose-300">${item.failureReason || item.errorMessage || '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function probeWhatsAppOpsHealth() {
+  const note = $('waProdProbeNote');
+  try {
+    const user = auth.currentUser;
+    if (!user) {
+      if (note) note.textContent = 'Sign in as admin to probe Cloud Functions.';
+      return;
+    }
+    const token = await user.getIdToken();
+    const res = await fetch(`${WHATSAPP_FUNCTIONS_BASE}/whatsappOpsHealth`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      state.whatsappOps = { probed: true, function: res.status === 404 ? 'NOT DEPLOYED' : 'UNKNOWN', credentials: 'UNKNOWN', webhookVerify: 'UNKNOWN' };
+      if (note) note.textContent = 'Function probe failed (' + res.status + '). Deploy whatsappOpsHealth or check CORS/auth.';
+    } else {
+      state.whatsappOps = {
+        probed: true,
+        function: data.function || 'DEPLOYED',
+        credentials: data.credentials || 'UNKNOWN',
+        webhookVerify: data.webhookVerify || 'UNKNOWN',
+      };
+      if (note) note.textContent = 'Last probe: Cloud Function responded. Token values are never shown.';
+    }
+  } catch (err) {
+    state.whatsappOps = { probed: true, function: 'UNKNOWN', credentials: 'UNKNOWN', webhookVerify: 'UNKNOWN' };
+    if (note) note.textContent = 'Probe unreachable. Function may be undeployed. Status stays UNKNOWN.';
+  }
+  renderWelcomeProductionStatus();
+}
+
+async function runAdminTestWelcome() {
+  const note = $('waProdProbeNote');
+  try {
+    const user = auth.currentUser;
+    if (!user) {
+      showAdminToast('Admin session required.', 'error');
+      return;
+    }
+    const token = await user.getIdToken();
+    const res = await fetch(`${WHATSAPP_FUNCTIONS_BASE}/adminTestWelcome`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data.status === 'NOT_CONFIGURED') {
+      showAdminToast('CODE READY — set WHATSAPP_TEST_TO on Cloud Functions to run a live test.', 'warning');
+      if (note) note.textContent = data.reason || 'Test number not configured.';
+      return;
+    }
+    if (!data.ok) {
+      showAdminToast(data.error || 'Test welcome failed.', 'error');
+      return;
+    }
+    showAdminToast('Test welcome queued (' + data.queueId + '). Watch /notification_queue for sent/failed.', 'success');
+  } catch (err) {
+    showAdminToast('Test endpoint unreachable. Deploy adminTestWelcome first.', 'warning');
   }
 }
 
@@ -3438,7 +4011,7 @@ async function submitCurrentTemplateToMeta() {
     });
 
     closeModal('templateModal');
-    showAdminToast(`Template "${displayName}" submitted to Meta for review.`, 'success');
+    showAdminToast(`Template "${displayName}" marked PENDING in Asset Doctor registry only. This does not call Meta Graph API. Submit the template in Meta Business Manager.`, 'warning');
   } catch (err) {
     showAdminToast(`Error submitting template: ${err.message}`, 'error');
   }
@@ -3502,7 +4075,8 @@ async function duplicateTemplate(templateId) {
 
 function renderNotificationQueue() {
   const items = state.notifications || [];
-  
+  const mask = window.ADIntel ? ADIntel.maskPhone : (v) => v || '—';
+
   const queuedCount = items.filter(x => x.status === 'queued').length;
   const sentCount = items.filter(x => x.status === 'sent').length;
   const deliveredCount = items.filter(x => x.status === 'delivered').length;
@@ -3524,54 +4098,70 @@ function renderNotificationQueue() {
   if (!tbody) return;
 
   if (!items.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-6 text-slate-500 text-xs">No pending notifications in queue.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6 text-slate-500 text-xs">No pending notifications in queue.</td></tr>';
+    if (window.ADIntel) ADIntel.renderWhatsAppHero(state);
+    renderWelcomeProductionStatus();
     return;
   }
 
-    tbody.innerHTML = items.map(item => {
-    const statusBadge = item.status === 'delivered' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' :
-                        item.status === 'read' ? 'bg-brand-500/20 text-brand-300 border-brand-500/30' :
+  tbody.innerHTML = items.map(item => {
+    const status = String(item.status || 'queued').toUpperCase();
+    const statusBadge = item.status === 'delivered' || item.status === 'read' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' :
                         item.status === 'sent' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' :
-                        item.status === 'queued' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
-                        item.status === 'skipped' ? 'bg-slate-700/50 text-slate-400 border-slate-600/30' :
+                        item.status === 'queued' || item.status === 'processing' || item.status === 'retrying' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
+                        item.status === 'cancelled' || item.status === 'skipped' ? 'bg-slate-700/50 text-slate-400 border-slate-600/30' :
                         'bg-rose-500/20 text-rose-300 border-rose-500/30';
-
-    const timeStr = item.createdAt ? new Date(item.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '—';
+    const timeStr = item.scheduledAt || item.createdAt
+      ? new Date(item.scheduledAt || item.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
+      : '—';
     const payload = item.payload || {};
-    const isWelcome = item.eventType === 'user_welcome' || item.type === 'WELCOME' || item.templateKey === 'welcome_message';
-    const customerType = (item.customerType || payload.customerType || '').toUpperCase();
-    const welcomeLabel = isWelcome
-      ? `${customerType === 'EXISTING' ? 'EXISTING USER' : 'NEW'} · WELCOME ${String(item.status || 'queued').toUpperCase()}`
-      : String(item.status || '');
-    const detail = isWelcome
-      ? `${item.customerName || payload.userName || 'Welcome'} · retry ${item.retryCount || 0}${item.wamid ? ` · ${item.wamid}` : ''}`
-      : (payload.assetName
-          ? `<strong class="text-white">${payload.assetName}</strong> (${payload.identifier || '—'})`
-          : (payload.docLabel || payload.ticketId || '—'));
-
+    const customer = item.customerName || payload.userName || item.userId || '—';
+    const asset = payload.assetName || payload.docLabel || item.eventType || item.type || '—';
+    const phone = item.maskedPhone || mask(item.recipientPhone);
     return `
       <tr class="table-row">
-        <td class="px-4 py-3 font-mono text-[11px] text-slate-400">${timeStr}</td>
-        <td class="px-4 py-3 font-mono text-white text-xs">
-          ${item.recipientPhone || '—'}<br>
-          <span class="text-[10px] text-slate-500">${item.userId}</span>
-        </td>
-        <td class="px-4 py-3 font-mono text-brand-300 text-xs font-bold">${item.templateKey}</td>
-        <td class="px-4 py-3 text-slate-300 text-xs">
-          ${detail}
-        </td>
         <td class="px-4 py-3">
-          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase ${statusBadge}">
-            ${welcomeLabel}
-          </span>
-          ${item.failureReason ? `<span class="block text-[9px] text-slate-500 mt-0.5">${item.failureReason}</span>` : ''}
+          <p class="text-white text-xs font-semibold">${customer}</p>
+          <p class="font-mono text-[10px] text-slate-500">${phone}<br>${item.userId || ''}</p>
         </td>
-        <td class="px-4 py-3 text-right font-mono text-[10px] text-slate-500 truncate max-w-[140px]" title="${item.idempotencyKey}">
-          ${item.idempotencyKey}
+        <td class="px-4 py-3 text-slate-300 text-xs">${asset}</td>
+        <td class="px-4 py-3 font-mono text-brand-300 text-xs font-bold">${item.templateKey || '—'}</td>
+        <td class="px-4 py-3 font-mono text-[11px] text-slate-400">${timeStr}</td>
+        <td class="px-4 py-3">
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase ${statusBadge}">${status}</span>
+        </td>
+        <td class="px-4 py-3 font-mono text-[11px] text-slate-400">${item.retryCount || item.attempts || 0}</td>
+        <td class="px-4 py-3 text-[11px] text-rose-300 max-w-[160px] truncate" title="${item.failureReason || item.errorMessage || ''}">${item.failureReason || item.errorMessage || '—'}</td>
+        <td class="px-4 py-3 text-right whitespace-nowrap">
+          <button onclick="viewNotificationDetail('${item.id}')" class="px-2 py-1 rounded bg-white/5 text-[11px] font-bold text-brand-300">Details</button>
         </td>
       </tr>
     `;
   }).join('');
+  if (window.ADIntel) ADIntel.renderWhatsAppHero(state);
+  renderWelcomeProductionStatus();
+}
+
+function viewNotificationDetail(id) {
+  const item = (state.notifications || []).find(n => n.id === id);
+  if (!item) return;
+  const mask = window.ADIntel ? ADIntel.maskPhone : (v) => '••••';
+  openConfirmActionModal({
+    title: 'Notification details',
+    subtitle: 'Read-only · Retry is unavailable (Cloud Function is onCreate-only)',
+    detailsHtml: `
+      <p><strong>Status:</strong> ${item.status || '—'}</p>
+      <p><strong>Template:</strong> ${item.templateKey || '—'}</p>
+      <p><strong>Customer:</strong> ${item.userId || '—'}</p>
+      <p><strong>Phone:</strong> ${item.maskedPhone || mask(item.recipientPhone)}</p>
+      <p><strong>Attempts:</strong> ${item.retryCount || 0}</p>
+      <p><strong>Error:</strong> ${item.failureReason || item.errorMessage || '—'}</p>
+      <p><strong>wamid:</strong> ${item.wamid || '—'}</p>
+    `,
+    confirmText: 'Close',
+    confirmBtnClass: 'bg-slate-700 hover:bg-slate-600',
+    onConfirm: async () => {},
+  });
 }
 
 // ----------------------------------------------------
@@ -3638,18 +4228,33 @@ function recalculateExpiries() {
   $('kpiExpiringPUC').textContent = expiringPucCount.toString();
 
   renderExpiryTable();
+  if (window.ADIntel) ADIntel.renderCommandCenter(state);
 }
 
 function updateKPIs() {
   if ($('kpiUsers')) $('kpiUsers').textContent = (state.users.length || 0).toLocaleString('en-IN');
   if ($('kpiAssets')) $('kpiAssets').textContent = (state.assets.length || 0).toLocaleString('en-IN');
   if ($('kpiDocuments')) $('kpiDocuments').textContent = (state.documents.length || 0).toLocaleString('en-IN');
-  
-  const openCount = state.tickets.filter(t => t.status === 'open' || t.status === 'in_progress').length;
+  if ($('sidebarDocCount')) $('sidebarDocCount').textContent = (state.documents.length || 0).toString();
+  if ($('settingsUserCount')) $('settingsUserCount').textContent = String(state.users.length || 0);
+  if ($('settingsAssetCount')) $('settingsAssetCount').textContent = String(state.assets.length || 0);
+  if ($('settingsDocCount')) $('settingsDocCount').textContent = String(state.documents.length || 0);
+
+  const openCount = state.tickets.filter(t => ['OPEN','IN_PROGRESS','WAITING_FOR_USER'].indexOf(String(t.status).toUpperCase()) >= 0).length;
   if ($('kpiTickets')) $('kpiTickets').textContent = openCount.toString();
   if ($('openTicketsBadge')) $('openTicketsBadge').textContent = openCount.toString();
   if ($('kpiOcrQueue')) $('kpiOcrQueue').textContent = (state.ocrQueue.length || 0).toString();
   if ($('ocrQueueBadge')) $('ocrQueueBadge').textContent = (state.ocrQueue.length || 0).toString();
+  if (window.ADIntel) ADIntel.renderCommandCenter(state);
+}
+
+function applyAdminFilters() {
+  const cat = $('adminFilterCategory')?.value;
+  if (cat && cat !== 'ALL' && $('assetFilterCategory')) {
+    $('assetFilterCategory').value = cat;
+  }
+  if (window.ADIntel) ADIntel.renderCommandCenter(state);
+  renderAssets();
 }
 
 // ----------------------------------------------------
@@ -3671,13 +4276,27 @@ function renderActivityStream() {
     return;
   }
 
-  container.innerHTML = state.activities.map(act => {
-    const priority = act.priority || 'INFO';
+  const filter = window.__adActivityFilter || 'all';
+  const kindOf = (act) => window.ADIntel ? ADIntel.classifyActivityKind(act) : 'other';
+  const filtered = filter === 'all'
+    ? state.activities
+    : state.activities.filter((act) => kindOf(act) === filter);
+
+  if (!filtered.length) {
+    container.innerHTML = `<p class="text-xs text-slate-500 py-6 text-center">No ${filter} activity in the current stream.</p>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map(act => {
+    const priority = act.priority || act.severity || 'INFO';
     const badgeClass = priority === 'CRITICAL' ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' :
-                       priority === 'HIGH' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
-                       priority === 'WARNING' ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40' :
+                       priority === 'HIGH' || priority === 'WARNING' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
                        priority === 'SUCCESS' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' :
                        'bg-cyan-500/20 text-cyan-300 border-cyan-500/40';
+    const kind = kindOf(act);
+    const status = act.status || 'LOGGED';
+    const statusClass = /fail|error|open/i.test(status) ? 'text-rose-300' :
+                        /success|closed|done/i.test(status) ? 'text-emerald-300' : 'text-slate-400';
 
     const timeStr = act.timestamp ? new Date(act.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
     const customer = act.customerName || act.customerEmail || act.customerUid || 'Customer';
@@ -3685,9 +4304,10 @@ function renderActivityStream() {
     return `
       <div class="p-3 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] transition flex items-start justify-between gap-3">
         <div class="space-y-0.5 min-w-0">
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 flex-wrap">
             <span class="text-[10px] font-mono text-slate-400">${timeStr}</span>
-            <span class="px-1.5 py-0.2 rounded text-[9px] font-bold border ${badgeClass} uppercase">${priority}</span>
+            <span class="px-1.5 py-0.5 rounded text-[9px] font-bold border ${badgeClass} uppercase">${priority}</span>
+            <span class="px-1.5 py-0.5 rounded text-[9px] font-bold border border-white/10 text-slate-400 uppercase">${kind}</span>
             <span class="text-white font-bold truncate">${customer}</span>
           </div>
           <p class="text-xs text-brand-300 font-semibold truncate">${act.action || act.summary || act.type}</p>
@@ -3699,7 +4319,7 @@ function renderActivityStream() {
           ` : ''}
         </div>
         <div class="text-right shrink-0">
-          <span class="text-[10px] text-slate-500 uppercase font-mono block">${act.status || 'LOGGED'}</span>
+          <span class="text-[10px] uppercase font-mono block ${statusClass}">${status}</span>
           ${act.customerUid ? `
             <button onclick="openCustomerModal('${act.customerUid}')" class="text-[10px] text-brand-400 hover:underline font-bold mt-1">View 360 &rarr;</button>
           ` : ''}
@@ -3726,13 +4346,25 @@ function renderUsers() {
   });
 
   if (!filtered.length) {
-    $('usersTableBody').innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-500 text-xs">No customer records found.</td></tr>`;
+    $('usersTableBody').innerHTML = `<tr><td colspan="8" class="text-center py-6 text-slate-500 text-xs">No customer records found.</td></tr>`;
     return;
   }
 
+  const mask = window.ADIntel ? ADIntel.maskPhone : (v) => v || '—';
   $('usersTableBody').innerHTML = filtered.map(u => {
     const userUid = u.uid || u.id;
     const userAssets = state.assets.filter(a => (a.ownerUid === userUid || a.uid === userUid));
+    const userDocs = state.documents.filter(d => d.ownerUid === userUid);
+    const ownExp = (state.expiries || []).filter(e => e.ownerUid === userUid);
+    const warranties = ownExp.filter(e => e.type === 'Warranty' && e.status !== 'EXPIRED').length;
+    const upcoming = ownExp.filter(e => e.status === 'EXPIRED' || e.status === 'EXP30').length;
+    const health = window.ADIntel ? ADIntel.customerHealth(u, state.assets, state.expiries) : '—';
+    const healthClass = health === 'At Risk' ? 'bg-rose-500/15 text-rose-300 border-rose-500/30' :
+                        health === 'Attention' ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' :
+                        'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
+    const joined = u.createdAt || u.joinedAt || u.created_at || '—';
+    const optIn = u.whatsappOptIn === false ? 'Opted out' : 'Opt-in';
+    const lastAct = u.lastActiveAt || u.lastLoginAt || u.updatedAt || '—';
     return `
       <tr class="table-row">
         <td class="px-4 py-3 font-semibold text-white">
@@ -3741,32 +4373,36 @@ function renderUsers() {
             <span class="text-[11px] text-slate-400 font-mono">${userUid}</span>
           </button>
         </td>
-        <td class="px-4 py-3 text-slate-300">
-          ${u.email || '—'}<br>
-          <span class="text-[11px] text-slate-400 font-mono">${u.phoneNumber || u.phone || '—'}</span>
-        </td>
-        <td class="px-4 py-3 text-slate-300">${u.address || u.city || '—'}</td>
+        <td class="px-4 py-3 font-mono text-[11px] text-slate-300">${mask(u.phoneNumber || u.phone)}</td>
+        <td class="px-4 py-3 text-[11px] text-slate-400">${joined}</td>
+        <td class="px-4 py-3 text-xs text-slate-300">${userAssets.length} / ${userDocs.length}</td>
+        <td class="px-4 py-3 text-xs text-slate-300">${warranties} active · ${upcoming} due</td>
         <td class="px-4 py-3">
-          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
-            ${userAssets.length} Assets
-          </span>
+          <span class="text-[10px] font-bold ${u.whatsappOptIn === false ? 'text-slate-500' : 'text-emerald-300'}">${optIn}</span>
+          <span class="block text-[10px] text-slate-500">${u.welcomeMessageSent ? 'Welcome sent' : u.welcomeMessageQueued ? 'Welcome queued' : 'Welcome not queued'}</span>
         </td>
         <td class="px-4 py-3">
-          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${u.status === 'Suspended' ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30' : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'}">
-            ${u.status || 'Active'}
-          </span>
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${healthClass}">${health}</span>
+          <span class="block text-[10px] text-slate-500 mt-0.5">${lastAct}</span>
         </td>
-        <td class="px-4 py-3 text-right space-x-2">
-          <button onclick="openCustomerModal('${userUid}')" class="px-2.5 py-1 rounded-lg bg-brand-600/20 hover:bg-brand-600/30 text-brand-300 border border-brand-500/30 text-xs font-bold transition">
-            View 360
-          </button>
-          <button onclick="toggleUserSuspend('${userUid}', '${u.status}')" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-bold text-slate-300 transition">
-            ${u.status === 'Suspended' ? 'Reactivate' : 'Suspend'}
-          </button>
+        <td class="px-4 py-3 text-right space-x-2 whitespace-nowrap">
+          <button onclick="openCustomerModal('${userUid}')" class="px-2.5 py-1 rounded-lg bg-brand-600/20 hover:bg-brand-600/30 text-brand-300 border border-brand-500/30 text-xs font-bold transition">View 360</button>
+          <button onclick="openWelcomeDiagnosticsFor('${userUid}')" class="px-2.5 py-1 rounded-lg bg-white/5 text-xs font-bold text-cyan-300">Welcome</button>
+          <button onclick="toggleUserSuspend('${userUid}', '${u.status}')" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-bold text-slate-300 transition">${u.status === 'Suspended' ? 'Reactivate' : 'Suspend'}</button>
         </td>
       </tr>
     `;
   }).join('');
+}
+
+function openWelcomeDiagnosticsFor(uid) {
+  switchTab('whatsapp');
+  switchWhatsappSubView('welcome');
+  const sel = $('welcomeDiagCustomer');
+  if (sel) {
+    sel.value = uid;
+    if (window.ADIntel) ADIntel.renderWelcomeDiagnostics(state);
+  }
 }
 
 function toggleUserSuspend(userId, currentStatus) {
@@ -3904,7 +4540,9 @@ function openCustomerFromUid(uid) {
 // ----------------------------------------------------
 function renderAssets() {
   const q = ($('assetSearchInput')?.value || '').toLowerCase().trim();
+  const cat = ($('assetFilterCategory')?.value || $('adminFilterCategory')?.value || 'ALL');
   const filtered = state.assets.filter(a => {
+    if (cat && cat !== 'ALL' && window.ADIntel && ADIntel.classifyAdminAssetCategory(a) !== cat) return false;
     if (!q) return true;
     const name = (a.assetName || a.name || '').toLowerCase();
     const brand = (a.brandName || a.brand || '').toLowerCase();
@@ -4473,6 +5111,91 @@ function correctOcr(queueId) {
   }
 }
 
+function renderLearningCenter() {
+  const empty = 'No learning data yet';
+  const fmt = window.ADIntel && ADIntel.formatDiagnosticMetric ? ADIntel.formatDiagnosticMetric : (v) => (v == null ? 'No data yet' : String(v));
+  const hardening = window.ADIntel && ADIntel.summarizeOcrHardeningDiagnostics
+    ? ADIntel.summarizeOcrHardeningDiagnostics({
+        ocrQueue: state.ocrQueue || [],
+        documents: state.documents || [],
+        learningFeedback: state.learningFeedback || [],
+      })
+    : { available: false };
+  if ($('learnKpiProcessed')) $('learnKpiProcessed').textContent = fmt(hardening.documentsProcessed);
+  if ($('learnKpiReviewFields')) $('learnKpiReviewFields').textContent = fmt(hardening.fieldsRequiringReview);
+  if ($('learnKpiDisagree')) $('learnKpiDisagree').textContent = fmt(hardening.providerDisagreement);
+  if ($('learnKpiConflicts')) $('learnKpiConflicts').textContent = fmt(hardening.assetMatchConflicts);
+  if ($('learnRealDocTelemetry')) {
+    $('learnRealDocTelemetry').textContent = hardening.realDocumentTelemetry || 'No real-document telemetry yet';
+  }
+  const failBox = $('learnFailureTypes');
+  if (failBox) {
+    if (!hardening.available || !(hardening.topFailureTypes || []).length) {
+      failBox.innerHTML = '<p class="text-slate-500 text-xs">No data yet</p>';
+    } else {
+      failBox.innerHTML = hardening.topFailureTypes.map((row) =>
+        `<div class="flex justify-between text-xs py-1 border-b border-white/5"><span class="text-slate-300 font-mono">${row.code}</span><span class="text-white font-bold">${row.count}</span></div>`
+      ).join('');
+    }
+  }
+
+  const summary = window.ADIntel && ADIntel.summarizeLearningCenter
+    ? ADIntel.summarizeLearningCenter(state.learningFeedback || [])
+    : { available: false };
+  const badge = $('learningBadge');
+  if (!summary.available) {
+    if (badge) badge.textContent = '—';
+    ['learnKpiEvents', 'learnKpiEmerging', 'learnKpiTrusted', 'learnKpiRejected'].forEach((id) => {
+      const el = $(id);
+      if (el) el.textContent = empty;
+    });
+    const fields = $('learnFieldsList');
+    const types = $('learnTypesList');
+    if (fields) fields.innerHTML = `<p class="text-slate-500 text-xs">${empty}</p>`;
+    if (types) types.innerHTML = `<p class="text-slate-500 text-xs">${empty}</p>`;
+    const pBody = $('learnPatternTable');
+    const eBody = $('learnEventTable');
+    if (pBody) pBody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-slate-500">${empty}</td></tr>`;
+    if (eBody) eBody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-slate-500">${empty}</td></tr>`;
+    return;
+  }
+  if (badge) badge.textContent = String(summary.eventCount);
+  $('learnKpiEvents').textContent = String(summary.eventCount);
+  $('learnKpiEmerging').textContent = String(summary.emerging.length);
+  $('learnKpiTrusted').textContent = String(summary.trusted.length);
+  $('learnKpiRejected').textContent = String(summary.rejected.length);
+
+  const fieldHtml = (summary.fieldsMostCorrected || []).map((row) =>
+    `<div class="flex justify-between text-xs py-1.5 border-b border-white/5"><span class="text-slate-300">${row.fieldName}</span><span class="text-white font-bold">${row.count}</span></div>`
+  ).join('');
+  $('learnFieldsList').innerHTML = fieldHtml || `<p class="text-slate-500 text-xs">${empty}</p>`;
+
+  const typeHtml = (summary.documentTypesWithMostErrors || []).map((row) =>
+    `<div class="flex justify-between text-xs py-1.5 border-b border-white/5"><span class="text-slate-300">${row.documentType}</span><span class="text-white font-bold">${row.count}</span></div>`
+  ).join('');
+  $('learnTypesList').innerHTML = typeHtml || `<p class="text-slate-500 text-xs">${empty}</p>`;
+
+  const patternRows = []
+    .concat(summary.trusted || [], summary.emerging || [], summary.rejected || [])
+    .map((p) => `<tr class="table-row">
+      <td class="px-3 py-2 text-[10px] font-bold uppercase ${p.status === 'TRUSTED' ? 'text-emerald-300' : p.status === 'EMERGING' ? 'text-amber-300' : 'text-slate-400'}">${p.status}</td>
+      <td class="px-3 py-2 text-slate-300">${p.documentType || '—'}</td>
+      <td class="px-3 py-2 text-white">${p.fieldName || '—'}</td>
+      <td class="px-3 py-2 font-mono text-cyan-300">${p.normalizedPattern || p.semanticLabel || '—'}</td>
+      <td class="px-3 py-2 text-slate-400">${p.independentEvidence || p.supportCount || '—'}</td>
+    </tr>`).join('');
+  $('learnPatternTable').innerHTML = patternRows || `<tr><td colspan="5" class="text-center py-6 text-slate-500">${empty}</td></tr>`;
+
+  const eventRows = (summary.recentEvents || []).map((ev) => `<tr class="table-row">
+    <td class="px-3 py-2 text-slate-400">${ev.timestamp || ev.createdAt || '—'}</td>
+    <td class="px-3 py-2 text-slate-300">${ev.documentType || '—'}</td>
+    <td class="px-3 py-2 text-white">${ev.fieldName || '—'}</td>
+    <td class="px-3 py-2 text-amber-200">${ev.correctionType || '—'}</td>
+    <td class="px-3 py-2 font-mono text-slate-400">${ev.originalValueShape || '—'} → ${ev.correctedValueShape || '—'}</td>
+  </tr>`).join('');
+  $('learnEventTable').innerHTML = eventRows || `<tr><td colspan="5" class="text-center py-6 text-slate-500">${empty}</td></tr>`;
+}
+
 // ----------------------------------------------------
 // UI Renderers: Audit Logs
 // ----------------------------------------------------
@@ -4489,16 +5212,19 @@ function renderAuditLogs() {
       <td class="px-4 py-2.5 text-xs text-white font-semibold">${l.actorId || 'System'}<br><span class="text-[10px] text-brand-300 font-bold uppercase">${l.actorRole || 'ADMIN'}</span></td>
       <td class="px-4 py-2.5 text-xs font-mono font-bold text-cyan-300">${l.action || '—'}</td>
       <td class="px-4 py-2.5 text-xs text-slate-300 font-mono">${l.targetUserId || l.targetDocId || '—'}</td>
-      <td class="px-4 py-2.5 text-xs text-slate-400">${l.reason || '—'}</td>
+      <td class="px-4 py-2.5 text-xs text-slate-400">${maskSensitiveAuditText(l.reason || '—')}</td>
     </tr>
   `).join('');
 
-  $('dashboardAuditStream').innerHTML = state.auditLogs.slice(0, 5).map(l => `
+  const dashAudit = $('dashboardAuditStream');
+  if (dashAudit) {
+    dashAudit.innerHTML = state.auditLogs.slice(0, 5).map(l => `
     <div class="border-b border-white/5 pb-2">
       <p class="font-bold text-white">${l.action} · <span class="text-slate-400 font-normal">${l.actorId}</span></p>
-      <p class="text-[11px] text-slate-400">${l.reason}</p>
+      <p class="text-[11px] text-slate-400">${maskSensitiveAuditText(l.reason || '')}</p>
     </div>
   `).join('');
+  }
 }
 
 // ----------------------------------------------------
@@ -4537,7 +5263,19 @@ function executeGlobalSearch(q) {
     (d.id && d.id.toLowerCase().includes(query))
   );
 
-  if (!matchedUsers.length && !matchedAssets.length && !matchedDocs.length) {
+  const matchedTemplates = (state.templates || []).filter(t =>
+    (t.templateKey && t.templateKey.toLowerCase().includes(query)) ||
+    (t.displayName && t.displayName.toLowerCase().includes(query)) ||
+    (t.metaTemplateName && t.metaTemplateName.toLowerCase().includes(query))
+  );
+  const matchedNotifs = (state.notifications || []).filter(n =>
+    (n.id && n.id.toLowerCase().includes(query)) ||
+    (n.userId && String(n.userId).toLowerCase().includes(query)) ||
+    (n.templateKey && String(n.templateKey).toLowerCase().includes(query)) ||
+    (n.idempotencyKey && String(n.idempotencyKey).toLowerCase().includes(query))
+  );
+
+  if (!matchedUsers.length && !matchedAssets.length && !matchedDocs.length && !matchedTemplates.length && !matchedNotifs.length) {
     container.innerHTML = `<p class="text-slate-500 text-center py-6">No matching records found for "${q}".</p>`;
     return;
   }
@@ -4580,6 +5318,34 @@ function executeGlobalSearch(q) {
           <p class="text-[11px] text-slate-400 font-mono">Policy/Invoice: ${d.invoiceOrPolicyNo || '—'}</p>
         </div>
         <span class="text-violet-300 font-bold text-xs">View &rarr;</span>
+      </div>
+    `).join('');
+    html += `</div>`;
+  }
+
+  if (matchedTemplates.length) {
+    html += `<div class="mb-3"><p class="text-[10px] uppercase font-bold text-emerald-300 mb-1">Templates (${matchedTemplates.length})</p>`;
+    html += matchedTemplates.slice(0, 5).map(t => `
+      <div onclick="closeModal('searchModal'); switchTab('whatsapp'); switchWhatsappSubView('templates'); openEditTemplateModal('${t.id || t.templateKey}');" class="p-2.5 rounded-xl border border-white/10 bg-slate-900/60 hover:bg-slate-800/60 cursor-pointer flex items-center justify-between transition">
+        <div>
+          <p class="font-bold text-white">${t.displayName || t.templateKey}</p>
+          <p class="text-[11px] text-slate-400 font-mono">${t.templateKey} · ${t.metaStatus || 'NOT_SUBMITTED'}</p>
+        </div>
+        <span class="text-emerald-300 font-bold text-xs">View &rarr;</span>
+      </div>
+    `).join('');
+    html += `</div>`;
+  }
+
+  if (matchedNotifs.length) {
+    html += `<div class="mb-3"><p class="text-[10px] uppercase font-bold text-amber-300 mb-1">Notifications (${matchedNotifs.length})</p>`;
+    html += matchedNotifs.slice(0, 5).map(n => `
+      <div onclick="closeModal('searchModal'); switchTab('whatsapp'); switchWhatsappSubView('queue'); viewNotificationDetail('${n.id}');" class="p-2.5 rounded-xl border border-white/10 bg-slate-900/60 hover:bg-slate-800/60 cursor-pointer flex items-center justify-between transition">
+        <div>
+          <p class="font-bold text-white font-mono">${n.templateKey || n.id}</p>
+          <p class="text-[11px] text-slate-400">${n.status || '—'} · ${n.userId || ''}</p>
+        </div>
+        <span class="text-amber-300 font-bold text-xs">View &rarr;</span>
       </div>
     `).join('');
     html += `</div>`;

@@ -33,6 +33,8 @@ import { AssetPassportPreview } from './AssetPassportPreview';
 import { ExploreYourAsset } from './tools/ExploreYourAsset';
 import { SmartKnowledgeHub } from './knowledge/SmartKnowledgeHub';
 import { PlatformFaqSection } from './PlatformFaqSection';
+import { AppDownloadShowcase } from './AppDownloadShowcase';
+import { GooglePlayDownloadButton } from './GooglePlayDownloadButton';
 
 interface PublicHomepageViewProps {
   onSelectTool: (toolSlug: string) => void;
@@ -88,6 +90,14 @@ export const PublicHomepageView: React.FC<PublicHomepageViewProps> = ({
             <span>Explore Asset Intelligence</span>
             <ChevronRight className="w-4 h-4 text-emerald-400" />
           </button>
+          {/* Refined Premium Google Play download CTA */}
+          <GooglePlayDownloadButton
+            variant="hero"
+            placement="hero"
+            label="Download Now"
+            sublabel="Google Play"
+            showChevron
+          />
         </div>
 
         {/* Supported Asset Universe Pills */}
@@ -116,6 +126,18 @@ export const PublicHomepageView: React.FC<PublicHomepageViewProps> = ({
       </section>
 
       {/* ============================================================ */}
+      {/* 2.5. PREMIUM APP DOWNLOAD SHOWCASE */}
+      {/* ============================================================ */}
+      <section id="app-download-showcase" className="w-full">
+        <AppDownloadShowcase
+          onExploreFeatures={() => {
+            const el = document.getElementById('platform-features');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+          }}
+        />
+      </section>
+
+      {/* ============================================================ */}
       {/* 3 & 4. SMART SEARCH & TRENDING QUESTIONS */}
       {/* ============================================================ */}
       <section className="w-full">
@@ -138,7 +160,7 @@ export const PublicHomepageView: React.FC<PublicHomepageViewProps> = ({
       {/* ============================================================ */}
       {/* 6. FREE INTELLIGENT TOOLS */}
       {/* ============================================================ */}
-      <section className="w-full">
+      <section id="platform-features" className="w-full">
         <PublicToolsGrid onSelectTool={onSelectTool} />
       </section>
 

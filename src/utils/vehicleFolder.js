@@ -109,6 +109,27 @@ export function listVehicleAssets(assets = []) {
   );
 }
 
+/**
+ * Home dashboard "Vehicle Insights / fuel" entry-point predicate.
+ *
+ * A vehicle surfaces for fuel & mileage tracking when it is recognised as a
+ * vehicle by the robust category signals (category / categoryLabel /
+ * smartCategory / isVehicleInvoice) OR carries vehicle identifiers
+ * (registration / chassis). This is intentionally broader than the
+ * capability-only check so vehicles that were added with a generic or
+ * unrecognised categoryId are still shown on Home.
+ */
+export function isHomeVehicle(asset = {}) {
+  if (!asset || typeof asset !== 'object') return false;
+  if (asset.isArchived || asset.deletedAt) return false;
+  return (
+    isVehicleCategory(asset) ||
+    Boolean(asset.registration) ||
+    Boolean(asset.chassisNumber) ||
+    Boolean(asset.engineNumber)
+  );
+}
+
 export default {
   normalizeRegistration,
   normalizeChassis,
@@ -119,4 +140,6 @@ export default {
   isVehicleAttachDocument,
   isVehicleCategory,
   listVehicleAssets,
+  isHomeVehicle,
 };
+

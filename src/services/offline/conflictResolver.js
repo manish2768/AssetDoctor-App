@@ -30,16 +30,21 @@ const IMPORTANT_KEYS = new Set([
 export function detectVersionConflict(local = {}, remote = {}) {
   const localVersion = Number(local.version ?? local.baseVersion);
   const remoteVersion = Number(remote.version);
+  const importantDiff = () =>
+    [...IMPORTANT_KEYS].some((key) => {
+      if (local[key] === undefined) return false;
+      return String(local[key] ?? '') !== String(remote[key] ?? '');
+    });
   if (!Number.isFinite(localVersion) || !Number.isFinite(remoteVersion)) {
+    if (importantDiff()) {
+      return { conflict: true, reason: 'MISSING_VERSION_FIELD_DIFF' };
+    }
     return { conflict: false };
   }
   if (localVersion === remoteVersion) return { conflict: false };
   // Local based on older remote → conflict if important fields differ
   if (localVersion < remoteVersion) {
-    const changed = [...IMPORTANT_KEYS].some((key) => {
-      if (local[key] === undefined) return false;
-      return String(local[key] ?? '') !== String(remote[key] ?? '');
-    });
+    const changed = importantDiff();
     if (changed) {
       return {
         conflict: true,

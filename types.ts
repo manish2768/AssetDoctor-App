@@ -40,6 +40,7 @@ export interface Asset {
   maintenanceDueDate?: string; // YYYY-MM-DD for next maintenance / renewal
   maintenanceType?: string; // e.g., 'Insurance Renewal', 'RO Filter Replacement', 'Bike Service'
   serialNumber?: string;
+  imei?: string;
   vendor?: string;
   notes?: string;
   receiptImageUrl?: string;
@@ -74,11 +75,11 @@ export interface ParsedInvoiceItem {
 
 export interface ReceiptScanResult {
   vendor?: string;
-  purchaseDate: string;
-  totalAmount: number;
+  purchaseDate?: string;
+  totalAmount?: number;
   gstin?: string;
   scamGuard?: ScamGuardAnalysis;
-  items: ParsedInvoiceItem[];
+  items?: ParsedInvoiceItem[];
   // Backward compatibility fields
   itemName?: string;
   brand?: string;

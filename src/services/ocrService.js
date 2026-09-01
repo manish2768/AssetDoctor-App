@@ -7,8 +7,8 @@
  * (shopName, GSTIN, product, IMEI, grand total, tax, line items).
  */
 
-import { ENV } from '../config/env';
-import { parseInvoiceText } from './ocr/InvoiceOcrParser';
+import { ENV } from '../config/env.js';
+import { parseInvoiceText } from './ocr/InvoiceOcrParser.js';
 
 const VISION_ANNOTATE_URL = 'https://vision.googleapis.com/v1/images:annotate';
 

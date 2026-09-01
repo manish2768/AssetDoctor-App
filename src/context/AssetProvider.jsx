@@ -18,6 +18,7 @@ import { DEMO_ASSETS, isDemoAssetId } from '../data/demoAssets';
 import { OfflineVaultCache } from '../services/offline/OfflineVaultCache';
 import { DocumentVaultService } from '../services/documents/DocumentVaultService';
 import { resolveVaultDocumentMeta } from '../services/ocr/documentTypeClassifier';
+import { filterActiveAssets, removeAssetFromList } from './assetVaultState';
 import {
   findVehicleAsset,
   isVehicleAttachDocument,
@@ -82,7 +83,9 @@ export function AssetProvider({ children }) {
       // Warm local encrypted cache immediately
       OfflineVaultCache.getAssets(user.uid)
         .then((list) => {
-          if (!settled && Array.isArray(list) && list.length) setAssets(list);
+          if (!settled && Array.isArray(list) && list.length) {
+            setAssets(filterActiveAssets(list));
+          }
         })
         .catch(() => {});
 
@@ -107,7 +110,7 @@ export function AssetProvider({ children }) {
     // Session-only: load encrypted offline cache for this uid
     OfflineVaultCache.getAssets(uid)
       .then((list) => {
-        if (Array.isArray(list) && list.length) setAssets(list);
+        if (Array.isArray(list) && list.length) setAssets(filterActiveAssets(list));
         else {
           try {
             const { normalizeAssetList } = require('../services/storageService');
@@ -187,7 +190,8 @@ export function AssetProvider({ children }) {
       if (existing && (isVehicleCategory(form) || form.isVehicleInvoice || form.linkAssetId)) {
         const assetId = existing.assetId || existing.id;
         const vaultMeta = resolveVaultDocumentMeta(form);
-        const updates = {
+        const isTrustedUpdate = !form.needsManualReview && (form.identityConfidence == null || form.identityConfidence >= 0.85) || form.userConfirmed === true;
+        const updates = isTrustedUpdate ? {
           ...(form.warrantyExpiry ? { warrantyExpiry: form.warrantyExpiry } : {}),
           ...(form.pucExpiry ? { pucExpiry: form.pucExpiry } : {}),
           ...(form.insuranceExpiry ? { insuranceExpiry: form.insuranceExpiry } : {}),
@@ -201,11 +205,12 @@ export function AssetProvider({ children }) {
           ...(form.serialNumber ? { serialNumber: form.serialNumber } : {}),
           ...(form.value ? { value: form.value } : {}),
           ...(form.purchaseDate ? { purchaseDate: form.purchaseDate } : {}),
-          ...(form.assetName ? { assetName: form.assetName } : {}),
           ...(form.storeName ? { storeName: form.storeName } : {}),
           ...(form.invoiceMeta ? { invoiceMeta: form.invoiceMeta } : {}),
           ...(form.odometerKm != null ? { odometerKm: form.odometerKm } : {}),
           registration: existing.registration || form.registration || '',
+        } : {
+          registration: existing.registration || '',
         };
         const updated = await AssetService.updateAsset(effectiveUid, assetId, updates, null);
         if (!updated?.success) {
@@ -320,15 +325,14 @@ export function AssetProvider({ children }) {
         return { success: false, error: 'Demo asset — sign in to manage your vault.' };
       }
       Haptics.tap();
-      const result = await AssetService.softDeleteAsset(uid, assetId);
+      const existing = assets.find((a) => (a.assetId || a.id) === assetId) || null;
+      const result = await AssetService.softDeleteAsset(uid, assetId, { existingAsset: existing });
       if (result?.success) {
-        setAssets((current) =>
-          current.filter((a) => (a.assetId || a.id) !== assetId),
-        );
+        setAssets((current) => removeAssetFromList(current, assetId));
       }
       return result;
     },
-    [user?.uid, sessionUid],
+    [user?.uid, sessionUid, assets],
   );
 
   const portfolioHealth = useMemo(() => calculatePortfolioHealth(assets), [assets]);

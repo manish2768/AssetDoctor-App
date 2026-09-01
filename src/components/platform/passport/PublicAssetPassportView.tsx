@@ -12,6 +12,7 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { AssetPassportService, PublicAssetPassport } from '../../../platform/passport/assetPassportService';
+import { AssetDoctorProtectedBadge } from '../trust/AssetDoctorProtectedBadge';
 
 interface PublicAssetPassportViewProps {
   passport?: PublicAssetPassport;
@@ -81,7 +82,7 @@ export const PublicAssetPassportView: React.FC<PublicAssetPassportViewProps> = (
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 font-mono">
-                  Verified Digital Passport
+                  Asset Passport
                 </span>
                 <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-900 text-slate-400 border border-slate-800">
                   ID: {passport.publicId}
@@ -90,6 +91,9 @@ export const PublicAssetPassportView: React.FC<PublicAssetPassportViewProps> = (
               <h1 className="text-xl sm:text-2xl font-black text-white mt-1">
                 {passport.name}
               </h1>
+              <div className="mt-2">
+                <AssetDoctorProtectedBadge state={{ id: 'PROTECTED', label: 'Asset Doctor Protected' }} compact />
+              </div>
               <p className="text-xs text-slate-400 font-mono">
                 {passport.brand} • {passport.category} • Year {passport.modelYear || 'N/A'}
               </p>
@@ -97,7 +101,7 @@ export const PublicAssetPassportView: React.FC<PublicAssetPassportViewProps> = (
           </div>
 
           <div className="text-right sm:border-l sm:border-slate-800 sm:pl-6">
-            <span className="text-[10px] uppercase font-bold text-slate-500 block">Health Index</span>
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Asset Health</span>
             <span className="text-3xl font-black text-emerald-400 font-mono">
               {passport.healthScore}<span className="text-sm text-slate-500">/100</span>
             </span>
@@ -112,13 +116,13 @@ export const PublicAssetPassportView: React.FC<PublicAssetPassportViewProps> = (
           </div>
 
           <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
-            <span className="text-[10px] uppercase text-slate-500 block">Ownership Verification</span>
-            <span className="font-bold text-white font-mono">{passport.verificationStatus}</span>
+            <span className="text-[10px] uppercase text-slate-500 block">Record status</span>
+            <span className="font-bold text-white font-mono">On file</span>
           </div>
 
           <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 col-span-2 sm:col-span-1">
             <span className="text-[10px] uppercase text-slate-500 block">Service Records</span>
-            <span className="font-bold text-cyan-400 font-mono">{passport.serviceCount} Verified Logs</span>
+            <span className="font-bold text-cyan-400 font-mono">{passport.serviceCount} service records</span>
           </div>
         </div>
       </div>

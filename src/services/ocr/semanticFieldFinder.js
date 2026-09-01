@@ -147,7 +147,7 @@ function parseOdometerDigits(raw) {
 function odometerRejectedNear(near = '') {
   const t = String(near || '');
   if (
-    /\b(?:gstin|hsn|sac|invoice\s*(?:no|number|#)|bill\s*no|phone|mobile|whatsapp|part\s*no|hsn\/sac|labour|labor|grand\s*total|net\s*total|amount\s*payable|taxable)\b/i.test(
+    /\b(?:gstin|gst|hsn|sac|hsn\/sac|invoice\s*(?:no|number|#)|bill\s*no|policy\s*no|policy\s*number|phone|mobile|tel|whatsapp|part\s*no|item\s*code|qty|quantity|rate|unit\s*price|chassis\s*(?:no|number)?|engine\s*(?:no|number)?|vin\b|frame\s*no|serial\s*no|bank\s*a\/?c|account|ifsc|upi\b|pin\s*code|postal|labour|labor|grand\s*total|net\s*total|subtotal|amount\s*payable|taxable|cgst|sgst|igst|tax\s*amount)\b/i.test(
       t,
     )
   ) {
@@ -168,7 +168,7 @@ function odometerRejectedNear(near = '') {
   if (/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]/i.test(compact)) return true;
   if (isIndianPlateToken(compact)) return true;
   const phone = t.replace(/\D/g, '');
-  if (phone.length === 10 && /^[6-9]/.test(phone) && /\b(?:ph|tel|mob|phone)\b/i.test(t)) return true;
+  if (phone.length === 10 && /^[6-9]/.test(phone) && /\b(?:ph|tel|mob|phone|contact)\b/i.test(t)) return true;
   return false;
 }
 

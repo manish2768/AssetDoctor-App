@@ -17,7 +17,7 @@ function plateKey(value) {
 
 function imeiKey(value) {
   const digits = String(value || '').replace(/\D/g, '');
-  return digits.length >= 14 ? digits.slice(0, 15) : '';
+  return /^\d{15}$/.test(digits) ? digits : '';
 }
 
 function serialKey(value) {
@@ -70,7 +70,6 @@ export function mapScanToExistingAsset(invoiceOrForm = {}, assets = []) {
       invoiceOrForm.nickname ||
         invoiceOrForm.locationLabel ||
         invoiceOrForm.roomName ||
-        invoiceOrForm.assetName ||
         '',
     );
     const product = nicknameKey(invoiceOrForm.productName || invoiceOrForm.assetName || '');
@@ -89,7 +88,7 @@ export function mapScanToExistingAsset(invoiceOrForm = {}, assets = []) {
 
     // 2) Mobiles / laptops — IMEI
     if (imei) {
-      const hit = list.find((a) => imeiKey(a.imei) === imei || imeiKey(a.serialNumber) === imei);
+      const hit = list.find((a) => imeiKey(a.imei) === imei);
       if (hit) {
         return {
           asset: hit,
@@ -133,23 +132,23 @@ export function mapScanToExistingAsset(invoiceOrForm = {}, assets = []) {
       if (hit) {
         return {
           asset: hit,
-          match: scoreMatch('nickname_location', 0.88),
-          reason: `Mapped by location/nickname to ${hit.assetName || hit.nickname}`,
+          match: scoreMatch('nickname_location', 0.72),
+          reason: `Possible location/nickname match to ${hit.assetName || hit.nickname} — review required`,
         };
       }
     }
 
-    // 5) Soft product-name overlap for appliances
+    // Soft product-name overlap is NEVER enough to auto-link (review required only).
     if (product.length >= 4) {
       const hit = list.find((a) => {
         const name = nicknameKey(a.assetName || a.name);
-        return name && (name.includes(product) || product.includes(name));
+        return name && name === product;
       });
       if (hit) {
         return {
           asset: hit,
-          match: scoreMatch('product_name', 0.7),
-          reason: `Likely match: ${hit.assetName}`,
+          match: scoreMatch('product_name', 0.62),
+          reason: `Possible name match: ${hit.assetName} — review required`,
         };
       }
     }

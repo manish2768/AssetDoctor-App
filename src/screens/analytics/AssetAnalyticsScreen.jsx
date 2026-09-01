@@ -60,10 +60,27 @@ function SimpleBars({ series }) {
 
 export function AssetAnalyticsScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
-  const assetId = route?.params?.assetId;
+  const routeAssetId = route?.params?.assetId;
   const { user } = useAuth();
   const { assets, getAsset } = useAssets();
-  const asset = getAsset?.(assetId) || assets.find((a) => (a.assetId || a.id) === assetId);
+
+  const [selectedAsset, setSelectedAsset] = useState(() => {
+    if (!routeAssetId) return null;
+    return getAsset?.(routeAssetId) || (assets || []).find((a) => (a.assetId || a.id) === routeAssetId) || null;
+  });
+
+  useEffect(() => {
+    if (routeAssetId) {
+      const found = getAsset?.(routeAssetId) || (assets || []).find((a) => (a.assetId || a.id) === routeAssetId);
+      setSelectedAsset(found || null);
+    } else {
+      setSelectedAsset(null);
+    }
+  }, [routeAssetId, assets, getAsset]);
+
+  const asset = selectedAsset;
+  const assetId = (asset && (asset.assetId || asset.id)) || null;
+
   const [expenseRows, setExpenseRows] = useState([]);
   const [expenseRowsByAsset, setExpenseRowsByAsset] = useState({});
   const [loading, setLoading] = useState(true);
@@ -159,9 +176,49 @@ export function AssetAnalyticsScreen({ route, navigation }) {
 
   if (!asset) {
     return (
-      <View style={[styles.root, { paddingTop: insets.top + 16 }]}>
+      <View style={[styles.root, { paddingTop: insets.top + 16, paddingHorizontal: 16 }]}>
         <Text style={styles.heading}>Asset Analytics</Text>
-        <Text style={styles.muted}>Asset not found.</Text>
+        <Text style={[styles.muted, { marginTop: 4, marginBottom: 16 }]}>
+          Select an asset to view financial & lifetime analytics.
+        </Text>
+        {assets && assets.length > 0 ? (
+          <ScrollView style={{ marginTop: 8 }}>
+            {assets.map((item) => (
+              <Pressable
+                key={item.assetId || item.id}
+                onPress={() => setSelectedAsset(item)}
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderColor: '#E2E8F0',
+                  borderWidth: 1,
+                  padding: 14,
+                  borderRadius: 10,
+                  marginBottom: 10,
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: '#0F172A' }}>
+                    {item.model || item.assetName || item.name || 'Asset'}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                    {item.registrationNumber || item.registration || item.category || 'Protected'}
+                  </Text>
+                </View>
+                <Text style={{ color: COLORS.primary || '#0F766E', fontWeight: '800' }}>Select →</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : (
+          <Pressable
+            onPress={() => navigation.navigate('Home', { screen: 'AddAsset' })}
+            style={{ backgroundColor: COLORS.primary || '#0F766E', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 8, marginTop: 16, alignSelf: 'flex-start' }}
+          >
+            <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>+ Add Asset</Text>
+          </Pressable>
+        )}
       </View>
     );
   }

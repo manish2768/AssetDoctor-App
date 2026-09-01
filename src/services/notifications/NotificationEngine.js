@@ -76,6 +76,42 @@ export class NotificationEngine {
       await ReminderScheduler.syncPortfolio(scoped, { userId });
     }
 
+    // Asynchronously dispatch WhatsApp notifications for eligible expiry milestones
+    if (userId && candidates.length > 0 && !inQuietHours(prefs)) {
+      (async () => {
+        try {
+          const { UserService } = await import('../user/UserService.js');
+          const userProfile = await UserService.getProfile(userId);
+          const phone = userProfile?.normalizedPhoneNumber || userProfile?.phoneNumber || userProfile?.phone;
+          if (phone && userProfile?.whatsappOptIn !== false) {
+            const { WhatsAppService } = await import('../whatsapp/WhatsAppService.js');
+            for (const c of candidates) {
+              if ([30, 15, 7, 1].includes(c.daysLeft)) {
+                const targetAsset = scoped.find((a) => (a.id || a.uid) === c.assetId);
+                const vehicleName = targetAsset?.registrationNumber || targetAsset?.assetName || 'Asset';
+                let docType = 'Document';
+                if (c.notificationType?.includes('INSURANCE')) docType = 'Insurance';
+                else if (c.notificationType?.includes('PUC')) docType = 'PUC';
+                else if (c.notificationType?.includes('WARRANTY')) docType = 'Warranty';
+
+                await WhatsAppService.sendExpiryReminder({
+                  userId,
+                  phone,
+                  customerName: userProfile?.name || 'Valued Member',
+                  vehicleName,
+                  docType,
+                  expiryDate: c.eventDate || new Date().toISOString().slice(0, 10),
+                  assetId: c.assetId,
+                }).catch(() => {});
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[NotificationEngine] WhatsApp dispatch note:', e?.message);
+        }
+      })();
+    }
+
     const center = await listNotificationCenter(userId);
     const unread = await unreadCount(userId);
     return {

@@ -1,41 +1,64 @@
-<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Asset Doctor">
   <defs>
-    <linearGradient id="bgGrad" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#0F172A"/>
-      <stop offset="100%" stop-color="#020617"/>
+    <linearGradient id="adTealMint" x1="8%" y1="12%" x2="92%" y2="88%">
+      <stop offset="0%" stop-color="#0F766E"/>
+      <stop offset="45%" stop-color="#14B8A6"/>
+      <stop offset="100%" stop-color="#6EE7B7"/>
     </linearGradient>
-    <linearGradient id="accentGrad" x1="100" y1="80" x2="400" y2="300" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#10B981"/>
-      <stop offset="100%" stop-color="#06B6D4"/>
+    <linearGradient id="adEkg" x1="0%" y1="50%" x2="100%" y2="50%">
+      <stop offset="0%" stop-color="#0F766E"/>
+      <stop offset="50%" stop-color="#2DD4BF"/>
+      <stop offset="100%" stop-color="#A7F3D0"/>
+    </linearGradient>
+    <linearGradient id="adBadge" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#14B8A6"/>
+      <stop offset="100%" stop-color="#5EEAD4"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="96" fill="url(#bgGrad)"/>
-  <path d="M256 50 L380 95 V195 C380 275 325 345 256 365 C187 345 132 275 132 195 V95 L256 50 Z"
-        fill="none" stroke="url(#accentGrad)" stroke-width="12" stroke-linejoin="round" opacity="0.4"/>
-  <path d="M256 95 L340 160 V260 H172 V160 L256 95 Z"
-        fill="none" stroke="url(#accentGrad)" stroke-width="14" stroke-linejoin="round"/>
-  <g stroke="url(#accentGrad)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <circle cx="210" cy="225" r="22"/>
-    <circle cx="302" cy="225" r="22"/>
-    <path d="M210 225 L235 195 H265 L280 225"/>
-    <path d="M235 195 L250 225 H302"/>
-    <path d="M260 185 L272 195"/>
-  </g>
-  <circle cx="335" cy="115" r="28" fill="#10B981"/>
-  <rect x="330" y="99" width="10" height="32" rx="3" fill="#020617"/>
-  <rect x="319" y="110" width="32" height="10" rx="3" fill="#020617"/>
-  <text x="256" y="420"
-        text-anchor="middle"
-        fill="#FFFFFF"
-        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-        font-weight="800"
-        font-size="34"
-        letter-spacing="2">ASSET DOCTOR</text>
-  <text x="256" y="450"
-        text-anchor="middle"
-        fill="#06B6D4"
-        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-        font-weight="600"
-        font-size="15"
-        letter-spacing="3">VEHICLE &amp; HOME VAULT</text>
+  <rect width="512" height="512" rx="114" fill="#050A0F"/>
+  <path
+    d="M256 70 C334 108 402 108 416 120 C416 272 362 392 256 462 C150 392 96 272 96 120 C110 108 178 108 256 70 Z"
+    fill="#07111F"
+    stroke="url(#adTealMint)"
+    stroke-width="16"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M228 168 H292 L318 194 V338 H228 Z"
+    fill="none"
+    stroke="#14B8A6"
+    stroke-opacity="0.28"
+    stroke-width="4"
+  />
+  <path
+    d="M314 168 L318 194 H292 Z"
+    fill="#14B8A6"
+    fill-opacity="0.18"
+    stroke="#14B8A6"
+    stroke-opacity="0.28"
+    stroke-width="4"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M256 142 L332 348 H298 L278 294 H234 L214 348 H180 Z M242 258 H270 L256 216 Z"
+    fill="#FFFFFF"
+  />
+  <path
+    d="M150 258 H214 L230 258 L246 204 L262 312 L278 258 L294 258 H362"
+    fill="none"
+    stroke="url(#adEkg)"
+    stroke-width="12"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <circle cx="372" cy="396" r="38" fill="url(#adBadge)"/>
+  <circle cx="372" cy="396" r="38" fill="none" stroke="#ECFDF5" stroke-width="4"/>
+  <path
+    d="M354 396 L366 408 L392 380"
+    fill="none"
+    stroke="#050A0F"
+    stroke-width="7"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
 </svg>

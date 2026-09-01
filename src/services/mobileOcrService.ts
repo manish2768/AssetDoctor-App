@@ -8,6 +8,20 @@ import { MobileServiceHistoryService } from './mobileServiceHistoryService.ts';
 import { MobileAssetService } from './mobileAssetService.ts';
 import type { Asset, ReceiptScanResult, ServiceRecord } from '../types.ts';
 
+function fieldStatus(field: any): string {
+  return String(field?.status || field?.tier || '').toUpperCase();
+}
+
+function fieldIsVerified(field: any): boolean {
+  const status = fieldStatus(field);
+  return status === 'VERIFIED' || status === 'AUTO_ACCEPTED';
+}
+
+function fieldNeedsVerification(field: any): boolean {
+  const status = fieldStatus(field);
+  return status === 'NEEDS_REVIEW' || status === 'NEEDS_VERIFICATION' || status === 'CONFLICT';
+}
+
 export type OcrProcessingState = 'IDLE' | 'UPLOADING' | 'PROCESSING' | 'COMPLETED' | 'NEEDS_REVIEW' | 'FAILED';
 
 export interface OcrFieldConfidence {
@@ -85,8 +99,8 @@ export class MobileOcrService {
             label: 'Vehicle Registration',
             value: s.vehicleRegistration.value,
             confidence: s.vehicleRegistration.confidence,
-            isVerified: s.vehicleRegistration.tier === 'VERIFIED',
-            needsVerification: s.vehicleRegistration.tier === 'NEEDS_VERIFICATION'
+            isVerified: fieldIsVerified(s.vehicleRegistration),
+            needsVerification: fieldNeedsVerification(s.vehicleRegistration)
           });
         }
         if (s.odometerKm?.value !== undefined && s.odometerKm.value !== null) {
@@ -95,8 +109,8 @@ export class MobileOcrService {
             label: 'Odometer / KM Reading',
             value: `${s.odometerKm.value.toLocaleString('en-IN')} KM`,
             confidence: s.odometerKm.confidence,
-            isVerified: s.odometerKm.tier === 'VERIFIED',
-            needsVerification: s.odometerKm.tier === 'NEEDS_VERIFICATION'
+            isVerified: fieldIsVerified(s.odometerKm),
+            needsVerification: fieldNeedsVerification(s.odometerKm)
           });
         }
         if (s.serviceDate?.value) {
@@ -105,8 +119,8 @@ export class MobileOcrService {
             label: 'Service Date',
             value: s.serviceDate.value,
             confidence: s.serviceDate.confidence,
-            isVerified: s.serviceDate.tier === 'VERIFIED',
-            needsVerification: s.serviceDate.tier === 'NEEDS_VERIFICATION'
+            isVerified: fieldIsVerified(s.serviceDate),
+            needsVerification: fieldNeedsVerification(s.serviceDate)
           });
         }
         if (s.invoiceNumber?.value) {
@@ -115,8 +129,8 @@ export class MobileOcrService {
             label: 'Invoice / JC No',
             value: s.invoiceNumber.value,
             confidence: s.invoiceNumber.confidence,
-            isVerified: s.invoiceNumber.tier === 'VERIFIED',
-            needsVerification: s.invoiceNumber.tier === 'NEEDS_VERIFICATION'
+            isVerified: fieldIsVerified(s.invoiceNumber),
+            needsVerification: fieldNeedsVerification(s.invoiceNumber)
           });
         }
         if (s.workshopName?.value) {
@@ -125,8 +139,8 @@ export class MobileOcrService {
             label: 'Workshop / Center',
             value: s.workshopName.value,
             confidence: s.workshopName.confidence,
-            isVerified: s.workshopName.tier === 'VERIFIED',
-            needsVerification: s.workshopName.tier === 'NEEDS_VERIFICATION'
+            isVerified: fieldIsVerified(s.workshopName),
+            needsVerification: fieldNeedsVerification(s.workshopName)
           });
         }
         if (s.totalAmount?.value) {
@@ -135,8 +149,8 @@ export class MobileOcrService {
             label: 'Total Amount',
             value: `₹${s.totalAmount.value.toLocaleString('en-IN')}`,
             confidence: s.totalAmount.confidence,
-            isVerified: s.totalAmount.tier === 'VERIFIED',
-            needsVerification: s.totalAmount.tier === 'NEEDS_VERIFICATION'
+            isVerified: fieldIsVerified(s.totalAmount),
+            needsVerification: fieldNeedsVerification(s.totalAmount)
           });
         }
       }
@@ -149,8 +163,8 @@ export class MobileOcrService {
             label: 'Insurer',
             value: ins.insurerName.value,
             confidence: ins.insurerName.confidence,
-            isVerified: ins.insurerName.tier === 'VERIFIED',
-            needsVerification: ins.insurerName.tier === 'NEEDS_VERIFICATION'
+            isVerified: fieldIsVerified(ins.insurerName),
+            needsVerification: fieldNeedsVerification(ins.insurerName)
           });
         }
         if (ins.policyNumber?.value) {
@@ -159,8 +173,8 @@ export class MobileOcrService {
             label: 'Policy Number',
             value: ins.policyNumber.value,
             confidence: ins.policyNumber.confidence,
-            isVerified: ins.policyNumber.tier === 'VERIFIED',
-            needsVerification: ins.policyNumber.tier === 'NEEDS_VERIFICATION'
+            isVerified: fieldIsVerified(ins.policyNumber),
+            needsVerification: fieldNeedsVerification(ins.policyNumber)
           });
         }
         if (ins.policyExpiryDate?.value) {
@@ -169,8 +183,8 @@ export class MobileOcrService {
             label: 'Policy Expiry Date',
             value: ins.policyExpiryDate.value,
             confidence: ins.policyExpiryDate.confidence,
-            isVerified: ins.policyExpiryDate.tier === 'VERIFIED',
-            needsVerification: ins.policyExpiryDate.tier === 'NEEDS_VERIFICATION'
+            isVerified: fieldIsVerified(ins.policyExpiryDate),
+            needsVerification: fieldNeedsVerification(ins.policyExpiryDate)
           });
         }
       }
@@ -183,8 +197,8 @@ export class MobileOcrService {
             label: 'PUC Number',
             value: puc.certificateNumber.value,
             confidence: puc.certificateNumber.confidence,
-            isVerified: puc.certificateNumber.tier === 'VERIFIED',
-            needsVerification: puc.certificateNumber.tier === 'NEEDS_VERIFICATION'
+            isVerified: fieldIsVerified(puc.certificateNumber),
+            needsVerification: fieldNeedsVerification(puc.certificateNumber)
           });
         }
         if (puc.expiryDate?.value) {
@@ -193,8 +207,8 @@ export class MobileOcrService {
             label: 'PUC Expiry Date',
             value: puc.expiryDate.value,
             confidence: puc.expiryDate.confidence,
-            isVerified: puc.expiryDate.tier === 'VERIFIED',
-            needsVerification: puc.expiryDate.tier === 'NEEDS_VERIFICATION'
+            isVerified: fieldIsVerified(puc.expiryDate),
+            needsVerification: fieldNeedsVerification(puc.expiryDate)
           });
         }
       }
@@ -207,8 +221,8 @@ export class MobileOcrService {
             label: 'RC Reg Number',
             value: rc.registrationNumber.value,
             confidence: rc.registrationNumber.confidence,
-            isVerified: rc.registrationNumber.tier === 'VERIFIED',
-            needsVerification: rc.registrationNumber.tier === 'NEEDS_VERIFICATION'
+            isVerified: fieldIsVerified(rc.registrationNumber),
+            needsVerification: fieldNeedsVerification(rc.registrationNumber)
           });
         }
         if (rc.ownerName?.value) {
@@ -217,8 +231,8 @@ export class MobileOcrService {
             label: 'Registered Owner',
             value: rc.ownerName.value,
             confidence: rc.ownerName.confidence,
-            isVerified: rc.ownerName.tier === 'VERIFIED',
-            needsVerification: rc.ownerName.tier === 'NEEDS_VERIFICATION'
+            isVerified: fieldIsVerified(rc.ownerName),
+            needsVerification: fieldNeedsVerification(rc.ownerName)
           });
         }
       }
@@ -228,46 +242,19 @@ export class MobileOcrService {
 
       let createdServiceRecord: ServiceRecord | undefined;
 
-      // Auto-attach service record if odometer is verified and target asset exists
-      const targetAssetId = targetAsset?.id || entityLink.matchedAssetId;
-      if (targetAssetId && ext.serviceData?.odometerKm?.value !== undefined && ext.serviceData.odometerKm.value !== null) {
-        const odoValue = ext.serviceData.odometerKm.value;
-        const odoConf = ext.serviceData.odometerKm.confidence;
-
-        if (odoConf >= 0.70) {
-          const recordData: Omit<ServiceRecord, 'id'> = {
-            assetId: targetAssetId,
-            serviceDate: ext.serviceData.serviceDate?.value || new Date().toISOString().split('T')[0],
-            odometerKm: odoValue,
-            serviceType: ext.serviceData.serviceType?.value || 'periodic_maintenance',
-            invoiceNumber: ext.serviceData.invoiceNumber?.value || undefined,
-            serviceCenter: ext.serviceData.workshopName?.value || undefined,
-            cost: ext.serviceData.totalAmount?.value ?? undefined,
-            ocrConfidence: odoConf,
-            verificationStatus: odoConf >= 0.85 ? 'VERIFIED' : 'NEEDS_REVIEW'
-          };
-
-          const recordId = await MobileServiceHistoryService.addServiceRecord(targetAssetId, recordData);
-          createdServiceRecord = { id: recordId, ...recordData };
-
-          await MobileAssetService.saveAsset({
-            id: targetAssetId,
-            odometerKm: odoValue,
-            serviceDate: ext.serviceData.serviceDate?.value || new Date().toISOString().split('T')[0]
-          });
-        }
-      }
+      // Matching must not auto-write asset odometer / service history from OCR.
+      // Service records are created only after explicit user confirm on Review.
 
       const extractedResult: ReceiptScanResult = {
-        vendor: ext.serviceData?.workshopName?.value || ext.insuranceData?.insurerName?.value || ext.purchaseData?.sellerName?.value || undefined,
-        purchaseDate: ext.serviceData?.serviceDate?.value || ext.insuranceData?.policyStartDate?.value || ext.purchaseData?.invoiceDate?.value || new Date().toISOString().split('T')[0],
-        totalAmount: ext.serviceData?.totalAmount?.value || ext.insuranceData?.premiumAmount?.value || ext.purchaseData?.finalAmount?.value || 0,
+        vendor: ext.serviceData?.workshopName?.value || ext.insuranceData?.insurerName?.value || ext.purchaseData?.sellerName?.value || ext.electronicsData?.sellerName?.value || undefined,
+        purchaseDate: ext.serviceData?.serviceDate?.value || ext.insuranceData?.policyStartDate?.value || ext.purchaseData?.invoiceDate?.value || ext.electronicsData?.invoiceDate?.value || null,
+        totalAmount: ext.serviceData?.totalAmount?.value ?? ext.insuranceData?.premiumAmount?.value ?? ext.purchaseData?.finalAmount?.value ?? ext.electronicsData?.totalAmount?.value ?? null,
         documentType: classification.documentType,
         odometerKm: ext.serviceData?.odometerKm?.value ?? undefined,
         odometerConfidence: ext.serviceData?.odometerKm?.confidence,
         vehicleRegistration: ext.serviceData?.vehicleRegistration?.value || ext.rcData?.registrationNumber?.value || undefined,
         serviceDate: ext.serviceData?.serviceDate?.value || undefined,
-        invoiceNumber: ext.serviceData?.invoiceNumber?.value || ext.purchaseData?.invoiceNumber?.value || undefined,
+        invoiceNumber: ext.serviceData?.invoiceNumber?.value || ext.purchaseData?.invoiceNumber?.value || ext.electronicsData?.invoiceNumber?.value || undefined,
         workshopName: ext.serviceData?.workshopName?.value || undefined,
         verificationStatus: hasLowConfidence ? 'NEEDS_REVIEW' : 'VERIFIED',
         items: []
@@ -293,7 +280,7 @@ export class MobileOcrService {
       return {
         state: 'FAILED',
         documentType: 'GENERIC_DOCUMENT',
-        extractedData: { purchaseDate: new Date().toISOString().split('T')[0], totalAmount: 0, items: [] },
+        extractedData: { purchaseDate: null, totalAmount: null, items: [] },
         fields: [],
         error: error?.message || 'Extraction failed'
       };

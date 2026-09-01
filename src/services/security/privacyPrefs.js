@@ -3,7 +3,14 @@
  * These prefs control notification privacy and backup status display.
  */
 
-import { EncryptedVaultStorage } from './EncryptedVaultStorage';
+let _storage = null;
+async function getStorage() {
+  if (!_storage) {
+    const mod = await import('./EncryptedVaultStorage');
+    _storage = mod.EncryptedVaultStorage;
+  }
+  return _storage;
+}
 
 const KEY = (uid) => `@asset_doctor/privacy_prefs_v1/${uid || 'guest'}`;
 
@@ -15,8 +22,13 @@ const DEFAULTS = Object.freeze({
 });
 
 export async function getPrivacyPrefs(userId) {
-  const stored = await EncryptedVaultStorage.getJSON(KEY(userId), null);
-  return { ...DEFAULTS, ...(stored || {}) };
+  try {
+    const storage = await getStorage();
+    const stored = await storage.getJSON(KEY(userId), null);
+    return { ...DEFAULTS, ...(stored || {}) };
+  } catch {
+    return { ...DEFAULTS };
+  }
 }
 
 export async function setPrivacyPrefs(userId, patch = {}) {
@@ -26,7 +38,12 @@ export async function setPrivacyPrefs(userId, patch = {}) {
     ...patch,
     updatedAt: new Date().toISOString(),
   };
-  await EncryptedVaultStorage.setJSON(KEY(userId), next);
+  try {
+    const storage = await getStorage();
+    await storage.setJSON(KEY(userId), next);
+  } catch {
+    // Graceful fallback if storage unavailable
+  }
   return next;
 }
 

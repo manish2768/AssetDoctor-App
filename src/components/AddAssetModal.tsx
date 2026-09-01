@@ -59,7 +59,7 @@ export const AddAssetModal: React.FC<AddAssetModalProps> = ({
       pucExpiryDate: isVehicle && pucExpiryDate ? pucExpiryDate : undefined,
       maintenanceType: maintenanceType || (isVehicle ? 'Vehicle Annual Service' : 'Routine Maintenance Check'),
       maintenanceDueDate: maintenanceDueDate || expiryDate,
-      serialNumber: serialNumber || `SN-${Math.floor(100000 + Math.random() * 900000)}`,
+      serialNumber: serialNumber || '',
       vendor: vendor || 'Direct Purchase',
       notes: notes || 'Registered in AssetDoctor Vault',
     };

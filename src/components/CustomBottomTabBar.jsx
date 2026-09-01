@@ -11,6 +11,7 @@ import { useWindowDimensions } from 'react-native';
 import { Haptics } from '../services/haptics';
 import { FONTS } from '../theme/branding';
 import { HIT, RADIUS, elevation } from '../theme/tokens';
+import { TAB_BAR_HEIGHT } from '../theme/tabMetrics';
 import { useThemeColors } from '../context/ThemeProvider';
 import {
   IconHome,
@@ -120,7 +121,7 @@ export function CustomBottomTabBar({ state, descriptors, navigation }) {
   );
 }
 
-export const TAB_BAR_HEIGHT = 68;
+export { TAB_BAR_HEIGHT } from '../theme/tabMetrics';
 
 const styles = StyleSheet.create({
   container: {

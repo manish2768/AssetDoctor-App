@@ -133,7 +133,7 @@ const HANDLERS = {
       }
     } catch (e) {
       if (String(e?.message) === 'CONFLICT') throw e;
-      /* remote read failed — proceed with write */
+      throw new Error('REMOTE_READ_FAILED');
     }
 
     const result = await AssetService.updateAsset(userId, assetId, updates, localImagePath, {
@@ -200,6 +200,17 @@ const HANDLERS = {
       operationType: 'UPLOAD',
       entityType: SYNC_ENTITY.INVOICE,
       entityId: assetId,
+      success: true,
+    });
+  },
+
+  documentIntelligenceFeedback: async (payload) => {
+    const { flushLearningEventToFirestore } = require('../intelligence/documentLearningClient');
+    await flushLearningEventToFirestore(payload);
+    logSyncEvent({
+      operationType: 'CREATE',
+      entityType: SYNC_ENTITY.LEARNING,
+      entityId: payload?.eventId,
       success: true,
     });
   },

@@ -67,7 +67,7 @@ export const ExportPdfButton: React.FC<ExportPdfButtonProps> = ({ assets, userNa
         <body>
           <div class="header">
             <div>
-              <div class="logo">🛡️ AssetDoctor</div>
+              <div class="logo">ASSET DOCTOR</div>
               <p style="font-size: 12px; color: #64748b; margin: 4px 0 0 0;">Smart Care & Warranty Vault Report</p>
             </div>
             <div style="text-align: right;">

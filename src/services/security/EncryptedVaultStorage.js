@@ -4,10 +4,15 @@
  * - Ciphertext payloads in AsyncStorage (user-scoped keys only)
  */
 
+import '../../polyfills/installSecureCrypto';
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 import CryptoJS from 'crypto-js';
+
+import { ensureCryptoSurface } from '../../polyfills/installSecureCrypto';
+import { secureRandomHex } from './secureId';
 
 const KEY_ALIAS = 'asset_doctor_vault_aes_v1';
 const PREFIX = 'ad_enc_v1:';
@@ -40,7 +45,7 @@ async function getOrCreateKey() {
           .map((b) => b.toString(16).padStart(2, '0'))
           .join('');
       } catch {
-        cachedKey = `ephemeral_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        cachedKey = `ephemeral_${secureRandomHex(16)}`;
       }
     }
     return cachedKey;
@@ -48,7 +53,13 @@ async function getOrCreateKey() {
 }
 
 function encryptString(plain, key) {
-  return PREFIX + CryptoJS.AES.encrypt(String(plain), key).toString();
+  const run = () => PREFIX + CryptoJS.AES.encrypt(String(plain), key).toString();
+  try {
+    return run();
+  } catch (error) {
+    ensureCryptoSurface();
+    return run();
+  }
 }
 
 function decryptString(cipher, key) {

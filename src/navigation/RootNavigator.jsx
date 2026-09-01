@@ -40,6 +40,8 @@ import { PlayStoreListingScreen } from '../screens/settings/PlayStoreListingScre
 import { NotificationSettingsScreen } from '../screens/settings/NotificationSettingsScreen';
 import { NotificationCenterScreen } from '../screens/notifications/NotificationCenterScreen';
 import { AssetAnalyticsScreen } from '../screens/analytics/AssetAnalyticsScreen';
+import { FuelVaultScreen } from '../screens/fuel/FuelVaultScreen';
+import { VehiclePassportScreen } from '../screens/VehiclePassportScreen';
 import { openNotificationDeepLink } from '../services/notifications/notificationDeepLink';
 import { OfflineSyncService } from '../services/offline/OfflineSyncService';
 import { SyncEngine } from '../services/offline/SyncEngine';
@@ -161,6 +163,8 @@ function HomeStackNav() {
       <HomeStack.Screen name="GlobalSearch" component={GlobalSearchScreen} options={{ title: 'Search', headerShown: false }} />
       <HomeStack.Screen name="ScanAssetQr" component={ScanAssetQrScreen} options={{ title: 'Scan Asset QR' }} />
       <HomeStack.Screen name="AssetAnalytics" component={AssetAnalyticsScreen} options={{ title: 'Asset Analytics' }} />
+      <HomeStack.Screen name="FuelVault" component={FuelVaultScreen} options={{ title: 'Fuel & Mileage' }} />
+      <HomeStack.Screen name="VehiclePassport" component={VehiclePassportScreen} options={{ title: 'Ride Passport', headerShown: false }} />
       <HomeStack.Screen name="AssetPassport" component={AssetPassportScreen} options={{ title: 'Asset Passport' }} />
       <HomeStack.Screen name="AddAsset" component={AddAssetScreen} options={addAssetOptions} />
       <HomeStack.Screen name="Maintenance" component={MaintenanceScreen} options={{ title: 'Service & Maintenance' }} />
@@ -170,6 +174,16 @@ function HomeStackNav() {
         name="CategoryFolders"
         component={CategoryFoldersScreen}
         options={{ title: 'Category Folders' }}
+      />
+      <HomeStack.Screen
+        name="EnergyOverview"
+        component={EnergyScreen}
+        options={{ title: 'Energy Intelligence', headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="ApplianceEnergyDetail"
+        component={AssetEnergyScreen}
+        options={{ title: 'Appliance Energy' }}
       />
     </HomeStack.Navigator>
   );
@@ -190,6 +204,8 @@ function AssetsStackNav() {
       <AssetsStack.Screen name="GlobalSearch" component={GlobalSearchScreen} options={{ title: 'Search', headerShown: false }} />
       <AssetsStack.Screen name="ScanAssetQr" component={ScanAssetQrScreen} options={{ title: 'Scan Asset QR' }} />
       <AssetsStack.Screen name="AssetAnalytics" component={AssetAnalyticsScreen} options={{ title: 'Analytics' }} />
+      <AssetsStack.Screen name="FuelVault" component={FuelVaultScreen} options={{ title: 'Fuel & Mileage' }} />
+      <AssetsStack.Screen name="VehiclePassport" component={VehiclePassportScreen} options={{ title: 'Ride Passport', headerShown: false }} />
       <AssetsStack.Screen name="AssetPassport" component={AssetPassportScreen} options={{ title: 'Passport' }} />
       <AssetsStack.Screen name="Maintenance" component={MaintenanceScreen} options={{ title: 'Service & Maintenance' }} />
       <AssetsStack.Screen name="DocumentsVault" component={DocumentsVaultScreen} options={{ title: 'Documents' }} />
@@ -214,6 +230,8 @@ function VaultStackNav() {
         options={{ title: 'Category Folders' }}
       />
       <VaultStack.Screen name="DocumentsVault" component={DocumentsVaultScreen} options={{ title: 'Documents' }} />
+      <VaultStack.Screen name="FuelVault" component={FuelVaultScreen} options={{ title: 'Fuel & Mileage' }} />
+      <VaultStack.Screen name="VehiclePassport" component={VehiclePassportScreen} options={{ title: 'Ride Passport', headerShown: false }} />
       <VaultStack.Screen name="AssetPassport" component={AssetPassportScreen} options={{ title: 'Passport' }} />
       <VaultStack.Screen name="AddAsset" component={AddAssetScreen} options={addAssetOptions} />
       <VaultStack.Screen
@@ -257,6 +275,8 @@ function SettingsStackNav() {
       <Stack.Screen name="Maintenance" component={MaintenanceScreen} options={{ title: 'Service & Maintenance' }} />
       <Stack.Screen name="DocumentsVault" component={DocumentsVaultScreen} options={{ title: 'Documents' }} />
       <Stack.Screen name="AssetAnalytics" component={AssetAnalyticsScreen} options={{ title: 'Analytics' }} />
+      <Stack.Screen name="FuelVault" component={FuelVaultScreen} options={{ title: 'Fuel & Mileage' }} />
+      <Stack.Screen name="VehiclePassport" component={VehiclePassportScreen} options={{ title: 'Ride Passport', headerShown: false }} />
       <Stack.Screen name="About" component={AboutScreen} options={{ title: 'About Us' }} />
       <Stack.Screen name="ContactUs" component={ContactUsScreen} options={{ title: 'Contact Us' }} />
       <Stack.Screen name="ReportIssue" component={ReportIssueScreen} options={{ title: 'Report Issue' }} />
@@ -294,6 +314,8 @@ function AlertsStackNav() {
         options={{ title: 'Notification settings' }}
       />
       <Stack.Screen name="AssetPassport" component={AssetPassportScreen} options={{ title: 'Asset Passport' }} />
+      <Stack.Screen name="FuelVault" component={FuelVaultScreen} options={{ title: 'Fuel & Mileage' }} />
+      <Stack.Screen name="VehiclePassport" component={VehiclePassportScreen} options={{ title: 'Ride Passport', headerShown: false }} />
       <Stack.Screen name="DocumentsVault" component={DocumentsVaultScreen} options={{ title: 'Documents' }} />
       <Stack.Screen name="Maintenance" component={MaintenanceScreen} options={{ title: 'Service & Maintenance' }} />
     </Stack.Navigator>
@@ -610,7 +632,7 @@ export function RootNavigator() {
     }
     let cancelled = false;
     (async () => {
-      const show = await shouldShowWelcomeGreeting();
+      const show = await shouldShowWelcomeGreeting(profile);
       if (!cancelled && show) setShowWelcome(true);
     })();
     return () => {

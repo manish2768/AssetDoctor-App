@@ -237,7 +237,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({
             </div>
             <div className="flex items-center gap-1.5 truncate justify-end">
               <Hash className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-              <span className="font-mono truncate">{asset.serialNumber || 'SN-N/A'}</span>
+              <span className="font-mono truncate">{asset.serialNumber || '—'}</span>
             </div>
           </div>
 

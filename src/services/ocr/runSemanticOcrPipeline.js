@@ -81,46 +81,7 @@ function preferPrimaryProductItems(items, productName) {
 
 function normalizeImeiKeep(raw) {
   const digits = String(raw || '').replace(/\D/g, '');
-  if (digits.length >= 14 && digits.length <= 17) return digits;
-  return '';
-}
-
-/** Recover IMEI from garbled OCR labels (MEUSerial, IMEVSerial, …). Skips vehicle chassis rows. */
-function recoverImeiFromDocument(blob, lines) {
-  const text = String(blob || '');
-  const isVehicle =
-    /\b(?:frame\s*no|engine\s*no|chassis|registration|rc\s*no|motor\s*company|ex[\s\-]?showroom)\b/i.test(text);
-  if (isVehicle) return '';
-
-  const patterns = [
-    /IMEI\s*\/?\s*Serial\s*No\.?\s*[:\-]?\s*\[?\s*([0-9\s]{14,20})\s*\]?/i,
-    /\[?\s*IMEI(?:\s*\/\s*Serial\s*No\.?)?\s*[:\-]?\s*([0-9\s]{14,20})\s*\]?/i,
-    /\bIMEI\s*[12]?\s*[:\-#]?\s*([0-9\s]{14,20})\b/i,
-    /(?:ime[ilvy0]{0,2}|meu)[\s\/\-_]*serial\s*(?:no\.?)?\s*[:\-]?\s*\[?\s*([0-9\s]{14,20})\s*\]?/i,
-    /(?:\(|\[)\s*(?:ime[ilvy0]{0,2}|meu)[\s\/\-_]*serial\s*no\.?\s+([0-9\s]{14,20})/i,
-  ];
-  const TAX_NEAR = /(?:cgst|sgst|igst|utgst|cess|gstin|taxable|hsn|sac)\b/i;
-  for (const re of patterns) {
-    const m = text.match(re);
-    if (!m?.[1]) continue;
-    const digits = String(m[1]).replace(/\D/g, '');
-    if (digits.length < 14 || digits.length > 17) continue;
-    const idx = text.indexOf(m[0]);
-    const near = text.slice(Math.max(0, idx - 48), idx + m[0].length + 48);
-    if (TAX_NEAR.test(near) && !/(?:phone|handset|serial|imei|nothing)/i.test(near)) continue;
-    return digits.slice(0, 17);
-  }
-
-  const phoneCtx =
-    /\b(?:phone|handset|mobile|smartphone|nothing\s*phone|imei|serial\s*no)\b/i.test(text);
-  if (!phoneCtx) return '';
-  const compact = text.replace(/(\d)\s+(?=\d)/g, '$1');
-  for (const m of compact.matchAll(/\b([0-9]{15})\b/g)) {
-    const idx = m.index || 0;
-    const near = compact.slice(Math.max(0, idx - 50), idx + 50);
-    if (/(?:cgst|sgst|igst|gstin|taxable)/i.test(near)) continue;
-    return m[1];
-  }
+  if (digits.length === 15) return digits;
   return '';
 }
 
@@ -254,69 +215,9 @@ function ensureLineItems(data, lines, totalAmount) {
     corrections.push({ action: 'dropped_junk_line_items', from: before, to: items.length });
   }
 
-  const hasProductItem = items.some((it) =>
-    /\b(?:phone|mobile|handset|laptop|tv|nothing|samsung|apple|iphone|oneplus|xiaomi|realme|vivo|oppo|motorola|boat|sony|lg|voltas|daikin|tvs|hero|honda|bajaj|ronin)\b/i.test(
-      String(it?.name || it?.productName || ''),
-    ),
-  );
-  const needsV2 =
-    !items.length ||
-    !hasProductItem ||
-    hasCrumbLineAmount(items) ||
-    items.some((it) => !it?.isFee && !(lineItemAmount(it) > 0));
-
-  if (needsV2) {
-    try {
-      const v2 = extractStructuredLineItems(lines, { totalAmount });
-      if (v2.items?.length) {
-        items = v2.items;
-        corrections.push({
-          action: hasCrumbLineAmount(data.items)
-            ? 'replaced_crumb_line_items_with_v2'
-            : items.length && !hasProductItem
-              ? 'replaced_non_product_items_with_v2'
-              : 'line_items_from_v2',
-          count: items.length,
-        });
-      }
-    } catch {
-      /* optional */
-    }
-  }
-
-  const product = String(data.productName || '').trim();
-  if (!items.length && product && isValidProductName(product)) {
-    items = [
-      {
-        index: 1,
-        name: product,
-        productName: product,
-        qty: 1,
-        amount: totalAmount != null ? Number(totalAmount) : null,
-        rate: totalAmount != null ? Number(totalAmount) : null,
-        imei: data.imei || '',
-        serialNumber: data.serialNumber || '',
-        source: 'primary_product_fallback',
-      },
-    ];
-    corrections.push({ action: 'fallback_line_item_from_product', product });
-  }
-
-  items = items.filter((it) => !isJunkLineItem(it));
-
-  if (!items.length && product && isValidProductName(product)) {
-    items = [
-      {
-        index: 1,
-        name: product,
-        productName: product,
-        qty: 1,
-        amount: totalAmount != null ? Number(totalAmount) : null,
-        imei: data.imei || '',
-        source: 'primary_product_fallback',
-      },
-    ];
-  }
+  // A product name and grand total do not prove that a line item exists.
+  // Keep only rows that carry their own OCR evidence; never synthesize a row.
+  items = items.filter((it) => Boolean(it?.sourceText || it?.evidence || it?.rawText));
 
   return { items, corrections };
 }
@@ -364,7 +265,8 @@ export function runSemanticOcrPipeline(rawText = '', parsedData = {}, opts = {})
   });
 
   recoverLabeledDocumentFields(data, lines, blob);
-  recoverVehicleIdentityFromDocument(data, blob);
+  // Vehicle identity must come from an explicit labeled extractor. Do not
+  // recover chassis/engine/registration from unlabeled model-like tokens.
 
   pipelineLog('B2_LABELED_RECOVERY', {
     shopName: data.shopName,
@@ -504,17 +406,10 @@ export function runSemanticOcrPipeline(rawText = '', parsedData = {}, opts = {})
     });
   }
 
-  // Normalize IMEI (14–17 digits — do not force-slice to 15 if longer OCR)
-  data.imei = normalizeImeiKeep(data.imei) || normalizeImeiKeep(opts.imei) || '';
-  if (!data.imei && Array.isArray(data.items)) {
-    for (const it of data.items) {
-      const hit = normalizeImeiKeep(it?.imei);
-      if (hit) {
-        data.imei = hit;
-        break;
-      }
-    }
-  }
+  // IMEI is accepted only from an explicit IMEI-labeled 15-digit span.
+  const explicitImei = blob.match(/\bIMEI(?:\s*(?:No|Number|1|2))?\s*[:#\-]?\s*([0-9\s]{15,20})\b/i);
+  const explicitImeiDigits = explicitImei?.[1]?.replace(/\D/g, '') || '';
+  data.imei = explicitImeiDigits.length === 15 ? explicitImeiDigits : '';
 
   // Stage: asset category (VEHICLE | GADGET | …)
   const assetClass = classifyAssetDocumentCategory(blob, {
@@ -556,9 +451,11 @@ export function runSemanticOcrPipeline(rawText = '', parsedData = {}, opts = {})
     corrections: totalPick.corrections,
   });
 
-  if (totalPick.selected != null) {
+  const hasExplicitTotalLabel = /(?:grand\s*tot[ae]l|amount\s*payable|net\s*(?:payable|total|amount)|total\s*(?:amount|invoice\s*value|payable)|invoice\s*total|ex[\s\-]?showroom\s*price)/i.test(blob);
+  if (totalPick.selected != null && hasExplicitTotalLabel) {
     data.totalAmount = totalPick.selected;
-  } else if (totalPick.uncertain) {
+  } else if (totalPick.selected != null || totalPick.uncertain) {
+    data.totalAmount = null;
     data.totalAmountUncertain = true;
     data.needsManualReview = true;
   }
@@ -640,13 +537,6 @@ export function runSemanticOcrPipeline(rawText = '', parsedData = {}, opts = {})
   if (!data.imei && data.items[0]?.imei) {
     data.imei = normalizeImeiKeep(data.items[0].imei);
   }
-  if (!data.imei) {
-    const recoveredImei = recoverImeiFromDocument(blob, lines);
-    if (recoveredImei) {
-      data.imei = recoveredImei;
-      if (data.items[0]) data.items[0].imei = recoveredImei;
-    }
-  }
 
   // Contextual warranty (OCR-tolerant — Warrarty / Menufecturing typos)
   // Insurance policies must not inherit manufacturing-warranty dates.
@@ -670,10 +560,20 @@ export function runSemanticOcrPipeline(rawText = '', parsedData = {}, opts = {})
         validationStatus: warranty.validationStatus,
         source: warranty.source,
       };
-      if (data.invoiceDate && !data.warrantyExpiry) {
-        data.warrantyExpiry = addMonthsIso(data.invoiceDate, warranty.warrantyMonths);
+    }
+    // Warranty Start = purchase/invoice date; Warranty Expiry = start + duration.
+    // Never guess a missing date; if the duration was read but no start date is
+    // available, mark the warranty for manual review so the user confirms.
+    const startDate =
+      data.invoiceDate || data.purchaseDate || (parsedData && parsedData.invoiceDate) || null;
+    if (data.warrantyPeriodMonths != null) {
+      data.warrantyStart = startDate || null;
+      if (startDate) {
+        data.warrantyExpiry = addMonthsIso(startDate, data.warrantyPeriodMonths);
+      } else if (!data.warrantyExpiry) {
+        data.warrantyNeedsReview = true;
       }
-    } else if (/warr?[ae]?r?t?[yi]?/i.test(blob) && !data.warrantyPeriodMonths) {
+    } else if (/warr?[ae]?r?t?[yi]?/i.test(blob)) {
       data.warrantyNeedsReview = true;
     }
   } else {

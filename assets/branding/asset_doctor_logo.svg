@@ -1,46 +1,64 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1280" viewBox="0 0 1024 1280" fill="none">
-  <rect width="1024" height="1280" fill="#050A0F"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Asset Doctor">
   <defs>
-    <radialGradient id="sweepFull" cx="0.55" cy="0.28" r="0.45">
-      <stop offset="0%" stop-color="#00E5FF" stop-opacity="0.5"/>
-      <stop offset="60%" stop-color="#00E5FF" stop-opacity="0.1"/>
-      <stop offset="100%" stop-color="#00E5FF" stop-opacity="0"/>
-    </radialGradient>
+    <linearGradient id="adTealMint" x1="8%" y1="12%" x2="92%" y2="88%">
+      <stop offset="0%" stop-color="#0F766E"/>
+      <stop offset="45%" stop-color="#14B8A6"/>
+      <stop offset="100%" stop-color="#6EE7B7"/>
+    </linearGradient>
+    <linearGradient id="adEkg" x1="0%" y1="50%" x2="100%" y2="50%">
+      <stop offset="0%" stop-color="#0F766E"/>
+      <stop offset="50%" stop-color="#2DD4BF"/>
+      <stop offset="100%" stop-color="#A7F3D0"/>
+    </linearGradient>
+    <linearGradient id="adBadge" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#14B8A6"/>
+      <stop offset="100%" stop-color="#5EEAD4"/>
+    </linearGradient>
   </defs>
-  <g transform="translate(512,420)">
-    <path d="M0 0 L150 -180 A230 230 0 0 1 210 -60 Z" fill="url(#sweepFull)"/>
-    <circle r="250" stroke="#39FF8A" stroke-width="12" fill="none"/>
-    <circle r="190" stroke="#39FF8A" stroke-width="9" fill="none" opacity="0.9"/>
-    <line x1="0" y1="-300" x2="0" y2="-260" stroke="#39FF8A" stroke-width="12" stroke-linecap="round"/>
-    <line x1="0" y1="260" x2="0" y2="300" stroke="#39FF8A" stroke-width="12" stroke-linecap="round"/>
-    <line x1="-300" y1="0" x2="-260" y2="0" stroke="#39FF8A" stroke-width="12" stroke-linecap="round"/>
-    <line x1="260" y1="0" x2="300" y2="0" stroke="#39FF8A" stroke-width="12" stroke-linecap="round"/>
-    <circle cx="-177" cy="-177" r="13" fill="#39FF8A"/>
-    <circle cx="177" cy="-177" r="13" fill="#39FF8A"/>
-    <circle cx="-177" cy="177" r="13" fill="#39FF8A"/>
-    <circle cx="177" cy="177" r="13" fill="#39FF8A"/>
-    <g fill="#39FF8A">
-      <circle cx="-58" cy="-32" r="58"/>
-      <circle cx="-58" cy="-32" r="23" fill="#050A0F"/>
-      <rect x="-45" y="-16" width="30" height="125" rx="8"/>
-      <rect x="-45" y="78" width="58" height="15" rx="5"/>
-      <rect x="-45" y="102" width="46" height="15" rx="5"/>
-    </g>
-    <g stroke="#39FF8A" stroke-width="14" fill="none" stroke-linecap="round">
-      <rect x="16" y="-108" width="108" height="216" rx="24"/>
-      <line x1="46" y1="-78" x2="94" y2="-78"/>
-      <line x1="46" y1="78" x2="94" y2="78"/>
-    </g>
-    <circle r="15" fill="#39FF8A"/>
-  </g>
-  <text x="512" y="820" text-anchor="middle" fill="#FFFFFF"
-        font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="72"
-        letter-spacing="2">ASSET DOCTOR</text>
-  <text x="512" y="900" text-anchor="middle" fill="#39FF8A"
-        font-family="Arial, Helvetica, sans-serif" font-weight="600" font-size="34"
-        letter-spacing="4">TRACK - MAINTAIN - SAVE</text>
-  <text x="512" y="970" text-anchor="middle" fill="#94A3B8"
-        font-family="Arial, Helvetica, sans-serif" font-weight="500" font-size="26"
-        letter-spacing="2">The Smart Asset Vault</text>
+  <rect width="512" height="512" rx="114" fill="#050A0F"/>
+  <path
+    d="M256 70 C334 108 402 108 416 120 C416 272 362 392 256 462 C150 392 96 272 96 120 C110 108 178 108 256 70 Z"
+    fill="#07111F"
+    stroke="url(#adTealMint)"
+    stroke-width="16"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M228 168 H292 L318 194 V338 H228 Z"
+    fill="none"
+    stroke="#14B8A6"
+    stroke-opacity="0.28"
+    stroke-width="4"
+  />
+  <path
+    d="M314 168 L318 194 H292 Z"
+    fill="#14B8A6"
+    fill-opacity="0.18"
+    stroke="#14B8A6"
+    stroke-opacity="0.28"
+    stroke-width="4"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M256 142 L332 348 H298 L278 294 H234 L214 348 H180 Z M242 258 H270 L256 216 Z"
+    fill="#FFFFFF"
+  />
+  <path
+    d="M150 258 H214 L230 258 L246 204 L262 312 L278 258 L294 258 H362"
+    fill="none"
+    stroke="url(#adEkg)"
+    stroke-width="12"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <circle cx="372" cy="396" r="38" fill="url(#adBadge)"/>
+  <circle cx="372" cy="396" r="38" fill="none" stroke="#ECFDF5" stroke-width="4"/>
+  <path
+    d="M354 396 L366 408 L392 380"
+    fill="none"
+    stroke="#050A0F"
+    stroke-width="7"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
 </svg>

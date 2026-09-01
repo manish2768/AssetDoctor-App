@@ -8,7 +8,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Image,
   Linking,
   Platform,
   AppState,
@@ -16,6 +15,7 @@ import {
 } from 'react-native';
 
 import { GlassButton } from '../../components/ui/Glass';
+import { AppLogo } from '../../components/AppLogo';
 import { BRAND, COLORS, SPACING } from '../../theme/branding';
 import { Haptics } from '../../services/haptics';
 import { AppLockService } from '../../services/security/AppLockService';
@@ -158,11 +158,7 @@ export function AppLockScreen({ onUnlocked, missingEnrollment }) {
 
   return (
     <View style={styles.root}>
-      <Image
-        source={require('../../../assets/icon.png')}
-        style={styles.logo}
-        resizeMode="contain"
-      />
+      <AppLogo size={88} style={styles.logo} />
       <Text style={styles.brand}>{BRAND.name}</Text>
       <Text style={styles.title}>Vault locked</Text>
       <Text style={styles.sub}>

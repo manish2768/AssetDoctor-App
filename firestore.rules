@@ -62,6 +62,13 @@ service cloud.firestore {
         allow read: if isOwner(userId) || isAdmin();
         allow create, update: if isOwner(userId) || isSuperAdmin() || getRole() == 'admin';
         allow delete: if false; // Soft-delete only to preserve maintenance & audit history
+
+        // Fuel & Mileage logs — owner-only read/write (lowercase compatibility path).
+        match /fuelLogs/{logId} {
+          allow read: if isOwner(userId) || isAdmin();
+          allow create, update: if isOwner(userId) || isSuperAdmin();
+          allow delete: if isSuperAdmin();
+        }
       }
 
       // Documents Subcollection
@@ -96,6 +103,14 @@ service cloud.firestore {
         allow create, update: if isOwner(userId) || isSuperAdmin();
         allow delete: if false;
 
+        // Fuel & Mileage logs — owner-only read/write. Fuel logs belong to the
+        // authenticated owner's own asset; a hard delete is reserved for admins.
+        match /fuelLogs/{logId} {
+          allow read: if isOwner(userId) || isAdmin();
+          allow create, update: if isOwner(userId) || isSuperAdmin();
+          allow delete: if isSuperAdmin();
+        }
+
         match /{subDoc=**} {
           allow read: if isOwner(userId) || isAdmin();
           allow write: if isOwner(userId) || isSuperAdmin();
@@ -128,13 +143,20 @@ service cloud.firestore {
     }
 
     // ----------------------------------------------------
-    // 2. Support Tickets Center
+    // 2. Support Tickets Center (standardized on support_tickets)
     // ----------------------------------------------------
-    match /supportTickets/{ticketId} {
+    match /support_tickets/{ticketId} {
       allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || isSupportAgent() || isAdmin();
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       allow update: if (isSignedIn() && resource.data.userId == request.auth.uid) || isSupportAgent() || isAdmin();
       allow delete: if isSuperAdmin();
+    }
+
+    // Server-side ticket numbering counter — written only by Cloud Functions
+    // (Admin SDK). Client SDK access is restricted to super admins only.
+    match /system_counters/{counterId} {
+      allow read: if isSuperAdmin();
+      allow write: if isSuperAdmin();
     }
 
     // ----------------------------------------------------
@@ -206,11 +228,12 @@ service cloud.firestore {
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.channel == 'whatsapp'
         && request.resource.data.eventType == 'user_welcome'
-        && request.resource.data.status == 'queued'
         && request.resource.data.templateKey == 'welcome_message'
+        && request.resource.data.status in ['queued', 'skipped', 'failed']
+        && notificationId == ('welcome_' + request.auth.uid)
         && request.resource.data.keys().hasAll(['userId', 'channel', 'templateKey', 'status', 'idempotencyKey', 'recipientPhone'])
-        && !request.resource.data.keys().hasAny(['accessToken', 'token', 'META_WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_TOKEN']);
-      allow update, delete: if isSuperAdmin() || isAdmin();
+        && !request.resource.data.keys().hasAny(['accessToken', 'token', 'META_WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_TOKEN', 'wamid', 'sentAt', 'deliveredAt', 'readAt']);
+      allow update, delete: if isSuperAdmin();
     }
 
     match /notification_logs/{logId} {
@@ -255,6 +278,36 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && request.resource.data.uid == request.auth.uid;
       allow read, update, delete: if isAdmin();
+    }
+
+    // ----------------------------------------------------
+    // 12. Adaptive Document Intelligence (Phase 13)
+    // Customers create EVENT records for their own documents only.
+    // Customers cannot write or promote PATTERN / TRUSTED global rules.
+    // ----------------------------------------------------
+    match /document_intelligence_feedback/{eventId} {
+      function learningEventCreate() {
+        return isSignedIn()
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.recordType == 'EVENT'
+          && request.resource.data.eventId == eventId
+          && request.resource.data.keys().hasAll(['userId', 'fieldName', 'correctionType', 'eventId', 'recordType'])
+          && !request.resource.data.keys().hasAny([
+            'password', 'otp', 'apiKey', 'api_key', 'token', 'accessToken',
+            'rawText', 'fullText', 'image', 'imageUri', 'imageBase64',
+            'whatsappToken', 'META_WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_TOKEN'
+          ]);
+      }
+
+      allow create: if learningEventCreate();
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid)
+        || (isSignedIn() && resource.data.recordType == 'PATTERN' && resource.data.status in ['EMERGING', 'TRUSTED']);
+      allow update: if isSuperAdmin()
+        && resource.data.recordType == 'PATTERN'
+        && request.resource.data.recordType == 'PATTERN'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'promotedBy', 'confidence']);
+      allow delete: if isSuperAdmin() && resource.data.recordType == 'PATTERN';
     }
 
     match /app_config/{docId} {

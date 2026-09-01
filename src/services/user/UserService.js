@@ -206,13 +206,9 @@ export class UserService {
     }
 
     // First-time WhatsApp welcome: queue server-side. Never call Meta from the APK.
-    const shouldQueueWelcome =
-      Boolean(normalizedPhone) &&
-      payload.whatsappOptIn !== false &&
-      !prior.welcomeMessageSent &&
-      (isNewUser || prior.welcomeMessageQueued === false);
-
-    if (shouldQueueWelcome) {
+    // Skip/fail reasons are written to notification_queue — never silent.
+    const shouldAttemptWelcome = isNewUser || prior.welcomeMessageQueued === false;
+    if (shouldAttemptWelcome) {
       try {
         console.log('[WHATSAPP_TRACE] AUTH_SUCCESS', user.uid);
         console.log('[WHATSAPP_TRACE] USER_CREATED', isNewUser ? 'new' : 'retry_unqueued');
@@ -220,16 +216,19 @@ export class UserService {
         const { enqueueWelcomeWhatsApp } = await import('../whatsapp/WhatsAppQueueService.js');
         const welcomeResult = await enqueueWelcomeWhatsApp({
           userId: user.uid,
-          phone: normalizedPhone,
+          phone: normalizedPhone || rawPhone,
           userName: resolvedName || 'Valued Member',
           customerType: 'NEW',
+          whatsappOptIn: payload.whatsappOptIn === true,
+          welcomeMessageSent: Boolean(prior.welcomeMessageSent),
         });
-        const queued = Boolean(welcomeResult?.success || welcomeResult?.duplicate);
+        const queued = Boolean(welcomeResult?.queued || welcomeResult?.duplicate);
         await Promise.all([
           userRef.set(
             {
               welcomeMessageQueued: queued,
               welcomeMessageQueuedAt: queued ? new Date().toISOString() : null,
+              welcomeSkipReason: welcomeResult?.reason || null,
             },
             { merge: true },
           ),
@@ -237,6 +236,7 @@ export class UserService {
             {
               welcomeMessageQueued: queued,
               welcomeMessageQueuedAt: queued ? new Date().toISOString() : null,
+              welcomeSkipReason: welcomeResult?.reason || null,
             },
             { merge: true },
           ),

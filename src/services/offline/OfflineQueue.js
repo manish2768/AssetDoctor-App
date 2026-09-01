@@ -12,6 +12,7 @@ import {
   makeOperationId,
 } from './syncConstants';
 import { EncryptedVaultStorage } from '../security/EncryptedVaultStorage';
+import { createSecureUuid } from '../security/secureId';
 
 const STORAGE_KEY = '@asset_doctor/offline_queue_v1';
 const memoryFallback = { value: '[]' };
@@ -75,10 +76,10 @@ function normalizeJob(job = {}) {
     job.payload?.operationId ||
     (entityId && operationType
       ? makeOperationId(entityType || 'X', entityId, operationType)
-      : `opid_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`);
+      : `opid_${createSecureUuid()}`);
 
   return {
-    id: job.id || `job_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    id: job.id || operationId || `job_${createSecureUuid()}`,
     operationId,
     type: job.type,
     operationType,

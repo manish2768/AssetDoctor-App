@@ -1,5 +1,6 @@
 import React from 'react';
-import { Shield, Mail, CheckCircle2 } from 'lucide-react';
+import { Shield, Mail } from 'lucide-react';
+import { AssetDoctorProtectedBadge } from './trust/AssetDoctorProtectedBadge';
 
 interface GlobalTrustFooterProps {
   onNavigateTab: (tab: string) => void;
@@ -46,6 +47,10 @@ export const GlobalTrustFooter: React.FC<GlobalTrustFooterProps> = ({
             <p className="text-xs text-slate-400 leading-relaxed max-w-sm">
               Universal asset intelligence and lifecycle platform helping individuals, families, and businesses understand, maintain, and protect everything they own.
             </p>
+
+            <div className="pt-1">
+              <AssetDoctorProtectedBadge state={{ id: 'PROTECTED', label: 'Asset Doctor Protected' }} compact />
+            </div>
 
             <div className="flex items-center gap-2 pt-2 text-[11px] font-mono text-emerald-400/90">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -102,6 +107,18 @@ export const GlobalTrustFooter: React.FC<GlobalTrustFooterProps> = ({
                   className="hover:text-emerald-400 transition"
                 >
                   Bill Analyzer
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://play.google.com/store/apps/details?id=com.assetdoctor.app"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Download Asset Doctor from Google Play"
+                  className="hover:text-emerald-400 transition inline-flex items-center gap-1.5 text-slate-300"
+                >
+                  <span>Android App</span>
+                  <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Google Play</span>
                 </a>
               </li>
             </ul>

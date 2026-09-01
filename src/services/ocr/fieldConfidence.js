@@ -92,14 +92,48 @@ export function scoreFieldConfidences(data = {}) {
   if (imei) {
     if (imei.length === 15 && validImei(imei)) {
       fields.imei = 0.98;
-    } else if (imei.length >= 14 && imei.length <= 17) {
-      fields.imei = 0.88;
+    } else if (imei.length === 15) {
+      fields.imei = 0.22;
+      reasons.imei = 'IMEI failed Luhn checksum — must not be treated as verified.';
     } else {
-      fields.imei = 0.25;
-      reasons.imei = 'IMEI should be 14–17 digits.';
+      fields.imei = 0.2;
+      reasons.imei = 'IMEI should be 15 digits with a valid Luhn check.';
     }
   } else {
     fields.imei = serial ? 0.7 : 0.5;
+  }
+
+  const gstin = String(data.shopGstin || data.gstin || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (gstin) {
+    const gstOk = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin);
+    fields.gstin = gstOk ? 0.9 : 0.25;
+    if (!gstOk) reasons.gstin = 'GSTIN format failed checksum/pattern validation.';
+  }
+
+  const vin = String(data.chassisNumber || data.vin || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (vin) {
+    if (vin.length === 17 && !/[IOQ]/.test(vin)) {
+      fields.chassisNumber = 0.92;
+    } else {
+      fields.chassisNumber = 0.28;
+      reasons.chassisNumber = 'Chassis/VIN failed 17-char / I-O-Q validation.';
+    }
+  }
+
+  const reg = String(data.registration || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (reg) {
+    const rtoOk = /^[A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}$/.test(reg) || /^[0-9]{2}BH[0-9]{4}[A-Z]{1,2}$/.test(reg);
+    fields.registration = rtoOk ? 0.92 : 0.3;
+    if (!rtoOk) reasons.registration = 'Registration number failed Indian RTO format check.';
+  }
+
+  const purchaseDate = String(data.invoiceDate || data.purchaseDate || data.purchase_date || '').trim();
+  if (purchaseDate && /^\d{4}-\d{2}-\d{2}$/.test(purchaseDate)) {
+    const yr = Number(purchaseDate.slice(0, 4));
+    if (yr < 1990 || yr > 2100) {
+      fields.purchaseDate = 0.15;
+      reasons.purchaseDate = 'Date year is outside a plausible range.';
+    }
   }
 
   if (serial && !isTaxIdentifierText(serial) && serial.length >= 5) {
@@ -115,14 +149,20 @@ export function scoreFieldConfidences(data = {}) {
   if (kind.includes('insurance')) {
     fields.policyNumber = hasText(data.policyNumber || data.invoiceNumber) ? 0.88 : 0.2;
     fields.policyHolder = hasText(data.policyHolder || data.customerName) ? 0.8 : 0.2;
-    fields.registration = hasText(data.registration) ? 0.9 : 0.2;
+    if (!hasText(data.registration)) fields.registration = 0.2;
+    else if (fields.registration == null || fields.registration >= 0.55) {
+      fields.registration = Math.max(fields.registration || 0, 0.9);
+    }
     fields.policyStartDate = hasText(data.policyStartDate || data.insuranceStart) ? 0.85 : 0.2;
     fields.policyExpiryDate = hasText(data.policyExpiryDate || data.insuranceExpiry) ? 0.85 : 0.2;
   }
   if (kind.includes('service') || data.isServiceInvoice) {
     const odo = data.odometerKm ?? data.odometerReading;
     fields.odometerReading = odo != null && Number(odo) > 0 ? 0.9 : 0.15;
-    fields.registration = hasText(data.registration) ? 0.9 : 0.2;
+    if (!hasText(data.registration)) fields.registration = 0.2;
+    else if (fields.registration == null || fields.registration >= 0.55) {
+      fields.registration = Math.max(fields.registration || 0, 0.9);
+    }
   }
 
   const critical = ['productName', 'price'];

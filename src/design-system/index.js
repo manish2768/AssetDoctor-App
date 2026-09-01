@@ -63,6 +63,13 @@ export { HealthScoreExplain } from '../components/HealthScoreExplain';
 export { SmartActionCard } from '../components/SmartActionCard';
 
 export {
+  BRAND_MARK_PATHS,
+  brandMarkSvg,
+  BRAND_WORDMARK as BRAND_MARK_WORDMARK,
+  BRAND_PRODUCT_LINE,
+} from './brandMark';
+
+export {
   INTELLIGENCE_FIELDS,
   SECTION_ORDER,
   SECTION_LABELS,

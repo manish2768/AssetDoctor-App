@@ -40,6 +40,8 @@ export const GEMINI_DOC_TYPES = Object.freeze({
 /** Stable set used for equality checks after normalize */
 export const DOC_CLASS = Object.freeze({
   TAX_INVOICE: 'TAX_INVOICE',
+  SALES_INVOICE: 'SALES_INVOICE',
+  SERVICE_INVOICE: 'SERVICE_INVOICE',
   INSURANCE_POLICY: 'INSURANCE_POLICY',
   REGISTRATION_CERTIFICATE: 'REGISTRATION_CERTIFICATE',
   PUC_CERTIFICATE: 'PUC_CERTIFICATE',
@@ -49,6 +51,8 @@ export const DOC_CLASS = Object.freeze({
 /** Map Gemini class → vault folder type used by DocumentVault / ReviewAsset */
 export const GEMINI_TO_VAULT_TYPE = Object.freeze({
   TAX_INVOICE: 'bill',
+  SALES_INVOICE: 'bill',
+  SERVICE_INVOICE: 'service',
   INSURANCE_POLICY: 'insurance',
   REGISTRATION_CERTIFICATE: 'rc',
   PUC_CERTIFICATE: 'puc',
@@ -63,6 +67,8 @@ export const GEMINI_TO_VAULT_TYPE = Object.freeze({
 
 export const DOC_TYPE_LABELS = Object.freeze({
   TAX_INVOICE: 'Tax Invoice',
+  SALES_INVOICE: 'Sales Invoice',
+  SERVICE_INVOICE: 'Service Invoice',
   INSURANCE_POLICY: 'Insurance Policy',
   REGISTRATION_CERTIFICATE: 'Registration Certificate',
   PUC_CERTIFICATE: 'PUC Certificate',
@@ -70,66 +76,58 @@ export const DOC_TYPE_LABELS = Object.freeze({
   OTHER_RECEIPT: 'Other Receipt',
 });
 
-const SYSTEM_PROMPT = `You are a strict Invoice OCR parser for Indian documents (Asset Doctor).
+const SYSTEM_PROMPT = `You are a strict document OCR parser. Read ONLY the current image/text.
 
-STEP 1 — CLASSIFY the document BEFORE extracting fields.
+STEP 1 — CLASSIFY before extracting.
 document_type MUST be exactly one of:
-["TAX_INVOICE", "SALES_INVOICE", "SERVICE_INVOICE", "INSURANCE_POLICY", "REGISTRATION_CERTIFICATE", "PUC", "OTHER_RECEIPT"]
+["TAX_INVOICE","SALES_INVOICE","SERVICE_INVOICE","INSURANCE_POLICY","REGISTRATION_CERTIFICATE","PUC_CERTIFICATE","OTHER_RECEIPT"]
 
-STRICT KEYWORD PRIORITY (apply in this order):
-1) POLICY / INSURANCE / "POLICY NO" / "PERIOD OF INSURANCE" → INSURANCE_POLICY.
-2) Job card / workshop / labour / odometer service → SERVICE_INVOICE.
-3) "TAX INVOICE" / SALES INVOICE / BILL (with GSTIN) → TAX_INVOICE or SALES_INVOICE.
-4) Registration Certificate / Form 23 / RC book → REGISTRATION_CERTIFICATE.
-5) PUC / Pollution Under Control → PUC.
-6) Else OTHER_RECEIPT.
+Rules:
+- POLICY SCHEDULE / CERTIFICATE OF INSURANCE / PERIOD OF INSURANCE → INSURANCE_POLICY
+- Job card / Labour / Current KM / Service Invoice / Workshop job → SERVICE_INVOICE
+- IMEI / smartphone / electronics / appliance retail bill → TAX_INVOICE or SALES_INVOICE
+- Form 23 / RC Book → REGISTRATION_CERTIFICATE
+- Pollution Under Control → PUC_CERTIFICATE
+- TAX INVOICE alone is NOT a service bill.
 
-STEP 2 — Return ONLY valid JSON (no markdown) with these keys:
+STEP 2 — Return JSON. Every missing field MUST be JSON null (not "", not "NA", not invented).
+
 {
-  "document_type": "TAX_INVOICE",
-  "product_name": "Nothing Phone (2a)",
-  "item_name": "Nothing Phone (2a)",
-  "asset_name": "Nothing Phone (2a)",
-  "total_amount": 24999,
-  "seller_name": "Retail Store Pvt Ltd",
-  "vendor_name": "Retail Store Pvt Ltd",
-  "vendor_dealer_name": "Retail Store Pvt Ltd",
-  "buyer_name": "Rahul Sharma",
-  "owner_buyer_name": "Rahul Sharma",
-  "invoice_number": "INV-1001",
-  "invoice_or_policy_no": "INV-1001",
-  "purchase_date": "YYYY-MM-DD",
-  "purchase_or_issue_date": "YYYY-MM-DD",
-  "category": "Gadget",
-  "serial_number": "",
-  "chassis_or_frame_no": "",
-  "vehicle_registration_number": "",
-  "engine_number": "",
-  "expiry_date": ""
+  "document_type": null,
+  "product_name": null,
+  "item_name": null,
+  "asset_name": null,
+  "total_amount": null,
+  "seller_name": null,
+  "vendor_name": null,
+  "buyer_name": null,
+  "invoice_number": null,
+  "purchase_date": null,
+  "category": null,
+  "serial_number": null,
+  "imei": null,
+  "chassis_or_frame_no": null,
+  "vehicle_registration_number": null,
+  "engine_number": null,
+  "odometer_reading": null,
+  "idv": null,
+  "premium": null,
+  "policy_number": null,
+  "policy_start_date": null,
+  "policy_end_date": null,
+  "insurer_name": null,
+  "expiry_date": null
 }
 
-PRODUCT NAME RULES (critical):
-- product_name / item_name / asset_name MUST be the sold product or primary line-item description
-  (phone model, TVS Ronin, fridge model, etc.).
-- NEVER put city, state, pincode, street, "Bill To" address blocks, or shop address into product_name.
-- If the product title is unclear, copy the highest-value line-item description from the item table.
-- NEVER default to the word "Product". If truly missing, return "".
-- NEVER put IMEI, serial, GSTIN, CGST/SGST amounts, or invoice numbers into product_name.
-- serial_number is a SEPARATE field (IMEI/serial/chassis) — keep it out of product_name.
-
-AMOUNT / PARTIES:
-- total_amount = Net Total / Grand Total / Amount Payable ONLY (ignore tax sub-totals).
-- seller_name / vendor_* = shop / dealer header (not footer disclaimers).
-- buyer_name = Bill To / Customer / Purchaser / Insured name only (real printed name).
-- invoice_number = Invoice No / Bill No / Policy No as applicable.
-- purchase_date = YYYY-MM-DD only.
-
-General:
-- Missing fields → null (never invent, never guess).
-- Never map CGST/SGST/GSTIN into serial_number / IMEI / chassis.
-- Always include document_type.
-- Include confidence as integer 0–100 for extraction certainty.
-- If HINTS.expectedDocumentType is set, KEEP it unless OCR clearly contradicts it.`;
+ABSOLUTE RULES:
+- Copy values ONLY if they are printed on THIS document.
+- NEVER reuse example vehicles, plates, chassis, engine numbers, odometer, or dates from memory or prior documents.
+- NEVER output 2026-12-31 or 2026-09-15 unless those exact dates are printed.
+- NEVER output odometer_reading unless a label such as Current KM / Odometer / KM Reading is printed next to the number.
+- For phones/electronics: chassis, engine, registration, odometer MUST be null.
+- For insurance: odometer, labour, parts, next-service MUST be null.
+- Dates must be YYYY-MM-DD and must match a printed date.
+- category: Vehicle | Gadget | Home | Insurance — only if the document supports it; else null.`;
 
 function apiKey() {
   // Production: empty → callers fall back to Cloud Function / local heuristics (no key in APK).
@@ -158,6 +156,12 @@ export function normalizeDocumentType(raw) {
 
   if (t === 'TAX_INVOICE' || t === 'PURCHASE_INVOICE' || t === 'INVOICE' || t === 'BILL') {
     return DOC_CLASS.TAX_INVOICE;
+  }
+  if (t === 'SALES_INVOICE' || t === 'RETAIL_INVOICE') {
+    return DOC_CLASS.SALES_INVOICE;
+  }
+  if (t === 'SERVICE_INVOICE' || t === 'REPAIR_BILL' || /SERVICE/.test(t)) {
+    return DOC_CLASS.SERVICE_INVOICE;
   }
   if (
     t === 'INSURANCE_POLICY' ||
@@ -197,7 +201,8 @@ function pickCategory(raw, documentType) {
   if (['Vehicle', 'Gadget', 'Home', 'Insurance'].includes(c)) return c;
   if (documentType === DOC_CLASS.INSURANCE_POLICY) return 'Insurance';
   if (documentType === DOC_CLASS.REGISTRATION_CERTIFICATE) return 'Vehicle';
-  return 'Vehicle';
+  if (documentType === DOC_CLASS.PUC_CERTIFICATE) return 'Vehicle';
+  return '';
 }
 
 /**
@@ -409,6 +414,23 @@ export function normalizeGeminiPayload(data = {}) {
     estimatedMonthlyUnits: numOrNull(data.estimatedMonthlyUnits),
     estimatedMonthlyBillCost: numOrNull(data.estimatedMonthlyBillCost),
     warrantyMonths: numOrNull(data.warrantyMonths),
+    odometer_reading:
+      documentType === 'SERVICE_INVOICE' || /service/i.test(documentType)
+        ? numOrNull(data.odometer_reading ?? data.odometerReading)
+        : null,
+    odometerReading:
+      documentType === 'SERVICE_INVOICE' || /service/i.test(documentType)
+        ? numOrNull(data.odometer_reading ?? data.odometerReading)
+        : null,
+    workshop_name: str(data.workshop_name || data.workshopName || vendor),
+    workshopName: str(data.workshop_name || data.workshopName || vendor),
+    idv: numOrNull(data.idv ?? data.idv_amount),
+    premium: numOrNull(data.premium ?? data.premium_amount),
+    policy_start_date: str(data.policy_start_date || data.policyStartDate),
+    policy_end_date: str(data.policy_end_date || data.policyEndDate || expiry),
+    insurer_name: str(data.insurer_name || data.insurerName || vendor),
+    vehicle_make: str(data.vehicle_make || data.vehicleMake),
+    vehicle_model: str(data.vehicle_model || data.vehicleModel),
   };
 
   return applyDocumentTypeGuards(base);

@@ -272,7 +272,7 @@ export function HealthScore({ score = 100, label, size = 'md', style }) {
   return (
     <View style={[styles.healthScoreWrap, { backgroundColor: bg }, style]}>
       <Text style={[TYPE.label, { color: fg, fontWeight: '800' }]}>{num}</Text>
-      <Text style={[TYPE.caption, { color: fg, fontWeight: '700', marginLeft: 4 }]}>
+      <Text style={[TYPE.caption, { color: fg, fontWeight: '700', marginLeft: 4 }]} numberOfLines={1}>
         {textLabel}
       </Text>
     </View>
@@ -325,6 +325,7 @@ export function AssetRow({
   statusTone = 'success',
   healthScore = 100,
   iconKey,
+  protectionState,
   onPress,
   style,
 }) {
@@ -388,6 +389,11 @@ export function AssetRow({
             <StatusBadge label={statusText} tone={statusTone} />
           </View>
         ) : null}
+        {protectionState?.label ? (
+          <Text style={[TYPE.micro, { color: colors.textMuted, marginTop: 4 }]} numberOfLines={1}>
+            {protectionState.label}
+          </Text>
+        ) : null}
       </View>
 
       <View style={styles.assetRowRight}>
@@ -403,7 +409,8 @@ export function DocumentRow({
   assetName,
   identifier,
   dateText,
-  verified = true,
+  verified = false,
+  protectionState,
   onPress,
   style,
 }) {
@@ -429,7 +436,7 @@ export function DocumentRow({
       accessibilityLabel={`${documentType}, ${assetName}`}
     >
       <View style={[styles.docIconBox, { backgroundColor: colors.accentLight }]}>
-        <Text style={{ fontSize: 18, color: colors.primary }}>📄</Text>
+        <Text style={{ fontSize: 11, color: colors.primary, fontWeight: '800' }}>DOC</Text>
       </View>
 
       <View style={styles.docRowContent}>
@@ -448,10 +455,10 @@ export function DocumentRow({
       </View>
 
       <View style={styles.docRowRight}>
-        {verified ? (
-          <StatusBadge label="Verified" tone="success" icon="✓" />
+        {protectionState?.label ? (
+          <StatusBadge label={protectionState.label} tone={protectionState.tone || 'neutral'} />
         ) : (
-          <StatusBadge label="Review" tone="warning" icon="⚠" />
+          <StatusBadge label="On file" tone="neutral" />
         )}
         <Text style={[styles.rowChevron, { color: colors.textMuted, marginTop: 4 }]}>›</Text>
       </View>
@@ -740,11 +747,15 @@ export function ExtractionField({
 // ============================================================================
 // 8. METRIC CARD & TIMELINE ITEM
 // ============================================================================
-export function MetricCard({ title, value, subtitle, icon, tone = 'neutral', style }) {
+export function MetricCard({ title, value, compactValue, subtitle, icon, tone = 'neutral', style }) {
   const colors = useThemeColors();
+  const [width, setWidth] = useState(0);
+  const useCompact = Boolean(compactValue) && (width > 0 ? width < 124 : true);
+  const display = useCompact && compactValue ? compactValue : value;
 
   return (
     <View
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
       style={[
         styles.metricCard,
         { backgroundColor: colors.surface, borderColor: colors.border },
@@ -753,14 +764,25 @@ export function MetricCard({ title, value, subtitle, icon, tone = 'neutral', sty
       ]}
     >
       <View style={styles.metricHeader}>
-        <Text style={[TYPE.label, { color: colors.textMuted, textTransform: 'uppercase' }]}>
+        <Text
+          style={[TYPE.label, { color: colors.textMuted, textTransform: 'uppercase' }]}
+          numberOfLines={1}
+        >
           {title}
         </Text>
         {icon ? <Text style={{ fontSize: 16 }}>{icon}</Text> : null}
       </View>
-      <Text style={[TYPE.metric, { color: colors.text, marginTop: 6 }]}>{value}</Text>
+      <Text
+        style={[styles.metricValue, { color: colors.text }]}
+        numberOfLines={1}
+        ellipsizeMode="clip"
+      >
+        {display}
+      </Text>
       {subtitle ? (
-        <Text style={[TYPE.caption, { color: colors.textMuted, marginTop: 2 }]}>{subtitle}</Text>
+        <Text style={[TYPE.caption, { color: colors.textMuted, marginTop: 2 }]} numberOfLines={1}>
+          {subtitle}
+        </Text>
       ) : null}
     </View>
   );
@@ -867,6 +889,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xs,
     paddingVertical: 3,
     borderRadius: RADIUS.small,
+    flexShrink: 0,
+    maxWidth: 110,
   },
   confidenceBadge: {
     paddingHorizontal: 8,
@@ -1003,10 +1027,21 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     flex: 1,
+    minWidth: 0,
     padding: SPACING.sm,
     borderRadius: RADIUS.medium,
     borderWidth: 1,
     marginHorizontal: 4,
+  },
+  metricValue: {
+    marginTop: 6,
+    fontSize: 18,
+    lineHeight: 22,
+    fontFamily: TYPE.metric.fontFamily,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.3,
+    flexShrink: 0,
   },
   metricHeader: {
     flexDirection: 'row',

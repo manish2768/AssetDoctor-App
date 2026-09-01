@@ -4,6 +4,7 @@
  */
 
 import { DOC_TYPES } from './documentTypeClassifier';
+import { isIdentifierMoneyDigits, parseInvoiceMoney } from './invoiceAmountGuard';
 
 const TAX_TOKEN =
   /^(?:cgst|sgst|igst|utgst|cess|gstin|hsn|sac|taxable|gst|tax)$/i;
@@ -45,12 +46,10 @@ export function mapFieldsForDocumentType(data = {}, classification = {}) {
   data.chassisNumber = sanitizeIdentityToken(data.chassisNumber);
   data.engineNumber = sanitizeIdentityToken(data.engineNumber);
 
-  // Move accidental 15-digit serial → IMEI
-  const serialDigits = String(data.serialNumber || '').replace(/\D/g, '');
-  if (!data.imei && serialDigits.length === 15) {
-    data.imei = serialDigits;
-    data.serialNumber = '';
-  }
+  // Serial and IMEI are distinct labels. Never promote a serial value into
+  // an IMEI merely because it contains 15 digits.
+  const rawImeiDigits = String(data.imei || '').replace(/\D/g, '');
+  if (data.imei && rawImeiDigits.length !== 15) data.imei = '';
 
   if (kind === DOC_TYPES.INSURANCE || kind === 'insurance') {
     data.totalAmount = data.premiumAmount ?? data.totalAmount ?? null;
@@ -91,6 +90,25 @@ export function mapFieldsForDocumentType(data = {}, classification = {}) {
   const buyer = cleanStr(data.customerName || data.ownerName || data.buyerName);
   if (TAX_TOKEN.test(buyer) || /niklesh\s*kumar/i.test(buyer)) {
     data.customerName = '';
+  }
+
+  const imeiDigits = String(data.imei || '').replace(/\D/g, '');
+  for (const moneyKey of ['totalAmount', 'purchasePrice', 'taxAmount', 'price', 'premiumAmount', 'idv', 'idvAmount']) {
+    const raw = data[moneyKey];
+    if (raw == null || raw === '') continue;
+    const digits = String(raw).replace(/\D/g, '');
+    if (isIdentifierMoneyDigits(String(raw)) || (imeiDigits.length === 15 && digits === imeiDigits)) {
+      data[moneyKey] = null;
+      continue;
+    }
+    const parsed = parseInvoiceMoney(raw);
+    if (parsed == null && String(raw).replace(/\D/g, '').length >= 10) {
+      data[moneyKey] = null;
+    }
+  }
+
+  if (GSTIN_SHAPE.test(String(data.registration || '').replace(/\s/g, ''))) {
+    data.registration = '';
   }
 
   return data;

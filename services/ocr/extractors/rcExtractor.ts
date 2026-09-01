@@ -4,36 +4,14 @@
  */
 
 import type { RcCertificateData, ExtractedField, VerificationConfidenceTier } from '../types.ts';
-import { ServiceExtractor } from './serviceExtractor.ts';
-
-function createField<T>(
-  value: T | null,
-  confidence: number,
-  rawText: string,
-  sourceLabel?: string,
-  flag?: string
-): ExtractedField<T> {
-  const rounded = Math.round(confidence * 100) / 100;
-  let tier: VerificationConfidenceTier = 'NEEDS_VERIFICATION';
-  if (rounded >= 0.85) tier = 'VERIFIED';
-  else if (rounded >= 0.70) tier = 'NEEDS_REVIEW';
-
-  return {
-    value,
-    confidence: rounded,
-    rawText,
-    sourceLabel,
-    tier,
-    flag
-  };
-}
+import { ServiceExtractor, createField } from './serviceExtractor.ts';
 
 export class RcExtractor {
   public static extract(rawText: string): RcCertificateData {
     const data: RcCertificateData = {};
 
     // 1. REGISTRATION NUMBER (Normalized e.g. UP 32 AB 1234 -> UP32AB1234)
-    const regMatch = rawText.match(/(?:Regn\s*No|Registration\s*Number|Vehicle\s*No)[:\s\.\-]*([A-Z0-9\s\-]{8,14})/i) ||
+    const regMatch = rawText.match(/(?:Regn\s*No|Registration\s*(?:No|Number)|Vehicle\s*No)[:\s\.\-]*([A-Z0-9\s\-]{8,14})/i) ||
                      rawText.match(/\b([A-Z]{2}[0-9]{2}[A-Z]{1,2}[0-9]{4})\b/i);
     if (regMatch) {
       const norm = ServiceExtractor.normalizeRegistration(regMatch[1]);
@@ -43,10 +21,10 @@ export class RcExtractor {
     }
 
     // 2. OWNER NAME
-    const ownerMatch = rawText.match(/(?:Owner\s*Name|Name\s*of\s*Owner|Registered\s*Owner)[:\s\.\-]*([A-Z\s\.\-]{3,35})/i);
+    const ownerMatch = rawText.match(/(?:Owner\s*Name|Name\s*of\s*Owner|Registered\s*Owner)[:\s\.\-]*([^\r\n]{3,35})/i);
     if (ownerMatch) {
-      const name = ownerMatch[1].trim();
-      if (name.length > 2 && !/form|certificate|registration|motor/i.test(name)) {
+      const name = ownerMatch[1].split(/[\r\n]/)[0].trim();
+      if (name.length > 2 && !/form|certificate|registration|motor|chassis|engine/i.test(name)) {
         data.ownerName = createField(name, 0.94, ownerMatch[0], 'RC Owner Name');
       }
     }
@@ -63,14 +41,16 @@ export class RcExtractor {
     }
 
     // 4. MAKER & MODEL
-    const makerMatch = rawText.match(/(?:Maker'?s\s*Name|Maker|Manufacturer)[:\s\.\-]*([A-Za-z\s]{3,25})/i);
+    const makerMatch = rawText.match(/(?:Maker'?s\s*Name|Maker|Manufacturer)[:\s\.\-]*([^\r\n]{3,25})/i);
     if (makerMatch) {
-      data.maker = createField(makerMatch[1].trim(), 0.93, makerMatch[0], 'Maker Name');
+      const cleanMaker = makerMatch[1].split(/[\r\n]/)[0].trim();
+      data.maker = createField(cleanMaker, 0.93, makerMatch[0], 'Maker Name');
     }
 
-    const modelMatch = rawText.match(/(?:Model\s*Name|Makers\s*Class|Model)[:\s\.\-]*([A-Za-z0-9\s\-]{3,30})/i);
+    const modelMatch = rawText.match(/(?:Model\s*Name|Makers\s*Class|Model)[:\s\.\-]*([^\r\n]{3,30})/i);
     if (modelMatch) {
-      data.model = createField(modelMatch[1].trim(), 0.91, modelMatch[0], 'Model Name');
+      const cleanModel = modelMatch[1].split(/[\r\n]/)[0].trim();
+      data.model = createField(cleanModel, 0.92, modelMatch[0], 'Vehicle Model');
     }
 
     // 5. REGISTRATION & VALIDITY DATES

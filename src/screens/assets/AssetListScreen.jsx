@@ -1,12 +1,12 @@
 /**
- * Asset Doctor — Master Assets List Screen
- * Clean, compact, data-rich list with search, category filtering and health scoring.
+ * Asset Doctor — Master Assets List Screen.
+ * Category isolation: route.params.category is the source of truth.
+ * Search runs only after the category filter.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   FlatList,
   RefreshControl,
@@ -17,10 +17,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAssets } from '../../context/AssetProvider';
 import { useAuth } from '../../context/AuthProvider';
 import { useThemeColors } from '../../context/ThemeProvider';
-import { useUiFeedback } from '../../context/UiFeedbackProvider';
 import { Haptics } from '../../services/haptics';
 import { requireAuth } from '../../navigation/authGate';
-import { getAssetFolderType } from '../../utils/assetFolders';
 import { calculateHealthScore } from '../../utils/healthScore';
 import { daysUntil } from '../../utils/dates';
 import { TAB_BAR_HEIGHT } from '../../components/CustomBottomTabBar';
@@ -30,15 +28,25 @@ import {
   FilterChip,
   AssetRow,
   EmptyState,
-  PrimaryButton,
 } from '../../components/design-system';
-import { RADIUS, SPACING, TYPE } from '../../theme/tokens';
+import { SPACING } from '../../theme/tokens';
+import {
+  CATEGORY_META,
+  getCategoryMeta,
+  resolveRouteCategory,
+  searchAssetsInCategory,
+} from '../../utils/categoryNormalization';
+import { AssetDoctorProtectedBadge } from '../../components/trust/AssetDoctorProtectedBadge';
+import { resolveProtectionBadgeState } from '../../trust/protectionStatus';
 
 const CATEGORY_FILTERS = [
   { id: 'all', label: 'All' },
   { id: 'vehicle', label: 'Vehicles' },
-  { id: 'appliances', label: 'Appliances' },
-  { id: 'gadgets', label: 'Gadgets' },
+  { id: 'gadget', label: 'Gadgets' },
+  { id: 'home', label: 'Home' },
+  { id: 'equipment', label: 'Equipment' },
+  { id: 'business', label: 'Business' },
+  { id: 'other', label: 'Other' },
 ];
 
 function assetSubtitle(asset) {
@@ -66,31 +74,33 @@ function assetCoverageStatus(asset) {
   return { label: 'Protected', tone: 'info' };
 }
 
-export function AssetListScreen({ navigation }) {
+export function AssetListScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
-  const ui = useUiFeedback();
-  const { assets, loading, removeAsset, refreshAssets } = useAssets();
+  const { assets, loading, refreshAssets } = useAssets();
   const { isAuthenticated } = useAuth();
 
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
 
+  const routeCategory = resolveRouteCategory(route?.params);
+  const selectedCategory = routeCategory.valid ? routeCategory.key : null;
+  const meta = selectedCategory ? getCategoryMeta(selectedCategory) : CATEGORY_META.all;
+
   const filteredAssets = useMemo(() => {
-    let list = assets || [];
-    if (filter === 'vehicle' || filter === 'appliances' || filter === 'gadgets') {
-      list = list.filter((a) => getAssetFolderType(a) === filter);
-    }
-    const q = query.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter((a) => {
-      const blob = `${a.assetName || ''} ${a.nickname || ''} ${a.categoryLabel || a.category || ''} ${
-        a.registration || ''
-      } ${a.serialNumber || ''} ${a.model || ''}`.toLowerCase();
-      return blob.includes(q);
-    });
-  }, [assets, query, filter]);
+    if (!routeCategory.valid) return [];
+    return searchAssetsInCategory(assets || [], selectedCategory, query);
+  }, [assets, query, routeCategory.valid, selectedCategory]);
+
+  useEffect(() => {
+    if (!__DEV__) return undefined;
+    const total = assets?.length || 0;
+    console.log('[CategoryIsolation] Selected category:', selectedCategory || `INVALID(${routeCategory.raw})`);
+    console.log('[CategoryIsolation] Total assets:', total);
+    console.log('[CategoryIsolation] Filtered assets:', filteredAssets.length);
+    console.log('[CategoryIsolation] Excluded assets:', total - filteredAssets.length);
+    return undefined;
+  }, [assets, filteredAssets.length, routeCategory.raw, selectedCategory]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -111,12 +121,35 @@ export function AssetListScreen({ navigation }) {
     });
   };
 
+  const setCategory = (id) => {
+    Haptics.select();
+    navigation.setParams({ category: id, folder: undefined });
+  };
+
+  const emptyState = query
+    ? {
+        title: 'No matching assets',
+        message: 'Try searching with a different name, registration or serial number.',
+        ctaLabel: 'Clear Search',
+        onCta: () => setQuery(''),
+      }
+    : {
+        title: routeCategory.valid ? meta.emptyTitle : 'No assets in this category',
+        message: routeCategory.valid
+          ? meta.emptyBody
+          : 'This collection could not be resolved. Go back and choose Vehicles, Gadgets, Home, Equipment, Business or Other.',
+        ctaLabel: routeCategory.valid ? meta.addLabel : '+ Add Asset',
+        onCta: onAddAsset,
+      };
+
+  const countLabel = `${filteredAssets.length} ${filteredAssets.length === 1 ? 'asset' : 'assets'} protected`;
+
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={{ paddingTop: Math.max(insets.top, 8) }}>
         <AppHeader
-          title="Assets"
-          subtitle={`${assets?.length || 0} ${assets?.length === 1 ? 'asset' : 'assets'} protected`}
+          title={routeCategory.valid ? meta.title : 'Assets'}
+          subtitle={countLabel}
           rightAction="+ Add"
           onRightAction={onAddAsset}
         />
@@ -126,7 +159,7 @@ export function AssetListScreen({ navigation }) {
         <SearchBar
           value={query}
           onChangeText={setQuery}
-          placeholder="Search assets, registration, serial number..."
+          placeholder={routeCategory.valid ? meta.searchPlaceholder : 'Search...'}
           style={{ marginHorizontal: SPACING.md }}
         />
 
@@ -139,8 +172,8 @@ export function AssetListScreen({ navigation }) {
             <FilterChip
               key={f.id}
               label={f.label}
-              selected={filter === f.id}
-              onPress={() => setFilter(f.id)}
+              selected={selectedCategory === f.id || (f.id === 'all' && selectedCategory === 'all')}
+              onPress={() => setCategory(f.id)}
             />
           ))}
         </ScrollView>
@@ -148,7 +181,7 @@ export function AssetListScreen({ navigation }) {
 
       <FlatList
         data={filteredAssets}
-        keyExtractor={(item) => item.assetId || item.id || String(Math.random())}
+        keyExtractor={(item) => item.assetId || item.id}
         renderItem={({ item }) => {
           const cov = assetCoverageStatus(item);
           return (
@@ -160,6 +193,7 @@ export function AssetListScreen({ navigation }) {
               statusText={cov.label}
               statusTone={cov.tone}
               healthScore={calculateHealthScore(item)}
+              protectionState={resolveProtectionBadgeState({ asset: item })}
               onPress={() =>
                 navigation.navigate('AssetPassport', { assetId: item.assetId || item.id })
               }
@@ -182,14 +216,10 @@ export function AssetListScreen({ navigation }) {
         ListEmptyComponent={
           loading ? null : (
             <EmptyState
-              title={query ? 'No matching assets' : 'No assets in this category'}
-              message={
-                query
-                  ? 'Try searching with a different name, registration or serial number.'
-                  : 'Add your vehicle or home appliance to protect and track it.'
-              }
-              ctaLabel={query ? 'Clear Search' : '+ Add Asset'}
-              onCta={query ? () => setQuery('') : onAddAsset}
+              title={emptyState.title}
+              message={emptyState.message}
+              ctaLabel={emptyState.ctaLabel}
+              onCta={emptyState.onCta}
               style={{ marginHorizontal: SPACING.md }}
             />
           )
@@ -214,3 +244,5 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.xs,
   },
 });
+
+export default AssetListScreen;
