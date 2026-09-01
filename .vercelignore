@@ -1,0 +1,15 @@
+android
+ios
+node_modules
+.git
+.expo
+build
+dist-bundle-check
+fixtures
+functions
+Users
+scratch
+*.aab
+*.apk
+*.jks
+*.log
