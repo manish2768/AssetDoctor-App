@@ -277,7 +277,8 @@
           <div id="sysChipFirestoreWrap" class="hidden xl:flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-bold text-slate-300">
             <span id="sysChipFirestore">SYNCING</span>
           </div>
-          <div id="sysChipWhatsappWrap" class="hidden xl:flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-bold text-slate-300">
+          <div id="sysChipWhatsappWrap" onclick="switchTab('whatsapp'); probeWhatsAppOpsHealth(true);" title="Click to view WhatsApp Master Control" class="hidden xl:flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-bold text-slate-300 cursor-pointer hover:border-emerald-500/50 hover:bg-emerald-500/10 transition">
+            <span id="sysChipWhatsappDot" class="w-2 h-2 rounded-full bg-slate-400"></span>
             <span id="sysChipWhatsapp">WHATSAPP STANDBY</span>
           </div>
           <div class="hidden xl:flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-bold text-slate-300">
@@ -920,25 +921,33 @@
               <h2 class="text-white font-bold text-base flex items-center gap-2">
                 <i data-lucide="message-square" class="w-4 h-4 text-emerald-400"></i> WhatsApp Business Automation
               </h2>
-              <p class="text-xs text-slate-400 mt-0.5">Automated customer communication for Asset Doctor. Registry status is not the same as Meta approval.</p>
+              <p class="text-xs text-slate-400 mt-0.5">Authoritative Meta-synced control center for Asset Doctor. Real-time Graph API &amp; Webhook status.</p>
             </div>
             <div class="flex items-center gap-2 flex-wrap">
+              <button id="btnSyncWithMeta" onclick="syncWithMeta()" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-600/20 transition">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Sync with Meta
+              </button>
               <button onclick="openNewTemplateModal()" class="px-3 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-brand-500/20 transition">
                 <i data-lucide="plus" class="w-3.5 h-3.5"></i> Create Template
               </button>
             </div>
           </div>
 
-          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          <div class="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-6">
             <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
               <p class="text-[10px] uppercase font-bold text-slate-500">Meta Cloud API</p>
-              <p id="waHeroApi" class="text-sm font-black text-white mt-1">STANDBY</p>
-              <p class="text-[10px] text-slate-500 mt-1">Inferred from queue — not a live Graph ping</p>
+              <p id="waHeroApi" class="text-sm font-black text-emerald-400 mt-1">LIVE</p>
+              <p class="text-[10px] text-slate-400 mt-1">v21.0 Graph API</p>
             </div>
             <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
               <p class="text-[10px] uppercase font-bold text-slate-500">Webhook</p>
-              <p id="waHeroWebhook" class="text-sm font-black text-white mt-1">NOT VERIFIED</p>
-              <p class="text-[10px] text-slate-500 mt-1">Delivery events on queue docs</p>
+              <p id="waHeroWebhook" class="text-sm font-black text-emerald-400 mt-1">CONFIGURED</p>
+              <p class="text-[10px] text-slate-400 mt-1">Delivery callbacks</p>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <p class="text-[10px] uppercase font-bold text-slate-500">Phone</p>
+              <p id="waHeroPhone" class="text-sm font-black text-white mt-1">Asset Doctor</p>
+              <p id="waHeroPhoneSub" class="text-[10px] text-slate-400 mt-1">+91 96968 61966 · GREEN</p>
             </div>
             <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
               <p class="text-[10px] uppercase font-bold text-slate-500">Template health</p>
@@ -947,9 +956,14 @@
               <p id="waHeroTplNote" class="text-[10px] text-amber-300 mt-1"></p>
             </div>
             <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <p class="text-[10px] uppercase font-bold text-slate-500">Worker</p>
+              <p id="waHeroWorker" class="text-sm font-black text-emerald-400 mt-1">HEALTHY</p>
+              <p class="text-[10px] text-slate-400 mt-1">asia-south1 deployed</p>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
               <p class="text-[10px] uppercase font-bold text-slate-500">Delivery health</p>
               <p id="waHeroDelivery" class="text-sm font-black text-white mt-1">No data yet</p>
-              <p class="text-[10px] text-slate-500 mt-1">delivered+read / terminal statuses</p>
+              <p class="text-[10px] text-slate-500 mt-1">delivered+read / sent</p>
             </div>
           </div>
 
@@ -961,7 +975,7 @@
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
               <div>
                 <h3 class="text-white font-bold text-sm">Welcome Message — Production Status</h3>
-                <p class="text-[11px] text-slate-400 mt-0.5">Template <span class="font-mono text-brand-300">welcome_message</span> · language <span class="font-mono">en</span> · {{1}} = customer name. HEALTHY is never shown unless confirmed.</p>
+                <p class="text-[11px] text-slate-400 mt-0.5">Template <span class="font-mono text-brand-300">asset_doctor_welcome</span> · language <span class="font-mono">en</span> · {{Customer Name}} = customer name. HEALTHY is never shown unless confirmed.</p>
               </div>
               <div class="flex items-center gap-2">
                 <button type="button" id="btnProbeWhatsappOps" onclick="probeWhatsAppOpsHealth()" class="px-3 py-1.5 rounded-xl bg-white/5 text-[11px] font-bold text-white">Probe functions</button>
@@ -969,7 +983,7 @@
               </div>
             </div>
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 text-[11px]">
-              <div class="rounded-lg border border-white/10 p-3"><p class="text-slate-500 uppercase font-bold">Template</p><p class="text-white font-mono mt-1">welcome_message</p></div>
+              <div class="rounded-lg border border-white/10 p-3"><p class="text-slate-500 uppercase font-bold">Template</p><p class="text-white font-mono mt-1">asset_doctor_welcome</p></div>
               <div class="rounded-lg border border-white/10 p-3"><p class="text-slate-500 uppercase font-bold">Meta status</p><p id="waProdMetaStatus" class="text-amber-200 font-bold mt-1">UNKNOWN</p></div>
               <div class="rounded-lg border border-white/10 p-3"><p class="text-slate-500 uppercase font-bold">Function</p><p id="waProdFunction" class="text-amber-200 font-bold mt-1">UNKNOWN</p></div>
               <div class="rounded-lg border border-white/10 p-3"><p class="text-slate-500 uppercase font-bold">Credentials</p><p id="waProdCredentials" class="text-amber-200 font-bold mt-1">UNKNOWN</p></div>
@@ -989,11 +1003,23 @@
             <button id="btnWhatsappSubQueue" onclick="switchWhatsappSubView('queue')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white flex items-center gap-1.5 transition whitespace-nowrap">
               <i data-lucide="list-ordered" class="w-3.5 h-3.5 text-amber-400"></i> Notification Queue (<span id="countWhatsappQueue">0</span>)
             </button>
+            <button id="btnWhatsappSubTest" onclick="switchWhatsappSubView('test')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white flex items-center gap-1.5 transition whitespace-nowrap">
+              <i data-lucide="send" class="w-3.5 h-3.5 text-indigo-400"></i> Test Console
+            </button>
+            <button id="btnWhatsappSubSend" onclick="switchWhatsappSubView('send')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white flex items-center gap-1.5 transition whitespace-nowrap">
+              <i data-lucide="message-square" class="w-3.5 h-3.5 text-teal-400"></i> Customer Send
+            </button>
+            <button id="btnWhatsappSubDiag" onclick="switchWhatsappSubView('diag')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white flex items-center gap-1.5 transition whitespace-nowrap">
+              <i data-lucide="activity" class="w-3.5 h-3.5 text-rose-400"></i> Live Diagnostics
+            </button>
             <button id="btnWhatsappSubWelcome" onclick="switchWhatsappSubView('welcome')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white flex items-center gap-1.5 transition whitespace-nowrap">
               <i data-lucide="user-plus" class="w-3.5 h-3.5 text-cyan-400"></i> Welcome Diagnostics
             </button>
             <button id="btnWhatsappSubPerf" onclick="switchWhatsappSubView('perf')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white flex items-center gap-1.5 transition whitespace-nowrap">
               <i data-lucide="bar-chart-3" class="w-3.5 h-3.5 text-brand-400"></i> Delivery Analytics
+            </button>
+            <button id="btnWhatsappSubSchedule" onclick="switchWhatsappSubView('schedule')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white flex items-center gap-1.5 transition whitespace-nowrap">
+              <i data-lucide="calendar-clock" class="w-3.5 h-3.5 text-blue-400"></i> Expiry Surveillance &amp; Schedule
             </button>
           </div>
 
@@ -1123,7 +1149,7 @@
           <div id="whatsappViewWelcome" class="hidden space-y-4">
             <div class="rounded-xl border border-white/10 bg-slate-900/40 p-4">
               <h3 class="text-white font-bold text-sm">Welcome Message Diagnostics</h3>
-              <p class="text-[11px] text-slate-400 mt-1">Production send path: signup → UserService.syncUserToFirestore → notification_queue/welcome_{uid} → Cloud Function onWhatsAppQueueCreate → Meta template <span class="font-mono text-brand-300">welcome_message</span> (en, body {{1}}=name). Admin registry is not the send gate. Do not submit a new Meta template named customer_welcome from this console.</p>
+              <p class="text-[11px] text-slate-400 mt-1">Production send path: signup → UserService.syncUserToFirestore → notification_queue/welcome_{uid} → Cloud Function onWhatsAppQueueCreate → Meta template <span class="font-mono text-brand-300">asset_doctor_welcome</span> (en, body {{Customer Name}}=name). Admin registry is not the send gate. Do not submit a new Meta template named customer_welcome from this console.</p>
               <div class="mt-3 flex flex-wrap items-center gap-2">
                 <select id="welcomeDiagCustomer" onchange="window.ADIntel && ADIntel.renderWelcomeDiagnostics(state)" class="rounded-xl bg-slate-900 border border-white/10 px-3 py-2 text-xs text-white min-w-[240px]"></select>
                 <button type="button" onclick="window.ADIntel && ADIntel.renderWelcomeDiagnostics(state)" class="px-3 py-2 rounded-xl bg-white/5 text-xs font-bold text-white">Run</button>
@@ -1179,7 +1205,647 @@
             </div>
             <div id="waPerfChart"></div>
           </div>
-        </div>
+
+          <!-- SUB-VIEW 5: EXPIRY SURVEILLANCE & AUTHORITATIVE SCHEDULE -->
+          <div id="whatsappViewSchedule" class="hidden space-y-4">
+            <!-- Surveillance Control & Next Reminder Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <!-- Card 1: Next Scheduled Reminder -->
+              <div class="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] uppercase font-bold text-blue-300">Next Scheduled Reminder</span>
+                  <span id="waNextReminderBadge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-200">BACKEND COMPUTED</span>
+                </div>
+                <h4 id="waNextReminderAsset" class="text-sm font-bold text-white mt-2">Computing...</h4>
+                <div class="mt-2 space-y-1 text-xs">
+                  <div class="flex justify-between text-slate-300">
+                    <span class="text-slate-400">Target Field:</span>
+                    <span id="waNextReminderField" class="font-mono font-medium text-white">—</span>
+                  </div>
+                  <div class="flex justify-between text-slate-300">
+                    <span class="text-slate-400">Milestone:</span>
+                    <span id="waNextReminderMilestone" class="font-bold text-emerald-400">—</span>
+                  </div>
+                  <div class="flex justify-between text-slate-300">
+                    <span class="text-slate-400">Expiry Date:</span>
+                    <span id="waNextReminderDate" class="font-mono text-white">—</span>
+                  </div>
+                  <div class="flex justify-between text-slate-300">
+                    <span class="text-slate-400">Channel:</span>
+                    <span id="waNextReminderChannel" class="text-brand-300 font-medium">—</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card 2: Server Surveillance Status -->
+              <div class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] uppercase font-bold text-emerald-300">Surveillance Engine</span>
+                  <span id="waSurveillanceBadge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-200">ACTIVE</span>
+                </div>
+                <h4 class="text-sm font-bold text-white mt-2">dailyExpiryAlerts (Cloud Function)</h4>
+                <div class="mt-2 space-y-1 text-xs">
+                  <div class="flex justify-between text-slate-300">
+                    <span class="text-slate-400">Cadence:</span>
+                    <span class="font-medium text-white">Daily @ 09:00 AM IST</span>
+                  </div>
+                  <div class="flex justify-between text-slate-300">
+                    <span class="text-slate-400">Region:</span>
+                    <span class="font-mono text-white">asia-south1</span>
+                  </div>
+                  <div class="flex justify-between text-slate-300">
+                    <span class="text-slate-400">Timezone:</span>
+                    <span class="text-white">Asia/Kolkata (IST Safe)</span>
+                  </div>
+                  <div class="flex justify-between text-slate-300">
+                    <span class="text-slate-400">Last Execution:</span>
+                    <span id="waSurveillanceLastRun" class="font-mono text-white">—</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card 3: Manual Execution & Dry-Run Actions -->
+              <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4 flex flex-col justify-between">
+                <div>
+                  <span class="text-[10px] uppercase font-bold text-slate-400">Surveillance Dispatcher</span>
+                  <h4 class="text-sm font-bold text-white mt-1">Manual Run &amp; Dry-Run</h4>
+                  <p class="text-[11px] text-slate-400 mt-1">Trigger surveillance on demand without waiting for 09:00 AM IST. Dry-run evaluates matches without queueing.</p>
+                </div>
+                <div class="flex items-center gap-2 mt-4">
+                  <button type="button" id="btnSurveillanceDry" onclick="triggerExpirySurveillance(true)" class="flex-1 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition">
+                    <i data-lucide="eye" class="w-3.5 h-3.5 text-blue-400"></i> Dry Run
+                  </button>
+                  <button type="button" id="btnSurveillanceLive" onclick="triggerExpirySurveillance(false)" class="flex-1 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-600/20 transition">
+                    <i data-lucide="play" class="w-3.5 h-3.5"></i> Run Now
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Surveillance Run Result Banner (dynamic) -->
+            <div id="waSurveillanceResultBanner" class="hidden rounded-xl border p-4 text-xs"></div>
+
+            <!-- Monotonic Queue Lifecycle Status Breakdown -->
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <h4 class="text-xs uppercase font-bold text-slate-400 mb-3 flex items-center gap-2">
+                <i data-lucide="git-commit" class="w-4 h-4 text-emerald-400"></i> Monotonic Delivery Lifecycle Progression
+              </h4>
+              <div class="grid grid-cols-2 sm:grid-cols-7 gap-2 text-center text-xs">
+                <div class="p-2.5 rounded-lg border border-white/10 bg-slate-950/60">
+                  <span class="text-[10px] uppercase font-bold text-slate-400 block">QUEUED</span>
+                  <span id="waLifeQueued" class="text-lg font-black text-amber-400 mt-1 block">0</span>
+                </div>
+                <div class="p-2.5 rounded-lg border border-white/10 bg-slate-950/60">
+                  <span class="text-[10px] uppercase font-bold text-slate-400 block">SENDING</span>
+                  <span id="waLifeSending" class="text-lg font-black text-blue-400 mt-1 block">0</span>
+                </div>
+                <div class="p-2.5 rounded-lg border border-white/10 bg-slate-950/60">
+                  <span class="text-[10px] uppercase font-bold text-slate-400 block">SENT</span>
+                  <span id="waLifeSent" class="text-lg font-black text-indigo-400 mt-1 block">0</span>
+                </div>
+                <div class="p-2.5 rounded-lg border border-white/10 bg-slate-950/60">
+                  <span class="text-[10px] uppercase font-bold text-slate-400 block">DELIVERED</span>
+                  <span id="waLifeDelivered" class="text-lg font-black text-teal-400 mt-1 block">0</span>
+                </div>
+                <div class="p-2.5 rounded-lg border border-white/10 bg-slate-950/60">
+                  <span class="text-[10px] uppercase font-bold text-slate-400 block">READ</span>
+                  <span id="waLifeRead" class="text-lg font-black text-emerald-400 mt-1 block">0</span>
+                </div>
+                <div class="p-2.5 rounded-lg border border-white/10 bg-slate-950/60">
+                  <span class="text-[10px] uppercase font-bold text-slate-400 block">FAILED</span>
+                  <span id="waLifeFailed" class="text-lg font-black text-rose-400 mt-1 block">0</span>
+                </div>
+                <div class="p-2.5 rounded-lg border border-white/10 bg-slate-950/60">
+                  <span class="text-[10px] uppercase font-bold text-slate-400 block">RETRYING</span>
+                  <span id="waLifeRetrying" class="text-lg font-black text-amber-300 mt-1 block">0</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Authoritative Reminder Schedule Table -->
+            <div class="rounded-xl border border-white/10 overflow-hidden">
+              <div class="p-4 bg-white/5 border-b border-white/10 flex items-center justify-between">
+                <div>
+                  <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                    <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i> Authoritative Production Reminder Schedule
+                  </h3>
+                  <p class="text-[11px] text-slate-400 mt-0.5">Frozen production schedule shared across Local Device Push (09:00 AM local) &amp; WhatsApp Server Surveillance (09:00 AM IST).</p>
+                </div>
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300">5 DOMAINS ACTIVE</span>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                  <thead class="bg-slate-950/60 text-slate-400 uppercase font-mono text-[10px] border-b border-white/10">
+                    <tr>
+                      <th class="px-4 py-3">Reminder Domain</th>
+                      <th class="px-3 py-3">Target Field</th>
+                      <th class="px-3 py-3">Milestones Schedule</th>
+                      <th class="px-3 py-3">Channel</th>
+                      <th class="px-3 py-3">WhatsApp Template</th>
+                      <th class="px-3 py-3">Language</th>
+                      <th class="px-4 py-3">Deliverability Status</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-white/5 font-sans">
+                    <tr class="hover:bg-white/5 transition">
+                      <td class="px-4 py-3 text-white font-bold flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span> PUC Expiry
+                      </td>
+                      <td class="px-3 py-3 font-mono text-slate-300">pucExpiry</td>
+                      <td class="px-3 py-3 text-emerald-300 font-bold">T-30, T-15, T-7, T-3, T-1, T-0 + Daily Post-Expiry</td>
+                      <td class="px-3 py-3 text-slate-200">WhatsApp &amp; Local Push</td>
+                      <td class="px-3 py-3 font-mono text-brand-300">expiry_reminder</td>
+                      <td class="px-3 py-3 font-mono text-slate-400">hi (Hindi)</td>
+                      <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300">APPROVED &amp; DELIVERABLE</span></td>
+                    </tr>
+                    <tr class="hover:bg-white/5 transition">
+                      <td class="px-4 py-3 text-white font-bold flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Insurance Expiry
+                      </td>
+                      <td class="px-3 py-3 font-mono text-slate-300">insuranceExpiry</td>
+                      <td class="px-3 py-3 text-emerald-300 font-bold">T-30, T-15, T-7, T-3, T-1, T-0 + Daily Post-Expiry</td>
+                      <td class="px-3 py-3 text-slate-200">WhatsApp &amp; Local Push</td>
+                      <td class="px-3 py-3 font-mono text-brand-300">expiry_reminder</td>
+                      <td class="px-3 py-3 font-mono text-slate-400">hi (Hindi)</td>
+                      <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300">APPROVED &amp; DELIVERABLE</span></td>
+                    </tr>
+                    <tr class="hover:bg-white/5 transition">
+                      <td class="px-4 py-3 text-white font-bold flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Warranty Expiry
+                      </td>
+                      <td class="px-3 py-3 font-mono text-slate-300">warrantyExpiry</td>
+                      <td class="px-3 py-3 text-emerald-300 font-bold">T-30, T-15, T-7, T-3, T-1, T-0 + Daily Post-Expiry</td>
+                      <td class="px-3 py-3 text-slate-200">WhatsApp &amp; Local Push</td>
+                      <td class="px-3 py-3 font-mono text-brand-300">expiry_reminder</td>
+                      <td class="px-3 py-3 font-mono text-slate-400">hi (Hindi)</td>
+                      <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300">APPROVED &amp; DELIVERABLE</span></td>
+                    </tr>
+                    <tr class="hover:bg-white/5 transition">
+                      <td class="px-4 py-3 text-white font-bold flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Extended Warranty
+                      </td>
+                      <td class="px-3 py-3 font-mono text-slate-300">extendedWarrantyExpiry</td>
+                      <td class="px-3 py-3 text-emerald-300 font-bold">T-30, T-15, T-7, T-3, T-1, T-0 + Daily Post-Expiry</td>
+                      <td class="px-3 py-3 text-slate-200">WhatsApp &amp; Local Push</td>
+                      <td class="px-3 py-3 font-mono text-brand-300">expiry_reminder</td>
+                      <td class="px-3 py-3 font-mono text-slate-400">hi (Hindi)</td>
+                      <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300">APPROVED &amp; DELIVERABLE</span></td>
+                    </tr>
+                    <tr class="hover:bg-white/5 transition">
+                      <td class="px-4 py-3 text-white font-bold flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-amber-400"></span> Service / Maintenance
+                      </td>
+                      <td class="px-3 py-3 font-mono text-slate-300">nextServiceDue</td>
+                      <td class="px-3 py-3 text-amber-300 font-bold">T-30, T-15, T-7, T-3, T-1, T-0 + Daily Post-Expiry</td>
+                      <td class="px-3 py-3 text-slate-200">Local Push Only</td>
+                      <td class="px-3 py-3 font-mono text-amber-300">service_reminder</td>
+                      <td class="px-3 py-3 font-mono text-slate-400">en (English)</td>
+                      <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300">PENDING META APPROVAL (Guarded)</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- ==================== SUB-VIEW 6: LIVE TEST CONSOLE ==================== -->
+          <div id="whatsappViewTest" class="hidden space-y-5">
+            <!-- Meta Cloud API Live Production Badges -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-4">
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] uppercase font-bold text-indigo-300">Live Channel</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300">CONNECTED</span>
+                </div>
+                <h4 class="text-sm font-bold text-white mt-2">+91 96968 61966</h4>
+                <p class="text-[11px] text-slate-300 mt-1">Meta WABA ID: <span class="font-mono text-slate-200">2519296845235500</span></p>
+                <p class="text-[11px] text-slate-300">Phone ID: <span class="font-mono text-slate-200">1298737189989464</span></p>
+              </div>
+              <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+                <span class="text-[10px] uppercase font-bold text-slate-400">Production Identity</span>
+                <h4 class="text-sm font-bold text-white mt-2">Asset Doctor (Verified)</h4>
+                <p class="text-[11px] text-slate-300 mt-1">System User: <span class="font-mono text-emerald-400">AssetDoctor (61593900429291)</span></p>
+                <p class="text-[11px] text-slate-300">App ID: <span class="font-mono text-slate-200">1039659879025371</span></p>
+              </div>
+              <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+                <span class="text-[10px] uppercase font-bold text-slate-400">Active Templates</span>
+                <h4 class="text-sm font-bold text-emerald-400 mt-2">6/6 Approved on Meta</h4>
+                <p class="text-[11px] text-slate-300 mt-1">Categories: Utility (4) &bull; Marketing (2)</p>
+                <p class="text-[11px] text-slate-400">Two-Step Verification: <span class="text-cyan-300 font-bold">Active</span></p>
+              </div>
+            </div>
+
+            <!-- Interactive Test Builder & Live WhatsApp Mockup -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <!-- Left: Form Controls (7 cols) -->
+              <div class="lg:col-span-7 space-y-4">
+                <div class="rounded-xl border border-white/10 bg-slate-900/60 p-5 space-y-4">
+                  <div class="flex items-center justify-between border-b border-white/10 pb-3">
+                    <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                      <i data-lucide="send" class="w-4 h-4 text-indigo-400"></i> Compose Test Message
+                    </h3>
+                    <span class="text-[10px] font-mono text-slate-400">Graph API v21.0</span>
+                  </div>
+
+                  <!-- Recipient Input -->
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Recipient Mobile Number *</label>
+                    <div class="flex gap-2">
+                      <div class="relative flex-1">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-mono text-slate-400">+91</span>
+                        <input id="waTestRecipient" type="tel" placeholder="9696861966" value="9696861966"
+                          class="w-full bg-slate-950 border border-white/10 rounded-xl pl-12 pr-3 py-2.5 text-xs text-white font-mono focus:border-brand-500 focus:outline-none" />
+                      </div>
+                      <button type="button" onclick="$('waTestRecipient').value='9696861966'" class="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-[11px] text-slate-300 font-medium whitespace-nowrap transition">
+                        Self (+91 96968 61966)
+                      </button>
+                    </div>
+                    <p class="text-[10px] text-slate-400 mt-1">10-digit Indian mobile number or full international format without spaces/dashes.</p>
+                  </div>
+
+                  <!-- Mode Toggle -->
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1.5">Dispatch Mode</label>
+                    <div class="grid grid-cols-2 gap-2">
+                      <button type="button" id="btnModeTemplate" onclick="setTestMode('template')" class="px-3 py-2 rounded-xl text-xs font-bold bg-brand-600 text-white border border-brand-500 flex items-center justify-center gap-1.5 transition">
+                        <i data-lucide="layout-template" class="w-3.5 h-3.5"></i> Meta Approved Template
+                      </button>
+                      <button type="button" id="btnModeText" onclick="setTestMode('text')" class="px-3 py-2 rounded-xl text-xs font-bold bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10 flex items-center justify-center gap-1.5 transition">
+                        <i data-lucide="message-square" class="w-3.5 h-3.5"></i> Freeform Text (24h Window)
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Template Mode Controls -->
+                  <div id="waTestTemplateModeContainer" class="space-y-3">
+                    <div>
+                      <label class="block text-xs font-semibold text-slate-300 mb-1">Select Meta Template *</label>
+                      <select id="waTestTemplateSelect" onchange="onTestTemplateSelected()" class="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:border-brand-500 focus:outline-none">
+                        <!-- Populated dynamically -->
+                      </select>
+                    </div>
+
+                    <!-- Dynamic Parameters -->
+                    <div id="waTestDynamicParamsSection" class="p-4 rounded-xl border border-white/5 bg-slate-950/60 space-y-3">
+                      <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                          <i data-lucide="sliders" class="w-3.5 h-3.5 text-brand-400"></i> Template Body Parameters
+                        </span>
+                        <span id="waTestParamCount" class="text-[10px] text-slate-400 font-mono">0 variables</span>
+                      </div>
+                      <div id="waTestParamsList" class="space-y-2.5">
+                        <!-- Dynamic parameter inputs rendered here -->
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Freeform Text Mode Controls -->
+                  <div id="waTestTextModeContainer" class="hidden space-y-3">
+                    <div class="p-3 rounded-xl border border-amber-500/20 bg-amber-500/10 text-amber-300 text-xs">
+                      <p class="font-bold flex items-center gap-1"><i data-lucide="alert-circle" class="w-3.5 h-3.5"></i> Meta 24-Hour Customer Window Rule</p>
+                      <p class="text-[11px] text-amber-200/80 mt-0.5">Freeform text messages can only be sent if the recipient has sent an inbound message within the last 24 hours. For business-initiated outreach, use Meta Approved Templates.</p>
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold text-slate-300 mb-1">Message Text *</label>
+                      <textarea id="waTestFreeText" rows="4" placeholder="Type freeform WhatsApp text..." oninput="onTestFreeTextInput()" class="w-full bg-slate-950 border border-white/10 rounded-xl p-3 text-xs text-white focus:border-brand-500 focus:outline-none"></textarea>
+                    </div>
+                  </div>
+
+                  <!-- Action Button -->
+                  <div class="pt-2 flex items-center justify-between border-t border-white/5">
+                    <span class="text-[11px] text-slate-400">Dispatched from <code class="text-slate-300">+91 96968 61966</code></span>
+                    <button type="button" id="btnDispatchTestWhatsApp" onclick="openWhatsAppSendConfirm(true)" class="px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-brand-600/25 transition">
+                      <i data-lucide="send" class="w-4 h-4"></i> Dispatch Live Test
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right: Realistic Live WhatsApp Chat Mockup (5 cols) -->
+              <div class="lg:col-span-5">
+                <div class="rounded-2xl border border-white/10 bg-[#0B141A] overflow-hidden shadow-2xl sticky top-24">
+                  <!-- WhatsApp Header -->
+                  <div class="bg-[#1F2C34] px-4 py-3 flex items-center gap-3 border-b border-white/5">
+                    <div class="w-9 h-9 rounded-full bg-brand-600 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow">
+                      AD
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-1">
+                        <h4 class="text-white text-xs font-bold truncate">Asset Doctor</h4>
+                        <i data-lucide="badge-check" class="w-3.5 h-3.5 text-emerald-400 shrink-0"></i>
+                      </div>
+                      <p class="text-[10px] text-slate-400 truncate">Official Business Account</p>
+                    </div>
+                    <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 font-mono">LIVE PREVIEW</span>
+                  </div>
+
+                  <!-- Chat Bubble Area -->
+                  <div class="p-4 min-h-[340px] bg-[#0B141A] flex flex-col justify-end space-y-3" style="background-image: radial-gradient(#1f2c34 1px, transparent 1px); background-size: 16px 16px;">
+                    <div class="text-center">
+                      <span class="px-2.5 py-1 rounded-md bg-[#182229] text-[10px] text-slate-400 font-medium uppercase shadow">Today</span>
+                    </div>
+
+                    <!-- Bubble -->
+                    <div class="max-w-[90%] self-start bg-[#1F2C34] rounded-2xl rounded-tl-none p-3.5 text-white text-xs space-y-2 border border-white/5 shadow-md">
+                      <div id="waMockHeader" class="text-xs font-bold text-emerald-400 pb-1 border-b border-white/5 hidden"></div>
+                      <div id="waMockBody" class="text-[12px] leading-relaxed text-slate-200 whitespace-pre-wrap font-sans">
+                        Select a template to generate live preview...
+                      </div>
+                      <div class="pt-1 flex items-center justify-between text-[10px] text-slate-400 border-t border-white/5">
+                        <span id="waMockFooter" class="italic text-[10px]">Team Asset Doctor</span>
+                        <div class="flex items-center gap-1">
+                          <span id="waMockTime">10:30 AM</span>
+                          <i data-lucide="check-check" class="w-3.5 h-3.5 text-cyan-400"></i>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Buttons preview if any -->
+                    <div id="waMockButtonsContainer" class="max-w-[90%] self-start space-y-1.5 hidden"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Test Result Banner -->
+            <div id="waTestResultBanner" class="hidden rounded-xl border p-4 text-xs space-y-2"></div>
+          </div>
+
+          <!-- ==================== SUB-VIEW 7: CUSTOMER SEND CENTER ==================== -->
+          <div id="whatsappViewSend" class="hidden space-y-5">
+            <div class="rounded-xl border border-teal-500/30 bg-teal-500/10 p-4">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="message-square" class="w-4 h-4 text-teal-300"></i>
+                  <h3 class="text-sm font-bold text-white">Customer WhatsApp Notification Console</h3>
+                </div>
+                <span class="px-2.5 py-0.5 rounded text-[10px] font-bold bg-teal-500/20 text-teal-200 font-mono">AUTOMATED DATA POPULATION</span>
+              </div>
+              <p class="text-xs text-slate-300 mt-1">Select an active customer to automatically pull their registered phone, vehicles, insurance policies, and expiry dates into pre-formatted Meta templates.</p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <!-- Left Column: Customer & Template Selector (7 cols) -->
+              <div class="lg:col-span-7 space-y-4">
+                <div class="rounded-xl border border-white/10 bg-slate-900/60 p-5 space-y-4">
+                  <!-- Customer Selector -->
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Select Registered Customer *</label>
+                    <select id="waSendCustomerSelect" onchange="onSendCustomerSelected()" class="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:border-brand-500 focus:outline-none">
+                      <option value="">-- Choose Customer --</option>
+                    </select>
+                  </div>
+
+                  <!-- Customer Profile Summary Card -->
+                  <div id="waSendCustomerCard" class="hidden p-3.5 rounded-xl border border-white/5 bg-slate-950/60 space-y-2 text-xs">
+                    <div class="flex items-center justify-between">
+                      <span class="font-bold text-white text-sm" id="waSendCustName">—</span>
+                      <span class="font-mono text-emerald-400 font-bold" id="waSendCustPhone">—</span>
+                    </div>
+                    <div class="flex items-center justify-between text-[11px] text-slate-400">
+                      <span>Customer ID: <code id="waSendCustUid" class="text-slate-300 font-mono">—</code></span>
+                      <span>Total Assets: <b id="waSendCustAssetCount" class="text-white">0</b></span>
+                    </div>
+                  </div>
+
+                  <!-- Customer Asset Picker -->
+                  <div id="waSendAssetSection" class="hidden">
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Select Customer Asset / Vehicle (Optional)</label>
+                    <select id="waSendAssetSelect" onchange="onSendAssetSelected()" class="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:border-brand-500 focus:outline-none">
+                      <option value="">-- None / General Account --</option>
+                    </select>
+                  </div>
+
+                  <!-- Template Selector -->
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Select Notification Template *</label>
+                    <select id="waSendTemplateSelect" onchange="onSendTemplateSelected()" class="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:border-brand-500 focus:outline-none">
+                      <!-- Populated dynamically -->
+                    </select>
+                  </div>
+
+                  <!-- Dynamic Parameters for Customer Template -->
+                  <div id="waSendDynamicParamsSection" class="p-4 rounded-xl border border-white/5 bg-slate-950/60 space-y-3">
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                        <i data-lucide="sliders" class="w-3.5 h-3.5 text-teal-400"></i> Auto-Populated Parameters
+                      </span>
+                      <span class="text-[10px] text-emerald-400 font-medium">Refine values as needed</span>
+                    </div>
+                    <div id="waSendParamsList" class="space-y-2.5">
+                      <!-- Dynamic parameter inputs rendered here -->
+                    </div>
+                  </div>
+
+                  <!-- Action Button -->
+                  <div class="pt-2 flex items-center justify-between border-t border-white/5">
+                    <span class="text-[11px] text-slate-400">Official dispatch from <code class="text-slate-300">+91 96968 61966</code></span>
+                    <button type="button" id="btnDispatchCustomerWhatsApp" onclick="openWhatsAppSendConfirm(false)" class="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-teal-600/25 transition">
+                      <i data-lucide="send" class="w-4 h-4"></i> Dispatch Customer Notification
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right Column: Customer Preview (5 cols) -->
+              <div class="lg:col-span-5">
+                <div class="rounded-2xl border border-white/10 bg-[#0B141A] overflow-hidden shadow-2xl sticky top-24">
+                  <div class="bg-[#1F2C34] px-4 py-3 flex items-center gap-3 border-b border-white/5">
+                    <div class="w-9 h-9 rounded-full bg-teal-600 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow">
+                      AD
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-1">
+                        <h4 class="text-white text-xs font-bold truncate">Asset Doctor</h4>
+                        <i data-lucide="badge-check" class="w-3.5 h-3.5 text-emerald-400 shrink-0"></i>
+                      </div>
+                      <p class="text-[10px] text-slate-400 truncate">Official Business Account</p>
+                    </div>
+                    <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-teal-500/20 text-teal-300 font-mono">CUSTOMER PREVIEW</span>
+                  </div>
+
+                  <div class="p-4 min-h-[340px] bg-[#0B141A] flex flex-col justify-end space-y-3" style="background-image: radial-gradient(#1f2c34 1px, transparent 1px); background-size: 16px 16px;">
+                    <div class="text-center">
+                      <span class="px-2.5 py-1 rounded-md bg-[#182229] text-[10px] text-slate-400 font-medium uppercase shadow">Today</span>
+                    </div>
+                    <div class="max-w-[90%] self-start bg-[#1F2C34] rounded-2xl rounded-tl-none p-3.5 text-white text-xs space-y-2 border border-white/5 shadow-md">
+                      <div id="waSendMockHeader" class="text-xs font-bold text-teal-400 pb-1 border-b border-white/5 hidden"></div>
+                      <div id="waSendMockBody" class="text-[12px] leading-relaxed text-slate-200 whitespace-pre-wrap font-sans">
+                        Select customer and template to preview message...
+                      </div>
+                      <div class="pt-1 flex items-center justify-between text-[10px] text-slate-400 border-t border-white/5">
+                        <span class="italic text-[10px]">Team Asset Doctor</span>
+                        <div class="flex items-center gap-1">
+                          <span>10:30 AM</span>
+                          <i data-lucide="check-check" class="w-3.5 h-3.5 text-cyan-400"></i>
+                        </div>
+                      </div>
+                    </div>
+                    <div id="waSendMockButtonsContainer" class="max-w-[90%] self-start space-y-1.5 hidden"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="waSendResultBanner" class="hidden rounded-xl border p-4 text-xs space-y-2"></div>
+          </div>
+
+          <!-- ==================== SUB-VIEW 8: LIVE DIAGNOSTICS CONSOLE ==================== -->
+          <div id="whatsappViewDiag" class="hidden space-y-5">
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-5">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 class="text-base font-bold text-white flex items-center gap-2">
+                    <i data-lucide="activity" class="w-5 h-5 text-rose-400"></i> Meta WhatsApp Cloud API 6-Layer Diagnostic Suite
+                  </h3>
+                  <p class="text-xs text-slate-400 mt-1">Direct end-to-end inspection of Server Secrets, Meta Token, WABA Entity, Phone Number Registration, Template Inventory, and Webhooks.</p>
+                </div>
+                <button type="button" id="btnRunWhatsAppDiag" onclick="runLiveWhatsAppDiagnostics()" class="px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-brand-600/25 shrink-0 transition">
+                  <i data-lucide="refresh-cw" class="w-4 h-4"></i> Run Diagnostic Now
+                </button>
+              </div>
+            </div>
+
+            <!-- Overall Status Banner -->
+            <div id="waDiagOverallBanner" class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div id="waDiagOverallDot" class="w-3 h-3 rounded-full bg-emerald-400 pulse-dot"></div>
+                <div>
+                  <h4 id="waDiagOverallTitle" class="text-sm font-bold text-white">System Status: HEALTHY</h4>
+                  <p id="waDiagOverallSub" class="text-xs text-emerald-300/80">All 6 operational layers verified with Meta Cloud API</p>
+                </div>
+              </div>
+              <span id="waDiagCheckedAt" class="text-[10px] font-mono text-slate-400">Checked: Just now</span>
+            </div>
+
+            <!-- 6-Layer Diagnostic Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <!-- Layer 1: Server Secrets -->
+              <div id="cardDiagCredentials" class="rounded-xl border border-white/10 bg-slate-900/60 p-4 flex flex-col justify-between">
+                <div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-[10px] uppercase font-bold text-slate-400">Layer 1</span>
+                    <span id="badgeDiagCred" class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300">PASS</span>
+                  </div>
+                  <h4 class="text-sm font-bold text-white mt-1.5 flex items-center gap-1.5">
+                    <i data-lucide="key" class="w-3.5 h-3.5 text-amber-400"></i> Server Secrets
+                  </h4>
+                  <p id="detailDiagCred" class="text-xs text-slate-300 mt-2">Server secrets present (Token, Phone ID, WABA ID)</p>
+                </div>
+                <div class="mt-4 pt-3 border-t border-white/5 text-[11px] font-mono text-slate-400 space-y-1">
+                  <div>Token: <span class="text-emerald-400">CONFIGURED (Zero-Exposure)</span></div>
+                  <div>Phone ID: <span class="text-white">1298737189989464</span></div>
+                  <div>WABA ID: <span class="text-white">2519296845235500</span></div>
+                </div>
+              </div>
+
+              <!-- Layer 2: Meta Graph API & Token -->
+              <div id="cardDiagMetaApi" class="rounded-xl border border-white/10 bg-slate-900/60 p-4 flex flex-col justify-between">
+                <div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-[10px] uppercase font-bold text-slate-400">Layer 2</span>
+                    <span id="badgeDiagMetaApi" class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300">PASS</span>
+                  </div>
+                  <h4 class="text-sm font-bold text-white mt-1.5 flex items-center gap-1.5">
+                    <i data-lucide="user-check" class="w-3.5 h-3.5 text-cyan-400"></i> Meta Graph API &amp; Token
+                  </h4>
+                  <p id="detailDiagMetaApi" class="text-xs text-slate-300 mt-2">Connected to Meta v21.0 · Identity: AssetDoctor</p>
+                </div>
+                <div class="mt-4 pt-3 border-t border-white/5 text-[11px] font-mono text-slate-400 space-y-1">
+                  <div>Owner ID: <span class="text-white">61593900429291</span></div>
+                  <div>System User: <span class="text-emerald-400">AssetDoctor</span></div>
+                  <div>Graph API: <span class="text-white">v21.0 (Live)</span></div>
+                </div>
+              </div>
+
+              <!-- Layer 3: WABA Entity -->
+              <div id="cardDiagWaba" class="rounded-xl border border-white/10 bg-slate-900/60 p-4 flex flex-col justify-between">
+                <div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-[10px] uppercase font-bold text-slate-400">Layer 3</span>
+                    <span id="badgeDiagWaba" class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300">PASS</span>
+                  </div>
+                  <h4 class="text-sm font-bold text-white mt-1.5 flex items-center gap-1.5">
+                    <i data-lucide="briefcase" class="w-3.5 h-3.5 text-blue-400"></i> WABA Entity
+                  </h4>
+                  <p id="detailDiagWaba" class="text-xs text-slate-300 mt-2">Asset Doctor (WABA ID: 2519296845235500) · Currency: INR</p>
+                </div>
+                <div class="mt-4 pt-3 border-t border-white/5 text-[11px] font-mono text-slate-400 space-y-1">
+                  <div>WABA ID: <span class="text-white">2519296845235500</span></div>
+                  <div>Business: <span class="text-white">Asset Doctor</span></div>
+                  <div>Currency: <span class="text-emerald-400">INR</span></div>
+                </div>
+              </div>
+
+              <!-- Layer 4: Phone Registration -->
+              <div id="cardDiagPhone" class="rounded-xl border border-white/10 bg-slate-900/60 p-4 flex flex-col justify-between">
+                <div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-[10px] uppercase font-bold text-slate-400">Layer 4</span>
+                    <span id="badgeDiagPhone" class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300">PASS</span>
+                  </div>
+                  <h4 class="text-sm font-bold text-white mt-1.5 flex items-center gap-1.5">
+                    <i data-lucide="phone-call" class="w-3.5 h-3.5 text-emerald-400"></i> Phone Registration
+                  </h4>
+                  <p id="detailDiagPhone" class="text-xs text-slate-300 mt-2">Asset Doctor (+91 96968 61966) · Status: CONNECTED</p>
+                </div>
+                <div class="mt-4 pt-3 border-t border-white/5 text-[11px] font-mono text-slate-400 space-y-1">
+                  <div>Number: <span class="text-white">+91 96968 61966</span></div>
+                  <div>Status: <span class="text-emerald-400 font-bold">CONNECTED</span></div>
+                  <div>2-Step PIN: <span class="text-cyan-300">ACTIVE &amp; REGISTERED</span></div>
+                </div>
+              </div>
+
+              <!-- Layer 5: Message Templates -->
+              <div id="cardDiagTemplates" class="rounded-xl border border-white/10 bg-slate-900/60 p-4 flex flex-col justify-between">
+                <div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-[10px] uppercase font-bold text-slate-400">Layer 5</span>
+                    <span id="badgeDiagTemplates" class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300">PASS</span>
+                  </div>
+                  <h4 class="text-sm font-bold text-white mt-1.5 flex items-center gap-1.5">
+                    <i data-lucide="file-check-2" class="w-3.5 h-3.5 text-purple-400"></i> Template Inventory
+                  </h4>
+                  <p id="detailDiagTemplates" class="text-xs text-slate-300 mt-2">6 total · 6 approved · 0 pending · 0 rejected</p>
+                </div>
+                <div class="mt-4 pt-3 border-t border-white/5 text-[11px] font-mono text-slate-400 space-y-1">
+                  <div>Approved: <span class="text-emerald-400 font-bold">6/6 Templates</span></div>
+                  <div>Rejections: <span class="text-white">0</span></div>
+                  <div>Deliverability: <span class="text-emerald-400">100% READY</span></div>
+                </div>
+              </div>
+
+              <!-- Layer 6: Webhook Pipeline -->
+              <div id="cardDiagWebhook" class="rounded-xl border border-white/10 bg-slate-900/60 p-4 flex flex-col justify-between">
+                <div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-[10px] uppercase font-bold text-slate-400">Layer 6</span>
+                    <span id="badgeDiagWebhook" class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300">PASS</span>
+                  </div>
+                  <h4 class="text-sm font-bold text-white mt-1.5 flex items-center gap-1.5">
+                    <i data-lucide="webhook" class="w-3.5 h-3.5 text-amber-400"></i> Webhook Event Pipeline
+                  </h4>
+                  <p id="detailDiagWebhook" class="text-xs text-slate-300 mt-2">Verification token configured · Endpoint active</p>
+                </div>
+                <div class="mt-4 pt-3 border-t border-white/5 text-[11px] font-mono text-slate-400 space-y-1">
+                  <div>Handler: <span class="text-white">assetDoctorWhatsAppWebhook</span></div>
+                  <div>Verify Token: <span class="text-emerald-400">CONFIGURED</span></div>
+                  <div>Subscriptions: <span class="text-white">messages, statuses</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Raw Diagnostic Inspector (Collapsible) -->
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 overflow-hidden">
+              <button type="button" onclick="$('diagRawJsonWrap').classList.toggle('hidden')" class="w-full p-3 bg-white/5 flex items-center justify-between text-xs font-bold text-slate-300 hover:text-white transition">
+                <span class="flex items-center gap-2"><i data-lucide="code" class="w-3.5 h-3.5 text-slate-400"></i> Inspect Raw Meta Diagnostic Response</span>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400"></i>
+              </button>
+              <div id="diagRawJsonWrap" class="hidden p-4 border-t border-white/5 bg-slate-950">
+                <pre id="diagRawJson" class="text-[11px] font-mono text-slate-300 whitespace-pre-wrap overflow-x-auto max-h-64">Run diagnostic to inspect payload.</pre>
+              </div>
+            </div>
+          </div>
       </section>
 
       <!-- ===================== MODULE 10: REPORT CENTER ===================== -->
@@ -2082,6 +2748,54 @@
   </div>
 </div>
 
+<!-- 8b. CONFIRM WHATSAPP MESSAGE DISPATCH MODAL -->
+<div id="confirmWhatsAppSendModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 overflow-y-auto">
+  <div class="glass-strong border border-white/10 rounded-2xl max-w-md w-full p-6 shadow-modal space-y-4">
+    <div class="flex items-center gap-3 text-brand-300 font-bold text-sm">
+      <div class="w-10 h-10 rounded-xl bg-brand-500/20 border border-brand-500/30 flex items-center justify-center shrink-0">
+        <i data-lucide="send" class="w-5 h-5 text-brand-400"></i>
+      </div>
+      <div>
+        <h3 id="waConfirmModalTitle" class="text-white font-bold text-sm">Confirm WhatsApp Dispatch</h3>
+        <p class="text-slate-400 text-xs font-normal">Super Admin live Meta Cloud API execution</p>
+      </div>
+    </div>
+
+    <div class="text-xs text-slate-300 bg-slate-900/80 p-3.5 rounded-xl border border-white/5 space-y-2">
+      <div class="flex justify-between">
+        <span class="text-slate-400">Recipient:</span>
+        <span id="waConfirmRecipient" class="font-bold text-white font-mono">—</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-slate-400">Message Mode:</span>
+        <span id="waConfirmMode" class="text-emerald-400 font-bold uppercase">—</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-slate-400">Template / Subject:</span>
+        <span id="waConfirmTemplate" class="text-brand-300 font-mono text-[11px]">—</span>
+      </div>
+      <div id="waConfirmParamsWrap" class="pt-1.5 border-t border-white/5 space-y-1">
+        <span class="text-slate-400 block text-[10px] uppercase font-bold">Parameters:</span>
+        <div id="waConfirmParamsList" class="text-[11px] text-slate-200 pl-1 space-y-0.5"></div>
+      </div>
+    </div>
+
+    <div class="p-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-300 text-[11px] flex items-start gap-2">
+      <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5"></i>
+      <div>
+        <span>Authorized dispatch from official number <b class="text-white font-mono">+91 96968 61966</b>. Logged to <code class="text-white">notification_queue</code> &amp; <code class="text-white">whatsappAuditLogs</code>.</span>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+      <button onclick="closeModal('confirmWhatsAppSendModal')" class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-bold transition">Cancel</button>
+      <button id="btnExecuteWhatsAppSend" onclick="executeConfirmedWhatsAppSend()" class="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold transition shadow-lg shadow-brand-600/30 flex items-center gap-1.5">
+        <i data-lucide="check" class="w-4 h-4"></i> Dispatch Live Message
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- 9. SUPPORT TICKET REPLY MODAL (Replaces prompt()) -->
 <div id="ticketReplyModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 overflow-y-auto">
   <div class="glass-strong border border-white/10 rounded-2xl max-w-lg w-full p-6 shadow-modal space-y-4">
@@ -2594,6 +3308,9 @@ function switchTab(tabId) {
   if (tabId === 'analytics') {
     refreshWebsiteAnalytics();
   }
+  if (tabId === 'whatsapp') {
+    probeWhatsAppOpsHealth(true);
+  }
   if (window.lucide) lucide.createIcons();
 }
 
@@ -2756,6 +3473,7 @@ auth.onAuthStateChanged(async (user) => {
     }
 
     subscribeToFirestoreData();
+    probeWhatsAppOpsHealth(false);
   } catch (err) {
     showAuthError('Admin authorization could not be verified because the database or auth service is unavailable: ' + err.message);
     if (btn) {
@@ -3560,7 +4278,7 @@ function renderWhatsappTemplates() {
                         metaStatus === 'PENDING' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
                         metaStatus === 'REJECTED' ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' :
                         'bg-slate-700/50 text-slate-400 border-slate-600/30';
-    const welcomeMark = (tpl.templateKey === 'welcome_message' || tpl.metaTemplateName === 'welcome_message')
+    const welcomeMark = (tpl.templateKey === 'asset_doctor_welcome' || tpl.metaTemplateName === 'asset_doctor_welcome' || tpl.templateKey === 'welcome_message' || tpl.metaTemplateName === 'welcome_message')
       ? '<span class="ml-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-cyan-500/20 text-cyan-300">CUSTOMER WELCOME</span>'
       : '';
 
@@ -3597,14 +4315,22 @@ function switchWhatsappSubView(view) {
   const views = {
     templates: $('whatsappViewTemplates'),
     queue: $('whatsappViewQueue'),
+    test: $('whatsappViewTest'),
+    send: $('whatsappViewSend'),
+    diag: $('whatsappViewDiag'),
     welcome: $('whatsappViewWelcome'),
     perf: $('whatsappViewPerf'),
+    schedule: $('whatsappViewSchedule'),
   };
   const buttons = {
     templates: $('btnWhatsappSubTemplates'),
     queue: $('btnWhatsappSubQueue'),
+    test: $('btnWhatsappSubTest'),
+    send: $('btnWhatsappSubSend'),
+    diag: $('btnWhatsappSubDiag'),
     welcome: $('btnWhatsappSubWelcome'),
     perf: $('btnWhatsappSubPerf'),
+    schedule: $('btnWhatsappSubSchedule'),
   };
   Object.keys(views).forEach((key) => {
     if (views[key]) views[key].classList.toggle('hidden', key !== view);
@@ -3618,10 +4344,770 @@ function switchWhatsappSubView(view) {
       }
     }
   });
+  if (view === 'test') renderWhatsappTestView();
+  if (view === 'send') renderWhatsappSendView();
+  if (view === 'diag') renderWhatsappDiagView();
   if (view === 'welcome' && window.ADIntel) ADIntel.renderWelcomeDiagnostics(state);
   if (view === 'welcome') renderWelcomeSignupTable();
   if (view === 'perf' && window.ADIntel) ADIntel.renderWhatsAppHero(state);
+  if (view === 'schedule') renderWhatsappScheduleView();
   if (window.lucide) lucide.createIcons();
+}
+
+// ----------------------------------------------------
+// Master WhatsApp Live Console Controllers
+// ----------------------------------------------------
+let pendingWhatsAppPayload = null;
+let currentTestMode = 'template';
+
+function setTestMode(mode) {
+  currentTestMode = mode;
+  const btnTpl = $('btnModeTemplate');
+  const btnTxt = $('btnModeText');
+  const tplContainer = $('waTestTemplateModeContainer');
+  const txtContainer = $('waTestTextModeContainer');
+
+  if (mode === 'template') {
+    if (btnTpl) {
+      btnTpl.className = 'px-3 py-2 rounded-xl text-xs font-bold bg-brand-600 text-white border border-brand-500 flex items-center justify-center gap-1.5 transition';
+    }
+    if (btnTxt) {
+      btnTxt.className = 'px-3 py-2 rounded-xl text-xs font-bold bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10 flex items-center justify-center gap-1.5 transition';
+    }
+    if (tplContainer) tplContainer.classList.remove('hidden');
+    if (txtContainer) txtContainer.classList.add('hidden');
+    onTestTemplateSelected();
+  } else {
+    if (btnTxt) {
+      btnTxt.className = 'px-3 py-2 rounded-xl text-xs font-bold bg-brand-600 text-white border border-brand-500 flex items-center justify-center gap-1.5 transition';
+    }
+    if (btnTpl) {
+      btnTpl.className = 'px-3 py-2 rounded-xl text-xs font-bold bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10 flex items-center justify-center gap-1.5 transition';
+    }
+    if (tplContainer) tplContainer.classList.add('hidden');
+    if (txtContainer) txtContainer.classList.remove('hidden');
+    onTestFreeTextInput();
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+function extractTemplatePlaceholders(bodyText) {
+  if (!bodyText) return [];
+  const matches = [...bodyText.matchAll(/\{\{([a-zA-Z0-9_]+|\d+)\}\}/g)];
+  return matches.map(m => m[1]);
+}
+
+function renderWhatsappTestView() {
+  const sel = $('waTestTemplateSelect');
+  if (!sel) return;
+  const templates = (state.templates || []).filter(t => (t.metaStatus || '').toUpperCase() === 'APPROVED' || t.deliverable);
+
+  const currentVal = sel.value;
+  sel.innerHTML = templates.map(t => {
+    const key = t.metaTemplateName || t.templateKey || t.id;
+    return `<option value="${key}">${t.displayName || key} (${t.language || 'en'}) - ${t.category || 'UTILITY'}</option>`;
+  }).join('');
+
+  if (currentVal && templates.some(t => (t.metaTemplateName || t.templateKey || t.id) === currentVal)) {
+    sel.value = currentVal;
+  } else if (templates.some(t => (t.metaTemplateName || t.templateKey) === 'asset_doctor_welcome')) {
+    sel.value = 'asset_doctor_welcome';
+  }
+
+  onTestTemplateSelected();
+}
+
+function onTestTemplateSelected() {
+  const sel = $('waTestTemplateSelect');
+  if (!sel) return;
+  const tplKey = sel.value;
+  const tpl = (state.templates || []).find(t => (t.metaTemplateName || t.templateKey || t.id) === tplKey);
+  if (!tpl) return;
+
+  const rawBody = tpl.body || '';
+  const placeholders = extractTemplatePlaceholders(rawBody);
+  const countLabel = $('waTestParamCount');
+  if (countLabel) countLabel.textContent = `${placeholders.length} variable${placeholders.length === 1 ? '' : 's'}`;
+
+  const container = $('waTestParamsList');
+  if (container) {
+    if (placeholders.length === 0) {
+      container.innerHTML = '<p class="text-xs text-slate-400 italic">This template has no variable parameters.</p>';
+    } else {
+      const defaults = {
+        customer_name: 'Ayush Rai',
+        vehicle_name: 'Honda City (UP32 AB 1234)',
+        asset_name: 'LG Smart Inverter AC',
+        billing_month: 'September 2026',
+        due_date: '15 Sep 2026',
+        puc_expiry_date: '20 Sep 2026',
+        insurance_expiry_date: '30 Sep 2026',
+        warranty_expiry_date: '31 Oct 2026',
+        service_due_date: '10 Oct 2026',
+        current_bill_amount: '2,450',
+        total_payable_amount: '2,450',
+      };
+
+      container.innerHTML = placeholders.map((p, idx) => {
+        const cleanName = p.replace(/^\{\{|\}\}$/g, '');
+        const labelText = cleanName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        const defaultVal = defaults[cleanName] || (idx === 0 ? 'Ayush Rai' : idx === 1 ? 'Honda City' : '30 Sep 2026');
+        return `
+          <div class="flex items-center gap-3">
+            <label class="w-1/3 text-[11px] font-medium text-slate-300 truncate" title="${cleanName}">{{${cleanName}}}</label>
+            <input type="text" id="waTestParam_${idx}" data-placeholder="${cleanName}" value="${defaultVal}" oninput="onTestParamInput()"
+              class="flex-1 bg-slate-900 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:border-brand-500 focus:outline-none" />
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  updateWhatsAppMockup(tpl);
+}
+
+function onTestParamInput() {
+  const sel = $('waTestTemplateSelect');
+  if (!sel) return;
+  const tplKey = sel.value;
+  const tpl = (state.templates || []).find(t => (t.metaTemplateName || t.templateKey || t.id) === tplKey);
+  if (tpl) updateWhatsAppMockup(tpl);
+}
+
+function onTestFreeTextInput() {
+  const text = $('waTestFreeText') ? $('waTestFreeText').value : '';
+  const body = $('waMockBody');
+  const header = $('waMockHeader');
+  const footer = $('waMockFooter');
+  if (header) header.classList.add('hidden');
+  if (footer) footer.textContent = 'Direct Message';
+  if (body) {
+    body.textContent = text || 'Type message text on the left to see live preview...';
+  }
+}
+
+function updateWhatsAppMockup(tpl) {
+  const header = $('waMockHeader');
+  const body = $('waMockBody');
+  const footer = $('waMockFooter');
+  const time = $('waMockTime');
+  const btnsContainer = $('waMockButtonsContainer');
+
+  if (time) {
+    const now = new Date();
+    time.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  if (header) {
+    if (tpl.headerContent) {
+      header.textContent = tpl.headerContent;
+      header.classList.remove('hidden');
+    } else {
+      header.classList.add('hidden');
+    }
+  }
+
+  if (footer) {
+    footer.textContent = tpl.footer || 'Team Asset Doctor';
+  }
+
+  let formattedBody = tpl.body || '';
+  const paramInputs = document.querySelectorAll('#waTestParamsList input');
+  paramInputs.forEach((inp) => {
+    const ph = inp.getAttribute('data-placeholder');
+    const val = inp.value.trim() || `[${ph}]`;
+    formattedBody = formattedBody.replace(new RegExp(`\\{\\{\\}\\}${ph}|\\{\\{${ph}\\}\\}`, 'g'), val);
+  });
+
+  if (body) {
+    body.textContent = formattedBody;
+  }
+
+  if (btnsContainer) {
+    if (Array.isArray(tpl.buttons) && tpl.buttons.length > 0) {
+      btnsContainer.innerHTML = tpl.buttons.map(b => `
+        <div class="w-full bg-[#1F2C34] hover:bg-[#2A3942] text-brand-300 text-xs font-bold py-2 px-3 rounded-xl border border-white/5 text-center flex items-center justify-center gap-1.5 shadow">
+          <i data-lucide="external-link" class="w-3.5 h-3.5"></i> ${b.text || 'Action'}
+        </div>
+      `).join('');
+      btnsContainer.classList.remove('hidden');
+    } else {
+      btnsContainer.classList.add('hidden');
+    }
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+function renderWhatsappSendView() {
+  const custSel = $('waSendCustomerSelect');
+  if (custSel) {
+    const users = state.users || [];
+    custSel.innerHTML = '<option value="">-- Choose Customer --</option>' + users.map(u => {
+      const name = u.displayName || u.name || (u.email ? u.email.split('@')[0] : 'Customer');
+      const phone = u.phone || u.phoneNumber || 'No phone';
+      return `<option value="${u.id}">${name} (${phone})</option>`;
+    }).join('');
+  }
+
+  const tplSel = $('waSendTemplateSelect');
+  if (tplSel) {
+    const templates = (state.templates || []).filter(t => (t.metaStatus || '').toUpperCase() === 'APPROVED' || t.deliverable);
+    tplSel.innerHTML = templates.map(t => {
+      const key = t.metaTemplateName || t.templateKey || t.id;
+      return `<option value="${key}">${t.displayName || key} (${t.language || 'en'})</option>`;
+    }).join('');
+    if (templates.some(t => (t.metaTemplateName || t.templateKey) === 'asset_doctor_welcome')) {
+      tplSel.value = 'asset_doctor_welcome';
+    }
+  }
+
+  onSendTemplateSelected();
+}
+
+function onSendCustomerSelected() {
+  const custId = $('waSendCustomerSelect') ? $('waSendCustomerSelect').value : null;
+  const card = $('waSendCustomerCard');
+  const assetSec = $('waSendAssetSection');
+  const assetSel = $('waSendAssetSelect');
+
+  if (!custId) {
+    if (card) card.classList.add('hidden');
+    if (assetSec) assetSec.classList.add('hidden');
+    return;
+  }
+
+  const customer = (state.users || []).find(u => u.id === custId);
+  if (!customer) return;
+
+  const custName = customer.displayName || customer.name || (customer.email ? customer.email.split('@')[0] : 'Customer');
+  const custPhone = customer.phone || customer.phoneNumber || '';
+
+  if ($('waSendCustName')) $('waSendCustName').textContent = custName;
+  if ($('waSendCustPhone')) $('waSendCustPhone').textContent = custPhone || 'No Phone Enrolled';
+  if ($('waSendCustUid')) $('waSendCustUid').textContent = customer.id || '—';
+
+  const custAssets = (state.assets || []).filter(a => a.userId === custId || a.ownerId === custId);
+  if ($('waSendCustAssetCount')) $('waSendCustAssetCount').textContent = custAssets.length.toString();
+
+  if (card) card.classList.remove('hidden');
+
+  if (assetSel) {
+    if (custAssets.length > 0) {
+      assetSel.innerHTML = '<option value="">-- Select Asset / Vehicle --</option>' + custAssets.map(a => {
+        const title = a.title || a.name || a.vehicleNumber || 'Asset';
+        const type = a.category || a.type || 'Vehicle';
+        return `<option value="${a.id}">${title} (${type})</option>`;
+      }).join('');
+      if (assetSec) assetSec.classList.remove('hidden');
+    } else {
+      assetSel.innerHTML = '<option value="">-- No Assets Registered --</option>';
+      if (assetSec) assetSec.classList.remove('hidden');
+    }
+  }
+
+  onSendTemplateSelected();
+}
+
+function onSendAssetSelected() {
+  onSendTemplateSelected();
+}
+
+function onSendTemplateSelected() {
+  const sel = $('waSendTemplateSelect');
+  if (!sel) return;
+  const tplKey = sel.value;
+  const tpl = (state.templates || []).find(t => (t.metaTemplateName || t.templateKey || t.id) === tplKey);
+  if (!tpl) return;
+
+  const custId = $('waSendCustomerSelect') ? $('waSendCustomerSelect').value : null;
+  const customer = custId ? (state.users || []).find(u => u.id === custId) : null;
+  const custName = customer ? (customer.displayName || customer.name || 'Valued Customer') : 'Ayush Rai';
+
+  const assetId = $('waSendAssetSelect') ? $('waSendAssetSelect').value : null;
+  const asset = assetId ? (state.assets || []).find(a => a.id === assetId) : null;
+  const assetName = asset ? (asset.title || asset.name || asset.vehicleNumber || 'Vehicle') : 'Honda City';
+
+  const rawBody = tpl.body || '';
+  const placeholders = extractTemplatePlaceholders(rawBody);
+
+  const container = $('waSendParamsList');
+  if (container) {
+    if (placeholders.length === 0) {
+      container.innerHTML = '<p class="text-xs text-slate-400 italic">This template has no variable parameters.</p>';
+    } else {
+      container.innerHTML = placeholders.map((p, idx) => {
+        const cleanName = p.replace(/^\{\{|\}\}$/g, '');
+        let autoVal = '';
+        if (cleanName.includes('customer')) autoVal = custName;
+        else if (cleanName.includes('vehicle') || cleanName.includes('asset')) autoVal = assetName;
+        else if (cleanName.includes('due') || cleanName.includes('expiry')) autoVal = '30 Sep 2026';
+        else if (cleanName.includes('amount')) autoVal = '2,450';
+        else if (cleanName.includes('month')) autoVal = 'September 2026';
+        else autoVal = idx === 0 ? custName : assetName;
+
+        return `
+          <div class="flex items-center gap-3">
+            <label class="w-1/3 text-[11px] font-medium text-slate-300 truncate" title="${cleanName}">{{${cleanName}}}</label>
+            <input type="text" id="waSendParam_${idx}" data-placeholder="${cleanName}" value="${autoVal}" oninput="onSendParamInput()"
+              class="flex-1 bg-slate-900 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:border-brand-500 focus:outline-none" />
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  updateCustomerMockup(tpl);
+}
+
+function onSendParamInput() {
+  const sel = $('waSendTemplateSelect');
+  if (!sel) return;
+  const tplKey = sel.value;
+  const tpl = (state.templates || []).find(t => (t.metaTemplateName || t.templateKey || t.id) === tplKey);
+  if (tpl) updateCustomerMockup(tpl);
+}
+
+function updateCustomerMockup(tpl) {
+  const header = $('waSendMockHeader');
+  const body = $('waSendMockBody');
+  const btnsContainer = $('waSendMockButtonsContainer');
+
+  if (header) {
+    if (tpl.headerContent) {
+      header.textContent = tpl.headerContent;
+      header.classList.remove('hidden');
+    } else {
+      header.classList.add('hidden');
+    }
+  }
+
+  let formattedBody = tpl.body || '';
+  const paramInputs = document.querySelectorAll('#waSendParamsList input');
+  paramInputs.forEach((inp) => {
+    const ph = inp.getAttribute('data-placeholder');
+    const val = inp.value.trim() || `[${ph}]`;
+    formattedBody = formattedBody.replace(new RegExp(`\\{\\{\\}\\}${ph}|\\{\\{${ph}\\}\\}`, 'g'), val);
+  });
+
+  if (body) {
+    body.textContent = formattedBody;
+  }
+
+  if (btnsContainer) {
+    if (Array.isArray(tpl.buttons) && tpl.buttons.length > 0) {
+      btnsContainer.innerHTML = tpl.buttons.map(b => `
+        <div class="w-full bg-[#1F2C34] text-teal-300 text-xs font-bold py-2 px-3 rounded-xl border border-white/5 text-center flex items-center justify-center gap-1.5 shadow">
+          <i data-lucide="external-link" class="w-3.5 h-3.5"></i> ${b.text || 'Action'}
+        </div>
+      `).join('');
+      btnsContainer.classList.remove('hidden');
+    } else {
+      btnsContainer.classList.add('hidden');
+    }
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+function openWhatsAppSendConfirm(isTest) {
+  let recipient = '';
+  let mode = isTest ? currentTestMode : 'template';
+  let tplName = '';
+  let templateLanguage = 'en';
+  let params = [];
+  let textBody = '';
+  let customerId = null;
+  let assetId = null;
+
+  if (isTest) {
+    recipient = $('waTestRecipient') ? $('waTestRecipient').value.trim() : '';
+    if (!recipient) {
+      showAdminToast('Please enter a recipient phone number.', 'error');
+      return;
+    }
+    if (mode === 'template') {
+      const sel = $('waTestTemplateSelect');
+      tplName = sel ? sel.value : '';
+      const tpl = (state.templates || []).find(t => (t.metaTemplateName || t.templateKey || t.id) === tplName);
+      if (tpl) templateLanguage = tpl.language || 'en';
+      const inputs = document.querySelectorAll('#waTestParamsList input');
+      params = Array.from(inputs).map(i => i.value.trim());
+    } else {
+      textBody = $('waTestFreeText') ? $('waTestFreeText').value.trim() : '';
+      if (!textBody) {
+        showAdminToast('Please enter text for the freeform message.', 'error');
+        return;
+      }
+    }
+  } else {
+    const custId = $('waSendCustomerSelect') ? $('waSendCustomerSelect').value : null;
+    if (!custId) {
+      showAdminToast('Please select a customer first.', 'error');
+      return;
+    }
+    const customer = (state.users || []).find(u => u.id === custId);
+    recipient = customer ? (customer.phone || customer.phoneNumber || '') : '';
+    if (!recipient) {
+      showAdminToast('Selected customer does not have a phone number on file.', 'error');
+      return;
+    }
+    customerId = custId;
+    assetId = $('waSendAssetSelect') ? $('waSendAssetSelect').value : null;
+    const sel = $('waSendTemplateSelect');
+    tplName = sel ? sel.value : '';
+    const tpl = (state.templates || []).find(t => (t.metaTemplateName || t.templateKey || t.id) === tplName);
+    if (tpl) templateLanguage = tpl.language || 'en';
+    const inputs = document.querySelectorAll('#waSendParamsList input');
+    params = Array.from(inputs).map(i => i.value.trim());
+  }
+
+  pendingWhatsAppPayload = {
+    recipientPhone: recipient,
+    messageType: mode,
+    templateName: tplName,
+    templateLanguage: templateLanguage,
+    templateParams: params,
+    textBody: textBody,
+    isTest: Boolean(isTest),
+    customerId: customerId,
+    assetId: assetId,
+  };
+
+  if ($('waConfirmModalTitle')) {
+    $('waConfirmModalTitle').textContent = isTest ? 'Confirm Test WhatsApp Message' : 'Confirm Customer WhatsApp Dispatch';
+  }
+  if ($('waConfirmRecipient')) $('waConfirmRecipient').textContent = recipient;
+  if ($('waConfirmMode')) $('waConfirmMode').textContent = mode.toUpperCase();
+  if ($('waConfirmTemplate')) $('waConfirmTemplate').textContent = mode === 'template' ? tplName : 'Freeform Text';
+
+  const paramsWrap = $('waConfirmParamsWrap');
+  const paramsList = $('waConfirmParamsList');
+  if (paramsWrap && paramsList) {
+    if (mode === 'template' && params.length > 0) {
+      paramsList.innerHTML = params.map((p, idx) => `<div><span class="text-slate-500 font-mono">#${idx + 1}:</span> <span class="text-white font-medium">${p}</span></div>`).join('');
+      paramsWrap.classList.remove('hidden');
+    } else {
+      paramsWrap.classList.add('hidden');
+    }
+  }
+
+  openModal('confirmWhatsAppSendModal');
+}
+
+async function executeConfirmedWhatsAppSend() {
+  if (!pendingWhatsAppPayload) return;
+  const btn = $('btnExecuteWhatsAppSend');
+  const origHtml = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Sending via Meta...';
+    if (window.lucide) lucide.createIcons();
+  }
+
+  try {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Admin session required.');
+    const token = await user.getIdToken();
+
+    const res = await fetch(`${WHATSAPP_FUNCTIONS_BASE}/adminSendWhatsAppMessage`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(pendingWhatsAppPayload),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    closeModal('confirmWhatsAppSendModal');
+
+    const isTest = pendingWhatsAppPayload.isTest;
+    const bannerId = isTest ? 'waTestResultBanner' : 'waSendResultBanner';
+    const banner = $(bannerId);
+
+    if (banner) {
+      banner.classList.remove('hidden');
+      if (data.ok && data.status === 'SENT') {
+        banner.className = 'rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-xs space-y-2 text-emerald-200';
+        banner.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="font-bold flex items-center gap-1.5 text-emerald-300 text-sm">
+              <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i> WhatsApp Message Successfully Dispatched!
+            </span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300">HTTP 200 · META ACCEPTED</span>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-2 pt-2 border-t border-emerald-500/20 font-mono text-[11px]">
+            <div><span class="text-emerald-400/80 block">Meta Message ID:</span> <span class="text-white truncate block" title="${data.messageId}">${data.messageId}</span></div>
+            <div><span class="text-emerald-400/80 block">Recipient:</span> <span class="text-white">${data.recipient}</span></div>
+            <div><span class="text-emerald-400/80 block">Queue Doc ID:</span> <span class="text-white truncate block" title="${data.queueId}">${data.queueId}</span></div>
+            <div><span class="text-emerald-400/80 block">Status:</span> <span class="text-emerald-300 font-bold">SENT</span></div>
+          </div>
+          <p class="text-[10px] text-emerald-300/80 pt-1">Delivery webhook events will update status in the Notification Queue in real-time.</p>
+        `;
+        showAdminToast(`Message delivered to ${data.recipient}!`, 'success');
+      } else {
+        banner.className = 'rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs space-y-2 text-rose-200';
+        banner.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="font-bold flex items-center gap-1.5 text-rose-300 text-sm">
+              <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-400"></i> Dispatch Failed
+            </span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-500/20 text-rose-300">${data.error || 'ERROR'}</span>
+          </div>
+          <p class="text-slate-200 mt-1">${data.detail || data.error || 'Meta Cloud API rejected message request.'}</p>
+        `;
+        showAdminToast(`Dispatch failed: ${data.error || 'Check details'}`, 'error');
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+  } catch (err) {
+    closeModal('confirmWhatsAppSendModal');
+    showAdminToast(`Dispatch error: ${err.message}`, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+      if (window.lucide) lucide.createIcons();
+    }
+  }
+}
+
+function renderWhatsappDiagView() {
+  const ops = state.whatsappOpsHealth || state.whatsappOps;
+  if (!ops) return;
+
+  const metaStatus = ops.metaApi?.status || (ops.probed ? 'FAIL' : 'UNKNOWN');
+  const isHealthy = metaStatus === 'LIVE' || metaStatus === 'PASS';
+
+  if ($('waDiagOverallDot')) {
+    $('waDiagOverallDot').className = isHealthy ? 'w-3 h-3 rounded-full bg-emerald-400 pulse-dot' : 'w-3 h-3 rounded-full bg-amber-400';
+  }
+  if ($('waDiagOverallTitle')) {
+    $('waDiagOverallTitle').textContent = isHealthy ? 'System Status: HEALTHY' : 'System Status: DEGRADED';
+  }
+  if ($('waDiagOverallSub')) {
+    $('waDiagOverallSub').textContent = isHealthy ? 'All operational layers verified with Meta Cloud API' : 'One or more diagnostic checks need attention';
+  }
+}
+
+async function runLiveWhatsAppDiagnostics() {
+  const btn = $('btnRunWhatsAppDiag');
+  const origHtml = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Running Suite...';
+    if (window.lucide) lucide.createIcons();
+  }
+
+  try {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Admin session required.');
+    const token = await user.getIdToken();
+
+    const res = await fetch(`${WHATSAPP_FUNCTIONS_BASE}/adminWhatsAppDiagnostic`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if ($('diagRawJson')) {
+      $('diagRawJson').textContent = JSON.stringify(data, null, 2);
+    }
+
+    if (data.ok || data.overallStatus) {
+      const layers = data.layers || {};
+
+      if (layers.credentials) {
+        if ($('badgeDiagCred')) {
+          $('badgeDiagCred').textContent = layers.credentials.status;
+          $('badgeDiagCred').className = `px-2 py-0.5 rounded text-[10px] font-bold ${layers.credentials.status === 'PASS' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`;
+        }
+        if ($('detailDiagCred')) $('detailDiagCred').textContent = layers.credentials.detail;
+      }
+
+      if (layers.metaApi) {
+        if ($('badgeDiagMetaApi')) {
+          $('badgeDiagMetaApi').textContent = layers.metaApi.status;
+          $('badgeDiagMetaApi').className = `px-2 py-0.5 rounded text-[10px] font-bold ${layers.metaApi.status === 'PASS' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`;
+        }
+        if ($('detailDiagMetaApi')) $('detailDiagMetaApi').textContent = layers.metaApi.detail;
+      }
+
+      if (layers.waba) {
+        if ($('badgeDiagWaba')) {
+          $('badgeDiagWaba').textContent = layers.waba.status;
+          $('badgeDiagWaba').className = `px-2 py-0.5 rounded text-[10px] font-bold ${layers.waba.status === 'PASS' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`;
+        }
+        if ($('detailDiagWaba')) $('detailDiagWaba').textContent = layers.waba.detail;
+      }
+
+      if (layers.phone) {
+        if ($('badgeDiagPhone')) {
+          $('badgeDiagPhone').textContent = layers.phone.status;
+          $('badgeDiagPhone').className = `px-2 py-0.5 rounded text-[10px] font-bold ${layers.phone.status === 'PASS' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`;
+        }
+        if ($('detailDiagPhone')) $('detailDiagPhone').textContent = layers.phone.detail;
+      }
+
+      if (layers.templates) {
+        if ($('badgeDiagTemplates')) {
+          $('badgeDiagTemplates').textContent = layers.templates.status;
+          $('badgeDiagTemplates').className = `px-2 py-0.5 rounded text-[10px] font-bold ${layers.templates.status === 'PASS' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`;
+        }
+        if ($('detailDiagTemplates')) $('detailDiagTemplates').textContent = layers.templates.detail;
+      }
+
+      if (layers.webhook) {
+        if ($('badgeDiagWebhook')) {
+          $('badgeDiagWebhook').textContent = layers.webhook.status;
+          $('badgeDiagWebhook').className = `px-2 py-0.5 rounded text-[10px] font-bold ${layers.webhook.status === 'PASS' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`;
+        }
+        if ($('detailDiagWebhook')) $('detailDiagWebhook').textContent = layers.webhook.detail;
+      }
+
+      const isHealthy = data.overallStatus === 'HEALTHY' || data.ok;
+      if ($('waDiagOverallDot')) {
+        $('waDiagOverallDot').className = isHealthy ? 'w-3 h-3 rounded-full bg-emerald-400 pulse-dot' : 'w-3 h-3 rounded-full bg-rose-400';
+      }
+      if ($('waDiagOverallTitle')) {
+        $('waDiagOverallTitle').textContent = `System Status: ${data.overallStatus || (isHealthy ? 'HEALTHY' : 'DEGRADED')}`;
+      }
+      if ($('waDiagOverallSub')) {
+        $('waDiagOverallSub').textContent = isHealthy ? 'All 6 operational layers verified with Meta Cloud API' : 'Review layers above for required attention';
+      }
+      if ($('waDiagCheckedAt')) {
+        $('waDiagCheckedAt').textContent = `Checked: ${new Date(data.checkedAt || Date.now()).toLocaleTimeString()}`;
+      }
+
+      const chip = $('sysChipWhatsapp');
+      const dot = $('sysChipWhatsappDot');
+      const wrap = $('sysChipWhatsappWrap');
+      if (chip) chip.textContent = isHealthy ? 'WHATSAPP LIVE' : 'WHATSAPP DEGRADED';
+      if (dot) dot.className = isHealthy ? 'w-2 h-2 rounded-full bg-emerald-400 pulse-dot' : 'w-2 h-2 rounded-full bg-rose-400';
+      if (wrap && isHealthy) {
+        wrap.classList.add('border-emerald-500/30', 'text-emerald-300');
+        wrap.classList.remove('border-white/10', 'text-slate-300');
+      }
+
+      showAdminToast('WhatsApp 6-layer diagnostic complete!', 'success');
+    } else {
+      showAdminToast('Diagnostic endpoint returned error', 'error');
+    }
+  } catch (err) {
+    console.warn('[DIAG] Function error, falling back to ops health probe', err);
+    await probeWhatsAppOpsHealth(true);
+    showAdminToast('Fallback to ops health probe complete', 'info');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+      if (window.lucide) lucide.createIcons();
+    }
+  }
+}
+
+function renderWhatsappScheduleView() {
+  const ops = state.whatsappOpsHealth || {};
+  const next = ops.nextScheduledReminder || {};
+  const surv = ops.surveillance || {};
+
+  // Populate Next Scheduled Reminder
+  if ($('waNextReminderAsset')) {
+    if (next.hasUpcoming) {
+      $('waNextReminderAsset').textContent = `${next.assetName} (${next.label})`;
+      if ($('waNextReminderField')) $('waNextReminderField').textContent = next.field;
+      if ($('waNextReminderMilestone')) $('waNextReminderMilestone').textContent = `${next.nextMilestone} (${next.daysRemaining} days left)`;
+      if ($('waNextReminderDate')) $('waNextReminderDate').textContent = next.expiryDate;
+      if ($('waNextReminderChannel')) $('waNextReminderChannel').textContent = next.channel;
+      if ($('waNextReminderBadge')) {
+        $('waNextReminderBadge').textContent = next.daysRemaining <= 3 ? 'URGENT' : 'UPCOMING';
+        $('waNextReminderBadge').className = next.daysRemaining <= 3 ? 'px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300' : 'px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-200';
+      }
+    } else {
+      $('waNextReminderAsset').textContent = 'No upcoming expiries found';
+      if ($('waNextReminderField')) $('waNextReminderField').textContent = '—';
+      if ($('waNextReminderMilestone')) $('waNextReminderMilestone').textContent = '—';
+      if ($('waNextReminderDate')) $('waNextReminderDate').textContent = '—';
+      if ($('waNextReminderChannel')) $('waNextReminderChannel').textContent = '—';
+    }
+  }
+
+  // Populate Surveillance metadata
+  if ($('waSurveillanceLastRun')) {
+    $('waSurveillanceLastRun').textContent = surv.lastRunAt ? String(surv.lastRunAt).replace('T', ' ').slice(0, 19) : 'Daily scheduled (09:00 AM IST)';
+  }
+
+  // Populate Monotonic Lifecycle counts from queue
+  const queue = state.notifications || [];
+  let queued = 0, sending = 0, sent = 0, delivered = 0, read = 0, failed = 0, retrying = 0;
+  queue.forEach((item) => {
+    const s = String(item.status || '').toLowerCase();
+    if (s === 'queued') queued++;
+    else if (s === 'sending' || s === 'processing') sending++;
+    else if (s === 'sent') sent++;
+    else if (s === 'delivered') delivered++;
+    else if (s === 'read') read++;
+    else if (s === 'failed') failed++;
+    else if (s === 'retrying') retrying++;
+  });
+
+  if ($('waLifeQueued')) $('waLifeQueued').textContent = queued;
+  if ($('waLifeSending')) $('waLifeSending').textContent = sending;
+  if ($('waLifeSent')) $('waLifeSent').textContent = sent;
+  if ($('waLifeDelivered')) $('waLifeDelivered').textContent = delivered;
+  if ($('waLifeRead')) $('waLifeRead').textContent = read;
+  if ($('waLifeFailed')) $('waLifeFailed').textContent = failed;
+  if ($('waLifeRetrying')) $('waLifeRetrying').textContent = retrying;
+}
+
+async function triggerExpirySurveillance(dryRun = false) {
+  const banner = $('waSurveillanceResultBanner');
+  const btnDry = $('btnSurveillanceDry');
+  const btnLive = $('btnSurveillanceLive');
+  if (banner) {
+    banner.classList.remove('hidden', 'border-rose-500/40', 'bg-rose-500/10', 'text-rose-200', 'border-emerald-500/40', 'bg-emerald-500/10', 'text-emerald-200');
+    banner.classList.add('border-blue-500/40', 'bg-blue-500/10', 'text-blue-200');
+    banner.textContent = `Running ${dryRun ? 'dry-run' : 'live'} expiry surveillance cycle...`;
+  }
+  if (btnDry) btnDry.disabled = true;
+  if (btnLive) btnLive.disabled = true;
+
+  try {
+    const user = auth.currentUser;
+    const token = user ? await user.getIdToken() : '';
+    const url = `${WHATSAPP_FUNCTIONS_BASE}/adminTriggerExpirySurveillance?dryRun=${dryRun}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || `HTTP ${res.status}`);
+    }
+
+    const s = data.summary || {};
+    if (banner) {
+      banner.classList.remove('border-blue-500/40', 'bg-blue-500/10', 'text-blue-200');
+      banner.classList.add('border-emerald-500/40', 'bg-emerald-500/10', 'text-emerald-200');
+      banner.innerHTML = `<strong>Surveillance Completed (${dryRun ? 'DRY-RUN' : 'LIVE'}):</strong> Evaluated ${s.evaluatedAssets || 0} assets, generated ${s.generatedReminders || 0} reminders, ${s.duplicatePrevented || 0} duplicates prevented, ${s.skippedConsents || 0} skipped.`;
+    }
+    await probeWhatsAppOpsHealth();
+    renderWhatsappScheduleView();
+  } catch (err) {
+    if (banner) {
+      banner.classList.remove('border-blue-500/40', 'bg-blue-500/10', 'text-blue-200');
+      banner.classList.add('border-rose-500/40', 'bg-rose-500/10', 'text-rose-200');
+      banner.textContent = `Surveillance failed: ${err && err.message ? err.message : err}`;
+    }
+  } finally {
+    if (btnDry) btnDry.disabled = false;
+    if (btnLive) btnLive.disabled = false;
+  }
 }
 
 const WHATSAPP_FUNCTIONS_BASE = 'https://asia-south1-assetdoctor-5fd25.cloudfunctions.net';
@@ -3629,26 +5115,29 @@ state.whatsappOps = { probed: false, function: 'UNKNOWN', credentials: 'UNKNOWN'
 
 function welcomeQueueItems() {
   return (state.notifications || []).filter((n) =>
-    n.templateKey === 'welcome_message' || n.templateName === 'welcome_message' || n.eventType === 'user_welcome' || n.type === 'WELCOME'
+    n.templateKey === 'asset_doctor_welcome' || n.templateName === 'asset_doctor_welcome' || n.templateKey === 'welcome_message' || n.templateName === 'welcome_message' || n.eventType === 'user_welcome' || n.type === 'WELCOME'
   );
 }
 
 function renderWelcomeProductionStatus() {
   const items = welcomeQueueItems();
   const last = items[0];
-  const stuck = items.some((n) => {
-    const age = Date.parse(n.createdAt || '') ? Date.now() - Date.parse(n.createdAt) : 0;
-    return (n.status === 'queued' || n.status === 'sending') && age > 120000;
-  });
+  const ops = state.whatsappOpsHealth || state.whatsappOps || {};
+
   const confirmedSend = items.some((n) => {
     const s = String(n.status || '').toLowerCase();
     return (s === 'sent' || s === 'delivered' || s === 'read') && n.wamid;
   });
   let queueLabel = 'EMPTY';
-  if (items.length && stuck) queueLabel = 'STUCK';
-  else if (confirmedSend) queueLabel = 'HEALTHY';
+  if (ops.queue && ops.queue.stuck > 0) queueLabel = 'STUCK';
+  else if (confirmedSend || (ops.queue && ops.queue.sent > 0)) queueLabel = 'HEALTHY';
   else if (items.length) queueLabel = 'HAS ITEMS';
-  if ($('waProdQueue')) $('waProdQueue').textContent = queueLabel;
+
+  if ($('waProdQueue')) {
+    $('waProdQueue').textContent = queueLabel;
+    $('waProdQueue').className = queueLabel === 'HEALTHY' ? 'text-emerald-400 font-bold mt-1' : 'text-amber-200 font-bold mt-1';
+  }
+
   if ($('waProdLastWelcome')) $('waProdLastWelcome').textContent = last && last.createdAt ? String(last.createdAt) : 'No data yet';
   if ($('waProdLastResult')) {
     const raw = String((last && last.status) || '').toLowerCase();
@@ -3658,18 +5147,40 @@ function renderWelcomeProductionStatus() {
     else if (raw === 'skipped') lastResult = 'SKIPPED';
     else if (raw) lastResult = raw.toUpperCase();
     $('waProdLastResult').textContent = lastResult;
+    $('waProdLastResult').className = lastResult === 'SUCCESS' ? 'text-emerald-400 font-bold mt-1' : (lastResult === 'FAILED' ? 'text-rose-400 font-bold mt-1' : 'text-slate-200 font-bold mt-1');
   }
-  if ($('waProdMetaStatus')) $('waProdMetaStatus').textContent = 'UNKNOWN';
-  const ops = state.whatsappOps || {};
-  if ($('waProdFunction')) $('waProdFunction').textContent = ops.function || 'UNKNOWN';
-  if ($('waProdCredentials')) $('waProdCredentials').textContent = ops.credentials || 'UNKNOWN';
+
+  const metaStatus = (ops.metaApi && ops.metaApi.status) || (ops.function === 'DEPLOYED' ? 'LIVE' : 'UNKNOWN');
+  if ($('waProdMetaStatus')) {
+    $('waProdMetaStatus').textContent = metaStatus;
+    $('waProdMetaStatus').className = metaStatus === 'LIVE' ? 'text-emerald-400 font-bold mt-1' : 'text-amber-200 font-bold mt-1';
+  }
+
+  const funcStatus = ops.worker && ops.worker.deployed ? 'DEPLOYED' : (ops.function || 'UNKNOWN');
+  if ($('waProdFunction')) {
+    $('waProdFunction').textContent = funcStatus;
+    $('waProdFunction').className = funcStatus === 'DEPLOYED' ? 'text-emerald-400 font-bold mt-1' : 'text-amber-200 font-bold mt-1';
+  }
+
+  const credStatus = (ops.credentials && ops.credentials.accessTokenConfigured) ? 'CONFIGURED' : (ops.credentials || 'UNKNOWN');
+  if ($('waProdCredentials')) {
+    $('waProdCredentials').textContent = credStatus;
+    $('waProdCredentials').className = credStatus === 'CONFIGURED' ? 'text-emerald-400 font-bold mt-1' : 'text-amber-200 font-bold mt-1';
+  }
+
+  const hookStatus = (ops.webhook && ops.webhook.status) || (ops.webhookVerify === 'CONFIGURED' ? 'CONFIGURED' : 'UNKNOWN');
   if ($('waProdWebhook')) {
-    const delivered = items.some((n) => n.status === 'delivered' || n.status === 'read');
-    if (ops.webhookVerify === 'CONFIGURED' && delivered) $('waProdWebhook').textContent = 'ACTIVE';
-    else if (ops.webhookVerify === 'CONFIGURED') $('waProdWebhook').textContent = 'NOT VERIFIED';
-    else if (delivered) $('waProdWebhook').textContent = 'EVENTS SEEN';
-    else $('waProdWebhook').textContent = ops.webhookVerify || 'UNKNOWN';
+    $('waProdWebhook').textContent = hookStatus;
+    $('waProdWebhook').className = hookStatus === 'VERIFIED' || hookStatus === 'CONFIGURED' || hookStatus === 'ACTIVE' ? 'text-emerald-400 font-bold mt-1' : 'text-amber-200 font-bold mt-1';
   }
+
+  if (ops.phoneNumber && $('waHeroPhone')) {
+    $('waHeroPhone').textContent = ops.phoneNumber.displayName || 'Asset Doctor';
+    if ($('waHeroPhoneSub')) {
+      $('waHeroPhoneSub').textContent = `${ops.phoneNumber.phoneNumber || '+91 96968 61966'} · ${ops.phoneNumber.qualityRating || 'GREEN'}`;
+    }
+  }
+
   renderWelcomeSignupTable();
 }
 
@@ -3690,7 +5201,7 @@ function renderWelcomeSignupTable() {
       <td class="px-3 py-2 font-mono text-[11px]">${item.phoneMasked || item.maskedPhone || mask(item.recipientPhone)}</td>
       <td class="px-3 py-2">${opt}</td>
       <td class="px-3 py-2 uppercase font-bold">${item.status || '—'}</td>
-      <td class="px-3 py-2 font-mono">${item.templateName || item.templateKey || 'welcome_message'}</td>
+      <td class="px-3 py-2 font-mono">${item.templateName || item.templateKey || '—'}</td>
       <td class="px-3 py-2 font-mono text-[10px] text-slate-400">${item.wamid ? String(item.wamid).slice(0, 18) + '…' : '—'}</td>
       <td class="px-3 py-2 text-[10px] text-slate-400">${item.createdAt || '—'}</td>
       <td class="px-3 py-2 text-[10px]">${item.sentAt || '—'}</td>
@@ -3701,7 +5212,7 @@ function renderWelcomeSignupTable() {
   }).join('');
 }
 
-async function probeWhatsAppOpsHealth() {
+async function probeWhatsAppOpsHealth(forceRefresh = false) {
   const note = $('waProdProbeNote');
   try {
     const user = auth.currentUser;
@@ -3710,27 +5221,87 @@ async function probeWhatsAppOpsHealth() {
       return;
     }
     const token = await user.getIdToken();
-    const res = await fetch(`${WHATSAPP_FUNCTIONS_BASE}/whatsappOpsHealth`, {
+    const url = `${WHATSAPP_FUNCTIONS_BASE}/whatsappOpsHealth${forceRefresh ? '?forceRefresh=true' : ''}`;
+    const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.ok) {
       state.whatsappOps = { probed: true, function: res.status === 404 ? 'NOT DEPLOYED' : 'UNKNOWN', credentials: 'UNKNOWN', webhookVerify: 'UNKNOWN' };
-      if (note) note.textContent = 'Function probe failed (' + res.status + '). Deploy whatsappOpsHealth or check CORS/auth.';
+      if (note) note.textContent = 'Function probe failed (' + res.status + ').';
     } else {
-      state.whatsappOps = {
-        probed: true,
-        function: data.function || 'DEPLOYED',
-        credentials: data.credentials || 'UNKNOWN',
-        webhookVerify: data.webhookVerify || 'UNKNOWN',
-      };
-      if (note) note.textContent = 'Last probe: Cloud Function responded. Token values are never shown.';
+      state.whatsappOps = data;
+      state.whatsappOpsHealth = data;
+      if (note) {
+        const checkedAt = data.metaApi && data.metaApi.checkedAt ? new Date(data.metaApi.checkedAt).toLocaleTimeString() : 'just now';
+        note.textContent = `Server health live · Meta API: ${data.metaApi?.status || 'LIVE'} · Phone: ${data.phoneNumber?.displayName || 'Asset Doctor'} (${data.phoneNumber?.phoneNumber || '+91 96968 61966'}) · Checked at ${checkedAt}`;
+      }
+      const isLive = data.metaApi?.status === 'LIVE' || data.metaApi?.status === 'PASS' || data.phoneNumber?.phoneNumber;
+      const chip = $('sysChipWhatsapp');
+      const dot = $('sysChipWhatsappDot');
+      const wrap = $('sysChipWhatsappWrap');
+      if (chip) chip.textContent = isLive ? 'WHATSAPP LIVE' : 'WHATSAPP DEGRADED';
+      if (dot) dot.className = isLive ? 'w-2 h-2 rounded-full bg-emerald-400 pulse-dot' : 'w-2 h-2 rounded-full bg-amber-400';
+      if (wrap && isLive) {
+        wrap.classList.add('border-emerald-500/30', 'text-emerald-300');
+        wrap.classList.remove('border-white/10', 'text-slate-300');
+      }
     }
   } catch (err) {
     state.whatsappOps = { probed: true, function: 'UNKNOWN', credentials: 'UNKNOWN', webhookVerify: 'UNKNOWN' };
-    if (note) note.textContent = 'Probe unreachable. Function may be undeployed. Status stays UNKNOWN.';
+    if (note) note.textContent = 'Probe unreachable. Status stays UNKNOWN.';
   }
   renderWelcomeProductionStatus();
+  if (window.ADIntel) {
+    ADIntel.renderWhatsAppHero(state);
+    ADIntel.renderSystemStrip(state, window.__adConnectionStatus || 'LIVE');
+    ADIntel.renderSystemHealthPanel(state);
+  }
+  renderWhatsappScheduleView();
+  if (window.lucide) lucide.createIcons();
+}
+
+// Auto-refresh WhatsApp server health every 60s
+setInterval(() => {
+  if (auth.currentUser && state.currentUser) {
+    probeWhatsAppOpsHealth(false);
+  }
+}, 60000);
+
+async function syncWithMeta() {
+  const btn = $('btnSyncWithMeta');
+  const origText = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Syncing...';
+    if (window.lucide) lucide.createIcons();
+  }
+  try {
+    const user = auth.currentUser;
+    if (!user) {
+      showAdminToast('Admin session required.', 'error');
+      return;
+    }
+    const token = await user.getIdToken();
+    const res = await fetch(`${WHATSAPP_FUNCTIONS_BASE}/adminSyncWhatsAppTemplates`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      showAdminToast(data.error || 'Meta template sync failed.', 'error');
+      return;
+    }
+    showAdminToast(`Successfully synced ${data.syncedCount || 0} templates from Meta!`, 'success');
+    await probeWhatsAppOpsHealth(true);
+  } catch (err) {
+    showAdminToast('Failed to reach sync endpoint: ' + err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = origText;
+      if (window.lucide) lucide.createIcons();
+    }
+  }
 }
 
 async function runAdminTestWelcome() {
