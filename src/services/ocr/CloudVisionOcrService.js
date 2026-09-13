@@ -40,6 +40,8 @@ function visionUrl() {
   return process.env.EXPO_PUBLIC_OCR_VISION_URL || ENV.ocrVisionUrl || DEFAULT_VISION_URL;
 }
 
+let cloudFunctionDisabled = false;
+
 /**
  * Calculates a deterministic document-level OCR confidence score (0.0 to 1.0)
  * from structural signals: text volume, line count, dates, amounts, and identifiers.
@@ -165,67 +167,15 @@ export class CloudVisionOcrService {
    * @returns {Promise<{ success: boolean, engine: string, rawText: string, confidence: number, processingTimeMs: number, error?: string }>}
    */
   static async executeAzureOcr(imageUri, base64 = null, budgetOpts = {}) {
-    const startedAt = budgetOpts.startedAt || Date.now();
-    return withOcrRetryWithinBudget(
-      async ({ timeoutMs }) => {
-        const tStart = Date.now();
-        try {
-          let b64 = base64;
-          if (!b64 && imageUri) {
-            const fs = getFileSystem();
-            b64 = fs
-              ? await fs.readAsStringAsync(imageUri, {
-                  encoding: fs.EncodingType?.Base64 || 'base64',
-                })
-              : '';
-          }
-          if (!b64) {
-            return {
-              success: false,
-              engine: 'azure-vision-read',
-              rawText: '',
-              confidence: 0,
-              processingTimeMs: Date.now() - tStart,
-              error: 'No base64 image data available for Azure OCR',
-            };
-          }
-          const { AzureOcrService } = require('./AzureOcrService');
-          const azureRes = await AzureOcrService.recognizeBase64(b64, null, { timeoutMs });
-          const processingTimeMs = Date.now() - tStart;
-          if (azureRes.success && azureRes.text && azureRes.text.trim().length > 20) {
-            const confidence = calculateOcrConfidence(azureRes.text);
-            return {
-              success: true,
-              engine: 'azure-vision-read',
-              rawText: azureRes.text,
-              confidence,
-              processingTimeMs,
-              aborted: Boolean(azureRes.aborted),
-            };
-          }
-          return {
-            success: false,
-            engine: 'azure-vision-read',
-            rawText: azureRes.text || '',
-            confidence: azureRes.text ? calculateOcrConfidence(azureRes.text) : 0,
-            processingTimeMs,
-            aborted: Boolean(azureRes.aborted),
-            error: azureRes.error || 'Insufficient text from Azure OCR',
-          };
-        } catch (err) {
-          return {
-            success: false,
-            engine: 'azure-vision-read',
-            rawText: '',
-            confidence: 0,
-            processingTimeMs: Date.now() - tStart,
-            aborted: /abort/i.test(String(err?.message || '')),
-            error: err?.message || 'Azure OCR request failed',
-          };
-        }
-      },
-      { startedAt },
-    );
+    // Azure Document Intelligence completely removed from active pipeline
+    return {
+      success: false,
+      engine: 'azure-vision-read',
+      rawText: '',
+      confidence: 0,
+      processingTimeMs: 0,
+      error: 'Azure OCR disabled — pipeline migrated to Gemini Vision',
+    };
   }
 
   static async recognizeInvoice(imageUri, options = {}) {
@@ -374,47 +324,7 @@ export class CloudVisionOcrService {
       }
     }
 
-    // 3) Azure only on Google HARD failure, inside remaining provider budget.
-    if (
-      !options.skipCloudOcr &&
-      (googleCalled || forcePrimaryFailure) &&
-      shouldCallAzureFallback({
-        googleResult: googleCalled ? googleResult : { success: false, rawText: '' },
-        remainingBudgetMs: remainingOcrBudgetMs(providerBudgetStartedAt),
-      }) &&
-      (precomputedBase64 || imageUri)
-    ) {
-      try {
-        azureCalled = true;
-        fallbackStarted = true;
-        fallbackEngine = 'AZURE';
-        console.log('[OCR_FALLBACK_TEST] FALLBACK_STARTED=true');
-        console.log('[OCR_FALLBACK_TEST] FALLBACK_ENGINE=AZURE');
-
-        azureResult = await this.executeAzureOcr(imageUri, precomputedBase64, {
-          startedAt: providerBudgetStartedAt,
-        });
-        azureMs = azureResult.processingTimeMs;
-        aborted = aborted || Boolean(azureResult.aborted);
-
-        const resolved = resolveOcrProviderWinner(googleResult, azureResult);
-        options._providerConflict = resolved.conflict;
-        options._providerNeedsReview = Boolean(
-          options._providerNeedsReview || resolved.needsReview,
-        );
-        if (resolved.engine && String(resolved.engine).includes('azure')) {
-          fallbackCompleted = true;
-          fallbackUsed = true;
-          console.log('[OCR_FALLBACK_TEST] AZURE_RESPONSE_RECEIVED=true');
-          console.log('[OCR_FALLBACK_TEST] FALLBACK_COMPLETED=true');
-        }
-        if (!resolved.rawText && !cloudError) {
-          cloudError = azureResult.error;
-        }
-      } catch (azureErr) {
-        console.warn('[CloudVisionOcr] Azure fallback error:', azureErr?.message || azureErr);
-      }
-    }
+    // Azure Document Intelligence removed from execution pipeline
 
     // 4) Client Vision key — development / explicit opt-in only
     if (
@@ -466,6 +376,10 @@ export class CloudVisionOcrService {
       }
     }
 
+    console.log(
+      `[OCR_TRACE_02_OCR] engine=${engine} rawChars=${(rawText || '').length} googleCalled=${googleCalled} azureCalled=${azureCalled} mlKitCalls=${mlKitCalls} cloudError=${cloudError ? 'yes' : 'no'}`,
+    );
+
     if (!rawText) {
       Haptics.error();
       const totalMs = Date.now() - t0;
@@ -516,69 +430,174 @@ export class CloudVisionOcrService {
     }
 
     const pipelineStarted = Date.now();
+    const { UnifiedAssetExtractor } = require('./UnifiedAssetExtractor');
+    const unifiedExtraction = UnifiedAssetExtractor.extract(rawText);
+    const baseUnified = unifiedExtraction?.asset || {};
+
+    let canonicalResult = null;
+    try {
+      const { CanonicalOcrPipeline } = require('./CanonicalOcrPipeline');
+      canonicalResult = await CanonicalOcrPipeline.process({
+        imageUri,
+        rawText,
+        base64: precomputedBase64,
+        existingAssets: options.existingAssets || [],
+        skipQualityGate: true,
+      });
+    } catch (canErr) {
+      console.warn('[CloudVisionOcr] Canonical pipeline error, using fallback:', canErr?.message || canErr);
+    }
+
     let universalResult = null;
-    let v2Result = null;
-    try {
-      const { OcrPipelineV2 } = require('./v2/OcrPipelineV2');
-      v2Result = await OcrPipelineV2.process(imageUri, {
-        existingAssets: options.existingAssets || [],
-        previousOdometer: options.previousVerifiedOdometer,
-        skipQualityCheck: true,
-      });
-    } catch (v2Err) {
-      console.warn('[CloudVisionOcr] Pipeline V2 fallback:', v2Err?.message || v2Err);
+    if (!canonicalResult || canonicalResult.status === 'POOR_SCAN' || (!canonicalResult.fields?.productName && !canonicalResult.fields?.totalAmount)) {
+      try {
+        const { UniversalOcrPipeline } = require('../../../services/ocr/universalPipeline');
+        universalResult = await UniversalOcrPipeline.process(rawText, {
+          existingAssets: options.existingAssets || [],
+          existingVaultedDocs: options.existingVaultedDocs || [],
+          previousVerifiedOdometer: options.previousVerifiedOdometer,
+          scanSessionId: options.scanSessionId,
+          documentId: options.documentId,
+          imageHash,
+          skipCache: Boolean(options.skipCache),
+        });
+      } catch (uniErr) {
+        console.warn('[CloudVisionOcr] Universal pipeline fallback:', uniErr?.message || uniErr);
+      }
     }
 
-    try {
-      const { UniversalOcrPipeline } = require('../../../services/ocr/universalPipeline');
-      universalResult = await UniversalOcrPipeline.process(rawText, {
-        existingAssets: options.existingAssets || [],
-        existingVaultedDocs: options.existingVaultedDocs || [],
-        previousVerifiedOdometer: options.previousVerifiedOdometer,
-        scanSessionId: options.scanSessionId,
-        documentId: options.documentId,
-        imageHash,
-        skipCache: Boolean(options.skipCache),
-      });
-    } catch (uniErr) {
-      console.warn('[CloudVisionOcr] Universal pipeline fallback:', uniErr?.message || uniErr);
-    }
-
-    // SweetBill remains an independent audit signal. Its values are not merged
-    // into the authoritative extraction because it has no field-level evidence.
+    // SweetBill remains an independent audit signal.
     const sweetBill = parseBillData(rawText);
     const energyHints = extractApplianceEnergyFromText(rawText);
 
-    let data = universalResult?.reviewInvoice
-      ? { ...universalResult.reviewInvoice }
-      : {
-          ...emptyInvoiceData(),
-          classifiedDocumentType: 'UNKNOWN_DOCUMENT',
-          geminiDocumentType: 'UNKNOWN_DOCUMENT',
-          needsManualReview: true,
-          fieldStatuses: {},
-          fieldEvidence: {},
-        };
-    // Keep structured diagnostics separate from final fields. Do not attach
-    // raw provider text to the object that can be saved to the vault.
-    if (v2Result) {
-      data.ocrPipelineVersion = 'v2';
-      data.v2Result = v2Result;
-      data.documentCategory = v2Result.documentCategory;
-      data.documentType = v2Result.documentType;
-      data.documentConfidence = v2Result.documentConfidence;
-      data.identityConfidence = v2Result.identityConfidence;
-      if (v2Result.validationStatus === 'NEEDS_REVIEW') {
-        data.needsManualReview = true;
-      }
-      if (v2Result.fields) {
-        if (v2Result.fields.vehicleRegistrationNumber) data.registration = v2Result.fields.vehicleRegistrationNumber;
-        if (v2Result.fields.odometerReading != null) data.odometerKm = v2Result.fields.odometerReading;
-        if (v2Result.fields.totalAmount != null) data.totalAmount = v2Result.fields.totalAmount;
-        if (v2Result.fields.invoiceNumber) data.invoiceNumber = v2Result.fields.invoiceNumber;
-        if (v2Result.fields.invoiceDate) data.invoiceDate = v2Result.fields.invoiceDate;
+    let data = {
+      ...emptyInvoiceData(),
+      ...baseUnified,
+      rawText,
+      rawOcrText: rawText,
+      isDocumentReadable: unifiedExtraction.isReadable,
+      isComplete: unifiedExtraction.isComplete,
+      needsManualReview: unifiedExtraction.needsReview,
+      unifiedAsset: baseUnified,
+    };
+
+    if (canonicalResult?.reviewInvoice) {
+      Object.assign(data, canonicalResult.reviewInvoice);
+    } else if (universalResult?.reviewInvoice) {
+      Object.assign(data, universalResult.reviewInvoice);
+    }
+
+    data.ocrPipelineVersion = 'unified_canonical';
+    if (canonicalResult) {
+      data.canonicalOcr = canonicalResult;
+      data.documentCategory = baseUnified.documentCategory || canonicalResult.category;
+      data.documentType = canonicalResult.documentType;
+      data.classifiedDocumentType = canonicalResult.documentType;
+      const rawConf = canonicalResult.overallConfidence ?? canonicalResult.extractionConfidence ?? baseUnified.confidenceScore ?? 0.85;
+      data.documentConfidence = rawConf <= 1 ? Math.round(rawConf * 100) : Math.round(rawConf);
+      data.confidence = data.documentConfidence;
+      data.qualityScore = canonicalResult.imageQualityScore;
+      data.needsManualReview = unifiedExtraction.needsReview || canonicalResult.status === 'NEEDS_REVIEW' || canonicalResult.status === 'POOR_SCAN';
+      data.fieldStatuses = canonicalResult.fieldStatuses || {};
+      data.fieldDecisions = canonicalResult.fieldDecisions || {};
+      if (canonicalResult.fields) {
+        for (const [k, v] of Object.entries(canonicalResult.fields)) {
+          if (v !== undefined && v !== null && v !== '' && (data[k] === undefined || data[k] === '')) {
+            data[k] = v;
+          }
+        }
       }
     }
+
+    console.log(
+      `[OCR_TRACE_05_CANONICAL] docType=${data.documentType || 'UNKNOWN'} category=${data.documentCategory || 'GENERAL'} status=${canonicalResult?.status || 'FALLBACK'} confidence=${data.documentConfidence ?? 0}`,
+    );
+
+    // Ensure all critical review aliases are symmetrically mapped from Canonical / UnifiedAssetExtractor
+    data.rawText = rawText;
+    data.rawOcrText = rawText;
+
+    const isSpecializedDoc = [
+      'VEHICLE_INSURANCE',
+      'VEHICLE_PUC',
+      'VEHICLE_RC',
+      'VEHICLE_SERVICE',
+      'VEHICLE_SERVICE_INVOICE',
+      'VEHICLE_SERVICE_BILL',
+      'ELECTRICITY_BILL',
+    ].includes(String(data.documentType || data.classifiedDocumentType || '').toUpperCase());
+
+    if (isSpecializedDoc) {
+      data.productName = data.productName || data.assetName || data.itemName || baseUnified.productName || '';
+      data.assetName = data.productName;
+      data.itemName = data.productName;
+      data.shopName = data.shopName || data.vendor || data.sellerName || data.vendorName || data.insurerName || data.insurer || baseUnified.merchantName || '';
+      data.vendor = data.shopName;
+      data.vendorName = data.shopName;
+      data.sellerName = data.shopName;
+      data.invoiceNumber = data.invoiceNumber || data.policyNumber || data.certificateNumber || data.consumerId || data.billNumber || baseUnified.invoiceNumber || '';
+      data.invoiceDate = data.invoiceDate || data.purchaseDate || data.policyStartDate || baseUnified.purchaseDate || '';
+      data.purchaseDate = data.invoiceDate;
+      data.totalAmount = data.totalAmount ?? data.premiumAmount ?? data.premium ?? data.currentBillAmount ?? data.grandTotal ?? baseUnified.totalAmount ?? null;
+      data.price = data.totalAmount;
+      data.serialNumber = data.serialNumber || baseUnified.serialNumber || '';
+      data.imei = data.imei || baseUnified.imei || '';
+      data.registration = data.registration || data.vehicleRegistrationNumber || baseUnified.registrationNumber || '';
+      data.chassisNumber = data.chassisNumber || baseUnified.vin || '';
+      data.engineNumber = data.engineNumber || '';
+      data.warrantyMonths = data.warrantyMonths ?? baseUnified.warrantyPeriodMonths ?? null;
+      data.warrantyExpiry = data.warrantyExpiry || baseUnified.warrantyExpiryDate || '';
+      // Force clear any generic line items that leaked into specialized docs
+      data.items = [];
+      data.lineItems = [];
+      data.itemCount = 0;
+    } else {
+      data.productName = baseUnified.productName || data.productName || data.assetName || data.itemName || '';
+      data.assetName = data.productName;
+      data.itemName = data.productName;
+      data.shopName = baseUnified.merchantName || data.shopName || data.vendor || data.sellerName || data.vendorName || '';
+      data.vendor = data.shopName;
+      data.vendorName = data.shopName;
+      data.sellerName = data.shopName;
+      data.invoiceNumber = baseUnified.invoiceNumber || data.invoiceNumber || data.billNumber || '';
+      data.invoiceDate = baseUnified.purchaseDate || data.invoiceDate || data.purchaseDate || '';
+      data.purchaseDate = data.invoiceDate;
+      data.totalAmount = data.totalAmount ?? baseUnified.totalAmount ?? data.grandTotal ?? null;
+      data.price = data.totalAmount;
+      data.serialNumber = baseUnified.serialNumber || data.serialNumber || '';
+      data.imei = baseUnified.imei || data.imei || '';
+      data.registration = baseUnified.registrationNumber || data.registration || '';
+      data.chassisNumber = baseUnified.vin || data.chassisNumber || '';
+      data.warrantyMonths = baseUnified.warrantyPeriodMonths ?? data.warrantyMonths ?? null;
+      data.warrantyExpiry = baseUnified.warrantyExpiryDate || data.warrantyExpiry || '';
+    }
+
+    // Purge accounting fields permanently from domain payload
+    delete data.shopGstin;
+    delete data.sellerGstin;
+    delete data.cgst;
+    delete data.sgst;
+    delete data.igst;
+    delete data.taxAmount;
+    delete data.taxRate;
+    delete data.hsn;
+    delete data.sac;
+    delete data.subtotal;
+    delete data.itemsSubtotal;
+    delete data.paymentMode;
+
+    data.isDocumentReadable = Boolean(
+      data.productName ||
+      data.shopName ||
+      data.totalAmount != null ||
+      data.invoiceNumber ||
+      data.invoiceDate ||
+      (rawText && rawText.length >= 10)
+    );
+
+    console.log(
+      `[OCR_TRACE_06_NORMALIZER] hasProduct=${Boolean(data.productName)} hasShop=${Boolean(data.shopName)} hasTotal=${data.totalAmount != null} hasDate=${Boolean(data.invoiceDate)} hasInvNum=${Boolean(data.invoiceNumber)}`,
+    );
 
     if (universalResult) {
       data.universalOcr = {
@@ -622,6 +641,10 @@ export class CloudVisionOcrService {
       /* optional */
     }
 
+    console.log(
+      `[OCR_TRACE_08_AUDIT] needsReview=${Boolean(data.needsManualReview)} readable=${Boolean(data.isDocumentReadable)} quality=${data.qualityScore ?? 0}`,
+    );
+
     const extractionMs = data.pipelineMs || 0;
     const totalMs = Date.now() - t0;
 
@@ -641,6 +664,20 @@ export class CloudVisionOcrService {
     );
     console.log(
       `[OCR_ROUTE] engine=${engine} googleCalled=${googleCalled} azureCalled=${azureCalled} fallbackUsed=${fallbackUsed} aborted=${aborted} textChars=${String(rawText || '').length} mlKitCalls=${mlKitCalls}`,
+    );
+
+    let diagnosticCase = 'HEALTHY';
+    if (!rawText || rawText.trim().length < 25) {
+      diagnosticCase = 'CASE_A_EMPTY_OCR_TEXT';
+    } else if (!data.productName && data.totalAmount == null && !data.shopName) {
+      diagnosticCase = 'CASE_B_PARSER_EXTRACT_FAILED';
+    } else if (data.needsManualReview || data.totalAmount == null || !data.invoiceDate || !data.invoiceNumber) {
+      diagnosticCase = data.needsManualReview ? 'NEEDS_REVIEW' : 'PARTIAL_EXTRACTION';
+    } else if (data.confidence == null || data.confidence < 50) {
+      diagnosticCase = 'CASE_E_LOW_CONFIDENCE_REVIEW';
+    }
+    console.log(
+      `[OCR_DIAGNOSTIC] stage=${diagnosticCase} docType=${data.documentType || 'UNKNOWN'} textChars=${String(rawText || '').length} hasProduct=${Boolean(data.productName)} hasTotal=${data.totalAmount != null} hasShop=${Boolean(data.shopName)} confidence=${data.confidence}`,
     );
     return {
       success: true,
@@ -726,9 +763,13 @@ export class CloudVisionOcrService {
       }
     }
 
+    if (cloudFunctionDisabled) {
+      return { success: false, error: 'Cloud Vision proxy disabled (404/unavailable)' };
+    }
+
     const timeoutMs = Math.max(
       1,
-      Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : PROVIDER_ATTEMPT_TIMEOUT_MS,
+      Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : 6000,
     );
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -739,6 +780,10 @@ export class CloudVisionOcrService {
         body: JSON.stringify({ imageBase64: trimmed }),
         signal: controller.signal,
       });
+      if (res.status === 404) {
+        cloudFunctionDisabled = true;
+        return { success: false, error: 'Cloud Vision endpoint not found (404)' };
+      }
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json?.success) {
         return {
@@ -764,9 +809,14 @@ export class CloudVisionOcrService {
       // eslint-disable-next-line global-require
       const module = require('@react-native-ml-kit/text-recognition');
       const recognizer = module?.default || module;
-      const result = await recognizer.recognize(imageUri);
+      const normalizedPath =
+        typeof imageUri === 'string' && imageUri.startsWith('/')
+          ? `file://${imageUri}`
+          : imageUri;
+      const result = await recognizer.recognize(normalizedPath);
       return { success: true, text: result?.text || '' };
     } catch (error) {
+      console.warn('[ML_KIT_RECOGNIZE_ERROR]:', error?.message || error);
       const missingNative =
         /cannot find module|native module|null|undefined/i.test(String(error?.message || error));
       return {

@@ -94,12 +94,13 @@ export function isHardOcrFailure(result) {
 }
 
 /**
+ * Azure Document Intelligence is completely removed from the OCR execution pipeline.
+ * Canonical pipeline routes directly to Gemini Vision.
  * @param {{ googleResult?: object, remainingBudgetMs?: number }} [opts]
  * @returns {boolean}
  */
 export function shouldCallAzureFallback(opts = {}) {
-  if ((Number(opts.remainingBudgetMs) || 0) < MIN_FALLBACK_BUDGET_MS) return false;
-  return isHardOcrFailure(opts.googleResult);
+  return false;
 }
 
 /**

@@ -7,19 +7,31 @@
 import { getImageManipulator } from '../../utils/safeNativeModules';
 import { compressScanImage } from '../../utils/compressScanImage';
 
-export const PREPROCESS_MAX_WIDTH = 1800;
-export const PREPROCESS_COMPRESS = 0.88;
+export const PREPROCESS_MAX_WIDTH = 2400;
+export const PREPROCESS_COMPRESS = 0.92;
 
-export function planScanResize(sourceWidth, maxWidth = PREPROCESS_MAX_WIDTH) {
+export function planScanResize(sourceWidth, maxWidth = PREPROCESS_MAX_WIDTH, sourceHeight = null) {
   const max = Number(maxWidth) || PREPROCESS_MAX_WIDTH;
   const w = Number(sourceWidth);
-  if (Number.isFinite(w) && w > 0 && w <= max) {
+  const h = Number(sourceHeight);
+  if (!Number.isFinite(w) || w <= 0) {
+    return { resize: false, targetWidth: null, reason: 'skip_resize_unknown_size' };
+  }
+  if (Number.isFinite(h) && h > 0) {
+    const longEdge = Math.max(w, h);
+    if (longEdge <= max) {
+      return { resize: false, targetWidth: w, targetHeight: h, reason: 'skip_upscale' };
+    }
+    if (w >= h) {
+      return { resize: true, targetWidth: max, reason: `resize_${max}` };
+    }
+    const targetWidth = Math.round(w * (max / h));
+    return { resize: true, targetWidth, reason: `resize_portrait_${max}` };
+  }
+  if (w <= max) {
     return { resize: false, targetWidth: w, reason: 'skip_upscale' };
   }
-  if (Number.isFinite(w) && w > max) {
-    return { resize: true, targetWidth: max, reason: `resize_${max}` };
-  }
-  return { resize: false, targetWidth: null, reason: 'skip_resize_unknown_size' };
+  return { resize: true, targetWidth: max, reason: `resize_${max}` };
 }
 
 /** alreadyPreprocessed = canonical preprocess already applied. Never re-encode JPEG. */
@@ -77,13 +89,18 @@ export async function readScanImageBase64(uri) {
 export async function prepareScanImageForOcr(capturedUri, opts = {}) {
   if (!capturedUri) return { uri: '', base64: null, steps: ['empty'], ok: false };
   if (opts.alreadyPreprocessed === true) {
-    const base64 = await readScanImageBase64(capturedUri);
+    const [base64, size] = await Promise.all([
+      readScanImageBase64(capturedUri),
+      probeImageSize(capturedUri),
+    ]);
     return {
       uri: capturedUri,
       base64,
       steps: ['already_preprocessed_base64_read'],
       ok: true,
       reencoded: false,
+      width: size?.width,
+      height: size?.height,
     };
   }
   const pre = await preprocessScanImage(capturedUri, {
@@ -138,7 +155,7 @@ export async function preprocessScanImage(uri, opts = {}) {
       steps.push(`deskew_rotate_${rotateDegrees}`);
     }
 
-    const plan = planScanResize(size?.width, maxWidth);
+    const plan = planScanResize(size?.width, maxWidth, size?.height);
     steps.push(plan.reason);
     if (plan.resize && plan.targetWidth) {
       actions.push({ resize: { width: plan.targetWidth } });
@@ -146,12 +163,12 @@ export async function preprocessScanImage(uri, opts = {}) {
 
     const returnBase64 = Boolean(opts.base64);
     const result = await ImageManipulator.manipulateAsync(current, actions, {
-      compress: size?.width && size.width <= 1200 ? Math.min(compress + 0.06, 0.95) : compress,
+      compress: Math.max(compress, 0.92),
       format,
       base64: returnBase64,
     });
     current = result?.uri || current;
-    steps.push('jpeg_0_88');
+    steps.push('jpeg_0_92');
 
     return {
       uri: current,

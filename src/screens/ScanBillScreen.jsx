@@ -14,6 +14,7 @@ import {
   Easing,
   ScrollView,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PrivacyVaultTag } from '../components/PrivacyVaultTag';
@@ -21,6 +22,13 @@ import { COLORS, RADIUS, SPACING } from '../theme/branding';
 import { GlassButton, Screen } from '../components/ui/Glass';
 import { Haptics } from '../services/haptics';
 import { CloudVisionOcrService } from '../services/ocr/CloudVisionOcrService';
+import { ConsumerAssetVlmService } from '../services/vlm/ConsumerAssetVlmService';
+import { MultiDocumentRouter } from '../services/vlm/MultiDocumentRouter';
+import {
+  isVehicleDocument,
+  normalizeToCanonicalDocType,
+} from '../types/assetDocumentTypes';
+import { normalizeDocumentByCanonicalType } from '../services/ocr/UnifiedDocumentNormalizer';
 import {
   captureDocumentImage,
   ensureCameraPermission,
@@ -40,9 +48,9 @@ import { useAuth } from '../context/AuthProvider';
 import { useAssets } from '../context/AssetProvider';
 import { useUiFeedback } from '../context/UiFeedbackProvider';
 import { ScanErrorBoundary } from '../components/ScanErrorBoundary';
-import { ReviewAssetModal } from '../components/ReviewAssetModal';
 import { openReviewInvoice, navigationRef, safeNavigate } from '../navigation/navActions';
-import { markScanSession } from '../utils/scanNavGuard';
+import { markScanSession, setActiveScanSessionId } from '../utils/scanNavGuard';
+import { getRouteForCanonicalDocType } from '../types/assetDocumentTypes';
 
 const AUTO_OPEN_MS = 280;
 const SCREEN_H = Dimensions.get('window').height;
@@ -53,7 +61,40 @@ const PICKER_OPTIONS = {
   quality: 0.92,
   allowsEditing: false,
   base64: false,
-  exif: false,
+  exif: true,
+};
+
+const DOC_TYPE_GUIDES = {
+  INVOICE: {
+    eyebrow: '🧾 PURCHASE INVOICE',
+    title: 'Scan purchase invoice',
+    sub: 'Scan the complete purchase invoice. Hold document steady within frame.',
+  },
+  VEHICLE_SERVICE: {
+    eyebrow: '🚗 VEHICLE SERVICE',
+    title: 'Scan vehicle service bill',
+    sub: 'Scan the complete service invoice or workshop job card.',
+  },
+  INSURANCE: {
+    eyebrow: '🛡️ VEHICLE INSURANCE',
+    title: 'Scan vehicle insurance policy',
+    sub: 'Scan your motor vehicle insurance policy schedule or cover note.',
+  },
+  PUC: {
+    eyebrow: '🟢 PUC CERTIFICATE',
+    title: 'Scan PUC certificate',
+    sub: 'Scan your Pollution Under Control certificate or emission test slip.',
+  },
+  ELECTRICITY_BILL: {
+    eyebrow: '⚡ ELECTRICITY BILL',
+    title: 'Scan electricity bill',
+    sub: 'Scan the complete electricity power utility bill.',
+  },
+  UNKNOWN: {
+    eyebrow: '📄 SMART SCANNER',
+    title: 'Hold document in front of camera',
+    sub: 'Edges detect automatically — AI classifies and extracts fields instantly.',
+  },
 };
 
 function friendlyCaptureMessage(error) {
@@ -85,6 +126,8 @@ async function prepareScanImage(capturedUri, opts = {}) {
   const { prepareScanImageForOcr } = require('../services/ocr/scanImagePreprocess');
   return prepareScanImageForOcr(capturedUri, opts);
 }
+
+
 
 /** Map OCR payload → review fields with null-safe defaults (never crash). */
 function mapOcrToInvoiceFields(parsedData = {}) {
@@ -222,7 +265,7 @@ function emptyFallbackInvoice() {
 }
 
 /**
- * FORCE navigate to ReviewAsset — never Home / Dashboard / MainTabs / popToTop.
+ * Safe navigate to the appropriate review screen — never Home / Dashboard / MainTabs.
  * Safe after camera Activity recreate (navigator may not be ready yet).
  */
 function goToReviewAsset(navigation, payload = {}) {
@@ -242,18 +285,49 @@ function goToReviewAsset(navigation, payload = {}) {
     ocrFailed: Boolean(payload.hasOcrError || payload.ocrFailed),
   });
 
-  // Always include aliases expected by ReviewAssetScreen
+  // Always include aliases expected by review screens
   params.assetData = params.invoice || emptyFallbackInvoice();
   params.parsedData = params.assetData;
   params.hasOcrError = Boolean(payload.hasOcrError || payload.ocrFailed);
 
-  // Persist Review so Activity recreation does not dump to Home
-  markScanSession('ReviewAsset', params).catch(() => {});
+  const rawDocType =
+    payload.documentType ||
+    params.assetData?.documentType ||
+    params.assetData?.classifiedDocumentType ||
+    'UNKNOWN';
+  const canonicalType = normalizeToCanonicalDocType(rawDocType);
+  const targetRoute = getRouteForCanonicalDocType(canonicalType);
+
+  params.documentType = canonicalType;
+  params.reviewRoute = targetRoute;
+
+  const populatedFieldCount = [
+    params.assetData?.productName,
+    params.assetData?.shopName,
+    params.assetData?.totalAmount,
+    params.assetData?.invoiceNumber,
+    params.assetData?.invoiceDate,
+  ].filter((v) => v != null && v !== '').length;
+
+  console.log(
+    `[OCR_TRACE_09_NAVIGATION] target=${targetRoute} docType=${canonicalType} populatedCount=${populatedFieldCount} hasError=${params.hasOcrError} ocrFailed=${params.ocrFailed} engine=${payload.engine || 'unknown'}`,
+  );
+  console.log(
+    `[SCAN_NAV_DEBUG] ${canonicalType} → ${targetRoute} scanSessionId=${params.scanSessionId || 'none'}`,
+  );
+
+  // Persist Review so Activity recreation restores THIS review screen, not generic ReviewAsset
+  markScanSession(targetRoute, {
+    ...params,
+    documentType: canonicalType,
+    reviewRoute: targetRoute,
+    scanSessionId: params.scanSessionId,
+  }).catch(() => {});
 
   const tryLocal = () => {
     try {
       if (typeof navigation?.navigate === 'function') {
-        navigation.navigate('ReviewAsset', params);
+        navigation.navigate(targetRoute, params);
         return true;
       }
     } catch (error) {
@@ -270,8 +344,13 @@ function goToReviewAsset(navigation, payload = {}) {
 
   try {
     if (navigationRef.isReady()) {
-      const opened = openReviewInvoice(params);
-      if (opened) return true;
+      if (targetRoute === 'ReviewAsset') {
+        const opened = openReviewInvoice(params);
+        if (opened) return true;
+      } else {
+        navigationRef.navigate(targetRoute, params);
+        return true;
+      }
     }
   } catch (error) {
     console.error('OCR Error / nav fallback:', error?.message || error);
@@ -282,10 +361,14 @@ function goToReviewAsset(navigation, payload = {}) {
     try {
       if (tryLocal()) return;
       if (navigationRef.isReady()) {
-        openReviewInvoice(params);
+        if (targetRoute === 'ReviewAsset') {
+          openReviewInvoice(params);
+        } else {
+          navigationRef.navigate(targetRoute, params);
+        }
         return;
       }
-      safeNavigate('ReviewAsset', params).catch((err) => {
+      safeNavigate(targetRoute, params).catch((err) => {
         console.error('OCR Error / delayed nav:', err?.message || err);
       });
     } catch (error) {
@@ -303,14 +386,18 @@ function stripHeavyFields(obj) {
   const ban = [
     'base64',
     'billThumbDataUrl',
-    'rawText',
-    'rawOcrText',
     'imageBase64',
     'dataUrl',
     'thumbnailBase64',
   ];
   for (const key of ban) {
     if (key in next) delete next[key];
+  }
+  if (typeof next.rawText === 'string' && next.rawText.length > 8000) {
+    next.rawText = next.rawText.slice(0, 8000);
+  }
+  if (typeof next.rawOcrText === 'string' && next.rawOcrText.length > 8000) {
+    next.rawOcrText = next.rawOcrText.slice(0, 8000);
   }
   if (next.ocrExtract && typeof next.ocrExtract === 'object') {
     const extract = { ...next.ocrExtract };
@@ -408,7 +495,7 @@ async function safeLaunchLibraryAsync() {
   }
 }
 
-function ScanBillScreenInner({ navigation }) {
+function ScanBillScreenInner({ navigation, route }) {
   const { user } = useAuth();
   const { assets } = useAssets();
   const ui = useUiFeedback();
@@ -448,6 +535,13 @@ function ScanBillScreenInner({ navigation }) {
       if (processingTimer.current) clearInterval(processingTimer.current);
     };
   }, [processing]);
+
+  useEffect(() => {
+    return () => {
+      scanGenRef.current += 1;
+      scanSessionIdRef.current = '';
+    };
+  }, []);
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -521,7 +615,7 @@ function ScanBillScreenInner({ navigation }) {
     }
   }, [ui]);
 
-  const processImageWithGemini = useCallback(
+  const processImage = useCallback(
     async (uri, processOpts = {}) => {
       if (!uri) {
         setLastError('Could not capture image. Please try again.');
@@ -551,8 +645,8 @@ function ScanBillScreenInner({ navigation }) {
       const preprocessStarted = Date.now();
       try {
         try {
-          setProcessLabel('Extracting text…');
-          setProcessingStage('OCR_EXTRACTING');
+          setProcessLabel('Preparing image…');
+          setProcessingStage('PREPROCESSING');
           const compressedImage = await prepareScanImage(uri, {
             alreadyPreprocessed: Boolean(processOpts.alreadyPreprocessed),
           });
@@ -567,15 +661,29 @@ function ScanBillScreenInner({ navigation }) {
         }
         const preprocessMs = Date.now() - preprocessStarted;
 
-        if (isStale()) return;
+        console.log(
+          `[OCR_TRACE_01_IMAGE] uri=${(optimizedUri || '').split('/').pop()} width=${imageWidth || 0} height=${imageHeight || 0} b64Chars=${(optimizedBase64 || '').length} source=${processOpts.source || 'scan'}`,
+        );
 
-        setProcessLabel('Extracting text…');
-        setProcessingStage('OCR_EXTRACTING');
+        if (isStale()) return;
 
         let ocr = null;
         let ocrFailed = false;
         let ocrFailMessage = '';
         let quality = { ok: true };
+        let vlmData = null;
+        let routerResult = null;
+        let vlmInsurance = null;
+        let vlmPuc = null;
+        let vlmElectricity = null;
+        let vlmVehicleService = null;
+
+        const selectedDocType =
+          processOpts.forceDocumentType ||
+          route?.params?.selectedDocType ||
+          (route?.params?.isEnergyScan ? 'ELECTRICITY_BILL' : undefined);
+
+        const canonicalTarget = normalizeToCanonicalDocType(selectedDocType);
 
         const ocrStarted = Date.now();
         try {
@@ -598,28 +706,128 @@ function ScanBillScreenInner({ navigation }) {
             return;
           }
 
-          const { collectVaultedDocsFromAssets } = require('../services/ocr/vaultedDocCollector');
-          ocr = await CloudVisionOcrService.recognizeInvoice(optimizedUri, {
-            base64: optimizedBase64,
-            alreadyPreprocessed: Boolean(processOpts.alreadyPreprocessed),
-            scanSessionId,
-            existingAssets: assets || [],
-            existingVaultedDocs: collectVaultedDocsFromAssets(assets || []),
-            skipAi: false,
-            t0ScanInitiated: t0,
-          });
-          try {
-            const { appendOcrTrail } = require('../services/ocr/ocrDebugTrail');
-            appendOcrTrail({
-              stage: 'IMAGE_PREPROCESSING',
-              imageQualityScore: quality.score,
-              qualityCode: quality.code,
-              preprocessMs,
-              ocrMs: Date.now() - ocrStarted,
-              scanSessionId,
-            });
-          } catch {
-            /* optional */
+          // =========================================================================
+          // CANONICAL DIRECT-TO-GEMINI VISION PIPELINE (ZERO AZURE DEPENDENCY)
+          // =========================================================================
+          console.log('[OCR_PROVIDER] OCR_PROVIDER=GEMINI_DIRECT');
+          console.log('[OCR_PROVIDER] GEMINI_START');
+          setProcessLabel('Reading document with Gemini Vision…');
+          setProcessingStage('EXTRACTING');
+
+          if (optimizedBase64) {
+            const vlmTimeoutMs = 15000;
+            try {
+              const vlmTimeout = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('VLM pipeline overall timeout (15s)')), vlmTimeoutMs)
+              );
+              routerResult = await Promise.race([
+                MultiDocumentRouter.processDocument(
+                  optimizedBase64,
+                  'image/jpeg',
+                  {
+                    userSelectedType: selectedDocType,
+                    forceDocumentType: processOpts.forceDocumentType || route?.params?.forceDocumentType,
+                    skipSafetyCheck: Boolean(processOpts.skipSafetyCheck),
+                  },
+                ),
+                vlmTimeout,
+              ]);
+
+              if (routerResult?.success && routerResult.extracted) {
+                console.log('[OCR_PROVIDER] GEMINI_SUCCESS');
+                setProcessLabel('Verifying fields & matching…');
+                setProcessingStage('VERIFYING');
+                const { type, payload } = routerResult.extracted;
+                if (type === 'INVOICE') {
+                  vlmData = payload;
+                } else if (type === 'VEHICLE_SERVICE') {
+                  vlmVehicleService = payload;
+                } else if (type === 'INSURANCE') {
+                  vlmInsurance = payload;
+                } else if (type === 'PUC') {
+                  vlmPuc = payload;
+                } else if (type === 'ELECTRICITY_BILL') {
+                  vlmElectricity = payload;
+                }
+              } else if (routerResult?.isTypeMismatch) {
+                // Handle AI safety mismatch
+                setProcessing(false);
+                const detectedLabel = (routerResult.detectedType || '').replace('_', ' ');
+                const selectedLabel = (selectedDocType || '').replace('_', ' ');
+                Alert.alert(
+                  "Document Mismatch",
+                  `This document appears to be a ${detectedLabel} rather than a ${selectedLabel}. How would you like to proceed?`,
+                  [
+                    {
+                      text: `Use ${detectedLabel} Scanner`,
+                      onPress: () => {
+                        processImage(optimizedUri, {
+                          ...processOpts,
+                          forceDocumentType: routerResult.detectedType,
+                          skipSafetyCheck: true,
+                        });
+                      },
+                    },
+                    {
+                      text: 'Scan Again',
+                      style: 'cancel',
+                      onPress: () => setPendingImageUri(''),
+                    },
+                    {
+                      text: 'Continue Anyway',
+                      onPress: () => {
+                        processImage(optimizedUri, {
+                          ...processOpts,
+                          forceDocumentType: selectedDocType,
+                          skipSafetyCheck: true,
+                        });
+                      },
+                    },
+                  ],
+                );
+                return;
+              } else {
+                console.warn('[OCR_PROVIDER] GEMINI_FAILURE (no extracted payload)');
+              }
+            } catch (vlmErr) {
+              const isTimeout = /timeout/i.test(String(vlmErr?.message || ''));
+              if (isTimeout) {
+                console.warn('[OCR_PROVIDER] GEMINI_TIMEOUT (15s limit exceeded)');
+                // Bounded single retry on transient network timeout
+                if (!processOpts.isRetry) {
+                  console.log('[OCR_PROVIDER] Retrying Gemini Vision extraction (attempt 2/2)...');
+                  return processImage(optimizedUri, {
+                    ...processOpts,
+                    isRetry: true,
+                  });
+                }
+              } else {
+                console.warn('[OCR_PROVIDER] GEMINI_FAILURE exception:', vlmErr?.message || vlmErr);
+              }
+              routerResult = null;
+            }
+          }
+
+          // Deterministic OCR fallback only if Gemini extraction yielded nothing
+          if (!vlmData && !vlmInsurance && !vlmPuc && !vlmElectricity && !vlmVehicleService && !ocr) {
+            setProcessLabel('Running text recognition…');
+            setProcessingStage('OCR_EXTRACTING');
+            const { collectVaultedDocsFromAssets } = require('../services/ocr/vaultedDocCollector');
+            try {
+              ocr = await CloudVisionOcrService.recognizeInvoice(optimizedUri, {
+                base64: optimizedBase64,
+                alreadyPreprocessed: Boolean(processOpts.alreadyPreprocessed),
+                scanSessionId,
+                existingAssets: assets || [],
+                existingVaultedDocs: collectVaultedDocsFromAssets(assets || []),
+                skipAi: false,
+                t0ScanInitiated: t0,
+              });
+            } catch (rescueErr) {
+              console.error('[OCR_PROVIDER] RESCUE_OCR_FAILURE:', rescueErr);
+              ocrFailed = true;
+              ocrFailMessage = rescueErr?.message || 'Could not auto-fill details, please enter manually';
+            }
           }
         } catch (ocrErr) {
           console.error('[ScanBillScreen Error]:', ocrErr);
@@ -633,76 +841,450 @@ function ScanBillScreenInner({ navigation }) {
           return;
         }
 
-        if (quality && quality.ok === false) {
+        const ocrRawText = ocr?.data?.rawText || ocr?.data?.rawOcrText || ocr?.rawText || '';
+        const hasExtractedText = Boolean(
+          vlmData ||
+            vlmInsurance ||
+            vlmPuc ||
+            vlmElectricity ||
+            vlmVehicleService ||
+            (ocr?.success && ocrRawText && ocrRawText.trim().length >= 10),
+        );
+
+        if (!hasExtractedText && ocrFailed) {
           setProcessing(false);
           setProcessLabel('Failed');
-          const tips = (quality.tips || []).slice(0, 5).map((t) => `• ${t}`).join('\n');
+          setProcessingStage('FAILED');
           setLastError(
-            `${quality.message || 'Image quality is too low to read this document clearly.'}${
-              tips ? `\n${tips}` : ''
-            }\nTap Scan document to retake.`,
+            ocr?.error ||
+            ocrFailMessage ||
+            'Could not extract readable text from this document. Please ensure good lighting, avoid glare, or enter details manually.'
           );
           Haptics.error();
           return;
         }
 
-        if (!ocrFailed && !ocr?.success) {
-          ocrFailed = true;
-          ocrFailMessage = ocr?.error || 'Could not auto-fill details, please enter manually';
+        const classifiedDocType =
+          routerResult?.documentType ||
+          ocr?.data?.classifiedDocumentType ||
+          ocr?.data?.documentType;
+        const docIdentified = Boolean(
+          classifiedDocType &&
+          classifiedDocType !== 'UNKNOWN' &&
+          classifiedDocType !== 'UNKNOWN_DOCUMENT' &&
+          classifiedDocType !== 'UNREADABLE_DOCUMENT'
+        );
+
+        if (docIdentified) {
+          setProcessLabel('Identifying document…');
+          setProcessingStage('IDENTIFYING');
+          if (isStale()) {
+            console.log('[OCR] discarded stale session', scanSessionId);
+            return;
+          }
+          setProcessLabel('Verifying fields & matching assets…');
+          setProcessingStage('VERIFYING');
+        } else {
+          setProcessLabel('Reviewing extracted details…');
+          setProcessingStage('REVIEWING');
         }
 
-        setProcessLabel('Identifying document…');
-        setProcessingStage('IDENTIFYING');
-        if (isStale()) {
-          console.log('[OCR] discarded stale session', scanSessionId);
-          return;
+        const honestRouterConf = routerResult?.classification?.confidence != null
+          ? Math.round(routerResult.classification.confidence <= 1 ? routerResult.classification.confidence * 100 : routerResult.classification.confidence)
+          : null;
+        const honestOcrConf = ocr?.confidence != null ? Math.round(ocr.confidence) : null;
+
+        let mappedInvoice = null;
+        if (vlmVehicleService) {
+          mappedInvoice = {
+            documentType: 'VEHICLE_SERVICE',
+            classifiedDocumentType: 'VEHICLE_SERVICE',
+            scanDocumentType: 'vehicle_service',
+            serviceInvoiceNumber: vlmVehicleService.serviceInvoiceNumber,
+            invoiceNumber: vlmVehicleService.serviceInvoiceNumber,
+            serviceDate: vlmVehicleService.serviceDate,
+            invoiceDate: vlmVehicleService.serviceDate,
+            workshopName: vlmVehicleService.workshopName,
+            shopName: vlmVehicleService.workshopName,
+            vendor: vlmVehicleService.workshopName,
+            customerName: vlmVehicleService.customerName,
+            registration: vlmVehicleService.registrationNumber,
+            vehicleRegistrationNumber: vlmVehicleService.registrationNumber,
+            chassisNumber: vlmVehicleService.chassisNumber,
+            chassisSuffix: vlmVehicleService.chassisSuffix,
+            engineNumber: vlmVehicleService.engineNumber,
+            engineSuffix: vlmVehicleService.engineSuffix,
+            vehicleMake: vlmVehicleService.vehicleMake,
+            vehicleModel: vlmVehicleService.vehicleModel,
+            brand: vlmVehicleService.vehicleMake,
+            model: vlmVehicleService.vehicleModel,
+            variant: vlmVehicleService.variant,
+            jobType: vlmVehicleService.jobType,
+            odometerKm: vlmVehicleService.odometerKm,
+            serviceItems: vlmVehicleService.serviceItems,
+            labourAmount: vlmVehicleService.labourAmount,
+            partsAmount: vlmVehicleService.partsAmount,
+            taxAmount: vlmVehicleService.taxAmount,
+            totalAmount: vlmVehicleService.totalAmount,
+            purchaseAmount: vlmVehicleService.totalAmount,
+            nextServiceDate: vlmVehicleService.nextServiceDate,
+            nextServiceDue: vlmVehicleService.nextServiceDate,
+            nextServiceKm: vlmVehicleService.nextServiceKm,
+            productName: vlmVehicleService.vehicleMake
+              ? `${vlmVehicleService.vehicleMake} ${vlmVehicleService.vehicleModel} Service`.trim()
+              : 'Vehicle Service',
+            confidence: honestRouterConf,
+            needsManualReview: false,
+            requiresVehicleLink: true,
+            isAttachDoc: true,
+            category: 'Vehicles',
+            purchaseCategory: 'Vehicles',
+          };
+        } else if (vlmInsurance) {
+          mappedInvoice = {
+            documentType: 'INSURANCE',
+            classifiedDocumentType: 'INSURANCE',
+            policyNumber: vlmInsurance.policyNumber,
+            invoiceNumber: vlmInsurance.policyNumber,
+            insurer: vlmInsurance.insurerName,
+            insurerName: vlmInsurance.insurerName,
+            shopName: vlmInsurance.insurerName,
+            vendor: vlmInsurance.insurerName,
+            policyType: vlmInsurance.policyType,
+            customerName: vlmInsurance.customerName,
+            registration: vlmInsurance.vehicleRegistrationNumber,
+            vehicleRegistrationNumber: vlmInsurance.vehicleRegistrationNumber,
+            chassisNumber: vlmInsurance.chassisNumber,
+            chassisSuffix: vlmInsurance.chassisSuffix,
+            engineNumber: vlmInsurance.engineNumber,
+            engineSuffix: vlmInsurance.engineSuffix,
+            idv: vlmInsurance.idv,
+            premium: vlmInsurance.premium,
+            totalAmount: vlmInsurance.premium,
+            purchaseAmount: vlmInsurance.premium,
+            policyStartDate: vlmInsurance.policyStartDate,
+            invoiceDate: vlmInsurance.policyStartDate,
+            insuranceExpiry: vlmInsurance.policyExpiryDate,
+            policyExpiryDate: vlmInsurance.policyExpiryDate,
+            coverageDetails: vlmInsurance.coverageDetails,
+            vehicleMake: vlmInsurance.vehicleMake,
+            vehicleModel: vlmInsurance.vehicleModel,
+            productName: vlmInsurance.vehicleMake
+              ? `${vlmInsurance.vehicleMake} ${vlmInsurance.vehicleModel}`.trim()
+              : 'Vehicle Insurance',
+            brand: vlmInsurance.vehicleMake,
+            model: vlmInsurance.vehicleModel,
+            confidence: honestRouterConf,
+            needsManualReview: false,
+            requiresVehicleLink: true,
+            isAttachDoc: true,
+            category: 'Vehicles',
+            purchaseCategory: 'Vehicles',
+          };
+        } else if (vlmPuc) {
+          mappedInvoice = {
+            documentType: 'PUC',
+            classifiedDocumentType: 'PUC',
+            certificateNumber: vlmPuc.certificateNumber,
+            invoiceNumber: vlmPuc.certificateNumber,
+            registration: vlmPuc.vehicleRegistrationNumber,
+            vehicleRegistrationNumber: vlmPuc.vehicleRegistrationNumber,
+            vehicleMake: vlmPuc.vehicleMake,
+            vehicleModel: vlmPuc.vehicleModel,
+            chassisNumber: vlmPuc.chassisNumber,
+            chassisSuffix: vlmPuc.chassisSuffix,
+            engineNumber: vlmPuc.engineNumber,
+            engineSuffix: vlmPuc.engineSuffix,
+            customerName: vlmPuc.ownerName,
+            fuelType: vlmPuc.fuelType,
+            invoiceDate: vlmPuc.testDate,
+            testDate: vlmPuc.testDate,
+            validUntil: vlmPuc.validUntil,
+            pucExpiry: vlmPuc.validUntil,
+            pucValidUntil: vlmPuc.validUntil,
+            emissionValues: vlmPuc.emissionValues,
+            shopName: vlmPuc.issuingAuthority,
+            issuingAuthority: vlmPuc.issuingAuthority,
+            productName: vlmPuc.vehicleMake
+              ? `${vlmPuc.vehicleMake} ${vlmPuc.vehicleModel}`.trim()
+              : 'Vehicle PUC Certificate',
+            brand: vlmPuc.vehicleMake,
+            model: vlmPuc.vehicleModel,
+            confidence: honestRouterConf,
+            needsManualReview: false,
+            requiresVehicleLink: true,
+            isAttachDoc: true,
+            category: 'Vehicles',
+            purchaseCategory: 'Vehicles',
+          };
+        } else if (vlmElectricity) {
+          mappedInvoice = {
+            documentType: 'ELECTRICITY_BILL',
+            classifiedDocumentType: 'ELECTRICITY_BILL',
+            isElectricityBill: true,
+            electricityProvider: vlmElectricity.providerName,
+            providerName: vlmElectricity.providerName,
+            shopName: vlmElectricity.providerName,
+            customerName: vlmElectricity.customerName,
+            consumerId: vlmElectricity.consumerNumber,
+            consumerNumber: vlmElectricity.consumerNumber,
+            accountNumber: vlmElectricity.accountNumber,
+            billNumber: vlmElectricity.billNumber,
+            billMonthYear: vlmElectricity.billMonthYear,
+            meterNumber: vlmElectricity.meterNumber,
+            serviceAddress: vlmElectricity.serviceAddress,
+            sanctionedLoad: vlmElectricity.sanctionedLoad,
+            maximumDemand: vlmElectricity.maximumDemand,
+            billingMonth: vlmElectricity.billingPeriod,
+            billingPeriod: vlmElectricity.billingPeriod,
+            billDate: vlmElectricity.billDate,
+            invoiceDate: vlmElectricity.billDate,
+            dueDate: vlmElectricity.dueDate,
+            disconnectionDate: vlmElectricity.disconnectionDate,
+            previousMeterReading: vlmElectricity.previousReading,
+            currentMeterReading: vlmElectricity.currentReading,
+            unitsConsumed: vlmElectricity.unitsConsumed,
+            calculatedConsumption: vlmElectricity.calculatedConsumption,
+            readingMismatch: vlmElectricity.readingMismatch,
+            grossBillAmount: vlmElectricity.grossBillAmount,
+            tariffSubsidy: vlmElectricity.tariffSubsidy,
+            subsidy: vlmElectricity.tariffSubsidy,
+            latePaymentSurcharge: vlmElectricity.latePaymentSurcharge,
+            lpsc: vlmElectricity.latePaymentSurcharge,
+            netCurrentBillAmount: vlmElectricity.netCurrentBillAmount,
+            advancePayment: vlmElectricity.advancePayment,
+            interestAmount: vlmElectricity.interestAmount,
+            arrears: vlmElectricity.arrears,
+            totalPayableAmount: vlmElectricity.totalPayableAmount,
+            totalAmount: vlmElectricity.amountDue,
+            amountDue: vlmElectricity.amountDue,
+            currentBillAmount: vlmElectricity.netCurrentBillAmount || vlmElectricity.amountDue,
+            confidence: honestRouterConf,
+            needsManualReview: false,
+          };
+        } else if (vlmData) {
+          mappedInvoice = {
+            ...vlmData,
+            documentType: 'INVOICE',
+            classifiedDocumentType: 'INVOICE',
+            confidence: honestRouterConf,
+            needsManualReview: false,
+            ocrExtract: {
+              product_name: vlmData.productName,
+              asset_name: vlmData.productName,
+              brand: vlmData.brand,
+              model: vlmData.model,
+              serial_number: vlmData.serialNumber,
+              chassis_or_frame_no: vlmData.chassisNumber,
+              engine_number: vlmData.engineNumber,
+              imei: vlmData.imei,
+              vendor_dealer_name: vlmData.shopName,
+              owner_buyer_name: vlmData.customerName,
+              purchase_date: vlmData.invoiceDate,
+              invoice_number: vlmData.invoiceNumber,
+              total_amount: vlmData.totalAmount,
+              warranty_period: vlmData.warrantyPeriod,
+              expiry_date: vlmData.warrantyExpiry,
+            },
+          };
+        } else {
+          console.log('[OCR_DEBUG] classification_started', {
+            selectedDocType,
+            ocrDataDocType: ocr?.data?.classifiedDocumentType || ocr?.data?.documentType,
+            routerDocType: routerResult?.documentType || routerResult?.classification?.documentType,
+            rawTextLength: (ocrRawText || '').length,
+          });
+
+          // Check raw OCR text for definitive insurance signatures
+          const isInsurancePolicy =
+            /\b(policy\s*(?:no|number|#|certificate|schedule)|certificate\s*of\s*insurance|motor\s*insurance\s*policy|insured\s*declared\s*value|\bidv\b|own\s*damage|ncb|no\s*claim\s*bonus|imt[- ]?28|pa\s*cover|compulsory\s*pa|liability\s*paid\s*driver)\b/i.test(
+              ocrRawText || '',
+            ) ||
+            /\b(icici\s*lombard|hdfc\s*ergo|bajaj\s*allianz|new\s*india\s*assurance|tata\s*aig|iffco\s*tokio|go\s*digit|united\s*india\s*insurance|national\s*insurance|sbi\s*general|reliance\s*general|cholamandalam)\b/i.test(
+              ocrRawText || '',
+            );
+
+          let detectedDocType =
+            ocr?.data?.classifiedDocumentType ||
+            ocr?.data?.documentType ||
+            routerResult?.documentType ||
+            routerResult?.classification?.documentType ||
+            selectedDocType;
+
+          if (isInsurancePolicy && detectedDocType !== 'VEHICLE_SERVICE_BILL') {
+            detectedDocType = 'VEHICLE_INSURANCE';
+          }
+
+          let canonicalTarget = normalizeToCanonicalDocType(detectedDocType);
+          if (isInsurancePolicy && canonicalTarget !== 'VEHICLE_SERVICE_BILL') {
+            canonicalTarget = 'VEHICLE_INSURANCE';
+          }
+
+          console.log(`[OCR_DEBUG] classification_result: ${canonicalTarget}`);
+          console.log(`[OCR_DEBUG] review_route: ${getRouteForCanonicalDocType(canonicalTarget)}`);
+
+          if (canonicalTarget === 'VEHICLE_SERVICE_BILL') {
+            const { RealVehicleServiceExtractor } = require('../services/ocr/extractors/RealVehicleServiceExtractor');
+            const srv = RealVehicleServiceExtractor.extract(ocrRawText);
+            mappedInvoice = {
+              documentType: 'VEHICLE_SERVICE_BILL',
+              classifiedDocumentType: 'VEHICLE_SERVICE',
+              workshopName: srv.workshopName || '',
+              serviceInvoiceNumber: srv.invoiceNumber || srv.jobCardNumber || '',
+              invoiceNumber: srv.invoiceNumber || srv.jobCardNumber || '',
+              serviceDate: srv.invoiceDate || '',
+              invoiceDate: srv.invoiceDate || '',
+              registration: srv.registration || '',
+              vehicleRegistrationNumber: srv.registration || '',
+              odometerKm: srv.odometerKm,
+              odometerReading: srv.odometerKm,
+              labourAmount: srv.labourCharges,
+              partsAmount: srv.partsTotal,
+              taxAmount: srv.taxAmount,
+              totalAmount: srv.totalAmount,
+              nextServiceDue: srv.nextServiceDate,
+              nextServiceDueDate: srv.nextServiceDate,
+              nextServiceDueKm: srv.nextServiceOdometerKm,
+              serviceType: 'Periodic Maintenance',
+              requiresVehicleLink: true,
+              isAttachDoc: true,
+              confidence: honestOcrConf,
+            };
+          } else if (canonicalTarget === 'VEHICLE_INSURANCE') {
+            const { InsuranceExtractor } = require('../ocr/extractors/InsuranceExtractor');
+            const { normalizeInsurance } = require('../services/ocr/UnifiedDocumentNormalizer');
+            const ins = InsuranceExtractor.extract(ocrRawText);
+            const intermediate = {
+              insurerName: ins.insurerName?.value || '',
+              policyNumber: ins.policyNumber?.value || '',
+              registration: ins.vehicleRegistration?.value || '',
+              engineNumber: ins.engineNumber?.value || '',
+              chassisNumber: ins.chassisNumber?.value || '',
+              idv: ins.idvAmount?.value,
+              premiumAmount: ins.premiumAmount?.value,
+              policyStartDate: ins.policyStartDate?.value || '',
+              policyExpiryDate: ins.policyEndDate?.value || '',
+              insuredName: ins.insuredName?.value || '',
+              policyType: ins.coverageType?.value || 'Comprehensive',
+              confidence: honestOcrConf || 85,
+            };
+            const normIns = normalizeInsurance(intermediate);
+            mappedInvoice = {
+              ...normIns,
+              documentType: 'VEHICLE_INSURANCE',
+              classifiedDocumentType: 'INSURANCE',
+              shopName: normIns.insurerName,
+              invoiceNumber: normIns.policyNumber,
+              vehicleRegistrationNumber: normIns.registration,
+              insuranceExpiry: normIns.policyExpiryDate,
+              customerName: normIns.insuredName,
+              totalAmount: normIns.premiumAmount,
+              price: normIns.premiumAmount,
+              items: [],
+              lineItems: [],
+              requiresVehicleLink: true,
+              isAttachDoc: true,
+              confidence: honestOcrConf || 85,
+            };
+          } else if (canonicalTarget === 'VEHICLE_PUC') {
+            const { PucExtractor } = require('../ocr/extractors/PucExtractor');
+            const puc = PucExtractor.extract(ocrRawText);
+            mappedInvoice = {
+              documentType: 'VEHICLE_PUC',
+              classifiedDocumentType: 'PUC',
+              certificateNumber: puc.certificateNumber?.value || '',
+              invoiceNumber: puc.certificateNumber?.value || '',
+              registration: puc.vehicleRegistration?.value || '',
+              vehicleRegistrationNumber: puc.vehicleRegistration?.value || '',
+              issueDate: puc.issueDate?.value || '',
+              invoiceDate: puc.issueDate?.value || '',
+              validUntil: puc.expiryDate?.value || '',
+              pucExpiry: puc.expiryDate?.value || '',
+              emissionResult: puc.emissionResult?.value || 'PASS',
+              fuelType: puc.fuelType?.value || puc.fuelType || '',
+              requiresVehicleLink: true,
+              isAttachDoc: true,
+              confidence: honestOcrConf,
+            };
+          } else if (canonicalTarget === 'ELECTRICITY_BILL') {
+            const { RealElectricityBillExtractor } = require('../services/ocr/extractors/RealElectricityBillExtractor');
+            const elec = RealElectricityBillExtractor.extract(ocrRawText);
+            mappedInvoice = {
+              documentType: 'ELECTRICITY_BILL',
+              classifiedDocumentType: 'ELECTRICITY_BILL',
+              isElectricityBill: true,
+              electricityProvider: elec.electricityProvider || '',
+              providerName: elec.electricityProvider || '',
+              shopName: elec.electricityProvider || '',
+              consumerId: elec.consumerId || '',
+              consumerNumber: elec.consumerId || '',
+              accountNumber: elec.consumerId || '',
+              billNumber: elec.billNumber || '',
+              billMonthYear: elec.billingMonth || '',
+              billingMonth: elec.billingMonth || '',
+              billDate: elec.billDate || '',
+              invoiceDate: elec.billDate || '',
+              dueDate: elec.dueDate || '',
+              meterNumber: elec.meterNumber || '',
+              previousMeterReading: elec.previousMeterReading,
+              previousReading: elec.previousMeterReading,
+              currentMeterReading: elec.currentMeterReading,
+              currentReading: elec.currentMeterReading,
+              unitsConsumed: elec.unitsConsumedKwh,
+              unitsConsumedKwh: elec.unitsConsumedKwh,
+              currentBillAmount: elec.currentBillAmount,
+              totalPayableAmount: elec.currentBillAmount,
+              amountDue: elec.currentBillAmount,
+              totalAmount: elec.currentBillAmount,
+              confidence: honestOcrConf,
+            };
+          } else {
+            mappedInvoice = mapOcrToInvoiceFields(ocr?.data || {});
+          }
         }
-        setProcessLabel('Verifying fields & matching assets…');
-        setProcessingStage('VERIFYING');
 
-        const mappedInvoice = ocrFailed
-          ? emptyFallbackInvoice()
-          : mapOcrToInvoiceFields(ocr?.data || {});
-
+        const isVlmExtracted = Boolean(vlmData || vlmInsurance || vlmPuc || vlmElectricity || vlmVehicleService);
         // Confidence gate — < 85% → Manual Review (never silent auto-trust)
         let confidence = Number(
           mappedInvoice.confidence ??
             ocr?.data?.confidence ??
             ocr?.confidence ??
-            0,
+            (isVlmExtracted ? (honestRouterConf || 0) : 0),
         );
-        try {
-          const { scoreExtractionConfidence, needsManualReview, OCR_CONFIDENCE_THRESHOLD } =
-            require('../services/ocr/ocrSchemas');
-          if (!Number.isFinite(confidence) || confidence <= 0) {
-            confidence = scoreExtractionConfidence(
-              { ...mappedInvoice, ...(ocr?.data || {}) },
-              mappedInvoice.document_type || ocr?.data?.document_type,
+        if (!isVlmExtracted) {
+          try {
+            const { scoreExtractionConfidence, needsManualReview, OCR_CONFIDENCE_THRESHOLD } =
+              require('../services/ocr/ocrSchemas');
+            if (!Number.isFinite(confidence) || confidence <= 0) {
+              confidence = scoreExtractionConfidence(
+                { ...mappedInvoice, ...(ocr?.data || {}) },
+                mappedInvoice.document_type || ocr?.data?.document_type,
+              );
+            }
+            mappedInvoice.confidence = confidence;
+            mappedInvoice.needsManualReview = Boolean(
+              ocrFailed ||
+                needsManualReview(confidence, OCR_CONFIDENCE_THRESHOLD) ||
+                ocr?.needsManualReview ||
+                ocr?.data?.needsManualReview ||
+                ocr?.data?.providerConflict,
+            );
+            if (ocr?.data?.fieldConfidence) {
+              mappedInvoice.fieldConfidence = ocr.data.fieldConfidence;
+              mappedInvoice.fieldConfidenceReasons = ocr.data.fieldConfidenceReasons || {};
+              mappedInvoice.lowConfidenceFields = ocr.data.lowConfidenceFields || [];
+            } else {
+              mappedInvoice.needsManualReview = true;
+            }
+          } catch {
+            mappedInvoice.confidence = confidence;
+            mappedInvoice.needsManualReview = Boolean(
+              ocrFailed ||
+                confidence < 85 ||
+                ocr?.needsManualReview ||
+                ocr?.data?.needsManualReview,
             );
           }
-          mappedInvoice.confidence = confidence;
-          mappedInvoice.needsManualReview = Boolean(
-            ocrFailed ||
-              needsManualReview(confidence, OCR_CONFIDENCE_THRESHOLD) ||
-              ocr?.needsManualReview ||
-              ocr?.data?.needsManualReview ||
-              ocr?.data?.providerConflict,
-          );
-          if (ocr?.data?.fieldConfidence) {
-            mappedInvoice.fieldConfidence = ocr.data.fieldConfidence;
-            mappedInvoice.fieldConfidenceReasons = ocr.data.fieldConfidenceReasons || {};
-            mappedInvoice.lowConfidenceFields = ocr.data.lowConfidenceFields || [];
-          } else {
-            mappedInvoice.needsManualReview = true;
-          }
-        } catch {
-          mappedInvoice.confidence = confidence;
-          mappedInvoice.needsManualReview = Boolean(
-            ocrFailed ||
-              confidence < 85 ||
-              ocr?.needsManualReview ||
-              ocr?.data?.needsManualReview,
-          );
         }
 
         let audit = {
@@ -723,8 +1305,11 @@ function ScanBillScreenInner({ navigation }) {
               needsManualReview: Boolean(mappedInvoice.needsManualReview),
             };
             if (mappedInvoice.needsManualReview) {
-              audit.manualEntry = true;
+              audit.needsReview = true;
               audit.flags = [...(audit.flags || []), 'low_confidence_manual_review'];
+              if (!mappedInvoice.productName && mappedInvoice.totalAmount == null && !mappedInvoice.shopName) {
+                audit.manualEntry = true;
+              }
             }
             if (dup?.isDuplicate) {
               audit.isDuplicate = true;
@@ -792,8 +1377,52 @@ function ScanBillScreenInner({ navigation }) {
           console.log('[OCR] discarded stale session', scanSessionId);
           return;
         }
-        Haptics.success();
-        goToReviewAsset(navigation, {
+
+        const canonicalType = normalizeToCanonicalDocType(
+          mappedInvoice.documentType ||
+          mappedInvoice.classifiedDocumentType ||
+          routerResult?.documentType ||
+          ocr?.data?.classifiedDocumentType ||
+          selectedDocType ||
+          'UNKNOWN'
+        );
+
+        mappedInvoice = normalizeDocumentByCanonicalType(canonicalType, mappedInvoice);
+
+        // Guard against zero-field false success
+        const meaningfulKeys = Object.keys(mappedInvoice || {}).filter(k => {
+          if (['documentType', 'classifiedDocumentType', 'scanDocumentType', 'requiresVehicleLink', 'isAttachDoc', 'isElectricityBill', 'confidence', 'needsManualReview'].includes(k)) return false;
+          const v = mappedInvoice[k];
+          return v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0);
+        });
+
+        if (meaningfulKeys.length === 0) {
+          ocrFailed = true;
+          ocrFailMessage = 'Could not auto-fill details, please enter manually';
+          mappedInvoice.needsManualReview = true;
+          audit.manualEntry = true;
+          audit.needsReview = true;
+          audit.flags = [...(audit.flags || []), 'zero_fields_extracted'];
+        }
+
+        if (__DEV__) {
+          const nonEmptyFields = Object.keys(mappedInvoice).filter(k => {
+            const v = mappedInvoice[k];
+            return v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0);
+          });
+          console.log('[Scan Router] Final Routing Decision:');
+          console.log(`- Selected Category: ${selectedDocType || 'AUTO'}`);
+          console.log(`- Classified Category: ${mappedInvoice.classifiedDocumentType || canonicalType}`);
+          console.log(`- Chosen Screen: ${canonicalType}`);
+          console.log(`- Extracted Field Count: ${nonEmptyFields.length}`);
+          console.log(`- Non-empty Fields: ${JSON.stringify(nonEmptyFields)}`);
+          console.log(`- Fallback Triggered: ${ocrFailed ? 'YES (OCR Failed)' : 'NO'}`);
+          console.log(`- Confidence Score: ${mappedInvoice.confidence}%`);
+          console.log(`- Raw OCR Provider: ${ocr?.engine || (ocrFailed ? 'manual' : 'unknown')}`);
+          console.log(`- VLM Provider: ${isVlmExtracted ? 'gemini-1.5-flash' : 'NONE'}`);
+        }
+
+        const reviewPayload = {
           scanId: scanSessionId || cached.scanId,
           imageUri: cached.localImageUri || optimizedUri,
           assetData: mappedInvoice,
@@ -809,7 +1438,49 @@ function ScanBillScreenInner({ navigation }) {
           needsManualReview: Boolean(mappedInvoice.needsManualReview),
           confidence: mappedInvoice.confidence,
           documentIntelligence,
-        });
+          rawOcrText: ocrRawText,
+          accountId: route?.params?.accountId,
+        };
+
+        const targetRoute = getRouteForCanonicalDocType(canonicalType);
+        reviewPayload.documentType = canonicalType;
+        reviewPayload.reviewRoute = targetRoute;
+        reviewPayload.scanSessionId = scanSessionId;
+
+        console.log(
+          `[SCAN_NAV_DEBUG] OCR_COMPLETE → ${canonicalType} (reviewRoute=${targetRoute} scanSessionId=${scanSessionId})`,
+        );
+
+        // Persist specific review state before navigation
+        markScanSession(targetRoute, {
+          ...reviewPayload,
+          documentType: canonicalType,
+          reviewRoute: targetRoute,
+          scanSessionId,
+        }).catch(() => {});
+
+        switch (canonicalType) {
+          case 'VEHICLE_SERVICE_BILL':
+            navigation.navigate('ReviewVehicleService', reviewPayload);
+            break;
+          case 'VEHICLE_INSURANCE':
+            navigation.navigate('ReviewInsurance', reviewPayload);
+            break;
+          case 'VEHICLE_PUC':
+            navigation.navigate('ReviewPuc', reviewPayload);
+            break;
+          case 'ELECTRICITY_BILL':
+            navigation.navigate('ReviewElectricityBill', reviewPayload);
+            break;
+          case 'OTHER_DOCUMENT':
+          case 'UNKNOWN':
+            navigation.navigate('ReviewGenericDocument', reviewPayload);
+            break;
+          case 'VEHICLE_PURCHASE_INVOICE':
+          default:
+            goToReviewAsset(navigation, reviewPayload);
+            break;
+        }
 
         if (ocrFailed) {
           setProcessLabel('Review required');
@@ -819,11 +1490,14 @@ function ScanBillScreenInner({ navigation }) {
         } else {
           setProcessLabel('Completed');
         }
+        return;
       } catch (error) {
-        // Last-resort: STILL navigate to Review with empty fields — NEVER Home
         console.error('OCR Error:', error);
         Haptics.error();
-        goToReviewAsset(navigation, {
+        const fallbackType = normalizeToCanonicalDocType(
+          selectedDocType || (route?.params?.isEnergyScan ? 'ELECTRICITY_BILL' : 'UNKNOWN')
+        );
+        const fallbackPayload = {
           scanId: `local_${Date.now()}`,
           imageUri: optimizedUri || uri,
           assetData: emptyFallbackInvoice(),
@@ -836,7 +1510,47 @@ function ScanBillScreenInner({ navigation }) {
           sweetBill: {},
           ocrFailed: true,
           hasOcrError: true,
-        });
+          accountId: route?.params?.accountId,
+        };
+
+        const fallbackRoute = getRouteForCanonicalDocType(fallbackType);
+        fallbackPayload.documentType = fallbackType;
+        fallbackPayload.reviewRoute = fallbackRoute;
+        fallbackPayload.scanSessionId = scanSessionId;
+
+        console.log(
+          `[SCAN_NAV_DEBUG] OCR_FALLBACK → ${fallbackType} (reviewRoute=${fallbackRoute} scanSessionId=${scanSessionId})`,
+        );
+
+        markScanSession(fallbackRoute, {
+          ...fallbackPayload,
+          documentType: fallbackType,
+          reviewRoute: fallbackRoute,
+          scanSessionId,
+        }).catch(() => {});
+
+        switch (fallbackType) {
+          case 'VEHICLE_SERVICE_BILL':
+            navigation.navigate('ReviewVehicleService', fallbackPayload);
+            break;
+          case 'VEHICLE_INSURANCE':
+            navigation.navigate('ReviewInsurance', fallbackPayload);
+            break;
+          case 'VEHICLE_PUC':
+            navigation.navigate('ReviewPuc', fallbackPayload);
+            break;
+          case 'ELECTRICITY_BILL':
+            navigation.navigate('ReviewElectricityBill', fallbackPayload);
+            break;
+          case 'OTHER_DOCUMENT':
+          case 'UNKNOWN':
+            navigation.navigate('ReviewGenericDocument', fallbackPayload);
+            break;
+          case 'VEHICLE_PURCHASE_INVOICE':
+          default:
+            goToReviewAsset(navigation, fallbackPayload);
+            break;
+        }
         setProcessLabel('Failed');
         setLastError('Could not auto-fill details, please enter manually');
       } finally {
@@ -878,20 +1592,46 @@ function ScanBillScreenInner({ navigation }) {
       if (ocrTimer.current) clearTimeout(ocrTimer.current);
       ocrTimer.current = setTimeout(() => {
         const run = () => {
-          processImageWithGemini(uri, { alreadyPreprocessed }).catch((error) => {
+          processImage(uri, { alreadyPreprocessed }).catch((error) => {
             console.error('OCR Error:', error);
-            // DO NOT NAVIGATE TO HOME — always ReviewAsset with empty fields
-            goToReviewAsset(navigation, {
+            const fallbackType = normalizeToCanonicalDocType(
+              route?.params?.selectedDocType ||
+              (route?.params?.isEnergyScan ? 'ELECTRICITY_BILL' : 'UNKNOWN')
+            );
+            const fallbackPayload = {
               scanId: `local_${Date.now()}`,
               imageUri: uri,
               assetData: emptyFallbackInvoice(),
               invoice: emptyFallbackInvoice(),
               parsedData: emptyFallbackInvoice(),
-              audit: { flags: ['ocr_failed'], canSave: false, manualEntry: true },
-              engine: 'manual',
+              audit: { manualEntry: true, flags: ['scan_failed_local_exception'] },
+              engine: 'failed_pipeline',
               ocrFailed: true,
               hasOcrError: true,
-            });
+              needsManualReview: true,
+            };
+
+            switch (fallbackType) {
+              case 'VEHICLE_SERVICE_BILL':
+                navigation.replace('ReviewVehicleService', fallbackPayload);
+                break;
+              case 'VEHICLE_INSURANCE':
+                navigation.replace('ReviewInsurance', fallbackPayload);
+                break;
+              case 'VEHICLE_PUC':
+                navigation.replace('ReviewPuc', fallbackPayload);
+                break;
+              case 'VEHICLE_RC':
+                navigation.replace('ReviewGenericDocument', fallbackPayload);
+                break;
+              case 'ELECTRICITY_BILL':
+                navigation.replace('ReviewElectricityBill', fallbackPayload);
+                break;
+              case 'PURCHASE_BILL':
+              default:
+                navigation.replace('ReviewAsset', fallbackPayload);
+                break;
+            }
             setProcessLabel('Failed');
             setLastError('Could not auto-fill details, please enter manually');
             setProcessing(false);
@@ -906,7 +1646,7 @@ function ScanBillScreenInner({ navigation }) {
         }
       }, 80);
     },
-    [processImageWithGemini, navigation],
+    [processImage, navigation],
   );
 
   const launchCameraCapture = useCallback(async () => {
@@ -916,8 +1656,16 @@ function ScanBillScreenInner({ navigation }) {
     clearAutoTimers();
     setAutoArmed(true);
     setLastError('');
+    const newSessionId = `scan_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    scanSessionIdRef.current = newSessionId;
+    setActiveScanSessionId(newSessionId);
+
     // Mark before scanner/camera so Activity kill restores ScanBill (not Home)
-    markScanSession('ScanBill').catch(() => {});
+    markScanSession('ScanBill', {
+      scanSessionId: newSessionId,
+      documentType: selectedDocType || null,
+      reviewRoute: null,
+    }).catch(() => {});
 
     try {
       const ok = cameraPermission === 'granted' ? true : await requestCameraAccess();
@@ -978,7 +1726,7 @@ function ScanBillScreenInner({ navigation }) {
       // alreadyPreprocessed means: do not JPEG re-encode; read base64 only.
 
       // Defer OCR — let loading UI paint first (prevents Android OOM)
-      scheduleOcrAfterPaint(uri);
+      scheduleOcrAfterPaint(uri, { alreadyPreprocessed: true });
     } catch (error) {
       capturing.current = false;
       startedRef.current = false;
@@ -1003,8 +1751,16 @@ function ScanBillScreenInner({ navigation }) {
     clearAutoTimers();
     setAutoArmed(false);
     setLastError('');
+    const newSessionId = `scan_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    scanSessionIdRef.current = newSessionId;
+    setActiveScanSessionId(newSessionId);
+
     // Mark before gallery so Activity kill restores ScanBill (not Home)
-    markScanSession('ScanBill').catch(() => {});
+    markScanSession('ScanBill', {
+      scanSessionId: newSessionId,
+      documentType: selectedDocType || null,
+      reviewRoute: null,
+    }).catch(() => {});
 
     try {
       const lib = await ensureLibraryPermission();
@@ -1241,11 +1997,19 @@ function ScanBillScreenInner({ navigation }) {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.headerBlock}>
-          <Text style={styles.eyebrow}>SCAN INVOICE</Text>
-          <Text style={styles.title}>Hold document in front of camera</Text>
-          <Text style={styles.sub}>
-            Edges detect automatically — scan starts when the invoice is clear. Gallery works the same OCR path.
-          </Text>
+          {(() => {
+            const currentDocType =
+              route?.params?.selectedDocType ||
+              (route?.params?.isEnergyScan ? 'ELECTRICITY_BILL' : 'UNKNOWN');
+            const guide = DOC_TYPE_GUIDES[currentDocType] || DOC_TYPE_GUIDES.UNKNOWN;
+            return (
+              <>
+                <Text style={styles.eyebrow}>{guide.eyebrow}</Text>
+                <Text style={styles.title}>{guide.title}</Text>
+                <Text style={styles.sub}>{guide.sub}</Text>
+              </>
+            );
+          })()}
           <PrivacyVaultTag style={{ marginTop: 10, alignSelf: 'flex-start' }} />
 
           {/* Dual-Mode Camera Selector */}
@@ -1350,6 +2114,29 @@ function ScanBillScreenInner({ navigation }) {
                 style={styles.actionBtn}
               />
             )}
+            {lastError ? (
+              <GlassButton
+                title="Enter Details Manually"
+                onPress={() => {
+                  Haptics.select();
+                  clearAutoTimers();
+                  goToReviewAsset(navigation, {
+                    scanId: `manual_${Date.now()}`,
+                    imageUri: '',
+                    assetData: emptyFallbackInvoice(),
+                    invoice: emptyFallbackInvoice(),
+                    extractedData: emptyFallbackInvoice(),
+                    parsedData: emptyFallbackInvoice(),
+                    audit: { manualEntry: true, flags: ['manual_entry_after_failed_scan'] },
+                    engine: 'manual',
+                    ocrFailed: true,
+                    hasOcrError: true,
+                    needsManualReview: true,
+                  });
+                }}
+                style={[styles.actionBtn, { marginBottom: 8 }]}
+              />
+            ) : null}
             <Pressable
               onPress={() => {
                 Haptics.select();
@@ -1381,43 +2168,68 @@ function ScanBillScreenInner({ navigation }) {
                 styles.stageStepText,
                 {
                   color:
-                    processingStage === 'OCR_EXTRACTING' ||
                     processingStage === 'IDENTIFYING' ||
-                    processingStage === 'VERIFYING'
+                    processingStage === 'VERIFYING' ||
+                    processingStage === 'REVIEWING' ||
+                    processingStage === 'COMPLETED'
                       ? COLORS.emerald
+                      : processingStage === 'EXTRACTING' ||
+                        processingStage === 'OCR_EXTRACTING' ||
+                        processingStage === 'PREPROCESSING'
+                      ? COLORS.text
                       : COLORS.muted,
                 },
               ]}
             >
-              {processingStage === 'OCR_EXTRACTING' ? '● Extracting text…' : '✓ Text extracted'}
+              {processingStage === 'PREPROCESSING'
+                ? '● Preparing image…'
+                : processingStage === 'OCR_EXTRACTING'
+                ? '● Reading document…'
+                : processingStage === 'EXTRACTING'
+                ? '● Reading document with Gemini AI…'
+                : processingStage === 'IDENTIFYING' ||
+                  processingStage === 'VERIFYING' ||
+                  processingStage === 'REVIEWING' ||
+                  processingStage === 'COMPLETED'
+                ? '✓ Details extracted'
+                : '○ Extracting details'}
             </Text>
             <Text
               style={[
                 styles.stageStepText,
                 {
                   color:
-                    processingStage === 'IDENTIFYING' || processingStage === 'VERIFYING'
+                    processingStage === 'VERIFYING' || processingStage === 'COMPLETED'
                       ? COLORS.emerald
+                      : processingStage === 'IDENTIFYING' || processingStage === 'REVIEWING'
+                      ? COLORS.text
                       : COLORS.muted,
                 },
               ]}
             >
               {processingStage === 'IDENTIFYING'
                 ? '● Identifying document…'
-                : processingStage === 'VERIFYING'
-                ? '✓ Document identified'
+                : processingStage === 'VERIFYING' || processingStage === 'COMPLETED'
+                ? '✓ Document verified'
+                : processingStage === 'REVIEWING'
+                ? '○ Reviewing document'
                 : '○ Identifying document'}
             </Text>
             <Text
               style={[
                 styles.stageStepText,
                 {
-                  color: processingStage === 'VERIFYING' ? COLORS.emerald : COLORS.muted,
+                  color:
+                    processingStage === 'VERIFYING' || processingStage === 'COMPLETED'
+                      ? COLORS.emerald
+                      : COLORS.muted,
                 },
               ]}
             >
               {processingStage === 'VERIFYING'
                 ? '● Verifying fields & matching…'
+                : processingStage === 'COMPLETED'
+                ? '✓ Fields verified'
                 : '○ Verifying fields'}
             </Text>
           </View>
@@ -1426,12 +2238,14 @@ function ScanBillScreenInner({ navigation }) {
             <View style={styles.longWaitCard}>
               <Text style={styles.longWaitTitle}>Taking longer than usual…</Text>
               <Text style={styles.longWaitSub}>
-                Network connection is slow. You can continue waiting or scan again.
+                Document processing is taking longer than expected.
               </Text>
               <View style={styles.longWaitActions}>
                 <Pressable
                   onPress={() => {
                     Haptics.tap();
+                    scanGenRef.current += 1;
+                    scanSessionIdRef.current = '';
                     setProcessing(false);
                     startAutoFocusCapture();
                   }}
@@ -1444,6 +2258,19 @@ function ScanBillScreenInner({ navigation }) {
           ) : (
             <Text style={styles.overlaySub}>Please wait — do not close the app.</Text>
           )}
+          <Pressable
+            onPress={() => {
+              Haptics.tap();
+              scanGenRef.current += 1;
+              scanSessionIdRef.current = '';
+              setProcessing(false);
+              clearAutoTimers();
+              if (navigation?.canGoBack?.()) navigation.goBack();
+            }}
+            style={styles.overlayCancelBtn}
+          >
+            <Text style={styles.overlayCancelText}>Cancel</Text>
+          </Pressable>
         </View>
       ) : null}
     </Screen>
@@ -1719,6 +2546,20 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 13,
+  },
+  overlayCancelBtn: {
+    marginTop: 18,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: RADIUS.full,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  overlayCancelText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

@@ -36,20 +36,20 @@ function resolveMediaTypes(ImagePicker) {
 function cameraOptions(ImagePicker) {
   return {
     mediaTypes: resolveMediaTypes(ImagePicker),
-    allowsEditing: true,
-    quality: 0.75,
+    allowsEditing: false,
+    quality: 0.92,
     base64: false,
-    exif: false,
+    exif: true,
   };
 }
 
 function galleryOptions(ImagePicker) {
   return {
     mediaTypes: resolveMediaTypes(ImagePicker),
-    allowsEditing: true,
-    quality: 0.75,
+    allowsEditing: false,
+    quality: 0.92,
     base64: false,
-    exif: false,
+    exif: true,
   };
 }
 
