@@ -1,6 +1,10 @@
 /**
- * Asset Doctor — Master Asset Detail / Passport Screen
- * Premium asset passport with overview metrics, relationally linked documents, and chronological timeline.
+ * Asset Doctor — Master Asset Passport Screen
+ *
+ * Progressive Disclosure Asset Hub:
+ * 1. Asset Hero / Certificate card (Identity, Health, Protection status)
+ * 2. Segmented Tab Selector: OVERVIEW · DOCUMENTS · MAINTENANCE · FUEL / ANALYTICS
+ * 3. Dedicated tab content rendered strictly per active tab
  */
 
 import React, { useMemo, useState } from 'react';
@@ -20,42 +24,62 @@ import { useThemeColors } from '../../context/ThemeProvider';
 import { useUiFeedback } from '../../context/UiFeedbackProvider';
 import { Haptics } from '../../services/haptics';
 import { calculateHealthScore } from '../../utils/healthScore';
-import { formatDateIN, daysUntil } from '../../utils/dates';
-import { formatINRCompact, formatOwnershipDuration } from '../../utils/format';
+import { daysUntil, formatDateIN } from '../../utils/dates';
+import { formatINRCompact } from '../../utils/format';
 import { calculateCostToUse } from '../../utils/costToUse';
 import { resolveAssetCapabilities } from '../../services/assets/assetCapabilities';
+import { TAB_BAR_HEIGHT } from '../../components/CustomBottomTabBar';
 import {
-  IconButton,
-  HealthScore,
-  SectionHeader,
   MetricCard,
-  TimelineItem,
+  EmptyState,
+  SectionHeader,
+} from '../../design-system';
+import {
+  HealthScore,
   DocumentRow,
+  TimelineItem,
+  IconButton,
   PrimaryButton,
   SecondaryButton,
-  EmptyState,
 } from '../../components/design-system';
 import { PremiumIcon } from '../../design-system/icons';
 import { CategoryIcon } from '../../components/icons/CategoryIcon';
-import { QuickFuelLogModal } from '../../components/fuel/QuickFuelLogModal';
 import { RADIUS, SPACING, TYPE, elevation } from '../../theme/tokens';
 import { AssetDoctorProtectedBadge } from '../../components/trust/AssetDoctorProtectedBadge';
 import { ProtectionScoreCard } from '../../components/trust/ProtectionScoreCard';
 import { SharePassportSheet } from '../../components/trust/SharePassportSheet';
-import { TAB_BAR_HEIGHT } from '../../theme/tabMetrics';
+import { QuickFuelLogModal } from '../../components/fuel/QuickFuelLogModal';
 import {
   DELETE_UX,
   userFacingDeleteError,
 } from '../../services/assets/assetDeleteFlow';
 import {
-  resolveProtectionBadgeState,
   calculateProtectionScore,
-  buildAssetTimeline,
+  resolveProtectionBadgeState,
   passportIdentityFields,
   passportProtectionFields,
   passportServiceFields,
   emptyStateForKind,
+  buildAssetTimeline,
 } from '../../trust/protectionStatus';
+
+function formatOwnershipDuration(purchaseDate) {
+  if (!purchaseDate) return '—';
+  const start = new Date(purchaseDate);
+  const now = new Date();
+  if (isNaN(start.getTime())) return '—';
+
+  const diffMonths = Math.max(
+    0,
+    (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth()),
+  );
+  const years = Math.floor(diffMonths / 12);
+  const months = diffMonths % 12;
+
+  if (years === 0) return `${months}m`;
+  if (months === 0) return `${years}y`;
+  return `${years}y ${months}m`;
+}
 
 export function AssetPassportScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
@@ -67,6 +91,7 @@ export function AssetPassportScreen({ route, navigation }) {
   const assetId = route?.params?.assetId;
   const asset = getAsset(assetId);
 
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'documents' | 'maintenance' | 'fuel_analytics'
   const [deleting, setDeleting] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [fuelOpen, setFuelOpen] = useState(false);
@@ -182,6 +207,15 @@ export function AssetPassportScreen({ route, navigation }) {
     setShareOpen(true);
   };
 
+  const onEdit = () => {
+    Haptics.tap();
+    navigation.navigate('AddAsset', {
+      assetId: asset.assetId || asset.id,
+      mode: 'edit',
+      initialValues: asset,
+    });
+  };
+
   const onDelete = async () => {
     const ok = await ui.confirm({
       title: DELETE_UX.confirmTitle,
@@ -232,14 +266,22 @@ export function AssetPassportScreen({ route, navigation }) {
           size={44}
         />
         <Text style={[TYPE.h2, { color: colors.text, flex: 1, textAlign: 'center', marginHorizontal: 8 }]} numberOfLines={1}>
-          Asset Passport
+          {asset.assetName}
         </Text>
+        <IconButton
+          icon={<PremiumIcon name="edit" size={18} color={colors.text} />}
+          label="Edit"
+          onPress={onEdit}
+          variant="surface"
+          size={44}
+        />
         <IconButton
           icon={<PremiumIcon name="share" size={18} color={colors.text} />}
           label="Share"
           onPress={onShare}
           variant="surface"
           size={44}
+          style={{ marginLeft: 6 }}
         />
       </View>
 
@@ -288,9 +330,6 @@ export function AssetPassportScreen({ route, navigation }) {
           <View style={{ marginTop: SPACING.sm }}>
             <AssetDoctorProtectedBadge state={protectionBadge} />
           </View>
-          <Text style={[TYPE.caption, { color: colors.textMuted, marginTop: 8 }]}>
-            Asset Health: {typeof health === 'number' ? health : health?.score ?? '—'}
-          </Text>
 
           {/* Quick Identity Tags */}
           <View style={styles.identityTagRow}>
@@ -322,216 +361,304 @@ export function AssetPassportScreen({ route, navigation }) {
           </View>
         </View>
 
-        <ProtectionScoreCard protection={protection} style={{ marginTop: SPACING.sm }} />
-
-        <SectionHeader title="Overview" style={{ marginTop: SPACING.md }} />
-        <View style={styles.metricGrid}>
-          <MetricCard
-            title="Purchase"
-            value={purchasePrice > 0 ? formatINRCompact(purchasePrice) : '—'}
-            compactValue={purchasePrice > 0 ? formatINRCompact(purchasePrice) : '—'}
-            subtitle={purchaseDate ? formatDateIN(purchaseDate) : 'Not recorded'}
-          />
-          <MetricCard
-            title="Current Value"
-            value={currentValue ? formatINRCompact(currentValue) : '—'}
-            compactValue={currentValue ? formatINRCompact(currentValue) : '—'}
-            subtitle="Estimated"
-          />
-          <MetricCard
-            title="Ownership"
-            value={ownershipYears}
-            compactValue={ownershipYears}
-            subtitle="Active"
-          />
+        {/* SEGMENTED TAB BAR */}
+        <View style={[styles.tabBarWrap, { backgroundColor: colors.surfaceMuted, borderColor: colors.border }]}>
+          {[
+            { id: 'overview', label: 'Overview' },
+            { id: 'documents', label: 'Documents' },
+            { id: 'maintenance', label: 'Maintenance' },
+            { id: 'fuel_analytics', label: isVehicle ? 'Fuel / Analytics' : 'Analytics' },
+          ].map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <Pressable
+                key={tab.id}
+                onPress={() => {
+                  Haptics.select();
+                  setActiveTab(tab.id);
+                }}
+                style={[
+                  styles.tabItem,
+                  isActive && [styles.tabItemActive, { backgroundColor: colors.primary }],
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.tabItemText,
+                    { color: isActive ? '#FFFFFF' : colors.textMuted },
+                    isActive && styles.tabItemTextActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {tab.label}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
 
-        {identityRows.length ? (
-          <>
-            <SectionHeader title="Identity" style={{ marginTop: SPACING.md }} />
-            <View style={[styles.timelineCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              {identityRows.map((row) => (
-                <View key={row.label} style={{ marginBottom: 8 }}>
-                  <Text style={[TYPE.micro, { color: colors.textMuted }]}>{row.label}</Text>
-                  <Text style={[TYPE.body, { color: colors.text, fontWeight: '600' }]} numberOfLines={2}>
-                    {String(row.value)}
+        {/* TAB 1: OVERVIEW */}
+        {activeTab === 'overview' && (
+          <View style={styles.tabContentContainer}>
+            <ProtectionScoreCard protection={protection} style={{ marginBottom: SPACING.md }} />
+
+            <SectionHeader title="Financial Overview" />
+            <View style={styles.metricGrid}>
+              <MetricCard
+                title="Purchase"
+                value={purchasePrice > 0 ? formatINRCompact(purchasePrice) : '—'}
+                compactValue={purchasePrice > 0 ? formatINRCompact(purchasePrice) : '—'}
+                subtitle={purchaseDate ? formatDateIN(purchaseDate) : 'Not recorded'}
+              />
+              <MetricCard
+                title="Current Value"
+                value={currentValue ? formatINRCompact(currentValue) : '—'}
+                compactValue={currentValue ? formatINRCompact(currentValue) : '—'}
+                subtitle="Estimated"
+              />
+              <MetricCard
+                title="Ownership"
+                value={ownershipYears}
+                compactValue={ownershipYears}
+                subtitle="Active"
+              />
+            </View>
+
+            {identityRows.length ? (
+              <>
+                <SectionHeader title="Identity Details" style={{ marginTop: SPACING.md }} />
+                <View style={[styles.timelineCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  {identityRows.map((row) => (
+                    <View key={row.label} style={{ marginBottom: 8 }}>
+                      <Text style={[TYPE.micro, { color: colors.textMuted }]}>{row.label}</Text>
+                      <Text style={[TYPE.body, { color: colors.text, fontWeight: '600' }]} numberOfLines={2}>
+                        {String(row.value)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            ) : null}
+
+            {timelineEvents.length ? (
+              <>
+                <SectionHeader title="Timeline" style={{ marginTop: SPACING.md }} />
+                <View style={[styles.timelineCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  {timelineEvents.map((ev, idx) => (
+                    <TimelineItem
+                      key={ev.id}
+                      date={ev.date}
+                      title={ev.title}
+                      subtitle={ev.subtitle}
+                      isLast={idx === timelineEvents.length - 1}
+                    />
+                  ))}
+                </View>
+              </>
+            ) : null}
+
+            {/* ─── PARKING ASSISTANT (vehicle only) ─── */}
+            {isVehicle ? (
+              <Pressable
+                onPress={() => {
+                  Haptics.tap();
+                  navigation.navigate('ParkingAssistant', { asset });
+                }}
+                style={[
+                  styles.parkingBanner,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                  elevation(1, colors.shadow),
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Open Parking Assistant"
+              >
+                <View style={styles.parkingBannerLeft}>
+                  <Text style={[styles.parkingBannerLabel, { color: colors.primary }]}>
+                    🅿️ PARKING ASSISTANT
+                  </Text>
+                  <Text style={[TYPE.h3, { color: colors.text }]}>View Parking QR</Text>
+                  <Text style={[TYPE.bodySmall, { color: colors.textMuted, marginTop: 2 }]}>
+                    Let anyone contact you about your vehicle — privacy protected.
                   </Text>
                 </View>
-              ))}
-            </View>
-          </>
-        ) : null}
+                <Text style={{ color: colors.primary, fontSize: 20, fontWeight: '700' }}>→</Text>
+              </Pressable>
+            ) : null}
 
-        <SectionHeader title="Protection" style={{ marginTop: SPACING.md }} />
-        {protectionRows.length ? (
-          <View style={[styles.timelineCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            {protectionRows.map((row) => (
-              <View key={row.label} style={{ marginBottom: 8 }}>
-                <Text style={[TYPE.micro, { color: colors.textMuted }]}>{row.label}</Text>
-                <Text style={[TYPE.body, { color: colors.text, fontWeight: '600' }]} numberOfLines={2}>
-                  {String(row.value)}
+            {/* Quick Actions */}
+            <View style={styles.actionButtonsWrap}>
+              <PrimaryButton
+                title="Scan Document"
+                onPress={() => navigation.getParent()?.navigate?.('ScanBill')}
+                size="md"
+                style={{ marginBottom: SPACING.xs }}
+              />
+              <SecondaryButton
+                title="Edit Asset Details"
+                onPress={onEdit}
+                size="md"
+                style={{ marginBottom: SPACING.xs }}
+              />
+              <SecondaryButton
+                title="Share Passport"
+                onPress={onShare}
+                size="md"
+                style={{ marginBottom: SPACING.xs }}
+              />
+              <SecondaryButton
+                title={deleting ? DELETE_UX.processing : DELETE_UX.confirmLabel}
+                onPress={onDelete}
+                disabled={deleting}
+                size="md"
+                textStyle={{ color: colors.danger }}
+              />
+            </View>
+          </View>
+        )}
+
+        {/* TAB 2: DOCUMENTS */}
+        {activeTab === 'documents' && (
+          <View style={styles.tabContentContainer}>
+            <SectionHeader
+              title="Linked Documents"
+              subtitle={`${linkedDocs.length} ${linkedDocs.length === 1 ? 'document' : 'documents'} on file`}
+            />
+            {linkedDocs.length > 0 ? (
+              linkedDocs.map((doc) => (
+                <DocumentRow
+                  key={doc.id}
+                  documentType={doc.type}
+                  assetName={doc.name}
+                  identifier={doc.identifier}
+                  dateText={doc.dateText}
+                  verified={false}
+                  onPress={() =>
+                    navigation.navigate('DocumentsVault', { assetId: asset.assetId || asset.id })
+                  }
+                />
+              ))
+            ) : (
+              <EmptyState
+                title={emptyStateForKind('document').title}
+                message={emptyStateForKind('document').body}
+                ctaLabel="Scan Document"
+                onCta={() => navigation.getParent()?.navigate?.('ScanBill')}
+              />
+            )}
+
+            <PrimaryButton
+              title="+ Add / Scan Document"
+              onPress={() => navigation.getParent()?.navigate?.('ScanBill')}
+              size="md"
+              style={{ marginTop: SPACING.md }}
+            />
+          </View>
+        )}
+
+        {/* TAB 3: MAINTENANCE */}
+        {activeTab === 'maintenance' && (
+          <View style={styles.tabContentContainer}>
+            <SectionHeader title="Service History & Maintenance" />
+            {serviceRows.length ? (
+              <View style={[styles.timelineCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                {serviceRows.map((row) => (
+                  <View key={row.label} style={{ marginBottom: 8 }}>
+                    <Text style={[TYPE.micro, { color: colors.textMuted }]}>{row.label}</Text>
+                    <Text style={[TYPE.body, { color: colors.text, fontWeight: '600' }]} numberOfLines={2}>
+                      {String(row.value)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <EmptyState
+                title={emptyStateForKind('service').title}
+                message={emptyStateForKind('service').body}
+                ctaLabel="Log Service Record"
+                onCta={() => navigation.getParent()?.navigate?.('ScanBill')}
+              />
+            )}
+
+            <PrimaryButton
+              title="+ Log Service / Maintenance"
+              onPress={() => navigation.navigate('Maintenance', { assetId: asset.assetId || asset.id })}
+              size="md"
+              style={{ marginTop: SPACING.md }}
+            />
+          </View>
+        )}
+
+        {/* TAB 4: FUEL & ANALYTICS */}
+        {activeTab === 'fuel_analytics' && (
+          <View style={styles.tabContentContainer}>
+            {caps.supportsFuelTracking ? (
+              <View style={{ marginBottom: SPACING.lg }}>
+                <SectionHeader title="Fuel & Mileage" />
+                <View style={[styles.fuelCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <Text style={[TYPE.body, { color: colors.text, fontWeight: '600' }]}>
+                    Track full-tank refills to compute verified km/L mileage and running cost per km.
+                  </Text>
+                  <View style={styles.fuelActions}>
+                    <PrimaryButton
+                      title="+ Log Fuel"
+                      onPress={() => {
+                        Haptics.tap();
+                        setFuelOpen(true);
+                      }}
+                      size="md"
+                      style={{ flex: 1, marginRight: SPACING.xs }}
+                    />
+                    <SecondaryButton
+                      title="View Fuel Vault"
+                      onPress={() =>
+                        navigation.navigate('FuelVault', { assetId: asset.assetId || asset.id })
+                      }
+                      size="md"
+                      style={{ flex: 1, marginLeft: SPACING.xs }}
+                    />
+                  </View>
+                </View>
+              </View>
+            ) : null}
+
+            <SectionHeader title="Financial Intelligence" />
+            <Pressable
+              onPress={() => {
+                Haptics.tap();
+                navigation.navigate('AssetAnalytics', { assetId: asset.assetId || asset.id });
+              }}
+              style={[styles.analyticsLinkCard, { backgroundColor: colors.surface, borderColor: colors.border }, elevation(1, colors.shadow)]}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[TYPE.h3, { color: colors.text, fontWeight: '700' }]}>Financial Analytics & TCO</Text>
+                <Text style={[TYPE.caption, { color: colors.textMuted, marginTop: 4 }]}>
+                  Depreciation trajectory, monthly ownership cost, and 12-month expense trends.
                 </Text>
               </View>
-            ))}
-          </View>
-        ) : (
-          <EmptyState
-            title={emptyStateForKind(isVehicle ? 'insurance' : 'warranty').title}
-            message={emptyStateForKind(isVehicle ? 'insurance' : 'warranty').body}
-            ctaLabel={emptyStateForKind(isVehicle ? 'insurance' : 'warranty').cta}
-            onCta={() => navigation.getParent()?.navigate?.('ScanBill')}
-          />
-        )}
+              <Text style={{ color: colors.primary, fontSize: 20, fontWeight: '700' }}>→</Text>
+            </Pressable>
 
-        {serviceRows.length ? (
-          <>
-            <SectionHeader title="Service" style={{ marginTop: SPACING.md }} />
-            <View style={[styles.timelineCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              {serviceRows.map((row) => (
-                <View key={row.label} style={{ marginBottom: 8 }}>
-                  <Text style={[TYPE.micro, { color: colors.textMuted }]}>{row.label}</Text>
-                  <Text style={[TYPE.body, { color: colors.text, fontWeight: '600' }]} numberOfLines={2}>
-                    {String(row.value)}
+            {isVehicle ? (
+              <Pressable
+                onPress={() => {
+                  Haptics.tap();
+                  navigation.navigate('VehiclePassport', { assetId: asset.assetId || asset.id });
+                }}
+                style={[styles.analyticsLinkCard, { backgroundColor: '#07111F', borderColor: 'rgba(15,143,135,0.3)', marginTop: 12 }]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[TYPE.h3, { color: '#00B8A9', fontWeight: '700' }]}>Digital Ride Passport Certificate</Text>
+                  <Text style={[TYPE.caption, { color: '#94A3B8', marginTop: 4 }]}>
+                    Verified digital vehicle identity with Standard, Gold & Black visual tiers.
                   </Text>
                 </View>
-              ))}
-            </View>
-          </>
-        ) : isVehicle ? (
-          <>
-            <SectionHeader title="Service" style={{ marginTop: SPACING.md }} />
-            <EmptyState
-              title={emptyStateForKind('service').title}
-              message={emptyStateForKind('service').body}
-              ctaLabel={emptyStateForKind('service').cta}
-              onCta={() => navigation.getParent()?.navigate?.('ScanBill')}
-            />
-          </>
-        ) : null}
-
-        {/* FUEL & MILEAGE SECTION (vehicles only) */}
-        {caps.supportsFuelTracking ? (
-          <>
-            <SectionHeader title="Fuel & Mileage" style={{ marginTop: SPACING.md }} />
-            <View style={[styles.fuelWrap, { marginBottom: SPACING.sm }]}>
-              <Text style={[TYPE.body, { color: colors.text, fontWeight: '600' }]}>
-                Track full-tank refills to see real mileage (km/L), distance and ₹/km.
-              </Text>
-              <View style={styles.fuelActions}>
-                <PrimaryButton
-                  title="+ Log Fuel"
-                  onPress={() => {
-                    Haptics.tap();
-                    setFuelOpen(true);
-                  }}
-                  size="md"
-                  style={{ flex: 1, marginRight: SPACING.xs }}
-                />
-                <SecondaryButton
-                  title="History"
-                  onPress={() =>
-                    navigation.navigate('FuelVault', { assetId: asset.assetId || asset.id })
-                  }
-                  size="md"
-                  style={{ flex: 1, marginLeft: SPACING.xs }}
-                />
-              </View>
-            </View>
-          </>
-        ) : null}
-
-        {/* DOCUMENTS SECTION */}
-        <SectionHeader
-          title="Documents"
-          subtitle={`${linkedDocs.length} ${linkedDocs.length === 1 ? 'document' : 'documents'} linked`}
-          style={{ marginTop: SPACING.md }}
-        />
-        {linkedDocs.length > 0 ? (
-          linkedDocs.map((doc) => (
-            <DocumentRow
-              key={doc.id}
-              documentType={doc.type}
-              assetName={doc.name}
-              identifier={doc.identifier}
-              dateText={doc.dateText}
-              verified={false}
-              onPress={() =>
-                navigation.navigate('DocumentsVault', { assetId: asset.assetId || asset.id })
-              }
-            />
-          ))
-        ) : (
-          <EmptyState
-            title={emptyStateForKind('document').title}
-            message={emptyStateForKind('document').body}
-            ctaLabel="Scan Document"
-            onCta={() => navigation.getParent()?.navigate?.('ScanBill')}
-          />
-        )}
-
-        {/* TIMELINE SECTION */}
-        <SectionHeader title="Timeline" style={{ marginTop: SPACING.md }} />
-        {timelineEvents.length ? (
-          <View style={[styles.timelineCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            {timelineEvents.map((ev, idx) => (
-              <TimelineItem
-                key={ev.id}
-                date={ev.date}
-                title={ev.title}
-                subtitle={ev.subtitle}
-                isLast={idx === timelineEvents.length - 1}
-              />
-            ))}
+                <Text style={{ color: '#00B8A9', fontSize: 20, fontWeight: '700' }}>→</Text>
+              </Pressable>
+            ) : null}
           </View>
-        ) : (
-          <Text style={[TYPE.caption, { color: colors.textMuted }]}>
-            No dated events on file yet.
-          </Text>
         )}
-
-        {/* ACTIONS */}
-        <View style={styles.actionButtonsWrap}>
-          <PrimaryButton
-            title="Scan Document"
-            onPress={() => navigation.getParent()?.navigate?.('ScanBill')}
-            size="md"
-            style={{ marginBottom: SPACING.xs }}
-          />
-          <SecondaryButton
-            title="Add Service Record"
-            onPress={() => navigation.getParent()?.navigate?.('ScanBill')}
-            size="md"
-            style={{ marginBottom: SPACING.xs }}
-          />
-          <SecondaryButton
-            title="Add Document"
-            onPress={() => navigation.navigate('DocumentsVault', { assetId: asset.assetId || asset.id })}
-            size="md"
-            style={{ marginBottom: SPACING.xs }}
-          />
-          <SecondaryButton
-            title="Share Passport"
-            onPress={onShare}
-            size="md"
-            style={{ marginBottom: SPACING.xs }}
-          />
-          <SecondaryButton
-            title={deleting ? DELETE_UX.processing : DELETE_UX.confirmLabel}
-            onPress={onDelete}
-            disabled={deleting}
-            size="md"
-            textStyle={{ color: colors.danger }}
-          />
-          {deleting ? (
-            <View style={styles.deletingRow}>
-              <ActivityIndicator size="small" color={colors.danger} />
-              <Text style={[TYPE.caption, { color: colors.textMuted, marginLeft: 8 }]}>
-                {DELETE_UX.processing}
-              </Text>
-            </View>
-          ) : null}
-        </View>
       </ScrollView>
+
       <SharePassportSheet visible={shareOpen} onClose={() => setShareOpen(false)} asset={asset} ui={ui} />
       <QuickFuelLogModal visible={fuelOpen} asset={asset} onClose={() => setFuelOpen(false)} />
     </View>
@@ -554,79 +681,125 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.xs,
   },
   passportCard: {
-    padding: SPACING.md,
-    borderRadius: RADIUS.large,
+    borderRadius: RADIUS.xl,
     borderWidth: 1,
-    marginBottom: SPACING.sm,
+    padding: SPACING.lg,
+    marginBottom: SPACING.md,
   },
   passportTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  passportIdentity: {
-    flex: 1,
-    minWidth: 0,
-    marginLeft: 12,
-    marginRight: 8,
-  },
-  passportBadge: {
-    flexShrink: 0,
-  },
-  nowrapValue: {
-    flexShrink: 0,
-  },
   passportIconBox: {
-    width: 52,
-    height: 52,
-    borderRadius: RADIUS.medium,
+    width: 48,
+    height: 48,
+    borderRadius: RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  passportIdentity: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  passportBadge: {
+    marginLeft: 8,
   },
   identityTagRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: SPACING.sm,
+    gap: 8,
+    marginTop: 12,
   },
   idTag: {
-    paddingHorizontal: SPACING.xs,
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: RADIUS.small,
+    borderRadius: RADIUS.sm,
     borderWidth: 1,
-    marginRight: 6,
-    marginBottom: 4,
+  },
+  nowrapValue: {
+    fontVariant: ['tabular-nums'],
+  },
+  tabBarWrap: {
+    flexDirection: 'row',
+    borderRadius: RADIUS.lg,
+    padding: 4,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+  },
+  tabItem: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: RADIUS.md,
+  },
+  tabItemActive: {
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  tabItemText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  tabItemTextActive: {
+    fontWeight: '700',
+  },
+  tabContentContainer: {
+    paddingTop: SPACING.xs,
   },
   metricGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginHorizontal: -4,
-    flexWrap: 'nowrap',
-  },
-  noDocsCard: {
-    padding: SPACING.md,
-    borderRadius: RADIUS.medium,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: 8,
+    marginBottom: SPACING.md,
   },
   timelineCard: {
-    padding: SPACING.md,
-    borderRadius: RADIUS.medium,
+    borderRadius: RADIUS.lg,
     borderWidth: 1,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
   },
-  actionButtonsWrap: {
-    marginTop: SPACING.lg,
-  },
-  fuelWrap: {
-    paddingHorizontal: SPACING.xs,
+  fuelCard: {
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    padding: SPACING.md,
   },
   fuelActions: {
     flexDirection: 'row',
-    marginTop: SPACING.sm,
+    marginTop: 12,
   },
-  deletingRow: {
+  analyticsLinkCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: SPACING.sm,
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+  },
+  actionButtonsWrap: {
+    marginTop: SPACING.md,
+  },
+  parkingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.sm,
+  },
+  parkingBannerLeft: {
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  parkingBannerLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: 4,
   },
 });
+
+export default AssetPassportScreen;

@@ -69,13 +69,13 @@ export default function App() {
   const [isWarrantyAlertsModalOpen, setIsWarrantyAlertsModalOpen] = useState(false);
   const [showSplash, setShowSplash] = useState(false);
   const [userPhone, setUserPhone] = useState<string>(() => {
-    return localStorage.getItem('assetdoctor_user_phone') || '+91 98765 43210';
+    return localStorage.getItem('assetdoctor_user_phone') || '';
   });
   const [userEmail, setUserEmail] = useState<string>(() => {
-    return localStorage.getItem('assetdoctor_user_email') || 'manish2768@gmail.com';
+    return localStorage.getItem('assetdoctor_user_email') || '';
   });
   const [userLocation, setUserLocation] = useState<string>(() => {
-    return localStorage.getItem('assetdoctor_user_location') || 'Mumbai, Maharashtra';
+    return localStorage.getItem('assetdoctor_user_location') || '';
   });
 
   const [savedModalOpen, setSavedModalOpen] = useState(false);
@@ -100,7 +100,7 @@ export default function App() {
       const unsubAssets = MobileAssetService.subscribeUserAssets(
         uid,
         (liveAssets) => {
-          if (liveAssets && liveAssets.length > 0) {
+          if (Array.isArray(liveAssets)) {
             setAssets(liveAssets);
           }
         }
@@ -429,6 +429,8 @@ export default function App() {
             isOpen={isAddModalOpen}
             onClose={() => setIsAddModalOpen(false)}
             onAddAsset={handleAddAsset}
+            existingAssets={assets}
+            onViewExistingAsset={(asset) => setSelectedAsset(asset)}
           />
         )}
 

@@ -26,6 +26,7 @@ import { EnergyScreen } from '../screens/dashboard/EnergyScreen';
 import { AddAssetScreen } from '../screens/assets/AddAssetScreen';
 import { DocumentsVaultScreen } from '../screens/assets/DocumentsVaultScreen';
 import { AssetPassportScreen } from '../screens/assets/AssetPassportScreen';
+import { ParkingAssistantScreen } from '../screens/assets/ParkingAssistantScreen';
 import { AssetListScreen } from '../screens/assets/AssetListScreen';
 import { VaultHomeScreen } from '../screens/assets/VaultHomeScreen';
 import { CategoryFoldersScreen } from '../screens/assets/CategoryFoldersScreen';
@@ -42,6 +43,11 @@ import { NotificationCenterScreen } from '../screens/notifications/NotificationC
 import { AssetAnalyticsScreen } from '../screens/analytics/AssetAnalyticsScreen';
 import { FuelVaultScreen } from '../screens/fuel/FuelVaultScreen';
 import { VehiclePassportScreen } from '../screens/VehiclePassportScreen';
+import { FamilyVaultScreen } from '../screens/family/FamilyVaultScreen';
+import { FamilyMembersScreen } from '../screens/family/FamilyMembersScreen';
+import { AcceptInviteScreen } from '../screens/family/AcceptInviteScreen';
+import { EnergyDoctorScreen } from '../screens/energy/EnergyDoctorScreen';
+import { ReviewElectricityBillScreen } from '../screens/energy/ReviewElectricityBillScreen';
 import { openNotificationDeepLink } from '../services/notifications/notificationDeepLink';
 import { OfflineSyncService } from '../services/offline/OfflineSyncService';
 import { SyncEngine } from '../services/offline/SyncEngine';
@@ -91,6 +97,86 @@ function ReviewAssetScreen(props) {
     );
   } catch (error) {
     console.error('[RootNavigator] ReviewAsset load failed:', error?.message || error);
+    const Boundary = require('../components/ScanErrorBoundary').ScanErrorBoundary;
+    return <Boundary navigation={props.navigation}>{null}</Boundary>;
+  }
+}
+
+function ReviewVehicleServiceScreen(props) {
+  try {
+    const Comp = require('../screens/review/ReviewVehicleServiceScreen').ReviewVehicleServiceScreen;
+    const Boundary = require('../components/ScanErrorBoundary').ScanErrorBoundary;
+    return (
+      <Boundary navigation={props.navigation}>
+        <Comp {...props} />
+      </Boundary>
+    );
+  } catch (error) {
+    console.error('[RootNavigator] ReviewVehicleService load failed:', error?.message || error);
+    const Boundary = require('../components/ScanErrorBoundary').ScanErrorBoundary;
+    return <Boundary navigation={props.navigation}>{null}</Boundary>;
+  }
+}
+
+function ReviewInsuranceScreen(props) {
+  try {
+    const Comp = require('../screens/review/ReviewInsuranceScreen').ReviewInsuranceScreen;
+    const Boundary = require('../components/ScanErrorBoundary').ScanErrorBoundary;
+    return (
+      <Boundary navigation={props.navigation}>
+        <Comp {...props} />
+      </Boundary>
+    );
+  } catch (error) {
+    console.error('[RootNavigator] ReviewInsurance load failed:', error?.message || error);
+    const Boundary = require('../components/ScanErrorBoundary').ScanErrorBoundary;
+    return <Boundary navigation={props.navigation}>{null}</Boundary>;
+  }
+}
+
+function ReviewPucScreen(props) {
+  try {
+    const Comp = require('../screens/review/ReviewPucScreen').ReviewPucScreen;
+    const Boundary = require('../components/ScanErrorBoundary').ScanErrorBoundary;
+    return (
+      <Boundary navigation={props.navigation}>
+        <Comp {...props} />
+      </Boundary>
+    );
+  } catch (error) {
+    console.error('[RootNavigator] ReviewPuc load failed:', error?.message || error);
+    const Boundary = require('../components/ScanErrorBoundary').ScanErrorBoundary;
+    return <Boundary navigation={props.navigation}>{null}</Boundary>;
+  }
+}
+
+function ReviewGenericDocumentScreen(props) {
+  try {
+    const Comp = require('../screens/review/ReviewGenericDocumentScreen').ReviewGenericDocumentScreen;
+    const Boundary = require('../components/ScanErrorBoundary').ScanErrorBoundary;
+    return (
+      <Boundary navigation={props.navigation}>
+        <Comp {...props} />
+      </Boundary>
+    );
+  } catch (error) {
+    console.error('[RootNavigator] ReviewGenericDocument load failed:', error?.message || error);
+    const Boundary = require('../components/ScanErrorBoundary').ScanErrorBoundary;
+    return <Boundary navigation={props.navigation}>{null}</Boundary>;
+  }
+}
+
+function OcrDiagnosticScreenWrapper(props) {
+  try {
+    const Comp = require('../screens/developer/OcrDiagnosticScreen').OcrDiagnosticScreen;
+    const Boundary = require('../components/ScanErrorBoundary').ScanErrorBoundary;
+    return (
+      <Boundary navigation={props.navigation}>
+        <Comp {...props} />
+      </Boundary>
+    );
+  } catch (error) {
+    console.error('[RootNavigator] OcrDiagnostic load failed:', error?.message || error);
     const Boundary = require('../components/ScanErrorBoundary').ScanErrorBoundary;
     return <Boundary navigation={props.navigation}>{null}</Boundary>;
   }
@@ -162,8 +248,9 @@ function HomeStackNav() {
       <HomeStack.Screen name="NotificationCenter" component={NotificationCenterScreen} options={{ title: 'Notifications' }} />
       <HomeStack.Screen name="GlobalSearch" component={GlobalSearchScreen} options={{ title: 'Search', headerShown: false }} />
       <HomeStack.Screen name="ScanAssetQr" component={ScanAssetQrScreen} options={{ title: 'Scan Asset QR' }} />
+      <HomeStack.Screen name="ParkingAssistant" component={ParkingAssistantScreen} options={{ title: 'Parking Assistant', headerShown: false }} />
       <HomeStack.Screen name="AssetAnalytics" component={AssetAnalyticsScreen} options={{ title: 'Asset Analytics' }} />
-      <HomeStack.Screen name="FuelVault" component={FuelVaultScreen} options={{ title: 'Fuel & Mileage' }} />
+      <HomeStack.Screen name="FuelVault" component={FuelVaultScreen} options={{ title: 'Fuel & Mileage', headerShown: false }} />
       <HomeStack.Screen name="VehiclePassport" component={VehiclePassportScreen} options={{ title: 'Ride Passport', headerShown: false }} />
       <HomeStack.Screen name="AssetPassport" component={AssetPassportScreen} options={{ title: 'Asset Passport' }} />
       <HomeStack.Screen name="AddAsset" component={AddAssetScreen} options={addAssetOptions} />
@@ -181,9 +268,44 @@ function HomeStackNav() {
         options={{ title: 'Energy Intelligence', headerShown: false }}
       />
       <HomeStack.Screen
+        name="EnergyDoctor"
+        component={EnergyDoctorScreen}
+        options={{ title: 'Energy Doctor', headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="OcrTest"
+        component={OcrDiagnosticScreenWrapper}
+        options={{ title: 'OCR Test & Pipeline', headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="OcrDiagnostic"
+        component={OcrDiagnosticScreenWrapper}
+        options={{ title: 'OCR Test & Pipeline', headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="ReviewElectricityBill"
+        component={ReviewElectricityBillScreen}
+        options={{ title: 'Review Electricity Bill', headerShown: false }}
+      />
+      <HomeStack.Screen
         name="ApplianceEnergyDetail"
         component={AssetEnergyScreen}
         options={{ title: 'Appliance Energy' }}
+      />
+      <HomeStack.Screen
+        name="FamilyVault"
+        component={FamilyVaultScreen}
+        options={{ title: 'Family Vault', headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="FamilyMembers"
+        component={FamilyMembersScreen}
+        options={{ title: 'Family Members', headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="AcceptInvite"
+        component={AcceptInviteScreen}
+        options={{ title: 'Join Family Vault', headerShown: false }}
       />
     </HomeStack.Navigator>
   );
@@ -203,12 +325,28 @@ function AssetsStackNav() {
       <AssetsStack.Screen name="AddAsset" component={AddAssetScreen} options={addAssetOptions} />
       <AssetsStack.Screen name="GlobalSearch" component={GlobalSearchScreen} options={{ title: 'Search', headerShown: false }} />
       <AssetsStack.Screen name="ScanAssetQr" component={ScanAssetQrScreen} options={{ title: 'Scan Asset QR' }} />
+      <AssetsStack.Screen name="ParkingAssistant" component={ParkingAssistantScreen} options={{ title: 'Parking Assistant', headerShown: false }} />
       <AssetsStack.Screen name="AssetAnalytics" component={AssetAnalyticsScreen} options={{ title: 'Analytics' }} />
-      <AssetsStack.Screen name="FuelVault" component={FuelVaultScreen} options={{ title: 'Fuel & Mileage' }} />
+      <AssetsStack.Screen name="FuelVault" component={FuelVaultScreen} options={{ title: 'Fuel & Mileage', headerShown: false }} />
       <AssetsStack.Screen name="VehiclePassport" component={VehiclePassportScreen} options={{ title: 'Ride Passport', headerShown: false }} />
       <AssetsStack.Screen name="AssetPassport" component={AssetPassportScreen} options={{ title: 'Passport' }} />
       <AssetsStack.Screen name="Maintenance" component={MaintenanceScreen} options={{ title: 'Service & Maintenance' }} />
       <AssetsStack.Screen name="DocumentsVault" component={DocumentsVaultScreen} options={{ title: 'Documents' }} />
+      <AssetsStack.Screen
+        name="FamilyVault"
+        component={FamilyVaultScreen}
+        options={{ title: 'Family Vault', headerShown: false }}
+      />
+      <AssetsStack.Screen
+        name="FamilyMembers"
+        component={FamilyMembersScreen}
+        options={{ title: 'Family Members', headerShown: false }}
+      />
+      <AssetsStack.Screen
+        name="AcceptInvite"
+        component={AcceptInviteScreen}
+        options={{ title: 'Join Family Vault', headerShown: false }}
+      />
     </AssetsStack.Navigator>
   );
 }
@@ -230,7 +368,7 @@ function VaultStackNav() {
         options={{ title: 'Category Folders' }}
       />
       <VaultStack.Screen name="DocumentsVault" component={DocumentsVaultScreen} options={{ title: 'Documents' }} />
-      <VaultStack.Screen name="FuelVault" component={FuelVaultScreen} options={{ title: 'Fuel & Mileage' }} />
+      <VaultStack.Screen name="FuelVault" component={FuelVaultScreen} options={{ title: 'Fuel & Mileage', headerShown: false }} />
       <VaultStack.Screen name="VehiclePassport" component={VehiclePassportScreen} options={{ title: 'Ride Passport', headerShown: false }} />
       <VaultStack.Screen name="AssetPassport" component={AssetPassportScreen} options={{ title: 'Passport' }} />
       <VaultStack.Screen name="AddAsset" component={AddAssetScreen} options={addAssetOptions} />
@@ -275,7 +413,7 @@ function SettingsStackNav() {
       <Stack.Screen name="Maintenance" component={MaintenanceScreen} options={{ title: 'Service & Maintenance' }} />
       <Stack.Screen name="DocumentsVault" component={DocumentsVaultScreen} options={{ title: 'Documents' }} />
       <Stack.Screen name="AssetAnalytics" component={AssetAnalyticsScreen} options={{ title: 'Analytics' }} />
-      <Stack.Screen name="FuelVault" component={FuelVaultScreen} options={{ title: 'Fuel & Mileage' }} />
+      <Stack.Screen name="FuelVault" component={FuelVaultScreen} options={{ title: 'Fuel & Mileage', headerShown: false }} />
       <Stack.Screen name="VehiclePassport" component={VehiclePassportScreen} options={{ title: 'Ride Passport', headerShown: false }} />
       <Stack.Screen name="About" component={AboutScreen} options={{ title: 'About Us' }} />
       <Stack.Screen name="ContactUs" component={ContactUsScreen} options={{ title: 'Contact Us' }} />
@@ -314,7 +452,7 @@ function AlertsStackNav() {
         options={{ title: 'Notification settings' }}
       />
       <Stack.Screen name="AssetPassport" component={AssetPassportScreen} options={{ title: 'Asset Passport' }} />
-      <Stack.Screen name="FuelVault" component={FuelVaultScreen} options={{ title: 'Fuel & Mileage' }} />
+      <Stack.Screen name="FuelVault" component={FuelVaultScreen} options={{ title: 'Fuel & Mileage', headerShown: false }} />
       <Stack.Screen name="VehiclePassport" component={VehiclePassportScreen} options={{ title: 'Ride Passport', headerShown: false }} />
       <Stack.Screen name="DocumentsVault" component={DocumentsVaultScreen} options={{ title: 'Documents' }} />
       <Stack.Screen name="Maintenance" component={MaintenanceScreen} options={{ title: 'Service & Maintenance' }} />
@@ -331,6 +469,10 @@ function homeTabPress(navigation) {
   });
 }
 
+function ScanActionScreen() {
+  return null;
+}
+
 function MainTabs() {
   return (
     <Tab.Navigator
@@ -341,6 +483,11 @@ function MainTabs() {
           if (route.name === 'Home') {
             e.preventDefault();
             homeTabPress(navigation);
+            return;
+          }
+          if (route.name === 'Scan') {
+            e.preventDefault();
+            openScanInvoice();
             return;
           }
           Haptics.select();
@@ -362,8 +509,8 @@ function MainTabs() {
     >
       <Tab.Screen name="Home" component={HomeStackNav} options={{ title: 'Home', tabBarLabel: 'Home' }} />
       <Tab.Screen name="Assets" component={AssetsStackNav} options={{ title: 'Assets' }} />
-      <Tab.Screen name="Documents" component={VaultStackNav} options={{ title: 'Documents', tabBarLabel: 'Docs' }} />
-      <Tab.Screen name="Alerts" component={AlertsStackNav} options={{ title: 'Alerts' }} />
+      <Tab.Screen name="Scan" component={ScanActionScreen} options={{ title: 'Scan', tabBarLabel: 'Scan' }} />
+      <Tab.Screen name="Vault" component={VaultStackNav} options={{ title: 'Vault', tabBarLabel: 'Vault' }} />
       <Tab.Screen name="Profile" component={SettingsStackNav} options={{ title: 'Profile', tabBarLabel: 'Profile' }} />
     </Tab.Navigator>
   );
@@ -476,6 +623,69 @@ function MainAppStackNavigator() {
           ...stackOptions,
           headerLeft: () => <ScanCloseButton navigation={navigation} />,
         })}
+      />
+      <RootStack.Screen
+        name="ReviewElectricityBill"
+        component={ReviewElectricityBillScreen}
+        options={{
+          headerShown: false,
+          presentation: 'fullScreenModal',
+        }}
+      />
+      <RootStack.Screen
+        name="ReviewVehicleService"
+        component={ReviewVehicleServiceScreen}
+        options={{
+          headerShown: false,
+          presentation: 'fullScreenModal',
+        }}
+      />
+      <RootStack.Screen
+        name="ReviewInsurance"
+        component={ReviewInsuranceScreen}
+        options={{
+          headerShown: false,
+          presentation: 'fullScreenModal',
+        }}
+      />
+      <RootStack.Screen
+        name="ReviewPuc"
+        component={ReviewPucScreen}
+        options={{
+          headerShown: false,
+          presentation: 'fullScreenModal',
+        }}
+      />
+      <RootStack.Screen
+        name="ReviewGenericDocument"
+        component={ReviewGenericDocumentScreen}
+        options={{
+          headerShown: false,
+          presentation: 'fullScreenModal',
+        }}
+      />
+      <RootStack.Screen
+        name="OcrTest"
+        component={OcrDiagnosticScreenWrapper}
+        options={{
+          headerShown: false,
+          presentation: 'fullScreenModal',
+        }}
+      />
+      <RootStack.Screen
+        name="OcrDiagnostic"
+        component={OcrDiagnosticScreenWrapper}
+        options={{
+          headerShown: false,
+          presentation: 'fullScreenModal',
+        }}
+      />
+      <RootStack.Screen
+        name="EnergyDoctor"
+        component={EnergyDoctorScreen}
+        options={{
+          headerShown: false,
+        }}
       />
       <RootStack.Screen
         name="AuthModal"
@@ -659,7 +869,7 @@ export function RootNavigator() {
   }, []);
 
   if (!bootDone) {
-    return <SplashScreen onFinish={finishSplash} holdMs={1500} />;
+    return <SplashScreen onFinish={finishSplash} holdMs={900} />;
   }
 
   if (!onboardingChecked) {
@@ -667,16 +877,6 @@ export function RootNavigator() {
       <View style={{ flex: 1, backgroundColor: COLORS.bg, justifyContent: 'center' }}>
         <ActivityIndicator color={COLORS.emerald} />
       </View>
-    );
-  }
-
-  // Auth first — onboarding only for signed-in users after profile gate
-  if (showOnboarding && isAuthenticated && !needsProfileSetup && !showAuthStack) {
-    return (
-      <OnboardingScreen
-        onDone={finishOnboarding}
-        displayName={displayName || user?.displayName || profile?.name || ''}
-      />
     );
   }
 
@@ -694,6 +894,16 @@ export function RootNavigator() {
           retryProfileHydrate?.();
         }}
         onContinueAnyway={() => setBootBypass(true)}
+      />
+    );
+  }
+
+  // Auth first — onboarding only for signed-in users after profile gate
+  if (showOnboarding && isAuthenticated && !needsProfileSetup && !showAuthStack) {
+    return (
+      <OnboardingScreen
+        onDone={finishOnboarding}
+        displayName={displayName || user?.displayName || profile?.name || ''}
       />
     );
   }
@@ -740,7 +950,7 @@ export function RootNavigator() {
       </NavigationContainer>
       <WelcomeBackModal
         visible={showWelcome && !showAuthStack}
-        displayName={displayName || user?.displayName || 'Guest'}
+        displayName={displayName || user?.displayName || ''}
         onDismiss={() => setShowWelcome(false)}
       />
     </>

@@ -35,6 +35,7 @@
   };
 </script>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
@@ -213,6 +214,17 @@
         <i data-lucide="wrench" class="w-4 h-4"></i>
         <span>Service &amp; Maintenance</span>
       </button>
+      <button data-tab="parking" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
+        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
+        <i data-lucide="map-pin" class="w-4 h-4"></i>
+        <span>Parking QR</span>
+        <span id="parkingQrBadge" class="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">—</span>
+      </button>
+      <button data-tab="products" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
+        <span class="nav-dot w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
+        <i data-lucide="package" class="w-4 h-4"></i>
+        <span>Product Catalog</span>
+      </button>
 
       <p class="px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1 mt-4">Support &amp; Insights</p>
       <button data-tab="tickets" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 border border-transparent hover:bg-white/5 transition">
@@ -301,7 +313,7 @@
         </div>
 
         <div class="flex items-center gap-3 shrink-0">
-          <button id="btnRefresh" title="Refresh data from Firestore" class="w-9 h-9 flex items-center justify-center rounded-xl border border-white/10 text-slate-300 hover:text-white hover:border-brand-500/40 transition">
+          <button id="btnRefresh" aria-label="Refresh Dashboard Data" title="Refresh live dashboard data across modules" class="w-9 h-9 flex items-center justify-center rounded-xl border border-white/10 text-slate-300 hover:text-white hover:border-brand-500/40 hover:bg-white/5 transition">
             <i data-lucide="refresh-cw" class="w-4 h-4"></i>
           </button>
           <div class="flex items-center gap-2.5 pl-3 pr-2 py-1 border-l border-white/10">
@@ -391,9 +403,9 @@
             <p id="kpiWarrantyHint" class="text-[10px] text-slate-500 mt-1">Not expired</p>
           </button>
           <button type="button" onclick="switchTab('expiry')" class="glass border border-white/10 rounded-2xl p-4 text-left hover:border-amber-500/40 transition">
-            <div class="flex items-center justify-between mb-1"><span class="text-[10px] font-bold uppercase text-slate-400">Expiring soon</span><i data-lucide="calendar-clock" class="w-4 h-4 text-amber-400"></i></div>
+            <div class="flex items-center justify-between mb-1"><span class="text-[10px] font-bold uppercase text-slate-400">Expiry alerts</span><i data-lucide="calendar-clock" class="w-4 h-4 text-amber-400"></i></div>
             <p id="kpiExpiringSoon" class="text-2xl font-black text-white tabular-nums">—</p>
-            <p id="kpiExpiringHint" class="text-[10px] text-slate-500 mt-1">≤30 days / expired</p>
+            <p id="kpiExpiringHint" class="text-[10px] text-slate-500 mt-1">Expired / ≤30d</p>
           </button>
           <button type="button" onclick="switchTab('whatsapp'); switchWhatsappSubView('queue');" class="glass border border-white/10 rounded-2xl p-4 text-left hover:border-amber-500/40 transition">
             <div class="flex items-center justify-between mb-1"><span class="text-[10px] font-bold uppercase text-slate-400">Pending WA</span><i data-lucide="list-ordered" class="w-4 h-4 text-amber-400"></i></div>
@@ -587,9 +599,28 @@
               </h2>
               <p class="text-xs text-slate-400 mt-0.5">Live customer profiles, contact records, online status, and vaulted assets.</p>
             </div>
-            <div class="flex items-center gap-3">
-              <input id="userSearchInput" type="text" placeholder="Search by name, phone, email, UID..."
-                class="rounded-xl bg-slate-900/80 border border-white/10 px-3.5 py-2 text-xs text-white placeholder-slate-500 w-72 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition" />
+            <div class="flex flex-wrap items-center gap-2.5">
+              <select id="userFilterJoinedDate" onchange="renderUsers()" class="rounded-xl bg-slate-900/80 border border-white/10 px-3 py-2 text-xs text-white focus:border-brand-500/60 transition">
+                <option value="ALL">All Dates</option>
+                <option value="24H">Joined Last 24 Hours</option>
+                <option value="YESTERDAY">Joined Yesterday</option>
+                <option value="7D">Joined Last 7 Days</option>
+                <option value="30D">Joined Last 30 Days</option>
+              </select>
+              <select id="userFilterStatus" onchange="renderUsers()" class="rounded-xl bg-slate-900/80 border border-white/10 px-3 py-2 text-xs text-white focus:border-brand-500/60 transition">
+                <option value="ALL">All Status</option>
+                <option value="ACTIVE">Active Only</option>
+                <option value="SUSPENDED">Suspended Only</option>
+                <option value="WHATSAPP_OPTED_IN">WhatsApp Opted-in</option>
+              </select>
+              <select id="userSortOrder" onchange="renderUsers()" class="rounded-xl bg-slate-900/80 border border-white/10 px-3 py-2 text-xs text-white focus:border-brand-500/60 transition">
+                <option value="NEWEST_FIRST">Newest Customers First</option>
+                <option value="OLDEST_FIRST">Oldest Customers First</option>
+                <option value="NAME_ASC">Name (A-Z)</option>
+                <option value="NAME_DESC">Name (Z-A)</option>
+              </select>
+              <input id="userSearchInput" type="text" placeholder="Search customer, phone, UID..."
+                class="rounded-xl bg-slate-900/80 border border-white/10 px-3.5 py-2 text-xs text-white placeholder-slate-500 w-56 focus:border-brand-500/60 focus:ring-2 focus:ring-brand-500/20 transition" />
             </div>
           </div>
 
@@ -894,6 +925,199 @@
               <p class="text-[11px] uppercase font-bold text-slate-400">Completed Service Logs</p>
               <p id="kpiCompletedServices" class="text-2xl font-black text-emerald-400 mt-1">N/A</p>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== MODULE: PARKING ASSISTANT ===================== -->
+      <section id="tab-parking" class="tab-panel space-y-4">
+        <div class="glass border border-white/10 rounded-2xl p-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+            <div>
+              <h2 class="text-white font-bold text-base flex items-center gap-2">
+                <i data-lucide="map-pin" class="w-4 h-4 text-cyan-400"></i> Smart Parking Assistant — QR Fleet &amp; Alerts
+              </h2>
+              <p class="text-xs text-slate-400 mt-0.5">Manage opaque vehicle parking QR codes, real-time alert logs, rate limits, and lifecycle events.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="openGenerateParkingQrModal()" class="px-3 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition flex items-center gap-1.5 shadow-glow">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i> Generate Parking QR
+              </button>
+              <button onclick="loadParkingDashboard(true)" class="px-3 py-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white font-bold text-xs transition flex items-center gap-1.5">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh
+              </button>
+            </div>
+          </div>
+
+          <!-- Parking KPI Cards -->
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <p class="text-[11px] uppercase font-bold text-slate-400">Active Parking QRs</p>
+              <p id="kpiParkingActiveQrs" class="text-2xl font-black text-emerald-400 mt-1">—</p>
+              <p class="text-[10px] text-slate-500 mt-0.5">Scannable vehicle stickers</p>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <p class="text-[11px] uppercase font-bold text-slate-400">Total Alerts Received</p>
+              <p id="kpiParkingTotalAlerts" class="text-2xl font-black text-cyan-400 mt-1">—</p>
+              <p class="text-[10px] text-slate-500 mt-0.5">Scanner submissions</p>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <p class="text-[11px] uppercase font-bold text-slate-400">Pending Alerts</p>
+              <p id="kpiParkingPendingAlerts" class="text-2xl font-black text-amber-400 mt-1">—</p>
+              <p class="text-[10px] text-slate-500 mt-0.5">Awaiting owner check</p>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <p class="text-[11px] uppercase font-bold text-slate-400">Revoked / Inactive QRs</p>
+              <p id="kpiParkingRevokedQrs" class="text-2xl font-black text-slate-400 mt-1">—</p>
+              <p class="text-[10px] text-slate-500 mt-0.5">Regenerated or disabled</p>
+            </div>
+          </div>
+
+          <!-- Search & Filter Controls -->
+          <div class="flex flex-col sm:flex-row gap-2 mb-4">
+            <div class="relative flex-1">
+              <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+              <input id="parkingSearchInput" oninput="renderParkingQrs()" type="text" placeholder="Search by vehicle number, QR code (AD-PARK-...), asset ID, or owner UID..." class="w-full bg-slate-900 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50" />
+            </div>
+            <select id="parkingStatusFilter" onchange="renderParkingQrs()" class="bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none">
+              <option value="ALL">All Statuses</option>
+              <option value="ACTIVE" selected>Active Only</option>
+              <option value="REVOKED">Revoked</option>
+              <option value="DISABLED">Disabled</option>
+            </select>
+          </div>
+
+          <!-- Parking QRs Table -->
+          <div class="overflow-x-auto rounded-xl border border-white/10 bg-slate-900/60 mb-6">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-white/5 text-slate-400 font-bold border-b border-white/10">
+                <tr>
+                  <th class="px-4 py-3">Vehicle / Asset</th>
+                  <th class="px-4 py-3">QR Code</th>
+                  <th class="px-4 py-3">Owner UID</th>
+                  <th class="px-4 py-3">Status</th>
+                  <th class="px-4 py-3">Generated</th>
+                  <th class="px-4 py-3">Last Alert</th>
+                  <th class="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="parkingQrsTableBody" class="divide-y divide-white/5">
+                <tr><td colspan="7" class="text-center py-6 text-slate-500 text-xs">Loading Parking QRs...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Parking Alerts Log Sub-section -->
+          <div class="pt-4 border-t border-white/10">
+            <h3 class="text-white font-bold text-sm flex items-center gap-2 mb-3">
+              <i data-lucide="bell-ring" class="w-4 h-4 text-amber-400"></i> Recent Real-Time Parking Alerts
+            </h3>
+            <div class="overflow-x-auto rounded-xl border border-white/10 bg-slate-900/60">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-white/5 text-slate-400 font-bold border-b border-white/10">
+                  <tr>
+                    <th class="px-4 py-3">Alert Type</th>
+                    <th class="px-4 py-3">Vehicle</th>
+                    <th class="px-4 py-3">QR Code</th>
+                    <th class="px-4 py-3">Scanner Message</th>
+                    <th class="px-4 py-3">Alert Status</th>
+                    <th class="px-4 py-3">Time</th>
+                    <th class="px-4 py-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="parkingAlertsTableBody" class="divide-y divide-white/5">
+                  <tr><td colspan="7" class="text-center py-6 text-slate-500 text-xs">No alerts recorded.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== MODULE: PRODUCT CATALOG ===================== -->
+      <section id="tab-products" class="tab-panel space-y-4">
+        <div class="glass border border-white/10 rounded-2xl p-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+            <div>
+              <h2 class="text-white font-bold text-base flex items-center gap-2">
+                <i data-lucide="package" class="w-4 h-4 text-brand-400"></i> Master Product Catalog
+              </h2>
+              <p class="text-xs text-slate-400 mt-0.5">Authoritative product database, category models, warranty defaults, and inventory items.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="openProductEditModal(null)" class="px-3 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-400 text-white font-bold text-xs transition flex items-center gap-1.5 shadow-glow">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add Product
+              </button>
+              <button onclick="loadProductsDashboard(true)" class="px-3 py-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white font-bold text-xs transition flex items-center gap-1.5">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh
+              </button>
+            </div>
+          </div>
+
+          <!-- Product KPI Cards -->
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <p class="text-[11px] uppercase font-bold text-slate-400">Total Products</p>
+              <p id="kpiProductsTotal" class="text-2xl font-black text-white mt-1">—</p>
+              <p class="text-[10px] text-slate-500 mt-0.5">Catalog master count</p>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <p class="text-[11px] uppercase font-bold text-slate-400">Active Products</p>
+              <p id="kpiProductsActive" class="text-2xl font-black text-emerald-400 mt-1">—</p>
+              <p class="text-[10px] text-slate-500 mt-0.5">Available in dropdowns</p>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <p class="text-[11px] uppercase font-bold text-slate-400">Archived Products</p>
+              <p id="kpiProductsArchived" class="text-2xl font-black text-amber-400 mt-1">—</p>
+              <p class="text-[10px] text-slate-500 mt-0.5">Soft-deleted items</p>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+              <p class="text-[11px] uppercase font-bold text-slate-400">Product Brands</p>
+              <p id="kpiProductsBrands" class="text-2xl font-black text-brand-300 mt-1">—</p>
+              <p class="text-[10px] text-slate-500 mt-0.5">Distinct manufacturers</p>
+            </div>
+          </div>
+
+          <!-- Product Filters -->
+          <div class="flex flex-col sm:flex-row gap-2 mb-4">
+            <div class="relative flex-1">
+              <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+              <input id="productSearchInput" oninput="renderProducts()" type="text" placeholder="Search by product name, brand, category, model number, SKU..." class="w-full bg-slate-900 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500/50" />
+            </div>
+            <select id="productCategoryFilter" onchange="renderProducts()" class="bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none">
+              <option value="ALL">All Categories</option>
+              <option value="vehicle">Vehicles</option>
+              <option value="gadget">Gadgets</option>
+              <option value="home">Home &amp; Appliances</option>
+              <option value="equipment">Equipment</option>
+              <option value="business">Business</option>
+              <option value="other">Other</option>
+            </select>
+            <select id="productStatusFilter" onchange="renderProducts()" class="bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none">
+              <option value="ACTIVE" selected>Active Catalog</option>
+              <option value="ARCHIVED">Archived / Deleted</option>
+              <option value="ALL">All Records</option>
+            </select>
+          </div>
+
+          <!-- Products Table -->
+          <div class="overflow-x-auto rounded-xl border border-white/10 bg-slate-900/60">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-white/5 text-slate-400 font-bold border-b border-white/10">
+                <tr>
+                  <th class="px-4 py-3">Product / Model</th>
+                  <th class="px-4 py-3">Brand</th>
+                  <th class="px-4 py-3">Category</th>
+                  <th class="px-4 py-3">Price / MRP</th>
+                  <th class="px-4 py-3">Status</th>
+                  <th class="px-4 py-3">Updated</th>
+                  <th class="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="productsTableBody" class="divide-y divide-white/5">
+                <tr><td colspan="7" class="text-center py-6 text-slate-500 text-xs">Loading product catalog...</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </section>
@@ -2015,8 +2239,9 @@
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <!-- Traffic Sources -->
           <div class="glass border border-white/10 rounded-2xl p-4 space-y-3">
-            <h3 class="font-bold text-white text-xs uppercase tracking-wider font-mono flex items-center gap-2">
-              <i data-lucide="globe" class="w-3.5 h-3.5 text-emerald-400"></i> Traffic Acquisition Channels
+            <h3 class="font-bold text-white text-xs uppercase tracking-wider font-mono flex items-center justify-between">
+              <span class="flex items-center gap-2"><i data-lucide="globe" class="w-3.5 h-3.5 text-emerald-400"></i> Traffic Acquisition Channels</span>
+              <span class="text-[10px] text-slate-500 font-normal">Page-view distribution</span>
             </h3>
             <div class="space-y-2.5" id="analyticsSourcesList">
               <div class="flex items-center justify-between text-xs">
@@ -2071,20 +2296,89 @@
           </div>
         </div>
 
-        <!-- 4. Google Search Console Status & Privacy Safeguard -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <!-- GSC Status -->
-          <div class="glass border border-amber-500/20 rounded-2xl p-4 space-y-2 bg-amber-950/10">
-            <div class="flex items-center gap-2">
-              <i data-lucide="alert-circle" class="w-4 h-4 text-amber-400"></i>
-              <h4 class="font-bold text-white text-xs">Google Search Console Integration</h4>
+        <!-- 4. Google Search Console Live Intelligence -->
+        <div class="glass border border-white/10 rounded-2xl p-5 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500/20 to-emerald-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                <i data-lucide="search" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="font-bold text-white text-sm">Google Search Console Organic Intelligence</h3>
+                  <span id="gscConnectionBadge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono">CONNECTING...</span>
+                </div>
+                <p id="gscStatusSubtext" class="text-xs text-slate-400 mt-0.5">Property: <span class="font-mono text-slate-300">sc-domain:assetdoctor.in</span> · Organic Search Performance</p>
+              </div>
             </div>
-            <p class="text-xs text-slate-400 leading-relaxed">
-              Search Console integration not connected. To view organic keyword CTR and impression ranks directly in this console, configure Google Search Console API OAuth Service Account in project settings.
-            </p>
+            <div class="flex items-center gap-2">
+              <select id="gscTimeRangeSelect" onchange="loadGoogleSearchConsoleAnalytics()" class="bg-slate-900 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-slate-300 font-mono focus:outline-none focus:border-brand-500">
+                <option value="7">Last 7 Days</option>
+                <option value="28" selected>Last 28 Days</option>
+                <option value="90">Last 3 Months</option>
+              </select>
+              <button onclick="loadGoogleSearchConsoleAnalytics(true)" class="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-slate-300 transition flex items-center gap-1.5">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                <span>Refresh</span>
+              </button>
+            </div>
           </div>
 
-          <!-- Privacy Safeguard Notice -->
+          <!-- GSC 4 Metric Cards -->
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-white/5 space-y-1">
+              <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Total Organic Clicks</span>
+              <span id="gscTotalClicks" class="text-xl font-black text-blue-400 font-mono block">--</span>
+              <span class="text-[10px] text-slate-500 block">Traffic arriving from Google</span>
+            </div>
+            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-white/5 space-y-1">
+              <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Total Impressions</span>
+              <span id="gscTotalImpressions" class="text-xl font-black text-purple-400 font-mono block">--</span>
+              <span class="text-[10px] text-slate-500 block">SERP views on Google</span>
+            </div>
+            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-white/5 space-y-1">
+              <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Average CTR</span>
+              <span id="gscAverageCtr" class="text-xl font-black text-emerald-400 font-mono block">--%</span>
+              <span class="text-[10px] text-slate-500 block">Click-through conversion</span>
+            </div>
+            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-white/5 space-y-1">
+              <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Average Position</span>
+              <span id="gscAveragePosition" class="text-xl font-black text-amber-400 font-mono block">--</span>
+              <span class="text-[10px] text-slate-500 block">Mean ranking in search results</span>
+            </div>
+          </div>
+
+          <!-- GSC Keywords & SERP Rankings Table -->
+          <div class="space-y-2 pt-1">
+            <div class="flex items-center justify-between">
+              <h4 class="font-bold text-white text-xs uppercase tracking-wider font-mono flex items-center gap-1.5">
+                <i data-lucide="trending-up" class="w-3.5 h-3.5 text-blue-400"></i> Top Organic Search Queries &amp; SERP Ranks
+              </h4>
+              <span id="gscDateRangeLabel" class="text-[11px] font-mono text-slate-500">—</span>
+            </div>
+            <div class="overflow-x-auto rounded-xl border border-white/5 bg-slate-900/40">
+              <table class="w-full text-left text-xs">
+                <thead>
+                  <tr class="border-b border-white/10 text-slate-500 font-mono text-[10px] uppercase">
+                    <th class="py-2.5 px-3">Search Query / Keyword</th>
+                    <th class="py-2.5 px-3 text-right">Clicks</th>
+                    <th class="py-2.5 px-3 text-right">Impressions</th>
+                    <th class="py-2.5 px-3 text-right">CTR</th>
+                    <th class="py-2.5 px-3 text-right">Avg Position</th>
+                  </tr>
+                </thead>
+                <tbody id="gscKeywordsTableBody" class="divide-y divide-white/5 font-mono text-[11px]">
+                  <tr><td colspan="5" class="py-6 text-center text-slate-500">Connecting to Google Search Console API...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="gscNoticeBanner" class="hidden p-3 rounded-xl border text-xs"></div>
+        </div>
+
+        <!-- 5. Privacy Safeguard Notice -->
+        <div class="grid grid-cols-1 gap-4">
           <div class="glass border border-emerald-500/20 rounded-2xl p-4 space-y-2 bg-emerald-950/10">
             <div class="flex items-center gap-2">
               <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
@@ -2185,6 +2479,63 @@
               </div>
               <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300">ENFORCED IN CLOUD</span>
             </div>
+          </div>
+        </div>
+
+        <!-- Google Search Console API Management Card -->
+        <div class="glass border border-white/10 rounded-2xl p-6 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                <i data-lucide="key" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <h3 class="text-white font-bold text-base flex items-center gap-2">
+                  Google Search Console API Integration
+                  <span id="gscSettingsBadge" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">ACTIVE</span>
+                </h3>
+                <p class="text-xs text-slate-400 mt-0.5">Automated organic search CTR, keyword rankings &amp; SERP intelligence ingestion.</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button id="btnTestGscConn" onclick="testGoogleSearchConsoleConnection()" class="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-bold transition flex items-center gap-1.5 border border-white/10">
+                <i data-lucide="activity" class="w-3.5 h-3.5 text-blue-400"></i>
+                <span>Test Connection</span>
+              </button>
+              <button onclick="openGscConfigModal()" class="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-blue-500/20">
+                <i data-lucide="sliders" class="w-3.5 h-3.5"></i>
+                <span>Configure / Update Credentials</span>
+              </button>
+            </div>
+          </div>
+
+          <div id="gscTestResultBanner" class="hidden p-3 rounded-xl border text-xs"></div>
+
+          <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-white/5 space-y-1">
+              <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Service Account Principal</span>
+              <p id="gscSettingsEmail" class="font-mono text-emerald-400 text-xs truncate" title="asset-doctor-search-console@assetdoctor-5fd25.iam.gserviceaccount.com">asset-doctor-search-console@assetdoctor-5fd25.iam.gserviceaccount.com</p>
+              <span class="text-[10px] text-slate-500 block">Owner / Delegated Service Principal</span>
+            </div>
+
+            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-white/5 space-y-1">
+              <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Target Property (Site)</span>
+              <p id="gscSettingsSite" class="font-mono text-white text-xs">sc-domain:assetdoctor.in</p>
+              <span class="text-[10px] text-slate-500 block">Domain verification identifier</span>
+            </div>
+
+            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-white/5 space-y-1 sm:col-span-2 lg:col-span-1">
+              <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">OAuth2 Scope</span>
+              <p class="font-mono text-blue-300 text-xs truncate">webmasters.readonly</p>
+              <span class="text-[10px] text-slate-500 block">Read-only organic query metrics</span>
+            </div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-slate-900/40 border border-white/5 flex items-start gap-2.5 text-xs text-slate-400">
+            <i data-lucide="info" class="w-4 h-4 text-blue-400 shrink-0 mt-0.5"></i>
+            <span class="leading-relaxed">
+              Google Search Console API credentials are encrypted and stored in Firestore under <code class="text-blue-300 font-mono">systemSettings/google_search_console</code>. Only authenticated Super Admins (<code class="text-slate-300 font-mono">super_admin: true</code>) can modify or re-upload private keys.
+            </span>
           </div>
         </div>
       </section>
@@ -2976,7 +3327,248 @@
   </div>
 </div>
 
-<!-- 13. TOAST NOTIFICATION CONTAINER (Replaces alert()) -->
+<!-- 13. GOOGLE SEARCH CONSOLE CONFIGURATION MODAL -->
+<div id="gscConfigModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 overflow-y-auto">
+  <div class="glass-strong border border-white/10 rounded-2xl max-w-xl w-full p-6 shadow-modal space-y-4">
+    <div class="flex items-center justify-between border-b border-white/10 pb-3">
+      <div class="flex items-center gap-2 text-blue-400 font-bold text-sm">
+        <i data-lucide="key" class="w-4 h-4"></i>
+        <span>Configure Google Search Console API</span>
+      </div>
+      <button onclick="closeModal('gscConfigModal')" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+    </div>
+
+    <div class="space-y-3 text-xs">
+      <div>
+        <label class="text-slate-300 font-bold block mb-1">Service Account Email *</label>
+        <input id="gscInputClientEmail" type="email" value="asset-doctor-search-console@assetdoctor-5fd25.iam.gserviceaccount.com" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white font-mono" />
+      </div>
+
+      <div class="grid sm:grid-cols-2 gap-3">
+        <div>
+          <label class="text-slate-300 font-bold block mb-1">GCP Project ID</label>
+          <input id="gscInputProjectId" type="text" value="assetdoctor-5fd25" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white font-mono" />
+        </div>
+        <div>
+          <label class="text-slate-300 font-bold block mb-1">Search Console Site URL *</label>
+          <input id="gscInputSiteUrl" type="text" value="sc-domain:assetdoctor.in" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white font-mono" />
+        </div>
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <label class="text-slate-300 font-bold block">Service Account Private Key (PEM format or JSON upload)</label>
+          <label class="text-brand-300 cursor-pointer text-[11px] font-bold hover:underline flex items-center gap-1">
+            <i data-lucide="upload" class="w-3 h-3"></i>
+            <span>Upload JSON file</span>
+            <input type="file" id="gscJsonFileInput" accept=".json" class="hidden" onchange="handleGscJsonUpload(event)" />
+          </label>
+        </div>
+        <textarea id="gscInputPrivateKey" rows="5" placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white font-mono text-[11px] focus:ring-1 focus:ring-blue-500 focus:outline-none"></textarea>
+        <p class="text-[10px] text-slate-500 mt-1">Upload the service account JSON key downloaded from Google Cloud Console, or paste the private key PEM directly.</p>
+      </div>
+
+      <div class="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-slate-300 text-[11px] space-y-1">
+        <p class="font-bold text-blue-300 flex items-center gap-1.5">
+          <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i> Google Search Console Verification Requirement:
+        </p>
+        <p class="leading-relaxed">
+          Ensure that <strong class="text-white font-mono">asset-doctor-search-console@assetdoctor-5fd25.iam.gserviceaccount.com</strong> is added as a User (or Owner) with "Full" or "Restricted" permissions inside Google Search Console property settings (<a href="https://search.google.com/search-console" target="_blank" class="text-blue-400 underline">search.google.com</a>).
+        </p>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+      <button onclick="closeModal('gscConfigModal')" class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-bold transition">Cancel</button>
+      <button id="btnSaveGscConfig" onclick="saveGoogleSearchConsoleConfig()" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition shadow-glow flex items-center gap-1.5">
+        <i data-lucide="save" class="w-3.5 h-3.5"></i>
+        <span>Save &amp; Connect GSC</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== PARKING QR VIEW / PRINT MODAL ===================== -->
+<div id="parkingQrModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 overflow-y-auto">
+  <div class="glass border border-white/15 rounded-2xl max-w-md w-full p-6 text-xs space-y-4 relative shadow-modal bg-slate-950">
+    <div class="flex items-center justify-between border-b border-white/10 pb-3">
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
+        <h3 class="text-white font-bold text-sm">Vehicle Parking Assistant QR</h3>
+      </div>
+      <button onclick="closeModal('parkingQrModal')" class="text-slate-400 hover:text-white transition text-lg">&times;</button>
+    </div>
+
+    <div class="text-center space-y-3 py-2">
+      <!-- Printable Sticker Box -->
+      <div id="printableQrSticker" class="bg-white p-5 rounded-2xl inline-block shadow-lg mx-auto text-slate-950">
+        <div class="text-[9px] font-black uppercase tracking-[0.2em] text-teal-700 mb-1">Asset Doctor</div>
+        <div class="text-xs font-bold text-slate-800 uppercase tracking-wide mb-2">Parking Assistant</div>
+        <div id="modalQrCodeContainer" class="flex justify-center my-2"></div>
+        <div id="modalQrVehicleNumber" class="text-sm font-black tracking-wider text-slate-900 mt-2">—</div>
+        <div id="modalQrCodeText" class="text-[10px] font-mono font-bold text-slate-500 mt-0.5">AD-PARK-XXXXXX</div>
+        <div class="text-[8px] text-slate-400 mt-2 border-t border-slate-200 pt-1.5 font-medium">Scan to notify owner • Privacy Protected</div>
+      </div>
+
+      <div class="text-left bg-slate-900/80 border border-white/10 rounded-xl p-3 space-y-1.5 font-mono text-[11px]">
+        <div class="flex justify-between"><span class="text-slate-400">QR Code:</span> <span id="modalMetaQrCode" class="text-cyan-300 font-bold">—</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Status:</span> <span id="modalMetaQrStatus" class="font-bold">—</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Asset ID:</span> <span id="modalMetaAssetId" class="text-slate-300 truncate max-w-[200px]">—</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Owner:</span> <span id="modalMetaOwnerUid" class="text-slate-300 truncate max-w-[200px]">—</span></div>
+        <div class="flex justify-between items-center pt-1 border-t border-white/5">
+          <span class="text-slate-400">Public URL:</span>
+          <a id="modalMetaQrUrl" href="#" target="_blank" class="text-brand-300 underline truncate max-w-[220px]">https://...</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-white/10">
+      <button onclick="copyParkingQrUrl()" class="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold transition flex items-center gap-1.5">
+        <i data-lucide="copy" class="w-3.5 h-3.5"></i> Copy URL
+      </button>
+      <button onclick="downloadParkingQrImage()" class="px-3 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold transition flex items-center gap-1.5">
+        <i data-lucide="download" class="w-3.5 h-3.5"></i> Download PNG
+      </button>
+      <button onclick="printParkingQrSticker()" class="px-3 py-2 rounded-xl bg-brand-500 hover:bg-brand-400 text-white font-bold transition flex items-center gap-1.5">
+        <i data-lucide="printer" class="w-3.5 h-3.5"></i> Print Sticker
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== GENERATE PARKING QR MODAL ===================== -->
+<div id="generateParkingQrModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 overflow-y-auto">
+  <div class="glass border border-white/15 rounded-2xl max-w-lg w-full p-6 text-xs space-y-4 relative shadow-modal bg-slate-950">
+    <div class="flex items-center justify-between border-b border-white/10 pb-3">
+      <div class="flex items-center gap-2">
+        <i data-lucide="map-pin" class="w-4 h-4 text-cyan-400"></i>
+        <h3 class="text-white font-bold text-sm">Generate Smart Parking QR</h3>
+      </div>
+      <button onclick="closeModal('generateParkingQrModal')" class="text-slate-400 hover:text-white transition text-lg">&times;</button>
+    </div>
+
+    <div class="space-y-3">
+      <div>
+        <label class="text-slate-300 font-bold block mb-1">Select Existing Vehicle Asset (Optional)</label>
+        <select id="genQrSelectAsset" onchange="onGenQrAssetSelected(this.value)" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs">
+          <option value="">— Select a vehicle or enter details below —</option>
+        </select>
+      </div>
+
+      <div class="grid sm:grid-cols-2 gap-3">
+        <div>
+          <label class="text-slate-300 font-bold block mb-1">Vehicle Registration / Number *</label>
+          <input id="genQrVehicleNumber" type="text" placeholder="e.g. DL 01 AB 1234" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-xs uppercase" />
+        </div>
+        <div>
+          <label class="text-slate-300 font-bold block mb-1">Vehicle / Asset Name</label>
+          <input id="genQrAssetName" type="text" placeholder="e.g. Honda City ZX" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs" />
+        </div>
+      </div>
+
+      <div class="grid sm:grid-cols-2 gap-3">
+        <div>
+          <label class="text-slate-300 font-bold block mb-1">Canonical Asset ID *</label>
+          <input id="genQrAssetId" type="text" placeholder="asset_..." class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-xs" />
+        </div>
+        <div>
+          <label class="text-slate-300 font-bold block mb-1">Owner User UID *</label>
+          <input id="genQrUserId" type="text" placeholder="Owner Firebase UID" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-xs" />
+        </div>
+      </div>
+
+      <div class="p-3 rounded-xl bg-cyan-950/40 border border-cyan-500/20 text-cyan-300 text-[11px] space-y-1">
+        <p class="font-bold flex items-center gap-1"><i data-lucide="info" class="w-3.5 h-3.5"></i> Single Active QR Rule:</p>
+        <p>If an ACTIVE Parking QR already exists for this vehicle asset, this operation will return the existing QR without creating a duplicate. To replace a lost or compromised sticker, use <strong>Regenerate</strong> instead.</p>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+      <button onclick="closeModal('generateParkingQrModal')" class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 font-bold transition">Cancel</button>
+      <button id="btnSubmitGenerateQr" onclick="submitGenerateParkingQr()" class="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold transition shadow-glow flex items-center gap-1.5">
+        <i data-lucide="check" class="w-3.5 h-3.5"></i> Generate Active QR
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== PRODUCT CREATE / EDIT MODAL ===================== -->
+<div id="productEditModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 overflow-y-auto">
+  <div class="glass border border-white/15 rounded-2xl max-w-lg w-full p-6 text-xs space-y-4 relative shadow-modal bg-slate-950">
+    <div class="flex items-center justify-between border-b border-white/10 pb-3">
+      <div class="flex items-center gap-2">
+        <i data-lucide="package" class="w-4 h-4 text-brand-400"></i>
+        <h3 id="productModalTitle" class="text-white font-bold text-sm">Add Product to Catalog</h3>
+      </div>
+      <button onclick="closeModal('productEditModal')" class="text-slate-400 hover:text-white transition text-lg">&times;</button>
+    </div>
+
+    <input type="hidden" id="editProductId" value="" />
+
+    <div class="space-y-3">
+      <div class="grid sm:grid-cols-2 gap-3">
+        <div>
+          <label class="text-slate-300 font-bold block mb-1">Product / Model Name *</label>
+          <input id="prodName" type="text" placeholder="e.g. Activa 6G DLX / MacBook Air M2" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs" />
+        </div>
+        <div>
+          <label class="text-slate-300 font-bold block mb-1">Brand / Manufacturer *</label>
+          <input id="prodBrand" type="text" placeholder="e.g. Honda / Apple / Samsung" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs" />
+        </div>
+      </div>
+
+      <div class="grid sm:grid-cols-3 gap-3">
+        <div>
+          <label class="text-slate-300 font-bold block mb-1">Category *</label>
+          <select id="prodCategory" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs">
+            <option value="vehicle">Vehicles</option>
+            <option value="gadget">Gadgets</option>
+            <option value="home">Home &amp; Appliances</option>
+            <option value="equipment">Equipment</option>
+            <option value="business">Business</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-slate-300 font-bold block mb-1">Model / SKU</label>
+          <input id="prodModel" type="text" placeholder="e.g. A2681 / ACT-6G" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-xs" />
+        </div>
+        <div>
+          <label class="text-slate-300 font-bold block mb-1">Status</label>
+          <select id="prodStatus" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs">
+            <option value="ACTIVE">ACTIVE</option>
+            <option value="ARCHIVED">ARCHIVED</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid sm:grid-cols-2 gap-3">
+        <div>
+          <label class="text-slate-300 font-bold block mb-1">Estimated MRP / Price (₹)</label>
+          <input id="prodPrice" type="number" placeholder="e.g. 78000" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs" />
+        </div>
+        <div>
+          <label class="text-slate-300 font-bold block mb-1">Default Warranty (Months)</label>
+          <input id="prodWarrantyMonths" type="number" placeholder="e.g. 12 or 24" class="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs" />
+        </div>
+      </div>
+
+      <div>
+        <label class="text-slate-300 font-bold block mb-1">Product Description / Specs</label>
+        <textarea id="prodDescription" rows="3" placeholder="Specifications, warranty terms, support helpline details..." class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white text-xs resize-none"></textarea>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+      <button onclick="closeModal('productEditModal')" class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 font-bold transition">Cancel</button>
+      <button id="btnSaveProduct" onclick="submitSaveProduct()" class="px-4 py-2 rounded-xl bg-brand-500 hover:bg-brand-400 text-white font-bold transition shadow-glow flex items-center gap-1.5">
+        <i data-lucide="save" class="w-3.5 h-3.5"></i> Save Product
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- 14. TOAST NOTIFICATION CONTAINER (Replaces alert()) -->
 <div id="adminToastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm pointer-events-none"></div>
 
 <script src="./js/admin-intelligence.js"></script>
@@ -3010,6 +3602,9 @@ const state = {
   expiries: [],
   notifications: [],
   templates: [],
+  parkingQrs: [],
+  parkingAlerts: [],
+  products: [],
   lastLiveUpdateAt: null
 };
 
@@ -3226,20 +3821,20 @@ function refreshWebsiteAnalytics() {
   try {
     const raw = localStorage.getItem('ad_analytics_agg_metrics');
     let metrics = {
-      totalPageViews: 142,
-      totalToolCompletions: 38,
-      totalResultsSaved: 19,
+      totalPageViews: 0,
+      totalToolCompletions: 0,
+      totalResultsSaved: 0,
       topTools: [
-        { name: 'Repair vs. Replace', completions: 16, saves: 9, conversionRate: '56%' },
-        { name: 'Warranty Checker', completions: 12, saves: 6, conversionRate: '50%' },
-        { name: 'Asset Depreciation', completions: 7, saves: 3, conversionRate: '43%' },
-        { name: 'Service Due Engine', completions: 3, saves: 1, conversionRate: '33%' }
+        { name: 'Repair vs. Replace', completions: 0, saves: 0, conversionRate: '0%' },
+        { name: 'Warranty Checker', completions: 0, saves: 0, conversionRate: '0%' },
+        { name: 'Asset Depreciation', completions: 0, saves: 0, conversionRate: '0%' },
+        { name: 'Service Due Engine', completions: 0, saves: 0, conversionRate: '0%' }
       ],
       topLandingPaths: [
-        { path: '/', views: 88 },
-        { path: '/tools/warranty-checker', views: 24 },
-        { path: '/tools/repair-or-replace', views: 18 },
-        { path: '/tools/service-due-calculator', views: 12 }
+        { path: '/', views: 0 },
+        { path: '/tools/warranty-checker', views: 0 },
+        { path: '/tools/repair-or-replace', views: 0 },
+        { path: '/tools/service-due-calculator', views: 0 }
       ],
       lastUpdated: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     };
@@ -3248,23 +3843,31 @@ function refreshWebsiteAnalytics() {
       try {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed.totalPageViews === 'number') {
-          metrics.totalPageViews = Math.max(metrics.totalPageViews, parsed.totalPageViews);
-          metrics.totalToolCompletions = Math.max(metrics.totalToolCompletions, parsed.totalToolCompletions);
-          metrics.totalResultsSaved = Math.max(metrics.totalResultsSaved, parsed.totalResultsSaved);
-          if (parsed.topTools && parsed.topTools.length > 0) metrics.topTools = parsed.topTools;
+          metrics.totalPageViews = parsed.totalPageViews || 0;
+          metrics.totalToolCompletions = parsed.totalToolCompletions || 0;
+          metrics.totalResultsSaved = parsed.totalResultsSaved || 0;
+          if (parsed.topTools && parsed.topTools.length > 0) {
+            metrics.topTools = parsed.topTools.map(t => {
+              const comp = Number(t.completions) || 0;
+              const saves = Number(t.saves) || 0;
+              const rate = comp > 0 ? `${Math.round((saves / comp) * 100)}%` : '0%';
+              return { ...t, completions: comp, saves, conversionRate: rate };
+            });
+          }
           if (parsed.topLandingPaths && parsed.topLandingPaths.length > 0) metrics.topLandingPaths = parsed.topLandingPaths;
+          if (parsed.lastUpdated) metrics.lastUpdated = new Date(parsed.lastUpdated).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         }
       } catch (_) {}
     }
 
     const statViews = $('statPageViews');
-    if (statViews) statViews.textContent = metrics.totalPageViews.toLocaleString();
+    if (statViews) statViews.textContent = metrics.totalPageViews > 0 ? metrics.totalPageViews.toLocaleString('en-IN') : '0';
 
     const statTools = $('statToolCompletions');
-    if (statTools) statTools.textContent = metrics.totalToolCompletions.toLocaleString();
+    if (statTools) statTools.textContent = metrics.totalToolCompletions > 0 ? metrics.totalToolCompletions.toLocaleString('en-IN') : '0';
 
     const statSaves = $('statSaveConversions');
-    if (statSaves) statSaves.textContent = metrics.totalResultsSaved.toLocaleString();
+    if (statSaves) statSaves.textContent = metrics.totalResultsSaved > 0 ? metrics.totalResultsSaved.toLocaleString('en-IN') : '0';
 
     const lastUpdatedEl = $('analyticsLastUpdated');
     if (lastUpdatedEl) lastUpdatedEl.textContent = 'Last updated: ' + metrics.lastUpdated;
@@ -3272,14 +3875,18 @@ function refreshWebsiteAnalytics() {
     // Render Tools Table
     const toolsTbody = $('analyticsToolsTableBody');
     if (toolsTbody) {
-      toolsTbody.innerHTML = metrics.topTools.map(t => `
-        <tr class="hover:bg-white/5 transition">
-          <td class="py-2.5 font-bold text-white">${t.name}</td>
-          <td class="py-2.5 text-right text-cyan-400">${t.completions}</td>
-          <td class="py-2.5 text-right text-emerald-400">${t.saves}</td>
-          <td class="py-2.5 text-right text-amber-400 font-bold">${t.conversionRate}</td>
-        </tr>
-      `).join('');
+      if (!metrics.topTools || metrics.topTools.length === 0 || metrics.totalToolCompletions === 0) {
+        toolsTbody.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-slate-500">No tool completions recorded yet in telemetry ledger.</td></tr>';
+      } else {
+        toolsTbody.innerHTML = metrics.topTools.map(t => `
+          <tr class="hover:bg-white/5 transition">
+            <td class="py-2.5 font-bold text-white">${t.name}</td>
+            <td class="py-2.5 text-right text-cyan-400">${t.completions}</td>
+            <td class="py-2.5 text-right text-emerald-400">${t.saves}</td>
+            <td class="py-2.5 text-right text-amber-400 font-bold">${t.conversionRate}</td>
+          </tr>
+        `).join('');
+      }
     }
 
     // Render Landing Paths Table
@@ -3299,6 +3906,7 @@ function refreshWebsiteAnalytics() {
 }
 
 function switchTab(tabId) {
+  state.activeTab = tabId;
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const panel = $('tab-' + tabId);
@@ -3307,9 +3915,19 @@ function switchTab(tabId) {
   if (navBtn) navBtn.classList.add('active');
   if (tabId === 'analytics') {
     refreshWebsiteAnalytics();
+    loadGoogleSearchConsoleAnalytics();
+  }
+  if (tabId === 'settings') {
+    syncGscSettingsDisplay();
   }
   if (tabId === 'whatsapp') {
     probeWhatsAppOpsHealth(true);
+  }
+  if (tabId === 'parking') {
+    loadParkingDashboard();
+  }
+  if (tabId === 'products') {
+    loadProductsDashboard();
   }
   if (window.lucide) lucide.createIcons();
 }
@@ -3470,6 +4088,19 @@ auth.onAuthStateChanged(async (user) => {
 
     if (btn) {
       $('btnSignInText').textContent = 'Console Opened';
+    }
+
+    // URL path / hash awareness (e.g. /admin/system-settings or #settings or /admin#users)
+    const currentPath = window.location.pathname.toLowerCase();
+    const currentHash = window.location.hash.toLowerCase().replace('#', '');
+    if (currentPath.includes('system-settings') || currentHash === 'settings' || currentHash === 'system-settings') {
+      switchTab('settings');
+    } else if (currentPath.includes('analytics') || currentHash === 'analytics') {
+      switchTab('analytics');
+    } else if (currentPath.includes('users') || currentHash === 'users') {
+      switchTab('users');
+    } else if (currentPath.includes('whatsapp') || currentHash === 'whatsapp') {
+      switchTab('whatsapp');
     }
 
     subscribeToFirestoreData();
@@ -3758,6 +4389,40 @@ function subscribeToFirestoreData() {
   }, (err) => {
     console.warn('[Firestore: whatsapp_templates]', err.message);
     renderWhatsappTemplates();
+  });
+
+  // 10. Smart Parking QRs (/parking_qrs)
+  db.collection('parking_qrs').orderBy('createdAt', 'desc').limit(200).onSnapshot((snap) => {
+    state.parkingQrs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    updateKPIs();
+    renderParkingQrs();
+    populateVehicleOptionsInGenQr();
+    onFirestoreSnapshotReceived();
+  }, (err) => {
+    console.warn('[Firestore: parking_qrs]', err.message);
+    renderParkingQrs();
+  });
+
+  // 11. Smart Parking Alerts (/parking_alerts)
+  db.collection('parking_alerts').orderBy('createdAt', 'desc').limit(100).onSnapshot((snap) => {
+    state.parkingAlerts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    updateKPIs();
+    renderParkingAlerts();
+    onFirestoreSnapshotReceived();
+  }, (err) => {
+    console.warn('[Firestore: parking_alerts]', err.message);
+    renderParkingAlerts();
+  });
+
+  // 12. Master Product Catalog (/products)
+  db.collection('products').orderBy('updatedAt', 'desc').limit(200).onSnapshot((snap) => {
+    state.products = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    updateKPIs();
+    renderProducts();
+    onFirestoreSnapshotReceived();
+  }, (err) => {
+    console.warn('[Firestore: products]', err.message);
+    renderProducts();
   });
 }
 
@@ -5789,6 +6454,8 @@ function recalculateExpiries() {
   $('radarExp30Count').textContent = exp30Count.toString();
   $('radarHealthyCount').textContent = healthyCount.toString();
   $('sidebarExpiryAlerts').textContent = (expiredCount + exp30Count).toString();
+  if ($('kpiExpiringSoon')) $('kpiExpiringSoon').textContent = (expiredCount + exp30Count).toString();
+  if ($('kpiExpiringHint')) $('kpiExpiringHint').textContent = `${expiredCount} expired · ${exp30Count} due in 30d`;
 
   const expiringInsCount = state.expiries.filter(x => x.type === 'Insurance' && (x.status === 'EXPIRED' || x.status === 'EXP30')).length;
   const expiringWarCount = state.expiries.filter(x => x.type === 'Warranty' && (x.status === 'EXPIRED' || x.status === 'EXP30')).length;
@@ -5816,6 +6483,26 @@ function updateKPIs() {
   if ($('openTicketsBadge')) $('openTicketsBadge').textContent = openCount.toString();
   if ($('kpiOcrQueue')) $('kpiOcrQueue').textContent = (state.ocrQueue.length || 0).toString();
   if ($('ocrQueueBadge')) $('ocrQueueBadge').textContent = (state.ocrQueue.length || 0).toString();
+
+  // Smart Parking KPIs
+  const activeParkingQrs = state.parkingQrs.filter(q => q.status === 'ACTIVE').length;
+  const revokedParkingQrs = state.parkingQrs.filter(q => q.status !== 'ACTIVE').length;
+  const pendingAlerts = state.parkingAlerts.filter(a => a.status === 'PENDING').length;
+  if ($('kpiParkingActiveQrs')) $('kpiParkingActiveQrs').textContent = activeParkingQrs.toString();
+  if ($('parkingQrBadge')) $('parkingQrBadge').textContent = activeParkingQrs.toString();
+  if ($('kpiParkingTotalAlerts')) $('kpiParkingTotalAlerts').textContent = (state.parkingAlerts.length || 0).toString();
+  if ($('kpiParkingPendingAlerts')) $('kpiParkingPendingAlerts').textContent = pendingAlerts.toString();
+  if ($('kpiParkingRevokedQrs')) $('kpiParkingRevokedQrs').textContent = revokedParkingQrs.toString();
+
+  // Product Catalog KPIs
+  const activeProducts = state.products.filter(p => (p.status === 'ACTIVE' || !p.status) && !p.isArchived).length;
+  const archivedProducts = state.products.filter(p => p.status === 'ARCHIVED' || p.isArchived).length;
+  const uniqueBrands = new Set(state.products.map(p => (p.brand || '').trim().toLowerCase()).filter(Boolean)).size;
+  if ($('kpiProductsTotal')) $('kpiProductsTotal').textContent = (state.products.length || 0).toString();
+  if ($('kpiProductsActive')) $('kpiProductsActive').textContent = activeProducts.toString();
+  if ($('kpiProductsArchived')) $('kpiProductsArchived').textContent = archivedProducts.toString();
+  if ($('kpiProductsBrands')) $('kpiProductsBrands').textContent = uniqueBrands.toString();
+
   if (window.ADIntel) ADIntel.renderCommandCenter(state);
 }
 
@@ -5903,26 +6590,155 @@ function renderActivityStream() {
 }
 
 // ----------------------------------------------------
+// Central Data Normalization & Human Formatting Engine
+// ----------------------------------------------------
+function normalizeFirestoreDate(val) {
+  if (!val) return null;
+  if (val instanceof Date && !isNaN(val.getTime())) return val;
+  if (typeof val === 'object') {
+    if (typeof val.toDate === 'function') {
+      const d = val.toDate();
+      return isNaN(d.getTime()) ? null : d;
+    }
+    if (typeof val.seconds === 'number') {
+      const d = new Date(val.seconds * 1000 + Math.floor((val.nanoseconds || 0) / 1000000));
+      return isNaN(d.getTime()) ? null : d;
+    }
+    if (typeof val._seconds === 'number') {
+      const d = new Date(val._seconds * 1000 + Math.floor((val._nanoseconds || 0) / 1000000));
+      return isNaN(d.getTime()) ? null : d;
+    }
+  }
+  if (typeof val === 'number') {
+    const d = val < 1e11 ? new Date(val * 1000) : new Date(val);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const parsed = new Date(String(val));
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatHumanDateTime(val, fallback = '—') {
+  const d = normalizeFirestoreDate(val);
+  if (!d) return fallback;
+  return d.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
+}
+
+function formatHumanDate(val, fallback = '—') {
+  const d = normalizeFirestoreDate(val);
+  if (!d) return fallback;
+  return d.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
+}
+
+function formatRelativeTime(val, fallback = '—') {
+  const d = normalizeFirestoreDate(val);
+  if (!d) return fallback;
+  const now = Date.now();
+  const diffMs = now - d.getTime();
+  if (diffMs < 0) return 'In the future';
+  const sec = Math.floor(diffMs / 1000);
+  if (sec < 60) return 'Just now';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const days = Math.floor(hr / 24);
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return `${days}d ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  return formatHumanDate(d);
+}
+
+function isCustomerJoinedWithin(user, maxHours = 24) {
+  const d = normalizeFirestoreDate(user.createdAt || user.joinedAt || user.created_at || user.createdOn);
+  if (!d) return false;
+  const now = Date.now();
+  const diffMs = now - d.getTime();
+  // Future dates are rejected (diffMs < 0)
+  if (diffMs < 0) return false;
+  const diffHours = diffMs / (1000 * 60 * 60);
+  return diffHours <= maxHours;
+}
+
+// ----------------------------------------------------
 // UI Renderers: Customers 360
 // ----------------------------------------------------
 function renderUsers() {
   const q = ($('userSearchInput')?.value || '').toLowerCase().trim();
-  const filtered = state.users.filter(u => {
-    if (!q) return true;
-    const name = (u.name || '').toLowerCase();
-    const email = (u.email || '').toLowerCase();
-    const phone = (u.phoneNumber || u.phone || '').toLowerCase();
-    const uid = (u.uid || u.id || '').toLowerCase();
-    return name.includes(q) || email.includes(q) || phone.includes(q) || uid.includes(q);
+  const dateFilter = $('userFilterJoinedDate')?.value || 'ALL';
+  const statusFilter = $('userFilterStatus')?.value || 'ALL';
+  const sortOrder = $('userSortOrder')?.value || 'NEWEST_FIRST';
+
+  const now = Date.now();
+
+  let list = state.users.filter(u => {
+    // 1. Text Search Filter
+    if (q) {
+      const name = (u.name || '').toLowerCase();
+      const email = (u.email || '').toLowerCase();
+      const phone = (u.phoneNumber || u.phone || '').toLowerCase();
+      const uid = (u.uid || u.id || '').toLowerCase();
+      if (!name.includes(q) && !email.includes(q) && !phone.includes(q) && !uid.includes(q)) {
+        return false;
+      }
+    }
+
+    // 2. Status Filter
+    if (statusFilter === 'ACTIVE' && u.status === 'Suspended') return false;
+    if (statusFilter === 'SUSPENDED' && u.status !== 'Suspended') return false;
+    if (statusFilter === 'WHATSAPP_OPTED_IN' && u.whatsappOptIn === false) return false;
+
+    // 3. Date Filter
+    if (dateFilter !== 'ALL') {
+      const d = normalizeFirestoreDate(u.createdAt || u.joinedAt || u.created_at || u.createdOn);
+      if (!d) return false;
+      const diffMs = now - d.getTime();
+      // Future date protection: reject future timestamps
+      if (diffMs < 0) return false;
+      const diffDays = diffMs / (1000 * 60 * 60 * 24);
+      if (dateFilter === '24H' && diffDays > 1) return false;
+      if (dateFilter === 'YESTERDAY' && (diffDays <= 1 || diffDays > 2)) return false;
+      if (dateFilter === '7D' && (diffDays < 0 || diffDays > 7)) return false;
+      if (dateFilter === '30D' && (diffDays < 0 || diffDays > 30)) return false;
+    }
+
+    return true;
   });
 
-  if (!filtered.length) {
-    $('usersTableBody').innerHTML = `<tr><td colspan="8" class="text-center py-6 text-slate-500 text-xs">No customer records found.</td></tr>`;
+  // Sorting
+  list.sort((a, b) => {
+    if (sortOrder === 'NAME_ASC') {
+      return (a.name || '').localeCompare(b.name || '');
+    }
+    if (sortOrder === 'NAME_DESC') {
+      return (b.name || '').localeCompare(a.name || '');
+    }
+    const da = normalizeFirestoreDate(a.createdAt || a.joinedAt || a.created_at || a.createdOn)?.getTime() || 0;
+    const dbTime = normalizeFirestoreDate(b.createdAt || b.joinedAt || b.created_at || b.createdOn)?.getTime() || 0;
+    if (sortOrder === 'OLDEST_FIRST') {
+      return da - dbTime;
+    }
+    // Default NEWEST_FIRST
+    return dbTime - da;
+  });
+
+  if (!list.length) {
+    $('usersTableBody').innerHTML = `<tr><td colspan="8" class="text-center py-6 text-slate-500 text-xs">No matching customer records found.</td></tr>`;
     return;
   }
 
   const mask = window.ADIntel ? ADIntel.maskPhone : (v) => v || '—';
-  $('usersTableBody').innerHTML = filtered.map(u => {
+  $('usersTableBody').innerHTML = list.map(u => {
     const userUid = u.uid || u.id;
     const userAssets = state.assets.filter(a => (a.ownerUid === userUid || a.uid === userUid));
     const userDocs = state.documents.filter(d => d.ownerUid === userUid);
@@ -5933,19 +6749,33 @@ function renderUsers() {
     const healthClass = health === 'At Risk' ? 'bg-rose-500/15 text-rose-300 border-rose-500/30' :
                         health === 'Attention' ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' :
                         'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
-    const joined = u.createdAt || u.joinedAt || u.created_at || '—';
+    
+    // Normalized Dates
+    const joinedFormatted = formatHumanDate(u.createdAt || u.joinedAt || u.created_at || u.createdOn);
+    const joinedRelative = formatRelativeTime(u.createdAt || u.joinedAt || u.created_at || u.createdOn);
+    const isNew = isCustomerJoinedWithin(u, 24);
+    const isRecent = !isNew && isCustomerJoinedWithin(u, 168); // 7 days
+
     const optIn = u.whatsappOptIn === false ? 'Opted out' : 'Opt-in';
-    const lastAct = u.lastActiveAt || u.lastLoginAt || u.updatedAt || '—';
+    const lastAct = formatRelativeTime(u.lastActiveAt || u.lastLoginAt || u.updatedAt);
+    
     return `
       <tr class="table-row">
         <td class="px-4 py-3 font-semibold text-white">
           <button onclick="openCustomerModal('${userUid}')" class="text-left hover:text-brand-300 transition">
-            ${u.name || 'Asset Owner'}<br>
-            <span class="text-[11px] text-slate-400 font-mono">${userUid}</span>
+            <span class="flex items-center gap-1.5">
+              ${u.name || 'Asset Owner'}
+              ${isNew ? '<span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">NEW</span>' : ''}
+              ${isRecent ? '<span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">RECENT</span>' : ''}
+            </span>
+            <span class="text-[11px] text-slate-400 font-mono block mt-0.5">${userUid}</span>
           </button>
         </td>
         <td class="px-4 py-3 font-mono text-[11px] text-slate-300">${mask(u.phoneNumber || u.phone)}</td>
-        <td class="px-4 py-3 text-[11px] text-slate-400">${joined}</td>
+        <td class="px-4 py-3 text-[11px]">
+          <span class="text-slate-300 font-medium">${joinedFormatted}</span>
+          <span class="block text-[10px] text-slate-500 font-mono">${joinedRelative}</span>
+        </td>
         <td class="px-4 py-3 text-xs text-slate-300">${userAssets.length} / ${userDocs.length}</td>
         <td class="px-4 py-3 text-xs text-slate-300">${warranties} active · ${upcoming} due</td>
         <td class="px-4 py-3">
@@ -6006,6 +6836,9 @@ function openCustomerModal(uid) {
   $('modalCustomerPhone').textContent = u.phoneNumber || u.phone || '—';
   $('modalCustomerEmail').textContent = u.email || '—';
   $('modalCustomerAddress').textContent = u.address || u.city || '—';
+  if ($('modalCustomerLastActive')) {
+    $('modalCustomerLastActive').textContent = formatRelativeTime(u.lastActiveAt || u.lastLoginAt || u.updatedAt, 'Recently active');
+  }
   
   const userAssets = state.assets.filter(a => (a.ownerUid === uid || a.uid === uid));
   $('modalCustomerAssetCount').textContent = userAssets.length.toString();
@@ -6054,38 +6887,38 @@ function openCustomerModal(uid) {
           <p class="font-bold text-white">${t.subject || 'Ticket'}</p>
           <p class="text-[11px] text-slate-400">Status: <strong class="text-brand-300 uppercase">${t.status}</strong> · Priority: ${t.priority || 'medium'}</p>
         </div>
-        <span class="text-[10px] text-slate-500 font-mono">${t.createdAt ? new Date(t.createdAt).toLocaleDateString() : '—'}</span>
+        <span class="text-[10px] text-slate-400 font-mono">${formatHumanDate(t.createdAt)}</span>
       </div>
     `).join('');
   }
 
   // Generate real chronological timeline
   const timeline = [];
-  if (u.createdAt) {
-    const d = u.createdAt._seconds ? new Date(u.createdAt._seconds * 1000) : new Date(u.createdAt);
-    timeline.push({ time: d, text: 'Account registered with Asset Doctor' });
+  const userRegDate = normalizeFirestoreDate(u.createdAt || u.joinedAt || u.created_at || u.createdOn);
+  if (userRegDate) {
+    timeline.push({ time: userRegDate, text: 'Account registered with Asset Doctor' });
   }
   userAssets.forEach(a => {
-    if (a.createdAt) {
-      const d = a.createdAt._seconds ? new Date(a.createdAt._seconds * 1000) : new Date(a.createdAt);
-      timeline.push({ time: d, text: `Vaulted asset: ${a.assetName || a.name || 'Asset'}` });
+    const assetDate = normalizeFirestoreDate(a.createdAt || a.addedAt || a.created_at);
+    if (assetDate) {
+      timeline.push({ time: assetDate, text: `Vaulted asset: ${a.assetName || a.name || 'Asset'}` });
     }
   });
   userDocs.forEach(d => {
-    if (d.createdAt) {
-      const dt = d.createdAt._seconds ? new Date(d.createdAt._seconds * 1000) : new Date(d.createdAt);
-      timeline.push({ time: dt, text: `Uploaded document: ${d.label || d.type || 'Document'}` });
+    const docDate = normalizeFirestoreDate(d.createdAt || d.uploadedAt || d.created_at);
+    if (docDate) {
+      timeline.push({ time: docDate, text: `Uploaded document: ${d.label || d.type || 'Document'}` });
     }
   });
 
-  timeline.sort((a, b) => b.time - a.time);
+  timeline.sort((a, b) => b.time.getTime() - a.time.getTime());
   if (!timeline.length) {
     $('modalCustomerTimeline').innerHTML = `<p class="text-slate-500 py-2">No historical events recorded.</p>`;
   } else {
     $('modalCustomerTimeline').innerHTML = timeline.map(e => `
       <div class="relative pl-3 pb-3">
         <span class="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-brand-400 ring-4 ring-slate-950"></span>
-        <span class="text-[10px] text-slate-400 font-mono">${isNaN(e.time.getTime()) ? '—' : e.time.toLocaleString()}</span>
+        <span class="text-[10px] text-slate-400 font-mono">${formatHumanDateTime(e.time)}</span>
         <p class="text-white font-semibold mt-0.5">${e.text}</p>
       </div>
     `).join('');
@@ -6959,18 +7792,1137 @@ function exportDataCsv(type) {
   document.body.removeChild(link);
 }
 
-$('btnRefresh').addEventListener('click', () => {
-  const icon = $('btnRefresh').querySelector('i');
-  icon.classList.add('animate-spin');
-  subscribeToFirestoreData();
-  setTimeout(() => icon.classList.remove('animate-spin'), 600);
-});
+let isGlobalRefreshing = false;
+
+async function executeGlobalDashboardRefresh() {
+  if (isGlobalRefreshing) return;
+  isGlobalRefreshing = true;
+
+  const btn = $('btnRefresh');
+  const icon = btn?.querySelector('i');
+  if (icon) icon.classList.add('animate-spin');
+  if (btn) btn.disabled = true;
+
+  try {
+    // 1. Revalidate Core Collections via snapshot or single get if needed
+    updateConnectionStatus('SYNCING');
+    
+    // Update live timestamp
+    state.lastLiveUpdateAt = Date.now();
+
+    // 2. Re-render Active Views & Recalculate Expiries
+    recalculateExpiries();
+    updateKPIs();
+    renderUsers();
+    renderAssets();
+    renderDocuments();
+    renderAuditLogs();
+    renderTickets();
+    renderOcrQueue();
+    renderNotificationQueue();
+    renderWhatsappTemplates();
+    renderActivityStream();
+
+    // 3. Tab-Specific Active Refresh
+    const activeTab = state.activeTab || 'dashboard';
+    if (activeTab === 'analytics') {
+      await refreshWebsiteAnalytics();
+      await loadGoogleSearchConsoleAnalytics(true);
+    } else if (activeTab === 'whatsapp') {
+      await probeWhatsAppOpsHealth(true);
+    } else if (activeTab === 'settings') {
+      await syncGscSettingsDisplay();
+    }
+
+    // 4. Intelligence & Command Center refresh
+    if (window.ADIntel) {
+      ADIntel.invalidateBiCache();
+      ADIntel.renderCommandCenter(state);
+      ADIntel.renderSystemHealthPanel(state);
+    }
+
+    // 5. Update live timestamps
+    const nowStr = new Date(state.lastLiveUpdateAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    if ($('footerLastSync')) $('footerLastSync').textContent = nowStr;
+    if ($('sysLastSync')) $('sysLastSync').textContent = nowStr;
+    updateConnectionStatus('LIVE');
+
+    showAdminToast('Dashboard refreshed successfully with latest live telemetry.', 'success');
+  } catch (err) {
+    console.error('[Global Refresh Error]', err);
+    showAdminToast(`Refresh completed with warning: ${err.message}`, 'warning');
+    updateConnectionStatus('LIVE');
+  } finally {
+    setTimeout(() => {
+      if (icon) icon.classList.remove('animate-spin');
+      if (btn) btn.disabled = false;
+      isGlobalRefreshing = false;
+    }, 400);
+  }
+}
+
+$('btnRefresh')?.addEventListener('click', executeGlobalDashboardRefresh);
 
 $('userSearchInput')?.addEventListener('input', renderUsers);
 $('assetSearchInput')?.addEventListener('input', renderAssets);
 $('documentSearchInput')?.addEventListener('input', renderDocuments);
 $('expiryFilterCategory')?.addEventListener('change', renderExpiryTable);
 $('expiryFilterStatus')?.addEventListener('change', renderExpiryTable);
+
+// ----------------------------------------------------
+// Google Search Console (GSC) API Client Logic
+// ----------------------------------------------------
+let gscCachedData = null;
+
+async function syncGscSettingsDisplay() {
+  try {
+    const doc = await db.collection('systemSettings').doc('google_search_console').get();
+    if (doc.exists) {
+      const data = doc.data();
+      const hasKey = Boolean(data.encrypted_private_key || data.private_key);
+      if ($('gscSettingsEmail')) $('gscSettingsEmail').textContent = data.client_email || 'asset-doctor-search-console@assetdoctor-5fd25.iam.gserviceaccount.com';
+      if ($('gscSettingsSite')) $('gscSettingsSite').textContent = data.site_url || 'sc-domain:assetdoctor.in';
+      if ($('gscSettingsBadge')) {
+        $('gscSettingsBadge').textContent = hasKey ? 'ACTIVE & CONFIGURED' : 'PENDING KEY';
+        $('gscSettingsBadge').className = hasKey
+          ? 'px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+          : 'px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30';
+      }
+      if ($('gscInputClientEmail') && data.client_email) $('gscInputClientEmail').value = data.client_email;
+      if ($('gscInputProjectId') && data.project_id) $('gscInputProjectId').value = data.project_id;
+      if ($('gscInputSiteUrl') && data.site_url) $('gscInputSiteUrl').value = data.site_url;
+      if ($('gscInputPrivateKey') && hasKey) $('gscInputPrivateKey').placeholder = 'Private Key is encrypted in cloud. Leave empty to keep existing key.';
+    }
+  } catch (err) {
+    console.warn('[GSC Settings Sync Warn]', err);
+  }
+}
+
+async function testGoogleSearchConsoleConnection() {
+  const btn = $('btnTestGscConn');
+  const banner = $('gscTestResultBanner');
+  const origHtml = btn ? btn.innerHTML : '';
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin text-blue-400"></i><span>Testing...</span>';
+    if (window.lucide) lucide.createIcons();
+  }
+
+  if (banner) {
+    banner.classList.remove('hidden');
+    banner.className = 'p-3 rounded-xl border border-blue-500/30 bg-blue-950/20 text-blue-300 text-xs flex items-center gap-2';
+    banner.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin shrink-0"></i><span>Testing OAuth2 authentication &amp; Search Console property permissions...</span>';
+    if (window.lucide) lucide.createIcons();
+  }
+
+  try {
+    const user = auth.currentUser;
+    if (!user) throw new Error('You must be signed in as an admin to test connection.');
+    const token = await user.getIdToken();
+
+    const res = await fetch(`${WHATSAPP_FUNCTIONS_BASE}/adminTestSearchConsoleConnection`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || `HTTP ${res.status}`);
+    }
+
+    if (banner) {
+      const isSuccess = data.authenticationSuccessful && data.propertyAccess;
+      const isDelegated = !data.propertyAccess && data.authenticationSuccessful;
+
+      banner.className = isSuccess
+        ? 'p-3 rounded-xl border border-emerald-500/30 bg-emerald-950/20 text-emerald-300 text-xs space-y-1'
+        : isDelegated
+        ? 'p-3 rounded-xl border border-amber-500/30 bg-amber-950/20 text-amber-300 text-xs space-y-1'
+        : 'p-3 rounded-xl border border-rose-500/30 bg-rose-950/20 text-rose-300 text-xs space-y-1';
+
+      banner.innerHTML = `
+        <div class="flex items-center justify-between font-bold">
+          <span class="flex items-center gap-1.5">
+            <i data-lucide="${isSuccess ? 'check-circle-2' : isDelegated ? 'alert-triangle' : 'x-circle'}" class="w-4 h-4"></i>
+            ${isSuccess ? 'Connection Active & Verified' : isDelegated ? 'Service Account Authenticated (Action Required)' : 'Authentication Failed'}
+          </span>
+          <span class="font-mono text-[10px] text-slate-400">${data.checkedAt ? new Date(data.checkedAt).toLocaleTimeString() : ''}</span>
+        </div>
+        <p class="text-[11px] text-slate-300 mt-1 leading-relaxed">${data.message || ''}</p>
+      `;
+      if (window.lucide) lucide.createIcons();
+    }
+
+    showAdminToast(data.message, data.propertyAccess ? 'success' : 'warning');
+    syncGscSettingsDisplay();
+
+  } catch (err) {
+    if (banner) {
+      banner.className = 'p-3 rounded-xl border border-rose-500/30 bg-rose-950/20 text-rose-300 text-xs space-y-1';
+      banner.innerHTML = `<p class="font-bold flex items-center gap-1.5"><i data-lucide="x-circle" class="w-4 h-4"></i> Test Failed</p><p class="text-[11px] text-slate-400">${err.message}</p>`;
+      if (window.lucide) lucide.createIcons();
+    }
+    showAdminToast(`Connection test failed: ${err.message}`, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+      if (window.lucide) lucide.createIcons();
+    }
+  }
+}
+
+function openGscConfigModal() {
+  syncGscSettingsDisplay();
+  openModal('gscConfigModal');
+}
+
+function handleGscJsonUpload(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+      const json = JSON.parse(e.target.result);
+      if (json.client_email && $('gscInputClientEmail')) {
+        $('gscInputClientEmail').value = json.client_email;
+      }
+      if (json.project_id && $('gscInputProjectId')) {
+        $('gscInputProjectId').value = json.project_id;
+      }
+      if (json.private_key && $('gscInputPrivateKey')) {
+        $('gscInputPrivateKey').value = json.private_key;
+      }
+      showAdminToast('Service account JSON parsed successfully.', 'success');
+    } catch (parseErr) {
+      showAdminToast('Invalid JSON file. Could not parse service account.', 'error');
+    }
+  };
+  reader.readAsText(file);
+}
+
+async function saveGoogleSearchConsoleConfig() {
+  const btn = $('btnSaveGscConfig');
+  const clientEmail = $('gscInputClientEmail')?.value.trim();
+  const projectId = $('gscInputProjectId')?.value.trim() || 'assetdoctor-5fd25';
+  const siteUrl = $('gscInputSiteUrl')?.value.trim() || 'sc-domain:assetdoctor.in';
+  const privateKey = $('gscInputPrivateKey')?.value.trim();
+
+  if (!clientEmail) {
+    showAdminToast('Service account client email is required.', 'warning');
+    return;
+  }
+
+  const origHtml = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Saving & Encrypting...';
+    if (window.lucide) lucide.createIcons();
+  }
+
+  try {
+    const user = auth.currentUser;
+    if (!user) throw new Error('You must be logged in as an administrator.');
+    const token = await user.getIdToken();
+
+    // Call Cloud Function to validate, encrypt and save configuration
+    const res = await fetch(`${WHATSAPP_FUNCTIONS_BASE}/adminSaveSearchConsoleConfig`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        client_email: clientEmail,
+        project_id: projectId,
+        site_url: siteUrl,
+        private_key: privateKey || undefined,
+      }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || `Failed to save configuration (HTTP ${res.status})`);
+    }
+
+    showAdminToast('Search Console configuration encrypted & saved successfully.', 'success');
+    closeModal('gscConfigModal');
+    syncGscSettingsDisplay();
+    loadGoogleSearchConsoleAnalytics(true);
+  } catch (err) {
+    showAdminToast(`Error saving config: ${err.message}`, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+      if (window.lucide) lucide.createIcons();
+    }
+  }
+}
+
+function showGscLoadingSkeletons() {
+  if ($('gscTotalClicks')) $('gscTotalClicks').innerHTML = '<span class="inline-block w-12 h-6 bg-slate-800 animate-pulse rounded"></span>';
+  if ($('gscTotalImpressions')) $('gscTotalImpressions').innerHTML = '<span class="inline-block w-14 h-6 bg-slate-800 animate-pulse rounded"></span>';
+  if ($('gscAverageCtr')) $('gscAverageCtr').innerHTML = '<span class="inline-block w-10 h-6 bg-slate-800 animate-pulse rounded"></span>';
+  if ($('gscAveragePosition')) $('gscAveragePosition').innerHTML = '<span class="inline-block w-10 h-6 bg-slate-800 animate-pulse rounded"></span>';
+
+  const tbody = $('gscKeywordsTableBody');
+  if (tbody) {
+    tbody.innerHTML = [1, 2, 3].map(() => `
+      <tr class="animate-pulse">
+        <td class="py-3 px-3"><div class="h-3.5 bg-slate-800 rounded w-48"></div></td>
+        <td class="py-3 px-3 text-right"><div class="h-3.5 bg-slate-800 rounded w-10 ml-auto"></div></td>
+        <td class="py-3 px-3 text-right"><div class="h-3.5 bg-slate-800 rounded w-12 ml-auto"></div></td>
+        <td class="py-3 px-3 text-right"><div class="h-3.5 bg-slate-800 rounded w-10 ml-auto"></div></td>
+        <td class="py-3 px-3 text-right"><div class="h-3.5 bg-slate-800 rounded w-8 ml-auto"></div></td>
+      </tr>
+    `).join('');
+  }
+}
+
+async function loadGoogleSearchConsoleAnalytics(forceRefresh = false) {
+  const badge = $('gscConnectionBadge');
+  const subtext = $('gscStatusSubtext');
+  const noticeBanner = $('gscNoticeBanner');
+  const days = $('gscTimeRangeSelect')?.value || '28';
+
+  if (!forceRefresh && gscCachedData && gscCachedData.days === days) {
+    renderGscAnalyticsUI(gscCachedData);
+    return;
+  }
+
+  if (badge) {
+    badge.textContent = 'CONNECTING...';
+    badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono';
+  }
+
+  // Display skeletons while fetching data
+  showGscLoadingSkeletons();
+
+  try {
+    const user = auth.currentUser;
+    if (!user) {
+      if (subtext) subtext.textContent = 'Please log in as an administrator to query Google Search Console API.';
+      return;
+    }
+
+    const token = await user.getIdToken();
+    const url = `${WHATSAPP_FUNCTIONS_BASE}/adminGetSearchConsoleAnalytics?days=${days}`;
+
+    const res = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(data.error || `HTTP ${res.status}`);
+    }
+
+    gscCachedData = { ...data, days };
+    renderGscAnalyticsUI(gscCachedData);
+
+  } catch (err) {
+    console.warn('[GSC Analytics Load Error]', err);
+    if (badge) {
+      badge.textContent = 'QUERY FAILED';
+      badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 font-mono';
+    }
+    if (noticeBanner) {
+      noticeBanner.classList.remove('hidden');
+      noticeBanner.className = 'p-3 rounded-xl border border-rose-500/30 bg-rose-950/20 text-rose-300 text-xs';
+      noticeBanner.innerHTML = `<p class="font-bold">Search Console Query Error</p><p class="text-[11px] text-slate-400 mt-0.5">${err.message}</p>`;
+    }
+  }
+}
+
+function renderGscAnalyticsUI(resData) {
+  const badge = $('gscConnectionBadge');
+  const subtext = $('gscStatusSubtext');
+  const noticeBanner = $('gscNoticeBanner');
+  const tbody = $('gscKeywordsTableBody');
+  const rangeLabel = $('gscDateRangeLabel');
+
+  const metrics = resData.metrics || {};
+  const rows = metrics.rows || [];
+
+  if (rangeLabel) {
+    if (resData.startDate && resData.endDate) {
+      rangeLabel.textContent = `${resData.startDate} to ${resData.endDate}`;
+    } else {
+      rangeLabel.textContent = `Trailing ${resData.days || 28} Days`;
+    }
+  }
+
+  // Update Badge & Status
+  if (badge) {
+    if (resData.connected) {
+      badge.textContent = 'CONNECTED & LIVE';
+      badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono';
+    } else if (resData.status === 'CONFIGURED_AWAITING_CREDENTIALS') {
+      badge.textContent = 'CREDENTIALS NEEDED';
+      badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono';
+    } else if (resData.status === 'PERMISSION_DENIED') {
+      badge.textContent = '403 NOT DELEGATED';
+      badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono';
+    } else {
+      badge.textContent = 'OFFLINE / NOTICE';
+      badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 font-mono';
+    }
+  }
+
+  if (subtext) {
+    subtext.innerHTML = `Property: <span class="font-mono text-slate-300">${resData.siteUrl || 'sc-domain:assetdoctor.in'}</span> · Principal: <span class="font-mono text-slate-300">${resData.clientEmail || 'asset-doctor-search-console@...'}</span>`;
+  }
+
+  // Render Metric Tiles
+  const clicksVal = typeof metrics.totalClicks === 'number' ? metrics.totalClicks : 0;
+  const impVal = typeof metrics.totalImpressions === 'number' ? metrics.totalImpressions : 0;
+  
+  if ($('gscTotalClicks')) $('gscTotalClicks').textContent = clicksVal.toLocaleString('en-IN');
+  if ($('gscTotalImpressions')) $('gscTotalImpressions').textContent = impVal.toLocaleString('en-IN');
+  
+  if ($('gscAverageCtr')) {
+    if (metrics.averageCtr != null && isFinite(metrics.averageCtr) && impVal > 0) {
+      $('gscAverageCtr').textContent = `${Number(metrics.averageCtr).toFixed(2)}%`;
+    } else if (impVal === 0) {
+      $('gscAverageCtr').textContent = '—';
+    } else {
+      $('gscAverageCtr').textContent = '—';
+    }
+  }
+
+  if ($('gscAveragePosition')) {
+    if (metrics.averagePosition != null && isFinite(metrics.averagePosition) && Number(metrics.averagePosition) > 0) {
+      $('gscAveragePosition').textContent = Number(metrics.averagePosition).toFixed(1);
+    } else {
+      $('gscAveragePosition').textContent = '—';
+    }
+  }
+
+  // Notice Banner handling
+  if (noticeBanner) {
+    if (resData.message) {
+      noticeBanner.classList.remove('hidden');
+      const isWarn = resData.status === 'PERMISSION_DENIED' || resData.status === 'CONFIGURED_AWAITING_CREDENTIALS';
+      noticeBanner.className = isWarn
+        ? 'p-3 rounded-xl border border-amber-500/30 bg-amber-950/20 text-amber-300 text-xs space-y-1'
+        : 'p-3 rounded-xl border border-blue-500/30 bg-blue-950/20 text-blue-300 text-xs space-y-1';
+      noticeBanner.innerHTML = `
+        <div class="flex items-center justify-between">
+          <p class="font-bold flex items-center gap-1.5"><i data-lucide="info" class="w-3.5 h-3.5"></i> ${resData.status || 'STATUS'}</p>
+          <button onclick="openGscConfigModal()" class="px-2 py-0.5 rounded text-[10px] font-bold bg-white/10 hover:bg-white/20 text-white transition">Update Credentials</button>
+        </div>
+        <p class="text-[11px] text-slate-400">${resData.message}</p>
+      `;
+      if (window.lucide) lucide.createIcons();
+    } else {
+      noticeBanner.classList.add('hidden');
+    }
+  }
+
+  // Render Queries Table
+  if (tbody) {
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-slate-500">No organic queries found for this period.</td></tr>';
+    } else {
+      tbody.innerHTML = rows.map((r) => {
+        const queryText = (r.keys && r.keys[0]) || r.query || '—';
+        const clicks = (r.clicks || 0).toLocaleString();
+        const impressions = (r.impressions || 0).toLocaleString();
+        const ctr = `${((r.ctr || 0) * 100).toFixed(2)}%`;
+        const position = (r.position || 0).toFixed(1);
+
+        return `
+          <tr class="hover:bg-white/5 transition">
+            <td class="py-2.5 px-3 font-bold text-white">${queryText}</td>
+            <td class="py-2.5 px-3 text-right text-blue-400 font-bold">${clicks}</td>
+            <td class="py-2.5 px-3 text-right text-purple-300">${impressions}</td>
+            <td class="py-2.5 px-3 text-right text-emerald-400 font-bold">${ctr}</td>
+            <td class="py-2.5 px-3 text-right text-amber-400 font-bold">${position}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
+}
+
+// ============================================================
+// SMART PARKING ASSISTANT — Admin Logic & Handlers
+// ============================================================
+let activeModalQrCode = null;
+
+async function loadParkingDashboard(force = false) {
+  if (state.parkingQrs.length && !force) {
+    renderParkingQrs();
+    renderParkingAlerts();
+    return;
+  }
+  try {
+    const [qrsSnap, alertsSnap] = await Promise.all([
+      db.collection('parking_qrs').orderBy('createdAt', 'desc').limit(200).get(),
+      db.collection('parking_alerts').orderBy('createdAt', 'desc').limit(100).get()
+    ]);
+    state.parkingQrs = qrsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    state.parkingAlerts = alertsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    updateKPIs();
+    renderParkingQrs();
+    renderParkingAlerts();
+    populateVehicleOptionsInGenQr();
+  } catch (err) {
+    console.error('[loadParkingDashboard error]', err);
+    showAdminToast('Failed to load parking data: ' + err.message, 'error');
+  }
+}
+
+function renderParkingQrs() {
+  const tbody = $('parkingQrsTableBody');
+  if (!tbody) return;
+
+  const query = ($('parkingSearchInput')?.value || '').toLowerCase().trim();
+  const statusFilter = $('parkingStatusFilter')?.value || 'ACTIVE';
+
+  let list = state.parkingQrs || [];
+  if (statusFilter !== 'ALL') {
+    list = list.filter(q => (q.status || 'ACTIVE').toUpperCase() === statusFilter);
+  }
+  if (query) {
+    list = list.filter(q => {
+      const code = (q.qrCode || q.id || '').toLowerCase();
+      const vn = (q.vehicleNumber || '').toLowerCase();
+      const an = (q.assetName || '').toLowerCase();
+      const aid = (q.assetId || '').toLowerCase();
+      const uid = (q.userId || '').toLowerCase();
+      return code.includes(query) || vn.includes(query) || an.includes(query) || aid.includes(query) || uid.includes(query);
+    });
+  }
+
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-slate-500 text-xs">No matching Parking QRs found.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = list.map(q => {
+    const code = q.qrCode || q.id;
+    const vn = q.vehicleNumber || '—';
+    const an = q.assetName || 'Vehicle';
+    const status = (q.status || 'ACTIVE').toUpperCase();
+    const statusBadge = status === 'ACTIVE'
+      ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">ACTIVE</span>'
+      : status === 'REVOKED'
+      ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">REVOKED</span>'
+      : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">DISABLED</span>';
+
+    const created = q.createdAt ? new Date(q.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+    const lastAlert = q.lastAlertAt ? new Date(q.lastAlertAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Never';
+
+    return `
+      <tr class="hover:bg-white/5 transition">
+        <td class="px-4 py-3">
+          <div class="font-bold text-white text-xs">${vn}</div>
+          <div class="text-[11px] text-slate-400 truncate max-w-[160px]">${an}</div>
+        </td>
+        <td class="px-4 py-3 font-mono font-bold text-cyan-300 text-xs">${code}</td>
+        <td class="px-4 py-3 font-mono text-[11px] text-slate-400 truncate max-w-[120px]" title="${q.userId || ''}">
+          <button onclick="openCustomerFromUid('${q.userId}')" class="hover:text-cyan-300 hover:underline">
+            ${q.userId ? q.userId.slice(0, 10) + '...' : '—'}
+          </button>
+        </td>
+        <td class="px-4 py-3">${statusBadge}</td>
+        <td class="px-4 py-3 text-slate-400 text-[11px]">${created}</td>
+        <td class="px-4 py-3 text-slate-400 text-[11px]">${lastAlert}</td>
+        <td class="px-4 py-3 text-right">
+          <div class="flex items-center justify-end gap-1.5">
+            <button onclick="openParkingQrModal('${code}')" class="p-1.5 rounded-lg bg-white/5 hover:bg-cyan-500/20 hover:text-cyan-300 text-slate-300 transition" title="View / Print QR Sticker">
+              <i data-lucide="qr-code" class="w-3.5 h-3.5"></i>
+            </button>
+            <button onclick="adminRegenerateQr('${q.assetId}', '${q.userId}', '${code}')" class="p-1.5 rounded-lg bg-white/5 hover:bg-amber-500/20 hover:text-amber-300 text-slate-300 transition" title="Revoke & Regenerate QR">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            </button>
+            ${status === 'ACTIVE' ? `
+              <button onclick="adminDisableQr('${code}')" class="p-1.5 rounded-lg bg-white/5 hover:bg-rose-500/20 hover:text-rose-300 text-slate-300 transition" title="Disable QR">
+                <i data-lucide="ban" class="w-3.5 h-3.5"></i>
+              </button>
+            ` : `
+              <button onclick="adminEnableQr('${code}')" class="p-1.5 rounded-lg bg-white/5 hover:bg-emerald-500/20 hover:text-emerald-300 text-slate-300 transition" title="Reactivate QR">
+                <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+              </button>
+            `}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  if (window.lucide) lucide.createIcons();
+}
+
+function renderParkingAlerts() {
+  const tbody = $('parkingAlertsTableBody');
+  if (!tbody) return;
+
+  const alerts = state.parkingAlerts || [];
+  if (!alerts.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-6 text-slate-500 text-xs">No parking alerts recorded in system.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = alerts.slice(0, 30).map(a => {
+    const alertId = a.alertId || a.id;
+    const typeLabel = a.alertTypeLabel || a.alertType || 'ALERT';
+    const isEmergency = a.alertType === 'EMERGENCY';
+    const typeBadge = isEmergency
+      ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1">🚨 EMERGENCY</span>'
+      : `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">${typeLabel}</span>`;
+
+    const status = a.status || 'PENDING';
+    const statusBadge = status === 'RESOLVED'
+      ? '<span class="text-emerald-400 font-bold">✓ RESOLVED</span>'
+      : status === 'OWNER_ACKNOWLEDGED'
+      ? '<span class="text-cyan-300 font-bold">👀 ACKNOWLEDGED</span>'
+      : '<span class="text-amber-400 font-bold pulse-dot">⏳ PENDING</span>';
+
+    const time = a.createdAt ? new Date(a.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+    const msg = a.message ? `"${a.message.slice(0, 60)}${a.message.length > 60 ? '...' : ''}"` : '—';
+
+    return `
+      <tr class="hover:bg-white/5 transition">
+        <td class="px-4 py-3">${typeBadge}</td>
+        <td class="px-4 py-3 font-bold text-white">${a.vehicleNumber || '—'}</td>
+        <td class="px-4 py-3 font-mono text-cyan-300 text-[11px]">${a.qrCode || '—'}</td>
+        <td class="px-4 py-3 text-slate-300 text-[11px] max-w-[200px] truncate" title="${a.message || ''}">${msg}</td>
+        <td class="px-4 py-3 text-[11px]">${statusBadge}</td>
+        <td class="px-4 py-3 text-slate-400 text-[11px]">${time}</td>
+        <td class="px-4 py-3 text-right">
+          ${status !== 'RESOLVED' ? `
+            <button onclick="adminResolveAlert('${alertId}')" class="px-2 py-1 rounded bg-emerald-500/15 hover:bg-emerald-500/30 text-emerald-300 font-bold text-[10px] transition">
+              Mark Resolved
+            </button>
+          ` : '<span class="text-slate-500 text-[10px]">Closed</span>'}
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  if (window.lucide) lucide.createIcons();
+}
+
+function openParkingQrModal(qrCode) {
+  const qr = (state.parkingQrs || []).find(q => (q.qrCode || q.id) === qrCode);
+  activeModalQrCode = qrCode;
+
+  const vn = qr?.vehicleNumber || qr?.assetName || 'Vehicle';
+  const url = `https://assetdoctor.app/park/${encodeURIComponent(qrCode)}`;
+
+  $('modalQrVehicleNumber').textContent = vn;
+  $('modalQrCodeText').textContent = qrCode;
+  $('modalMetaQrCode').textContent = qrCode;
+  $('modalMetaQrStatus').textContent = (qr?.status || 'ACTIVE').toUpperCase();
+  $('modalMetaQrStatus').className = (qr?.status === 'ACTIVE' ? 'text-emerald-400' : 'text-rose-400') + ' font-bold';
+  $('modalMetaAssetId').textContent = qr?.assetId || '—';
+  $('modalMetaOwnerUid').textContent = qr?.userId || '—';
+  $('modalMetaQrUrl').textContent = url;
+  $('modalMetaQrUrl').href = url;
+
+  // Render QR Code using QRCode library
+  const container = $('modalQrCodeContainer');
+  container.innerHTML = '';
+  if (typeof QRCode !== 'undefined') {
+    new QRCode(container, {
+      text: url,
+      width: 160,
+      height: 160,
+      colorDark: '#090d16',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  } else {
+    container.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(url)}" alt="QR Code" class="w-40 h-40" />`;
+  }
+
+  openModal('parkingQrModal');
+}
+
+function copyParkingQrUrl() {
+  if (!activeModalQrCode) return;
+  const url = `https://assetdoctor.app/park/${encodeURIComponent(activeModalQrCode)}`;
+  navigator.clipboard.writeText(url).then(() => {
+    showAdminToast('Parking QR link copied to clipboard!', 'success');
+  }).catch(() => {
+    showAdminToast('Failed to copy. URL: ' + url, 'info');
+  });
+}
+
+function downloadParkingQrImage() {
+  const container = $('modalQrCodeContainer');
+  const img = container.querySelector('img') || container.querySelector('canvas');
+  if (!img) {
+    showAdminToast('QR image not ready for download.', 'warning');
+    return;
+  }
+  let dataUrl = '';
+  if (img.tagName.toLowerCase() === 'canvas') {
+    dataUrl = img.toDataURL('image/png');
+  } else {
+    dataUrl = img.src;
+  }
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = `AssetDoctor_ParkingQR_${activeModalQrCode || 'sticker'}.png`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  showAdminToast('Downloaded Parking QR sticker image.', 'success');
+}
+
+function printParkingQrSticker() {
+  const sticker = $('printableQrSticker');
+  if (!sticker) return;
+  const printWindow = window.open('', '_blank');
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Print Parking Sticker — ${activeModalQrCode}</title>
+      <style>
+        body { margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: -apple-system, system-ui, sans-serif; }
+        .sticker { border: 2px solid #000; border-radius: 16px; padding: 24px; text-align: center; width: 280px; }
+      </style>
+    </head>
+    <body onload="window.print(); window.close();">
+      <div class="sticker">
+        ${sticker.innerHTML}
+      </div>
+    </body>
+    </html>
+  `);
+  printWindow.document.close();
+}
+
+function openGenerateParkingQrModal() {
+  populateVehicleOptionsInGenQr();
+  $('genQrVehicleNumber').value = '';
+  $('genQrAssetName').value = '';
+  $('genQrAssetId').value = '';
+  $('genQrUserId').value = '';
+  openModal('generateParkingQrModal');
+}
+
+function populateVehicleOptionsInGenQr() {
+  const sel = $('genQrSelectAsset');
+  if (!sel) return;
+  const vehicles = (state.assets || []).filter(a => {
+    const cat = String(a.category || a.categoryLabel || '').toLowerCase();
+    const name = String(a.assetName || a.name || '').toLowerCase();
+    return cat.includes('vehicle') || cat.includes('bike') || cat.includes('car') || Boolean(a.registration);
+  });
+
+  sel.innerHTML = '<option value="">— Select a vehicle or enter details below —</option>' +
+    vehicles.map(v => {
+      const reg = v.registration || v.registrationNumber || 'No Plate';
+      const name = v.assetName || v.name || 'Vehicle';
+      return `<option value="${v.id}">${reg} — ${name} (${(v.ownerUid || '').slice(0, 8)}...)</option>`;
+    }).join('');
+}
+
+function onGenQrAssetSelected(assetId) {
+  if (!assetId) return;
+  const asset = (state.assets || []).find(a => a.id === assetId);
+  if (!asset) return;
+  $('genQrVehicleNumber').value = asset.registration || asset.registrationNumber || asset.assetName || '';
+  $('genQrAssetName').value = asset.assetName || asset.name || '';
+  $('genQrAssetId').value = asset.id || '';
+  $('genQrUserId').value = asset.ownerUid || asset.uid || '';
+}
+
+async function submitGenerateParkingQr() {
+  const vehicleNumber = $('genQrVehicleNumber').value.trim();
+  const assetName = $('genQrAssetName').value.trim();
+  const assetId = $('genQrAssetId').value.trim();
+  const userId = $('genQrUserId').value.trim();
+
+  if (!assetId || !userId) {
+    showAdminToast('Asset ID and Owner User UID are required.', 'warning');
+    return;
+  }
+
+  const btn = $('btnSubmitGenerateQr');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="inline-block animate-spin mr-1">⏳</span> Generating...';
+
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    const response = await fetch('https://asia-south1-assetdoctor-5fd25.cloudfunctions.net/adminGenerateParkingQr', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ assetId, userId, vehicleNumber, assetName })
+    });
+
+    const result = await response.json();
+    if (response.ok && result.success) {
+      closeModal('generateParkingQrModal');
+      showAdminToast(`Parking QR active: ${result.qrCode} (${result.isNew ? 'New' : 'Existing'})`, 'success');
+      loadParkingDashboard(true);
+      openParkingQrModal(result.qrCode);
+    } else {
+      showAdminToast(result.error || 'Failed to generate Parking QR', 'error');
+    }
+  } catch (err) {
+    console.error('[submitGenerateParkingQr error]', err);
+    showAdminToast('Generation error: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="check" class="w-3.5 h-3.5"></i> Generate Active QR';
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+async function adminRegenerateQr(assetId, userId, oldQrCode) {
+  if (!confirm(`⚠️ Are you sure you want to REGENERATE the Parking QR for this vehicle?\n\nThe current QR code (${oldQrCode}) will be permanently REVOKED and a new QR will be generated immediately.`)) {
+    return;
+  }
+
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    const response = await fetch('https://asia-south1-assetdoctor-5fd25.cloudfunctions.net/adminRegenerateParkingQr', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ assetId, userId, confirmRegenerate: true })
+    });
+
+    const result = await response.json();
+    if (response.ok && result.success) {
+      showAdminToast(`Old QR revoked. New Parking QR active: ${result.qrCode}`, 'success');
+      loadParkingDashboard(true);
+      openParkingQrModal(result.qrCode);
+    } else {
+      showAdminToast(result.error || 'Regeneration failed', 'error');
+    }
+  } catch (err) {
+    showAdminToast('Regenerate error: ' + err.message, 'error');
+  }
+}
+
+async function adminDisableQr(qrCode) {
+  if (!confirm(`Are you sure you want to DISABLE Parking QR ${qrCode}?\n\nScanners will be shown an "Inactive QR" message.`)) {
+    return;
+  }
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    const response = await fetch('https://asia-south1-assetdoctor-5fd25.cloudfunctions.net/adminDisableParkingQr', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ qrCode })
+    });
+    const result = await response.json();
+    if (response.ok && result.success) {
+      showAdminToast(`Parking QR ${qrCode} is now disabled.`, 'success');
+      loadParkingDashboard(true);
+    } else {
+      showAdminToast(result.error || 'Disable failed', 'error');
+    }
+  } catch (err) {
+    showAdminToast('Error: ' + err.message, 'error');
+  }
+}
+
+async function adminEnableQr(qrCode) {
+  try {
+    await db.collection('parking_qrs').doc(qrCode).update({
+      status: 'ACTIVE',
+      updatedAt: new Date().toISOString()
+    });
+    showAdminToast(`Parking QR ${qrCode} reactivated.`, 'success');
+    loadParkingDashboard(true);
+  } catch (err) {
+    showAdminToast('Reactivate error: ' + err.message, 'error');
+  }
+}
+
+async function adminResolveAlert(alertId) {
+  try {
+    const now = new Date().toISOString();
+    await db.collection('parking_alerts').doc(alertId).update({
+      status: 'RESOLVED',
+      resolvedAt: now,
+      resolvedBy: auth.currentUser?.uid || 'admin',
+      updatedAt: now
+    });
+    showAdminToast('Alert marked as resolved.', 'success');
+    loadParkingDashboard(true);
+  } catch (err) {
+    showAdminToast('Resolve error: ' + err.message, 'error');
+  }
+}
+
+
+// ============================================================
+// MASTER PRODUCT CATALOG — Admin Logic & Handlers
+// ============================================================
+async function loadProductsDashboard(force = false) {
+  if (state.products.length && !force) {
+    renderProducts();
+    return;
+  }
+  try {
+    const snap = await db.collection('products').orderBy('updatedAt', 'desc').limit(200).get();
+    state.products = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    updateKPIs();
+    renderProducts();
+  } catch (err) {
+    console.error('[loadProductsDashboard error]', err);
+    showAdminToast('Failed to load product catalog: ' + err.message, 'error');
+  }
+}
+
+function renderProducts() {
+  const tbody = $('productsTableBody');
+  if (!tbody) return;
+
+  const query = ($('productSearchInput')?.value || '').toLowerCase().trim();
+  const categoryFilter = $('productCategoryFilter')?.value || 'ALL';
+  const statusFilter = $('productStatusFilter')?.value || 'ACTIVE';
+
+  let list = state.products || [];
+
+  if (categoryFilter !== 'ALL') {
+    list = list.filter(p => (p.category || '').toLowerCase() === categoryFilter.toLowerCase());
+  }
+
+  if (statusFilter === 'ACTIVE') {
+    list = list.filter(p => !p.isArchived && (p.status || 'ACTIVE').toUpperCase() === 'ACTIVE');
+  } else if (statusFilter === 'ARCHIVED') {
+    list = list.filter(p => p.isArchived || (p.status || '').toUpperCase() === 'ARCHIVED');
+  }
+
+  if (query) {
+    list = list.filter(p => {
+      const name = (p.name || '').toLowerCase();
+      const brand = (p.brand || '').toLowerCase();
+      const model = (p.modelNumber || p.sku || '').toLowerCase();
+      const cat = (p.category || '').toLowerCase();
+      return name.includes(query) || brand.includes(query) || model.includes(query) || cat.includes(query);
+    });
+  }
+
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-slate-500 text-xs">No catalog products found. Click "+ Add Product" to create one.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = list.map(p => {
+    const id = p.id;
+    const name = p.name || 'Unnamed Product';
+    const model = p.modelNumber || p.sku || '—';
+    const brand = p.brand || '—';
+    const cat = (p.category || 'other').toUpperCase();
+    const price = p.price ? '₹' + Number(p.price).toLocaleString('en-IN') : '—';
+    const isArchived = Boolean(p.isArchived || (p.status || '').toUpperCase() === 'ARCHIVED');
+    const statusBadge = isArchived
+      ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">ARCHIVED</span>'
+      : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">ACTIVE</span>';
+
+    const updated = p.updatedAt ? new Date(p.updatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+    return `
+      <tr class="hover:bg-white/5 transition">
+        <td class="px-4 py-3">
+          <div class="font-bold text-white text-xs">${name}</div>
+          <div class="text-[11px] text-slate-400 font-mono">${model}</div>
+        </td>
+        <td class="px-4 py-3 font-semibold text-brand-300 text-xs">${brand}</td>
+        <td class="px-4 py-3 text-slate-300 text-[11px] uppercase font-bold">${cat}</td>
+        <td class="px-4 py-3 text-white font-mono text-xs">${price}</td>
+        <td class="px-4 py-3">${statusBadge}</td>
+        <td class="px-4 py-3 text-slate-400 text-[11px]">${updated}</td>
+        <td class="px-4 py-3 text-right">
+          <div class="flex items-center justify-end gap-1.5">
+            <button onclick="openProductEditModal('${id}')" class="p-1.5 rounded-lg bg-white/5 hover:bg-brand-500/20 hover:text-brand-300 text-slate-300 transition" title="Edit Product">
+              <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+            </button>
+            <button onclick="toggleArchiveProduct('${id}', ${isArchived})" class="p-1.5 rounded-lg bg-white/5 hover:bg-amber-500/20 hover:text-amber-300 text-slate-300 transition" title="${isArchived ? 'Restore Product' : 'Archive Product'}">
+              <i data-lucide="${isArchived ? 'archive-restore' : 'archive'}" class="w-3.5 h-3.5"></i>
+            </button>
+            <button onclick="deleteProduct('${id}')" class="p-1.5 rounded-lg bg-white/5 hover:bg-rose-500/20 hover:text-rose-300 text-slate-300 transition" title="Delete Product">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  if (window.lucide) lucide.createIcons();
+}
+
+function openProductEditModal(productId) {
+  $('editProductId').value = productId || '';
+  if (productId) {
+    const prod = (state.products || []).find(p => p.id === productId);
+    if (!prod) return;
+    $('productModalTitle').textContent = 'Edit Catalog Product';
+    $('prodName').value = prod.name || '';
+    $('prodBrand').value = prod.brand || '';
+    $('prodCategory').value = (prod.category || 'other').toLowerCase();
+    $('prodModel').value = prod.modelNumber || prod.sku || '';
+    $('prodStatus').value = prod.status || (prod.isArchived ? 'ARCHIVED' : 'ACTIVE');
+    $('prodPrice').value = prod.price || '';
+    $('prodWarrantyMonths').value = prod.defaultWarrantyMonths || '';
+    $('prodDescription').value = prod.description || '';
+  } else {
+    $('productModalTitle').textContent = 'Add Product to Catalog';
+    $('prodName').value = '';
+    $('prodBrand').value = '';
+    $('prodCategory').value = 'vehicle';
+    $('prodModel').value = '';
+    $('prodStatus').value = 'ACTIVE';
+    $('prodPrice').value = '';
+    $('prodWarrantyMonths').value = '12';
+    $('prodDescription').value = '';
+  }
+  openModal('productEditModal');
+}
+
+async function submitSaveProduct() {
+  const id = $('editProductId').value.trim();
+  const name = $('prodName').value.trim();
+  const brand = $('prodBrand').value.trim();
+  const category = $('prodCategory').value.trim();
+  const modelNumber = $('prodModel').value.trim();
+  const status = $('prodStatus').value.trim();
+  const price = $('prodPrice').value ? Number($('prodPrice').value) : null;
+  const defaultWarrantyMonths = $('prodWarrantyMonths').value ? Number($('prodWarrantyMonths').value) : null;
+  const description = $('prodDescription').value.trim();
+
+  if (!name || !brand || !category) {
+    showAdminToast('Product Name, Brand, and Category are required.', 'warning');
+    return;
+  }
+
+  const btn = $('btnSaveProduct');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="inline-block animate-spin mr-1">⏳</span> Saving...';
+
+  try {
+    const now = new Date().toISOString();
+    const payload = {
+      name,
+      brand,
+      category,
+      modelNumber: modelNumber || null,
+      sku: modelNumber || null,
+      status,
+      isArchived: status === 'ARCHIVED',
+      price,
+      defaultWarrantyMonths,
+      description: description || null,
+      updatedAt: now,
+      updatedBy: auth.currentUser?.email || 'admin'
+    };
+
+    if (id) {
+      await db.collection('products').doc(id).set(payload, { merge: true });
+      showAdminToast('Product updated successfully.', 'success');
+    } else {
+      payload.createdAt = now;
+      payload.createdBy = auth.currentUser?.email || 'admin';
+      const ref = await db.collection('products').add(payload);
+      showAdminToast('Product created in catalog.', 'success');
+    }
+
+    // Write audit log
+    await db.collection('auditLogs').add({
+      timestamp: now,
+      actorRole: 'admin',
+      actorEmail: auth.currentUser?.email || 'admin',
+      action: id ? 'product_updated' : 'product_created',
+      targetDocId: id || null,
+      details: { name, brand, category, price },
+      category: 'product_catalog'
+    }).catch(() => {});
+
+    closeModal('productEditModal');
+    loadProductsDashboard(true);
+  } catch (err) {
+    console.error('[submitSaveProduct error]', err);
+    showAdminToast('Save failed: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="save" class="w-3.5 h-3.5"></i> Save Product';
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+async function toggleArchiveProduct(productId, isCurrentlyArchived) {
+  const actionText = isCurrentlyArchived ? 'RESTORE' : 'ARCHIVE';
+  if (!confirm(`Are you sure you want to ${actionText} this product from the active catalog?`)) {
+    return;
+  }
+  try {
+    const now = new Date().toISOString();
+    await db.collection('products').doc(productId).update({
+      isArchived: !isCurrentlyArchived,
+      status: isCurrentlyArchived ? 'ACTIVE' : 'ARCHIVED',
+      archivedAt: isCurrentlyArchived ? null : now,
+      updatedAt: now,
+      updatedBy: auth.currentUser?.email || 'admin'
+    });
+    showAdminToast(`Product ${actionText.toLowerCase()}d successfully.`, 'success');
+    loadProductsDashboard(true);
+  } catch (err) {
+    showAdminToast('Archive toggle failed: ' + err.message, 'error');
+  }
+}
+
+async function deleteProduct(productId) {
+  const prod = (state.products || []).find(p => p.id === productId);
+  const prodName = prod?.name || 'this product';
+
+  // Check if any vaulted asset references this product name or brand
+  const referenced = (state.assets || []).filter(a => {
+    const an = (a.assetName || a.name || '').toLowerCase();
+    const ab = (a.brandName || a.brand || '').toLowerCase();
+    return an.includes((prod?.name || '').toLowerCase()) || ab.includes((prod?.brand || '').toLowerCase());
+  });
+
+  if (referenced.length > 0) {
+    const proceed = confirm(`⚠️ Warning: ${referenced.length} vaulted customer asset(s) may reference this product ("${prodName}").\n\nHard-deleting this catalog entry may affect brand intelligence. We recommend ARCHIVING instead.\n\nDo you still want to permanently delete this product?`);
+    if (!proceed) return;
+  } else {
+    if (!confirm(`Are you sure you want to PERMANENTLY delete product "${prodName}"? This action cannot be undone.`)) {
+      return;
+    }
+  }
+
+  try {
+    await db.collection('products').doc(productId).delete();
+    await db.collection('auditLogs').add({
+      timestamp: new Date().toISOString(),
+      actorRole: 'admin',
+      actorEmail: auth.currentUser?.email || 'admin',
+      action: 'product_deleted',
+      targetDocId: productId,
+      details: { name: prodName, brand: prod?.brand },
+      category: 'product_catalog'
+    }).catch(() => {});
+
+    showAdminToast('Product permanently deleted from catalog.', 'success');
+    loadProductsDashboard(true);
+  } catch (err) {
+    showAdminToast('Delete failed: ' + err.message, 'error');
+  }
+}
 
 if (window.lucide) lucide.createIcons();
 </script>

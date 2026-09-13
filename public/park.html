@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<meta name="theme-color" content="#020617" />
+<title>Parking Assistant — Asset Doctor</title>
+<link rel="icon" href="/icon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: #020617;
+    color: #e2e8f0;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.2); border-radius: 999px; }
+
+  .page { max-width: 420px; margin: 0 auto; padding: 24px 16px 48px; }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand-logo { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, #14a690, #0891b2); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .brand-logo img { width: 100%; height: 100%; object-fit: cover; }
+  .brand-name { font-size: 13px; font-weight: 800; color: #fff; letter-spacing: 0.02em; }
+  .brand-sub { font-size: 10px; color: #14a690; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+
+  .card {
+    background: rgba(15,23,42,0.8);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 20px;
+    padding: 24px;
+    margin-bottom: 16px;
+    backdrop-filter: blur(12px);
+  }
+  .vehicle-header { text-align: center; margin-bottom: 20px; }
+  .vehicle-label { font-size: 10px; font-weight: 800; color: #14a690; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 6px; }
+  .vehicle-number { font-size: 22px; font-weight: 800; color: #fff; margin-bottom: 4px; }
+  .vehicle-privacy { font-size: 12px; color: #64748b; }
+
+  .section-title { font-size: 13px; font-weight: 700; color: #94a3b8; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+
+  .issue-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+  .issue-btn {
+    background: rgba(255,255,255,0.04);
+    border: 1.5px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 14px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    color: #e2e8f0;
+    font-family: inherit;
+    text-align: center;
+  }
+  .issue-btn:hover, .issue-btn:focus { border-color: #14a690; background: rgba(20,166,144,0.08); outline: none; }
+  .issue-btn.selected { border-color: #14a690; background: rgba(20,166,144,0.15); }
+  .issue-btn .emoji { font-size: 24px; }
+  .issue-btn .label { font-size: 12px; font-weight: 600; color: #cbd5e1; line-height: 1.3; }
+  .issue-btn.emergency { border-color: rgba(239,68,68,0.4); }
+  .issue-btn.emergency.selected { border-color: #ef4444; background: rgba(239,68,68,0.12); }
+
+  textarea {
+    width: 100%; background: rgba(255,255,255,0.04); border: 1.5px solid rgba(255,255,255,0.1);
+    border-radius: 12px; padding: 12px; color: #e2e8f0; font-family: inherit; font-size: 14px;
+    resize: none; min-height: 80px; transition: border-color 0.15s;
+  }
+  textarea:focus { outline: none; border-color: #14a690; }
+  textarea::placeholder { color: #475569; }
+
+  .photo-upload-btn {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(255,255,255,0.04); border: 1.5px dashed rgba(255,255,255,0.12);
+    border-radius: 12px; padding: 12px 16px; cursor: pointer; transition: border-color 0.15s;
+    color: #64748b; font-size: 13px; font-weight: 600; font-family: inherit; width: 100%; margin-top: 10px;
+  }
+  .photo-upload-btn:hover { border-color: #14a690; color: #14a690; }
+
+  .notify-btn {
+    width: 100%; padding: 16px;
+    background: linear-gradient(135deg, #14a690, #0891b2);
+    border: none; border-radius: 14px; color: #fff;
+    font-size: 16px; font-weight: 800; font-family: inherit;
+    cursor: pointer; transition: opacity 0.15s; margin-top: 8px;
+  }
+  .notify-btn:hover { opacity: 0.9; }
+  .notify-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .success-card { text-align: center; padding: 32px 24px; }
+  .success-icon { font-size: 48px; margin-bottom: 16px; }
+  .success-title { font-size: 22px; font-weight: 800; color: #fff; margin-bottom: 8px; }
+  .success-body { font-size: 14px; color: #94a3b8; line-height: 1.6; }
+
+  .download-cta { margin-top: 32px; }
+  .download-divider { text-align: center; font-size: 11px; color: #475569; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 16px; }
+  .download-card { background: linear-gradient(135deg, rgba(20,166,144,0.15), rgba(8,145,178,0.08)); border: 1px solid rgba(20,166,144,0.3); border-radius: 16px; padding: 20px; text-align: center; }
+  .download-card-title { font-size: 15px; font-weight: 800; color: #fff; margin-bottom: 8px; }
+  .download-features { list-style: none; margin-bottom: 16px; }
+  .download-features li { font-size: 13px; color: #94a3b8; padding: 3px 0; }
+  .download-features li::before { content: "✓ "; color: #14a690; font-weight: 700; }
+  .download-btn {
+    display: inline-block; background: linear-gradient(135deg, #14a690, #0891b2);
+    color: #fff; text-decoration: none; padding: 12px 24px; border-radius: 12px;
+    font-size: 14px; font-weight: 700; font-family: inherit;
+  }
+
+  .error-card { text-align: center; padding: 40px 24px; }
+  .error-icon { font-size: 40px; margin-bottom: 12px; }
+  .error-title { font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+  .error-body { font-size: 14px; color: #64748b; }
+
+  .spinner { display: inline-block; width: 20px; height: 20px; border: 2.5px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 8px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .hidden { display: none !important; }
+  .photo-preview { margin-top: 8px; border-radius: 10px; overflow: hidden; position: relative; }
+  .photo-preview img { width: 100%; max-height: 160px; object-fit: cover; border-radius: 10px; }
+  .photo-remove { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.6); border: none; border-radius: 50%; width: 28px; height: 28px; cursor: pointer; color: #fff; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <!-- Brand -->
+  <div class="brand">
+    <div class="brand-logo">
+      <img src="/icon.png" alt="Asset Doctor" onerror="this.style.display='none';this.parentElement.innerHTML='🛡️';" />
+    </div>
+    <div>
+      <div class="brand-name">Asset Doctor</div>
+      <div class="brand-sub">Parking Assistant</div>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div id="stateLoading" class="card" style="text-align:center;padding:48px 24px;">
+    <div style="font-size:36px;margin-bottom:12px;">🅿️</div>
+    <p style="color:#64748b;font-size:14px;">Loading Parking Assistant…</p>
+  </div>
+
+  <!-- Invalid QR State -->
+  <div id="stateInvalid" class="card error-card hidden">
+    <div class="error-icon">❌</div>
+    <div class="error-title">Invalid QR Code</div>
+    <div class="error-body">This QR code is not valid or has expired. Please scan the QR on the vehicle again.</div>
+  </div>
+
+  <!-- Inactive QR State -->
+  <div id="stateInactive" class="card error-card hidden">
+    <div class="error-icon">🔒</div>
+    <div class="error-title">Parking Assistant Inactive</div>
+    <div class="error-body">This Parking Assistant QR is currently not active. Please contact the vehicle owner directly if this is urgent.</div>
+  </div>
+
+  <!-- Report Form -->
+  <div id="stateForm" class="hidden">
+    <!-- Vehicle Card -->
+    <div class="card">
+      <div class="vehicle-header">
+        <div class="vehicle-label">🅿️ Parking Assistant</div>
+        <div class="vehicle-number" id="vehicleNumberDisplay">—</div>
+        <div class="vehicle-privacy">🔒 Owner contact details are protected</div>
+      </div>
+    </div>
+
+    <!-- Issue Selection -->
+    <div class="card">
+      <div class="section-title">What do you need?</div>
+      <div class="issue-grid" id="issueGrid">
+        <button class="issue-btn" data-type="VEHICLE_BLOCKING" onclick="selectIssue(this)">
+          <span class="emoji">🚨</span>
+          <span class="label">Vehicle Blocking Me</span>
+        </button>
+        <button class="issue-btn" data-type="WRONG_PARKING" onclick="selectIssue(this)">
+          <span class="emoji">🅿️</span>
+          <span class="label">Wrong Parking</span>
+        </button>
+        <button class="issue-btn" data-type="LIGHTS_LEFT_ON" onclick="selectIssue(this)">
+          <span class="emoji">💡</span>
+          <span class="label">Lights / Window Left Open</span>
+        </button>
+        <button class="issue-btn" data-type="VEHICLE_ISSUE" onclick="selectIssue(this)">
+          <span class="emoji">⚠️</span>
+          <span class="label">Vehicle Issue</span>
+        </button>
+        <button class="issue-btn emergency" data-type="EMERGENCY" onclick="selectIssue(this)" style="grid-column:span 2;">
+          <span class="emoji">❤️</span>
+          <span class="label">Emergency</span>
+        </button>
+      </div>
+
+      <!-- Optional message -->
+      <div id="messageArea" class="hidden" style="margin-top:4px;">
+        <textarea id="messageText" placeholder="Optional: Add a note for the vehicle owner…" maxlength="500"></textarea>
+      </div>
+
+      <!-- Optional photo (for VEHICLE_ISSUE) -->
+      <div id="photoArea" class="hidden">
+        <label class="photo-upload-btn" for="photoInput">
+          📷 &nbsp;Attach a photo (optional)
+          <input type="file" id="photoInput" accept="image/*" capture="environment" class="hidden" onchange="handlePhotoChange(this)" />
+        </label>
+        <div id="photoPreview" class="photo-preview hidden">
+          <img id="photoImg" alt="Attached photo" />
+          <button class="photo-remove" onclick="removePhoto()">✕</button>
+        </div>
+      </div>
+
+      <button class="notify-btn" id="notifyBtn" onclick="submitReport()" disabled>
+        Notify Owner
+      </button>
+    </div>
+  </div>
+
+  <!-- Success State -->
+  <div id="stateSuccess" class="card hidden">
+    <div class="success-card">
+      <div class="success-icon">✅</div>
+      <div class="success-title">Owner has been notified</div>
+      <div class="success-body" id="successBody">
+        We've sent an alert to the vehicle owner. They should respond shortly.
+      </div>
+    </div>
+    <div class="download-cta">
+      <div class="download-divider">Protect your own vehicle</div>
+      <div class="download-card">
+        <div class="download-card-title">Get Asset Doctor — FREE</div>
+        <ul class="download-features">
+          <li>Insurance & PUC expiry alerts</li>
+          <li>Free Parking Assistant QR</li>
+          <li>Vehicle service records</li>
+          <li>Warranty & document vault</li>
+        </ul>
+        <a href="https://play.google.com/store/apps/details?id=com.assetdoctor" class="download-btn" target="_blank" rel="noopener">
+          Get Asset Doctor — Free
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Error sending State -->
+  <div id="stateSendError" class="card error-card hidden">
+    <div class="error-icon">⚠️</div>
+    <div class="error-title">Could not send alert</div>
+    <div class="error-body" id="sendErrorBody">Please try again in a moment.</div>
+    <button onclick="resetToForm()" style="margin-top:20px;background:none;border:1.5px solid #334155;border-radius:10px;padding:10px 20px;color:#94a3b8;cursor:pointer;font-family:inherit;font-size:13px;">Try Again</button>
+  </div>
+</div>
+
+<script>
+  // ── Firebase config (matches production project) ──────────────────────────
+  const firebaseConfig = {
+    apiKey: "AIzaSyA1_TBhP6hRGJl5Yj0iUTyMFI8sLsXfCHM",
+    authDomain: "assetdoctor-5fd25.firebaseapp.com",
+    projectId: "assetdoctor-5fd25",
+    storageBucket: "assetdoctor-5fd25.firebasestorage.app",
+    messagingSenderId: "432693810936",
+    appId: "1:432693810936:web:8c6e9a5d7b2c3f1e4a5b6c"
+  };
+
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  const fns = firebase.functions();
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  let currentQrCode = null;
+  let currentQrRecord = null;
+  let selectedIssueType = null;
+  let selectedPhotoFile = null;
+
+  // ── Routing: extract QR code from URL ─────────────────────────────────────
+  function getQrCodeFromUrl() {
+    const path = window.location.pathname; // /park/AD-PARK-X82K9P
+    const match = path.match(/\/park\/([A-Z0-9-]+)/i);
+    return match ? match[1].toUpperCase() : null;
+  }
+
+  // ── Show/hide states ───────────────────────────────────────────────────────
+  const STATES = ['stateLoading', 'stateInvalid', 'stateInactive', 'stateForm', 'stateSuccess', 'stateSendError'];
+  function showState(id) {
+    STATES.forEach((s) => document.getElementById(s).classList.toggle('hidden', s !== id));
+  }
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+  async function init() {
+    currentQrCode = getQrCodeFromUrl();
+    if (!currentQrCode || !/^AD-PARK-[A-Z0-9]{6}$/i.test(currentQrCode)) {
+      showState('stateInvalid');
+      return;
+    }
+
+    try {
+      const doc = await db.collection('parking_qrs').doc(currentQrCode).get();
+      if (!doc.exists) {
+        showState('stateInvalid');
+        return;
+      }
+      currentQrRecord = doc.data();
+      const status = currentQrRecord.status || '';
+      if (status === 'REVOKED' || status === 'DISABLED') {
+        showState('stateInactive');
+        return;
+      }
+      if (status !== 'ACTIVE') {
+        showState('stateInvalid');
+        return;
+      }
+
+      // Populate vehicle display (never expose owner details)
+      const vn = currentQrRecord.vehicleNumber || currentQrRecord.assetName || '';
+      document.getElementById('vehicleNumberDisplay').textContent = vn || 'Vehicle';
+      document.title = vn ? `Parking Assistant — ${vn}` : 'Parking Assistant — Asset Doctor';
+
+      showState('stateForm');
+    } catch (err) {
+      console.error('[park.html] init error:', err);
+      showState('stateInvalid');
+    }
+  }
+
+  // ── Issue selection ────────────────────────────────────────────────────────
+  function selectIssue(btn) {
+    document.querySelectorAll('.issue-btn').forEach((b) => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedIssueType = btn.dataset.type;
+
+    // Always show message area after selection
+    document.getElementById('messageArea').classList.remove('hidden');
+
+    // Photo only for VEHICLE_ISSUE and EMERGENCY
+    const showPhoto = selectedIssueType === 'VEHICLE_ISSUE' || selectedIssueType === 'EMERGENCY';
+    document.getElementById('photoArea').classList.toggle('hidden', !showPhoto);
+
+    document.getElementById('notifyBtn').disabled = false;
+  }
+
+  // ── Photo handling ─────────────────────────────────────────────────────────
+  function handlePhotoChange(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Photo must be under 5 MB.');
+      input.value = '';
+      return;
+    }
+    selectedPhotoFile = file;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      document.getElementById('photoImg').src = e.target.result;
+      document.getElementById('photoPreview').classList.remove('hidden');
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function removePhoto() {
+    selectedPhotoFile = null;
+    document.getElementById('photoInput').value = '';
+    document.getElementById('photoPreview').classList.add('hidden');
+  }
+
+  function resetToForm() {
+    showState('stateForm');
+  }
+
+  // ── Submit report via Cloud Function ──────────────────────────────────────
+  async function submitReport() {
+    if (!selectedIssueType || !currentQrCode) return;
+
+    const btn = document.getElementById('notifyBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Sending…';
+
+    try {
+      const message = (document.getElementById('messageText')?.value || '').trim().slice(0, 500);
+
+      // Call Cloud Function (HTTP endpoint)
+      const payload = {
+        qrCode: currentQrCode,
+        alertType: selectedIssueType,
+        message,
+        // Photo upload handled separately if needed
+      };
+
+      const response = await fetch('https://asia-south1-assetdoctor-5fd25.cloudfunctions.net/reportParkingIssue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        const isEmergency = selectedIssueType === 'EMERGENCY';
+        document.getElementById('successBody').textContent = isEmergency
+          ? 'An emergency alert has been sent to the vehicle owner. If this is a medical emergency, please also call 112.'
+          : 'We\'ve notified the vehicle owner. They should respond shortly.';
+        showState('stateSuccess');
+      } else {
+        const errMsg = data.error || data.message || 'Something went wrong. Please try again.';
+        document.getElementById('sendErrorBody').textContent = errMsg;
+        showState('stateSendError');
+      }
+    } catch (err) {
+      console.error('[park.html] submit error:', err);
+      document.getElementById('sendErrorBody').textContent = 'Network error. Please check your connection and try again.';
+      showState('stateSendError');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = 'Notify Owner';
+    }
+  }
+
+  // ── Boot ───────────────────────────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

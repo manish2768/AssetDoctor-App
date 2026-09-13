@@ -46,12 +46,14 @@
   ],
   "rewrites": [
     { "source": "/admin", "destination": "/admin.html" },
+    { "source": "/park/:qrCode", "destination": "/park.html" },
+    { "source": "/park", "destination": "/park.html" },
     { "source": "/sitemap.xml", "destination": "/sitemap.xml" },
     { "source": "/robots.txt", "destination": "/robots.txt" },
     { "source": "/privacy", "destination": "/index.html" },
     { "source": "/terms", "destination": "/index.html" },
     { "source": "/tools/(.*)", "destination": "/index.html" },
     { "source": "/assets/(.*)", "destination": "/assets/$1" },
-    { "source": "/((?!assets/|admin|robots\\.txt|sitemap\\.xml|sw\\.js|manifest\\.json|icon\\.svg|logo\\.png).*)$", "destination": "/index.html" }
+    { "source": "/((?!assets/|admin|park|robots\\.txt|sitemap\\.xml|sw\\.js|manifest\\.json|icon\\.svg|logo\\.png).*)$", "destination": "/index.html" }
   ]
 }

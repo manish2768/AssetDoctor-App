@@ -77,6 +77,17 @@ service firebase.storage {
       allow delete: if isOwner(uid) || isAdmin();
     }
 
+    // ─── PARKING REPORT PHOTOS ──────────────────────────────────────────────
+    // Anonymous scanner can upload a photo when reporting a parking issue.
+    // Owner and admin can read. Max 5MB image only.
+    match /parking_reports/{alertId}/photos/{photoId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.metadata['ownerUid'] == request.auth.uid);
+      allow create: if request.resource.contentType.matches('image/.*')
+        && request.resource.size < 5 * 1024 * 1024; // max 5MB, anonymous upload allowed
+      allow update, delete: if isAdmin();
+    }
+
     // Strict Deny-All for any other path
     match /{allPaths=**} {
       allow read, write: if false;

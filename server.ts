@@ -119,15 +119,25 @@ app.post('/api/scan-receipt', async (req, res) => {
     }
 
     const promptText = `You are a strict, zero-hallucination document intelligence engine for Asset Doctor.
-CRITICAL ZERO-HALLUCINATION RULES:
-1. ONLY extract fields and values physically printed on the document.
-2. DO NOT invent, assume, or default any field. If not printed, return null or empty string.
-3. NEVER assume warranty is 12 months unless explicitly printed.
-4. NEVER invent serial numbers, chassis numbers, odometer readings, or registration numbers.
-5. NEVER invent dates. If purchase date is not visible, return null.
+
+DOCUMENT INTELLIGENCE RULES:
+1. Document Type Detection: Classify the document as one of:
+   "Purchase Invoice", "Retail Bill", "Warranty Card", "Insurance", "RC", "PUC", "Service Invoice", "AMC", or "Other".
+2. Multi-Page Processing: If the document has multiple pages (e.g. PDF), process and synthesize ALL pages. For example, product model & price might appear on page 1, while serial numbers, warranty terms, or AMC coverage appear on page 2.
+3. CRITICAL ANTI-POLLUTION RULES:
+   - Tax identifiers such as GSTIN, seller GST number, HSN/SAC codes, PAN, TAN, CGST, SGST, IGST, or invoice numbers MUST NEVER be extracted as serialNumber, itemName, or brand.
+   - Serial numbers are strictly hardware/manufacturer serial numbers (e.g. S/N, IMEI, Chassis/VIN, Barcode ID). If no hardware serial number is explicitly printed, return null.
+   - Do not extract company legal suffixes (e.g. "Pvt Ltd") as the brand. Extract the genuine product brand (e.g. Samsung, LG, Apple, Daikin, TVS, Honda).
+4. Zero-Hallucination & Defaulting Rules:
+   - ONLY extract values physically printed on the document.
+   - DO NOT assume warranty is 12 months unless explicitly stated in the document.
+   - DO NOT invent purchase dates. Use the actual invoice/issue date in YYYY-MM-DD format.
+   - If a field cannot be verified, return null.
 
 Return ONLY structured JSON matching this schema:
 {
+  "documentType": "Purchase Invoice" | "Retail Bill" | "Warranty Card" | "Insurance" | "RC" | "PUC" | "Service Invoice" | "AMC" | "Other",
+  "documentTypeConfidence": "high" | "medium" | "low",
   "vendor": string | null,
   "purchaseDate": string | null,
   "totalAmount": number | null,
@@ -138,18 +148,25 @@ Return ONLY structured JSON matching this schema:
       "brand": string | null,
       "price": number | null,
       "warrantyMonths": number | null,
-      "category": string,
+      "category": "Electronics" | "Vehicles" | "Appliances" | "Gadgets" | "Home" | "Other",
       "serialNumber": string | null,
-      "notes": string | null
+      "notes": string | null,
+      "confidence": {
+        "itemName": "high" | "medium" | "low",
+        "price": "high" | "medium" | "low",
+        "purchaseDate": "high" | "medium" | "low",
+        "brand": "high" | "medium" | "low",
+        "serialNumber": "high" | "medium" | "low"
+      }
     }
   ]
 }
-${textContent ? `Invoice text content:\n${textContent}` : ''}`;
+${textContent ? `Document text content:\n${textContent}` : ''}`;
 
     parts.push({ text: promptText });
 
     const response = await aiClient.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       contents: { parts },
       config: {
         responseMimeType: 'application/json',
@@ -159,29 +176,74 @@ ${textContent ? `Invoice text content:\n${textContent}` : ''}`;
     const parsedText = response.text || '{}';
     const jsonResult = JSON.parse(parsedText);
 
-    const extractedItems = (jsonResult.items || []).map((item: any, idx: number) => ({
-      itemName: item.itemName || `Item ${idx + 1}`,
-      brand: item.brand || null,
-      price: typeof item.price === 'number' && Number.isFinite(item.price) ? item.price : null,
-      warrantyMonths: typeof item.warrantyMonths === 'number' && Number.isFinite(item.warrantyMonths) ? item.warrantyMonths : null,
-      category: ['Electronics', 'Vehicles', 'Appliances', 'Gadgets', 'Home', 'Other'].includes(item.category)
-        ? item.category
-        : 'Other',
-      serialNumber: item.serialNumber || null,
-      notes: item.notes || null,
-      selected: true,
-    }));
+    // GSTIN regex for anti-pollution validation
+    const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/i;
+    const cleanGstin = jsonResult.gstin && gstinRegex.test(String(jsonResult.gstin).trim())
+      ? String(jsonResult.gstin).trim().toUpperCase()
+      : null;
+
+    const extractedItems = (jsonResult.items || []).map((item: any, idx: number) => {
+      let serial = item.serialNumber ? String(item.serialNumber).trim() : null;
+      // Anti-pollution: check if serialNumber was accidentally populated with GSTIN or tax text
+      if (serial && (gstinRegex.test(serial) || /^(GST|HSN|SAC|CGST|SGST|IGST|TAX|INV)/i.test(serial))) {
+        serial = null;
+      }
+
+      let brand = item.brand ? String(item.brand).trim() : null;
+      if (brand && /^(GST|TAX|INVOICE|RETAIL|TOTAL|BILL|CASH)/i.test(brand)) {
+        brand = null;
+      }
+
+      // Smart Category resolution if needed
+      let category = item.category || 'Other';
+      const nameLower = (item.itemName || '').toLowerCase();
+      if (nameLower.includes('ac') || nameLower.includes('air conditioner') || nameLower.includes('refrigerator') || nameLower.includes('washing machine') || nameLower.includes('purifier') || /\bro\b/i.test(nameLower)) {
+        category = 'Appliances';
+      } else if (nameLower.includes('bike') || nameLower.includes('scooter') || nameLower.includes('car') || nameLower.includes('motorcycle')) {
+        category = 'Vehicles';
+      } else if (nameLower.includes('phone') || nameLower.includes('mobile') || nameLower.includes('buds') || nameLower.includes('watch') || nameLower.includes('tablet') || nameLower.includes('ipad')) {
+        category = 'Gadgets';
+      } else if (nameLower.includes('tv') || nameLower.includes('television') || nameLower.includes('laptop') || nameLower.includes('monitor')) {
+        category = 'Electronics';
+      }
+
+      if (!['Electronics', 'Vehicles', 'Appliances', 'Gadgets', 'Home', 'Other'].includes(category)) {
+        category = 'Other';
+      }
+
+      return {
+        itemName: item.itemName || `Asset ${idx + 1}`,
+        brand,
+        price: typeof item.price === 'number' && Number.isFinite(item.price) && item.price > 0 ? item.price : null,
+        warrantyMonths: typeof item.warrantyMonths === 'number' && Number.isFinite(item.warrantyMonths) && item.warrantyMonths > 0 ? item.warrantyMonths : null,
+        category,
+        serialNumber: serial,
+        notes: item.notes || null,
+        confidence: item.confidence || {
+          itemName: item.itemName ? 'high' : 'low',
+          price: item.price ? 'high' : 'low',
+          purchaseDate: jsonResult.purchaseDate ? 'high' : 'low',
+          brand: brand ? 'high' : 'low',
+          serialNumber: serial ? 'high' : 'low'
+        },
+        selected: true,
+      };
+    });
 
     const calculatedTotal = extractedItems.reduce((acc: number, cur: any) => acc + (cur.price || 0), 0);
+    const validDocTypes = ['Purchase Invoice', 'Retail Bill', 'Warranty Card', 'Insurance', 'RC', 'PUC', 'Service Invoice', 'AMC', 'Other'];
+    const detectedDocType = validDocTypes.includes(jsonResult.documentType) ? jsonResult.documentType : 'Purchase Invoice';
 
     return res.json({
       success: true,
       source: 'gemini_ocr',
       data: {
+        documentType: detectedDocType,
+        documentTypeConfidence: jsonResult.documentTypeConfidence || 'high',
         vendor: jsonResult.vendor || null,
         purchaseDate: jsonResult.purchaseDate || null,
-        totalAmount: typeof jsonResult.totalAmount === 'number' ? jsonResult.totalAmount : (calculatedTotal > 0 ? calculatedTotal : null),
-        gstin: jsonResult.gstin || null,
+        totalAmount: typeof jsonResult.totalAmount === 'number' && jsonResult.totalAmount > 0 ? jsonResult.totalAmount : (calculatedTotal > 0 ? calculatedTotal : null),
+        gstin: cleanGstin,
         items: extractedItems,
       },
     });

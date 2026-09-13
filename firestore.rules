@@ -316,8 +316,125 @@ service cloud.firestore {
     }
 
     // ----------------------------------------------------
+    // 13. Family Asset Vault & Multi-User Collaboration
+    // ----------------------------------------------------
+    function isVaultMember(vaultId) {
+      return isSignedIn() && exists(/databases/$(database)/documents/family_vaults/$(vaultId)/members/$(request.auth.uid));
+    }
+
+    function getVaultRole(vaultId) {
+      return get(/databases/$(database)/documents/family_vaults/$(vaultId)/members/$(request.auth.uid)).data.role;
+    }
+
+    function isVaultAdmin(vaultId) {
+      return isVaultMember(vaultId) && (getVaultRole(vaultId) in ['OWNER', 'ADMIN'] || isSuperAdmin());
+    }
+
+    function isVaultOwner(vaultId) {
+      return isVaultMember(vaultId) && (getVaultRole(vaultId) == 'OWNER' || isSuperAdmin());
+    }
+
+    match /family_vaults/{vaultId} {
+      allow read: if isVaultMember(vaultId) || isAdmin();
+      allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isVaultAdmin(vaultId);
+      allow delete: if isVaultOwner(vaultId);
+
+      // Members Subcollection
+      match /members/{memberUid} {
+        allow read: if isVaultMember(vaultId) || isAdmin();
+        allow create, update: if (isVaultAdmin(vaultId) && (request.resource.data.role != 'OWNER' || isVaultOwner(vaultId)))
+          || (isSignedIn() && request.auth.uid == memberUid && request.resource.data.status in ['ACTIVE', 'SUSPENDED']);
+        allow delete: if isVaultOwner(vaultId)
+          || (isVaultAdmin(vaultId) && resource.data.role != 'OWNER')
+          || (isSignedIn() && request.auth.uid == memberUid && resource.data.role != 'OWNER');
+      }
+
+      // Shared Assets Subcollection
+      match /shared_assets/{sharedAssetId} {
+        allow read: if isVaultMember(vaultId) && (
+          resource.data.accessLevel == 'ALL_MEMBERS' ||
+          request.auth.uid in resource.data.sharedWithMemberUids ||
+          isVaultAdmin(vaultId)
+        );
+        allow create, update: if isVaultAdmin(vaultId) || (isVaultMember(vaultId) && getVaultRole(vaultId) == 'MEMBER');
+        allow delete: if isVaultAdmin(vaultId);
+      }
+
+      // Activity Feed Subcollection (Immutable & Append-Only)
+      match /activities/{activityId} {
+        allow read: if isVaultMember(vaultId);
+        allow create: if isVaultMember(vaultId) && request.resource.data.actorUid == request.auth.uid;
+        allow update, delete: if false; // Strictly immutable audit trail
+      }
+
+      // Invitations Subcollection
+      match /invitations/{invitationId} {
+        allow read: if isSignedIn();
+        allow create: if isVaultAdmin(vaultId);
+        allow update: if isVaultAdmin(vaultId) || (isSignedIn() && request.resource.data.status == 'ACCEPTED' && request.resource.data.acceptedByUid == request.auth.uid);
+        allow delete: if isVaultAdmin(vaultId);
+      }
+    }
+
+    // ----------------------------------------------------
     // Default Root Deny (Catch-All)
     // ----------------------------------------------------
+
+    // ─── PARKING QR COLLECTION ────────────────────────────────────────────
+    // parking_qrs/{qrCode} — document keyed by opaque QR code string
+    // Rules:
+    //   Read: Anyone can look up a QR by code (needed for web scanner page without auth)
+    //         Owners can also read their own QRs (filtered by userId)
+    //   Write: ONLY via Cloud Function (Admin SDK bypasses rules) or super_admin directly
+    match /parking_qrs/{qrCode} {
+      allow read: if true; // Public read: scanner must look up QR without auth
+      allow create: if isSuperAdmin();
+      allow update: if isSuperAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid
+            && request.resource.data.keys().hasOnly(['status', 'updatedAt', 'revokedAt', 'revokedBy', 'revokedReason']));
+      allow delete: if false; // Never hard-delete; use status: REVOKED
+    }
+
+    // ─── PARKING ALERTS COLLECTION ────────────────────────────────────────
+    // parking_alerts/{alertId} — alert created when QR is scanned
+    // Rules:
+    //   Create: Anyone (anonymous web scanner can create; rate limiting enforced server-side)
+    //   Read: Super admin or the vehicle owner (ownerUid == current user)
+    //   Update: Owner can acknowledge/resolve; super admin can do anything
+    //   Delete: Super admin only (rare — for GDPR erasure)
+    match /parking_alerts/{alertId} {
+      allow create: if true; // Anonymous scanner can report; rate limit enforced in Cloud Function
+      allow read: if isSuperAdmin()
+        || (isSignedIn() && resource.data.ownerUid == request.auth.uid);
+      allow update: if isSuperAdmin()
+        || (isSignedIn() && resource.data.ownerUid == request.auth.uid
+            && request.resource.data.keys().hasOnly([
+              'status', 'acknowledgedAt', 'acknowledgedBy', 'resolvedAt', 'resolvedBy', 'updatedAt'
+            ]));
+      allow delete: if isSuperAdmin();
+    }
+
+    // ─── PARKING RATE LIMITS ──────────────────────────────────────────────
+    // parking_rate_limits/{rateLimitId} — rate limiting counters
+    // Only the Cloud Function (Admin SDK) should write these. Direct writes denied.
+    match /parking_rate_limits/{rateLimitId} {
+      allow read, write: if isSuperAdmin(); // Cloud Function uses Admin SDK, bypasses rules
+    }
+
+    // ─── PRODUCTS / CATALOG ───────────────────────────────────────────────
+    // products/{productId} — admin product catalog
+    // Rules:
+    //   Read: Admin only (not exposed to customers in this version)
+    //   Write: Super admin only
+    //   Soft-delete via isArchived: true; hard delete by super_admin only
+    match /products/{productId} {
+      allow read: if isAdmin();
+      allow create: if isSuperAdmin();
+      allow update: if isSuperAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
