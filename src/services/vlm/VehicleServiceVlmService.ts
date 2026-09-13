@@ -135,7 +135,7 @@ export const VEHICLE_SERVICE_SCHEMA = {
 export function postProcessVehicleServiceExtraction(
   raw: Partial<VehicleServiceExtraction>,
 ): NormalizedVehicleServiceData {
-  const regRaw = (raw.registration_number || '')
+  const regRaw = (raw.registration_number || (raw as any).vehicle_registration_number || '')
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, '');
 

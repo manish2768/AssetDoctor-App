@@ -27,16 +27,19 @@ export function safeParseGeminiJson<T = any>(rawText: string | null | undefined)
   cleaned = cleaned.replace(/\s*```$/i, '');
   cleaned = cleaned.trim();
 
-  // Find bounding braces if wrapped in extraneous text
+  // Find bounding braces or brackets if wrapped in extraneous text
   const firstBrace = cleaned.indexOf('{');
-  const lastBrace = cleaned.lastIndexOf('}');
-  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    cleaned = cleaned.slice(firstBrace, lastBrace + 1);
-  } else {
-    const firstBracket = cleaned.indexOf('[');
+  const firstBracket = cleaned.indexOf('[');
+
+  if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
     const lastBracket = cleaned.lastIndexOf(']');
-    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+    if (lastBracket > firstBracket) {
       cleaned = cleaned.slice(firstBracket, lastBracket + 1);
+    }
+  } else if (firstBrace !== -1) {
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (lastBrace > firstBrace) {
+      cleaned = cleaned.slice(firstBrace, lastBrace + 1);
     }
   }
 

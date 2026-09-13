@@ -21,6 +21,11 @@ import {
   googleSignOut,
 } from './googleSignIn';
 import { IdentityService } from './IdentityService';
+import { IdentityResolver } from '../identity/identityResolver';
+import {
+  normalizeCanonicalEmail,
+  normalizeCanonicalPhone,
+} from '../identity/identityNormalizer';
 
 function isFirebaseDefaultMissing(error) {
   const msg = String(error?.message || error || '');
@@ -336,28 +341,98 @@ export class AuthService {
       const googleCredential = auth.GoogleAuthProvider.credential(token);
       const userCredential = await firebaseAuth.signInWithCredential(googleCredential);
       const { user } = userCredential;
-      const isNewUser = Boolean(userCredential.additionalUserInfo?.isNewUser);
+      const normEmail = normalizeCanonicalEmail(user.email);
+      const googleProvider = (user.providerData || []).find((p) => p.providerId === 'google.com');
+      const googleUid = googleProvider?.uid || user.uid;
+
+      // Check if an account already exists with that email or associated phone number
+      const existing = await IdentityResolver.findExistingCanonicalProfile({
+        email: normEmail || undefined,
+        googleUid,
+        currentUid: user.uid,
+      });
 
       let profile = null;
-      try {
-        profile = await UserService.syncUserToFirestore(user, {
-          authProvider: 'google',
-          extra: {
-            name: user.displayName || undefined,
-            email: user.email || undefined,
-            photoURL: user.photoURL || undefined,
+      let isNewUser = Boolean(userCredential.additionalUserInfo?.isNewUser);
+
+      if (existing && existing.canonicalUserId && existing.canonicalUserId !== user.uid) {
+        // Existing account found! Do NOT create a new user profile.
+        // Link the Google provider to the existing account and log them into that account directly.
+        const primaryUid = existing.canonicalUserId;
+        isNewUser = false;
+
+        // Reconcile and link Google identity to the existing canonical account
+        await IdentityResolver.linkIdentityToExistingProfile(primaryUid, {
+          type: 'google',
+          value: {
+            providerUserId: googleUid,
+            email: normEmail,
           },
-        });
-      } catch (syncError) {
-        console.warn('[AuthService] profile sync after Google login:', syncError?.message || syncError);
+        }).catch((e) => console.warn('[AuthService] linkIdentityToExistingProfile warning:', e?.message));
+
+        // Attempt Auth provider linking if token is available
         try {
-          profile = await UserService.saveGoogleUserProfile(user);
+          const { tryLinkGoogleAfterPhoneSignIn } = require('./AccountLinkService');
+          await tryLinkGoogleAfterPhoneSignIn(token);
         } catch {
-          /* Auth still succeeds */
+          /* optional */
+        }
+
+        // Update secondary user record to point to canonical primary account
+        try {
+          const firestore = require('@react-native-firebase/firestore').default;
+          await Promise.all([
+            firestore().collection('users').doc(user.uid).set(
+              {
+                uid: user.uid,
+                canonicalUserId: primaryUid,
+                isLinkedDuplicate: true,
+                mergedInto: primaryUid,
+                email: normEmail || undefined,
+                updatedAt: firestore.FieldValue.serverTimestamp(),
+              },
+              { merge: true }
+            ),
+            firestore().collection('identityMappings').doc(`authUid:${user.uid}`).set(
+              {
+                canonicalUserId: primaryUid,
+                identityType: 'authUid',
+                identityValue: user.uid,
+                verified: true,
+                updatedAt: new Date().toISOString(),
+              },
+              { merge: true }
+            ),
+          ]);
+        } catch (e) {
+          console.warn('[AuthService] Map secondary Google uid warning:', e?.message);
+        }
+
+        profile = await UserService.getProfile(primaryUid);
+      } else {
+        // No conflict / this is the primary canonical user
+        try {
+          profile = await UserService.syncUserToFirestore(user, {
+            authProvider: 'google',
+            extra: {
+              name: user.displayName || undefined,
+              email: normEmail || user.email || undefined,
+              photoURL: user.photoURL || undefined,
+            },
+          });
+        } catch (syncError) {
+          console.warn('[AuthService] profile sync after Google login note:', syncError?.message || syncError);
+          profile = await IdentityResolver.findExistingCanonicalProfile({
+            currentUid: user.uid,
+            email: user.email,
+          });
         }
       }
 
-      if (isNewUser && user.email) {
+      if (user.email) {
+        // Always attempt welcome email — EmailService.sendWelcomeEmail() has a
+        // Firestore-transaction idempotency guard that prevents duplicate sends.
+        // Auth must still succeed even if this fails.
         try {
           await user.getIdToken(true);
           await EmailService.sendWelcomeEmail({
@@ -523,11 +598,10 @@ export class AuthService {
       if (!user) {
         throw new Error('Could not complete phone verification.');
       }
-      const isNewUser = Boolean(userCredential.additionalUserInfo?.isNewUser);
-      const displayName =
-        String(options.name || '').trim() || user.displayName || undefined;
+      const rawName = String(options.name || '').trim() || user.displayName || '';
+      const displayName = IdentityResolver.sanitizeDisplayName(rawName) || undefined;
 
-      const phone = user.phoneNumber || confirmation.phone || undefined;
+      const phone = normalizeCanonicalPhone(user.phoneNumber || confirmation.phone) || undefined;
 
       if (displayName && displayName !== user.displayName) {
         try {
@@ -545,16 +619,65 @@ export class AuthService {
       } catch {
         authProviders = ['phone'];
       }
-      const profile = await UserService.syncUserToFirestore(user, {
-        authProvider: mode === 'link' && !linkMeta.merged ? 'linked' : 'phone',
-        extra: {
-          phone: phone || undefined,
-          phoneNumber: phone || undefined,
-          name: displayName,
-          linkedProviders: providers,
-          authProviders,
-        },
-      });
+      let isNewUser = Boolean(userCredential.additionalUserInfo?.isNewUser);
+      let profile = null;
+
+      // Check if an account already exists with that phone number
+      const existingPhoneAccount = phone ? await IdentityResolver.findExistingCanonicalProfile({ phone, currentUid: user.uid }) : null;
+
+      if (existingPhoneAccount && existingPhoneAccount.canonicalUserId && existingPhoneAccount.canonicalUserId !== user.uid) {
+        // Account exists with this phone number -> log directly into that account
+        const primaryUid = existingPhoneAccount.canonicalUserId;
+        isNewUser = false;
+
+        // Map phone identity and secondary authUid to existing canonical account
+        await IdentityResolver.linkIdentityToExistingProfile(primaryUid, {
+          type: 'phone',
+          value: phone,
+        }).catch(() => {});
+
+        try {
+          const firestore = require('@react-native-firebase/firestore').default;
+          await Promise.all([
+            firestore().collection('users').doc(user.uid).set(
+              {
+                uid: user.uid,
+                canonicalUserId: primaryUid,
+                isLinkedDuplicate: true,
+                mergedInto: primaryUid,
+                phone: phone || undefined,
+                updatedAt: firestore.FieldValue.serverTimestamp(),
+              },
+              { merge: true }
+            ),
+            firestore().collection('identityMappings').doc(`authUid:${user.uid}`).set(
+              {
+                canonicalUserId: primaryUid,
+                identityType: 'authUid',
+                identityValue: user.uid,
+                verified: true,
+                updatedAt: new Date().toISOString(),
+              },
+              { merge: true }
+            ),
+          ]);
+        } catch (e) {
+          console.warn('[AuthService] Map secondary Phone uid warning:', e?.message);
+        }
+
+        profile = await UserService.getProfile(primaryUid);
+      } else {
+        profile = await UserService.syncUserToFirestore(user, {
+          authProvider: mode === 'link' && !linkMeta.merged ? 'linked' : 'phone',
+          extra: {
+            phone: phone || undefined,
+            phoneNumber: phone || undefined,
+            name: displayName,
+            linkedProviders: providers,
+            authProviders,
+          },
+        });
+      }
 
       if (isNewUser && mode !== 'link') {
         await Promise.allSettled([
@@ -589,6 +712,30 @@ export class AuthService {
           ? 'Invalid OTP'
           : mapAuthError(error) || error?.message || 'Invalid OTP';
       return { success: false, error: message, user: null };
+    }
+  }
+
+  /**
+   * Send a Firebase password-reset email to the given address.
+   * Uses the existing Firebase Auth provider — secure, provider-managed link.
+   * Safe to call for any email: Firebase does NOT expose whether the address exists.
+   * @param {string} email
+   * @returns {Promise<{ success: boolean, error?: string }>}
+   */
+  static async sendPasswordResetEmail(email) {
+    Haptics.tap();
+    try {
+      const firebaseAuth = await resolveFirebaseAuth();
+      const cleanEmail = String(email || '').trim().toLowerCase();
+      if (!cleanEmail || !cleanEmail.includes('@')) {
+        throw new Error('Enter a valid email address.');
+      }
+      await firebaseAuth.sendPasswordResetEmail(cleanEmail);
+      Haptics.success();
+      return { success: true };
+    } catch (error) {
+      Haptics.error();
+      return { success: false, error: mapAuthError(error) || error?.message || 'Could not send reset email.' };
     }
   }
 

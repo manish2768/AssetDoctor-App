@@ -796,6 +796,7 @@ function ScanBillScreenInner({ navigation, route }) {
                 // Bounded single retry on transient network timeout
                 if (!processOpts.isRetry) {
                   console.log('[OCR_PROVIDER] Retrying Gemini Vision extraction (attempt 2/2)...');
+                  setProcessLabel('Retrying once…');
                   return processImage(optimizedUri, {
                     ...processOpts,
                     isRetry: true,

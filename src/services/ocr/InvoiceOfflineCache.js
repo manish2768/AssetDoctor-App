@@ -27,11 +27,12 @@ export class InvoiceOfflineCache {
     audit,
     rawText,
     engine,
+    persistImageFile = false,
   }) {
     const id = scanId || `scan_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     let localImageUri = imageUri || '';
     try {
-      if (imageUri && FileSystem.documentDirectory) {
+      if (persistImageFile && imageUri && FileSystem.documentDirectory) {
         const dir = `${FileSystem.documentDirectory}asset-doctor/invoices/${userId || 'guest'}/`;
         await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
         const dest = `${dir}${id}.jpg`;
