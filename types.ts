@@ -1,4 +1,15 @@
-export type AssetCategory = 'Electronics' | 'Vehicles' | 'Appliances' | 'Gadgets' | 'Home' | 'Other';
+export type AssetCategory =
+  | 'VEHICLE'
+  | 'ELECTRONICS'
+  | 'HOME_APPLIANCES'
+  | 'BUSINESS'
+  | 'PERSONAL_DOCUMENT'
+  | 'Electronics'
+  | 'Vehicles'
+  | 'Appliances'
+  | 'Gadgets'
+  | 'Home'
+  | 'Other';
 
 export type WarrantyStatus = 'active' | 'expiring_soon' | 'expired';
 

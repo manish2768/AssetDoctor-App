@@ -1,6 +1,11 @@
 /**
- * Root Error Boundary — catches render/runtime errors and shows recovery UI
- * instead of a blank white screen or Expo fatal overlay.
+ * Asset Doctor — Master Human-Friendly Root Error Boundary
+ *
+ * Catches any unhandled render / runtime errors:
+ * - Clear, calm, reassuring human copy
+ * - Assures the user their vault data is 100% safe
+ * - Primary "Try again" + Secondary "Go to Home" actions
+ * - Technical details collapsed by default under expandable accordion
  */
 
 import React, { Component } from 'react';
@@ -10,21 +15,20 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Linking,
   SafeAreaView,
 } from 'react-native';
-import Constants from 'expo-constants';
 
 import { BRAND, COLORS } from '../theme/branding';
 import { AppLogo } from './AppLogo';
+import { RADIUS, SPACING, TYPE, elevation } from '../theme/tokens';
+import { goHomeDashboard } from '../navigation/navActions';
 
 function reportCrashEmail(error) {
   try {
-    // eslint-disable-next-line global-require
     const { openSupportErrorEmail } = require('../services/diagnostics/DeviceDiagnostics');
     openSupportErrorEmail({
-      subject: '[Asset Doctor] App crash report',
-      message: 'The app crashed with this error.',
+      subject: '[Asset Doctor] App diagnostic report',
+      message: 'The app encountered an unexpected error state.',
       error,
     });
   } catch {
@@ -35,7 +39,7 @@ function reportCrashEmail(error) {
 export class RootErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { error: null, resetKey: 0 };
+    this.state = { error: null, resetKey: 0, showDetails: false };
   }
 
   static getDerivedStateFromError(error) {
@@ -46,7 +50,6 @@ export class RootErrorBoundary extends Component {
     console.error('[RootErrorBoundary]', error?.message || error);
     console.error('[RootErrorBoundary] stack:', info?.componentStack || '');
     try {
-      // eslint-disable-next-line global-require
       const { CrashlyticsService } = require('../services/crashlytics/CrashlyticsService');
       CrashlyticsService.recordError?.(error, {
         componentStack: String(info?.componentStack || '').slice(0, 200),
@@ -61,105 +64,174 @@ export class RootErrorBoundary extends Component {
     this.setState((state) => ({
       error: null,
       resetKey: state.resetKey + 1,
+      showDetails: false,
     }));
   };
 
   restart = () => {
-    this.setState({ error: null, resetKey: 0 });
+    this.setState({ error: null, resetKey: 0, showDetails: false });
     if (typeof this.props.onRestart === 'function') {
       this.props.onRestart();
     } else {
-      this.retry();
+      try {
+        goHomeDashboard();
+      } catch {
+        this.retry();
+      }
     }
   };
 
   render() {
     if (this.state.error) {
       return (
-        <SafeAreaView style={styles.crash} accessibilityRole="alert">
-          <View style={styles.crashInner}>
-            <AppLogo size={48} style={{ marginBottom: 8 }} />
-            <Text style={styles.crashBrand}>{BRAND.name}</Text>
-            <Text style={styles.crashTitle}>Oops, something went wrong</Text>
-            <Text style={styles.crashSub}>
-              The vault hit an unexpected error. Restart to continue — your data stays private.
+        <SafeAreaView style={styles.container} accessibilityRole="alert">
+          <View style={styles.inner}>
+            <AppLogo size={52} style={{ marginBottom: 12 }} />
+            <Text style={styles.brand}>{BRAND.name}</Text>
+            <Text style={styles.title}>Something needs attention</Text>
+            <Text style={styles.subtitle}>
+              Your asset vault data is completely safe. We hit a temporary hiccup loading this view.
             </Text>
-            <ScrollView style={styles.crashScroll} contentContainerStyle={{ paddingVertical: 8 }}>
-              <Text style={styles.crashBody} selectable>
-                {String(this.state.error?.message || this.state.error)}
+
+            <View style={styles.actionGroup}>
+              <Pressable style={styles.primaryBtn} onPress={this.retry}>
+                <Text style={styles.primaryBtnText}>Try again</Text>
+              </Pressable>
+
+              <Pressable style={styles.secondaryBtn} onPress={this.restart}>
+                <Text style={styles.secondaryBtnText}>Go to Home</Text>
+              </Pressable>
+            </View>
+
+            {/* Collapsible Technical Details */}
+            <Pressable
+              style={styles.detailsToggle}
+              onPress={() => this.setState((s) => ({ showDetails: !s.showDetails }))}
+            >
+              <Text style={styles.detailsToggleText}>
+                {this.state.showDetails ? '▲ Hide technical details' : '▼ View technical details'}
               </Text>
-            </ScrollView>
-            <Pressable style={styles.crashBtn} onPress={this.restart}>
-              <Text style={styles.crashBtnText}>Restart</Text>
             </Pressable>
-            <Pressable style={[styles.crashBtn, styles.crashBtnGhost]} onPress={this.retry}>
-              <Text style={styles.crashBtnTextGhost}>Try again</Text>
-            </Pressable>
-            <Pressable style={styles.linkBtn} onPress={() => reportCrashEmail(this.state.error)}>
-              <Text style={styles.linkText}>Report via Email</Text>
-            </Pressable>
-            <Text style={styles.crashHelp}>Support: {BRAND.supportEmail}</Text>
+
+            {this.state.showDetails ? (
+              <ScrollView style={styles.errorBox} contentContainerStyle={{ padding: 12 }}>
+                <Text style={styles.errorText} selectable>
+                  {String(this.state.error?.message || this.state.error)}
+                </Text>
+                <Pressable
+                  style={{ marginTop: 12 }}
+                  onPress={() => reportCrashEmail(this.state.error)}
+                >
+                  <Text style={styles.reportLink}>Report error via email →</Text>
+                </Pressable>
+              </ScrollView>
+            ) : null}
           </View>
         </SafeAreaView>
       );
     }
 
-    return (
-      <View style={styles.fill} key={this.state.resetKey}>
-        {this.props.children}
-      </View>
-    );
+    return this.props.children;
   }
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: COLORS.bg },
-  crash: {
+  container: {
     flex: 1,
-    backgroundColor: COLORS.bg,
-  },
-  crashInner: {
-    flex: 1,
+    backgroundColor: '#07111F',
     justifyContent: 'center',
-    padding: 24,
+    alignItems: 'center',
   },
-  crashBrand: {
-    color: COLORS.emerald,
-    fontSize: 13,
+  inner: {
+    width: '88%',
+    maxWidth: 420,
+    backgroundColor: '#0B1628',
+    borderRadius: RADIUS.xl,
+    padding: SPACING.xl,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(15,143,135,0.25)',
+  },
+  brand: {
+    color: '#00B8A9',
+    fontSize: 12,
     fontWeight: '800',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    marginBottom: 4,
+  },
+  title: {
+    color: '#F8FAFC',
+    fontSize: 22,
+    fontWeight: '800',
+    textAlign: 'center',
     marginBottom: 8,
   },
-  crashTitle: { color: COLORS.text, fontSize: 22, fontWeight: '900', marginBottom: 8 },
-  crashSub: { color: COLORS.muted, fontSize: 14, lineHeight: 20 },
-  crashScroll: {
-    maxHeight: 180,
-    marginVertical: 12,
-    backgroundColor: COLORS.dangerSoft,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(244,63,94,0.35)',
+  subtitle: {
+    color: '#94A3B8',
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: SPACING.xl,
   },
-  crashBody: { color: COLORS.rose, fontSize: 13, lineHeight: 18, fontWeight: '600' },
-  crashBtn: {
-    backgroundColor: COLORS.emerald,
-    borderRadius: 14,
-    paddingVertical: 14,
+  actionGroup: {
+    width: '100%',
+    gap: 10,
+  },
+  primaryBtn: {
+    width: '100%',
+    height: 48,
+    borderRadius: RADIUS.md,
+    backgroundColor: '#0F8F87',
     alignItems: 'center',
-    marginBottom: 10,
+    justifyContent: 'center',
   },
-  crashBtnGhost: {
-    backgroundColor: 'transparent',
+  primaryBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  secondaryBtn: {
+    width: '100%',
+    height: 48,
+    borderRadius: RADIUS.md,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  crashBtnText: { color: COLORS.onPrimary, fontWeight: '900', fontSize: 14 },
-  crashBtnTextGhost: { color: COLORS.text, fontWeight: '700', fontSize: 14 },
-  linkBtn: { alignItems: 'center', paddingVertical: 8 },
-  linkText: { color: COLORS.neonBlue, fontWeight: '700', fontSize: 13 },
-  crashHelp: { color: COLORS.muted, textAlign: 'center', marginTop: 12, fontSize: 12 },
+  secondaryBtnText: {
+    color: '#F8FAFC',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  detailsToggle: {
+    marginTop: SPACING.md,
+    padding: 8,
+  },
+  detailsToggleText: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  errorBox: {
+    maxHeight: 140,
+    width: '100%',
+    backgroundColor: '#050A12',
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    marginTop: 8,
+  },
+  errorText: {
+    color: '#EF4444',
+    fontFamily: 'monospace',
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  reportLink: {
+    color: '#00B8A9',
+    fontSize: 12,
+    fontWeight: '600',
+  },
 });
-
-export default RootErrorBoundary;

@@ -1,16 +1,18 @@
 /**
- * Asset Doctor — Master Assets List Screen.
+ * Asset Doctor — Master Assets Portfolio Screen.
  * Category isolation: route.params.category is the source of truth.
- * Search runs only after the category filter.
+ * Search runs after the category filter.
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
+  Text,
   StyleSheet,
   FlatList,
   RefreshControl,
   ScrollView,
+  Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -21,6 +23,7 @@ import { Haptics } from '../../services/haptics';
 import { requireAuth } from '../../navigation/authGate';
 import { calculateHealthScore } from '../../utils/healthScore';
 import { daysUntil } from '../../utils/dates';
+import { formatINRCompact } from '../../utils/format';
 import { TAB_BAR_HEIGHT } from '../../components/CustomBottomTabBar';
 import {
   AppHeader,
@@ -29,14 +32,13 @@ import {
   AssetRow,
   EmptyState,
 } from '../../components/design-system';
-import { SPACING } from '../../theme/tokens';
+import { SPACING, RADIUS, TYPE, elevation } from '../../theme/tokens';
 import {
   CATEGORY_META,
   getCategoryMeta,
   resolveRouteCategory,
   searchAssetsInCategory,
 } from '../../utils/categoryNormalization';
-import { AssetDoctorProtectedBadge } from '../../components/trust/AssetDoctorProtectedBadge';
 import { resolveProtectionBadgeState } from '../../trust/protectionStatus';
 
 const CATEGORY_FILTERS = [
@@ -66,9 +68,9 @@ function assetCoverageStatus(asset) {
   if (ins != null && ins < 0) return { label: 'Insurance expired', tone: 'error' };
   if (puc != null && puc < 0) return { label: 'PUC expired', tone: 'error' };
   if (svc != null && svc < 0) return { label: 'Service overdue', tone: 'error' };
-  if (ins != null && ins <= 15) return { label: `Insurance ${ins}d`, tone: 'warning' };
-  if (puc != null && puc <= 15) return { label: `PUC ${puc}d`, tone: 'warning' };
-  if (svc != null && svc <= 15) return { label: `Service ${svc}d`, tone: 'warning' };
+  if (ins != null && ins <= 15) return { label: `Insurance ${ins}d left`, tone: 'warning' };
+  if (puc != null && puc <= 15) return { label: `PUC ${puc}d left`, tone: 'warning' };
+  if (svc != null && svc <= 15) return { label: `Service ${svc}d left`, tone: 'warning' };
   if (war != null && war > 0) return { label: 'Warranty active', tone: 'success' };
   if (ins != null && ins > 15) return { label: 'Insurance active', tone: 'success' };
   return { label: 'Protected', tone: 'info' };
@@ -92,15 +94,12 @@ export function AssetListScreen({ navigation, route }) {
     return searchAssetsInCategory(assets || [], selectedCategory, query);
   }, [assets, query, routeCategory.valid, selectedCategory]);
 
-  useEffect(() => {
-    if (!__DEV__) return undefined;
-    const total = assets?.length || 0;
-    console.log('[CategoryIsolation] Selected category:', selectedCategory || `INVALID(${routeCategory.raw})`);
-    console.log('[CategoryIsolation] Total assets:', total);
-    console.log('[CategoryIsolation] Filtered assets:', filteredAssets.length);
-    console.log('[CategoryIsolation] Excluded assets:', total - filteredAssets.length);
-    return undefined;
-  }, [assets, filteredAssets.length, routeCategory.raw, selectedCategory]);
+  const totalValuation = useMemo(() => {
+    return filteredAssets.reduce((sum, item) => {
+      const val = Number(item.purchasePrice || item.price || item.value || 0);
+      return sum + (Number.isFinite(val) ? val : 0);
+    }, 0);
+  }, [filteredAssets]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -142,13 +141,15 @@ export function AssetListScreen({ navigation, route }) {
         onCta: onAddAsset,
       };
 
-  const countLabel = `${filteredAssets.length} ${filteredAssets.length === 1 ? 'asset' : 'assets'} protected`;
+  const countLabel = totalValuation > 0
+    ? `${filteredAssets.length} ${filteredAssets.length === 1 ? 'Asset' : 'Assets'} • ₹${formatINRCompact(totalValuation)}`
+    : `${filteredAssets.length} ${filteredAssets.length === 1 ? 'asset' : 'assets'} protected`;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={{ paddingTop: Math.max(insets.top, 8) }}>
         <AppHeader
-          title={routeCategory.valid ? meta.title : 'Assets'}
+          title={routeCategory.valid ? meta.title : 'My Assets'}
           subtitle={countLabel}
           rightAction="+ Add"
           onRightAction={onAddAsset}
@@ -159,7 +160,7 @@ export function AssetListScreen({ navigation, route }) {
         <SearchBar
           value={query}
           onChangeText={setQuery}
-          placeholder={routeCategory.valid ? meta.searchPlaceholder : 'Search...'}
+          placeholder={routeCategory.valid ? meta.searchPlaceholder : 'Search assets...'}
           style={{ marginHorizontal: SPACING.md }}
         />
 
@@ -187,7 +188,7 @@ export function AssetListScreen({ navigation, route }) {
           return (
             <AssetRow
               item={item}
-              title={item.assetName}
+              title={item.assetName || item.name || 'Protected Asset'}
               subtitle={assetSubtitle(item)}
               registration={item.registration}
               statusText={cov.label}

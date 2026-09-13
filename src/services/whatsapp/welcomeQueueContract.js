@@ -5,7 +5,7 @@
 
 export const WELCOME_QUEUE_COLLECTION = 'notification_queue';
 export const WELCOME_EVENT_TYPE = 'user_welcome';
-export const WELCOME_TEMPLATE_NAME = 'welcome_message';
+export const WELCOME_TEMPLATE_NAME = 'asset_doctor_welcome';
 export const WELCOME_TEMPLATE_KEY = WELCOME_TEMPLATE_NAME;
 export const WELCOME_TEMPLATE_LANGUAGE = 'en';
 export const WELCOME_PROVIDER = 'meta_cloud_api';
@@ -78,6 +78,9 @@ export function evaluateWelcomeEligibility({
 } = {}) {
   if (welcomeMessageSent === true) {
     return { action: 'skip', status: 'skipped', reason: 'ALREADY_SENT' };
+  }
+  if (!phone || String(phone).trim() === '') {
+    return { action: 'pending', status: 'pending', reason: 'MISSING_PHONE' };
   }
   const parsed = normalizeIndianWhatsAppDigits(phone);
   if (!parsed.ok) {
@@ -216,7 +219,51 @@ export function buildWelcomeQueueItem({
     return { ok: false, error: 'userId required', errorCategory: 'MISSING_USER' };
   }
 
+  if (eligibility.reason === 'MISSING_PHONE') {
+    return {
+      ok: false,
+      error: 'Phone number missing. Welcome queued as pending.',
+      errorCategory: 'MISSING_PHONE',
+      pending: true,
+      docId: null,
+    };
+  }
+
   const parsed = normalizeIndianWhatsAppDigits(phone);
+  if (eligibility.reason === 'ALREADY_SENT') {
+    return {
+      ok: false,
+      error: 'Welcome already sent.',
+      errorCategory: 'ALREADY_SENT',
+      diagnosticItem: {
+        uid,
+        userId: uid,
+        type: 'WELCOME',
+        eventType: WELCOME_EVENT_TYPE,
+        channel: 'whatsapp',
+        templateName: WELCOME_TEMPLATE_NAME,
+        templateKey: WELCOME_TEMPLATE_KEY,
+        language: WELCOME_TEMPLATE_LANGUAGE,
+        templateLanguage: WELCOME_TEMPLATE_LANGUAGE,
+        phoneMasked: parsed.ok ? maskE164ForTrace(parsed.e164) : '****',
+        maskedPhone: parsed.ok ? maskE164ForTrace(parsed.e164) : '****',
+        recipientPhone: parsed.e164 || '',
+        status: 'skipped',
+        failureReason: 'ALREADY_SENT',
+        failureCode: 'ALREADY_SENT',
+        provider: WELCOME_PROVIDER,
+        createdAt: now,
+        updatedAt: now,
+        attemptCount: 0,
+        retryCount: 0,
+        idempotencyKey: welcomeIdempotencyKey(uid),
+        payload: { userName: displayName.slice(0, 80), customerType: type },
+        source: 'client_signup',
+      },
+      docId: welcomeQueueDocId(uid),
+    };
+  }
+
   if (!parsed.ok || eligibility.reason === 'INVALID_PHONE') {
     const skipAlready = eligibility.reason === 'ALREADY_SENT';
     return {

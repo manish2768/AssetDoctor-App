@@ -1,18 +1,17 @@
-// AssetDoctor Progressive Web App Service Worker V2.8
-const CACHE_NAME = 'assetdoctor-v2.8-live-pwa';
+// AssetDoctor Progressive Web App Service Worker V2.9
+const CACHE_NAME = 'assetdoctor-v2.9-admin-fix';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/icon.svg',
-  '/admin.html'
+  '/icon.svg'
 ];
 
 // Install Event - Pre-cache core shell
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[ServiceWorker] Pre-caching offline shell');
+      console.log('[ServiceWorker] Pre-caching offline shell v2.9');
       return cache.addAll(STATIC_ASSETS).catch((err) => {
         console.warn('[ServiceWorker] Pre-cache partial warning:', err);
       });
@@ -41,14 +40,15 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
-  // Do not cache backend API calls, Auth endpoints, or Firestore streams
+  // Do not cache backend API calls, Auth endpoints, Firestore streams, or Admin Dashboard assets
   if (
     url.pathname.startsWith('/api/') ||
+    url.pathname.includes('admin') ||
     url.hostname.includes('firestore.googleapis.com') ||
     url.hostname.includes('identitytoolkit.googleapis.com') ||
     url.hostname.includes('securetoken.googleapis.com')
   ) {
-    return;
+    return; // Bypass service worker entirely: browser goes directly to network
   }
 
   // Network-First for Navigation / HTML pages (Guarantees live Firestore Admin UI)

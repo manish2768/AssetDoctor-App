@@ -3,12 +3,22 @@
 
 User-agent: *
 Allow: /
+Allow: /vehicle-doctor/
+Allow: /appliance-doctor/
+Allow: /warranty
+Allow: /maintenance
+Allow: /smart-qr
 Allow: /tools/
+Allow: /blog/
+Allow: /download
 Allow: /assets/
 Allow: /knowledge/
-Allow: /passport/
+Allow: /about
+Allow: /contact
+Allow: /privacy
+Allow: /terms
 
-# Protect Admin, Private Account, and Vault from public indexing
+# Protect Admin, Private Account, and Customer Vault from public indexing
 Disallow: /admin
 Disallow: /admin.html
 Disallow: /account

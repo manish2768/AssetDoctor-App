@@ -734,6 +734,40 @@ export class AssetService {
         'batteryCapacityKwh',
         'energyConsumptionPer100Km',
         'rangeKm',
+        // Vehicle service, insurance, PUC, documents & purchase fields
+        'serviceHistory',
+        'lastServiceDate',
+        'serviceInvoiceNumber',
+        'workshopName',
+        'totalServiceCost',
+        'insurancePolicyNumber',
+        'policyNumber',
+        'insuranceInsurer',
+        'insurerName',
+        'insuranceIdv',
+        'idv',
+        'insurancePremium',
+        'premium',
+        'insuranceStartDate',
+        'policyStartDate',
+        'pucCertificateNumber',
+        'certificateNumber',
+        'pucValidUntil',
+        'testingCentre',
+        'model',
+        'brand',
+        'purchasePrice',
+        'totalAmount',
+        'invoiceNumber',
+        'invoiceDate',
+        'hasBill',
+        'hasInsurance',
+        'hasPuc',
+        'hasWarranty',
+        'documents',
+        'vehicleNumber',
+        'registrationNumber',
+        'fuelEconomyKmpl',
       ];
 
       for (const key of allow) {
@@ -763,7 +797,7 @@ export class AssetService {
       const cleaned = stripUndefinedDeep(patch);
       await assetsRef(userId).doc(assetId).set(cleaned, { merge: true });
       Haptics.success();
-      return { success: true, id: assetId };
+      return { success: true, id: assetId, asset: { ...cleaned, assetId, id: assetId } };
     } catch (error) {
       Haptics.error();
       const shouldQueue = !options.skipOfflineQueue && isTransientError(error);

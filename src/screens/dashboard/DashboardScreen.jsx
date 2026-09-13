@@ -1,6 +1,14 @@
 /**
- * Asset Doctor — Home dashboard (Phase 10 presentation).
- * Data still comes from useAssets / calculateHealthScore / summarizePortfolioCost.
+ * Asset Doctor — Master Home Dashboard Screen
+ *
+ * Core Asset Intelligence & Protection Hub:
+ * 1. Compact Header: Personalized Greeting + Bell Inbox
+ * 2. Signature Asset Health Hero: Portfolio Score (88 / 100 GOOD), Assets/Docs count, [View health report →]
+ * 3. Primary Actions: "+ Add / Scan Asset" + "Scan document" (Invoice, RC, Insurance, Warranty, Service)
+ * 4. Needs Your Attention: Actionable urgent items (Overdue service, Expiring policies)
+ * 5. Your Assets: Compact visual asset cards (Name, Health, Valuation, Action)
+ * 6. Smart Insights: 2-3 actionable financial & maintenance intelligence cards
+ * 7. Recent Activity: Compact chronological activity timeline
  */
 
 import React, { useMemo, useState } from 'react';
@@ -11,72 +19,44 @@ import {
   ScrollView,
   Pressable,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '../../context/AuthProvider';
 import { useAssets } from '../../context/AssetProvider';
+import { useFamilyVault } from '../../context/FamilyVaultContext';
 import { useDrawer } from '../../context/DrawerContext';
 import { useThemeColors } from '../../context/ThemeProvider';
 import { Haptics } from '../../services/haptics';
 import { requireAuth } from '../../navigation/authGate';
-import { openScanInvoice, openAssetCategoryList } from '../../navigation/navActions';
+import { openScanInvoice } from '../../navigation/navActions';
+import { ScanAndAddModal } from '../../components/scan/ScanAndAddModal';
 import { daysUntil, formatDateIN } from '../../utils/dates';
 import { calculateHealthScore } from '../../utils/healthScore';
 import { needsAttention, hasExpiredDocuments } from '../../utils/assetExpiry';
-import { resolveAssetCategory } from '../../utils/categoryNormalization';
-import { resolveAssetCapabilities } from '../../services/assets/assetCapabilities';
-import { VehicleInsightsSection } from '../../components/fuel/VehicleInsightsSection';
-import { NetworkIntelligenceSection } from '../../components/intelligence/NetworkIntelligenceSection';
-import { isHomeVehicle } from '../../utils/vehicleFolder';
+import { formatINRCompact } from '../../utils/format';
 import { TAB_BAR_HEIGHT } from '../../components/CustomBottomTabBar';
 import {
   StatusBadge,
-  SectionHeader,
   EmptyState,
-  HeroCard,
   IconButton,
-  PremiumButton,
   PremiumIcon,
   CountUp,
-  ScanBeam,
-  AssetCollectionCard,
-  InsightCard,
-  MetricCard,
 } from '../../design-system';
-import { RADIUS, SPACING, TYPE } from '../../theme/tokens';
+import { isVehicleAsset, isHomeApplianceAsset } from '../../domain/asset/assetGuards';
+import {
+  PrimaryButton,
+  SecondaryButton,
+} from '../../components/design-system';
+import { CategoryIcon } from '../../components/icons/CategoryIcon';
+import { RADIUS, SPACING, TYPE, elevation } from '../../theme/tokens';
 
 function getGreeting() {
   const hour = new Date().getHours();
   if (hour < 12) return 'Good morning';
   if (hour < 17) return 'Good afternoon';
   return 'Good evening';
-}
-
-function assetSubtitle(asset) {
-  const parts = [];
-  const id = asset.registration || asset.serialNumber || asset.imei;
-  if (id) parts.push(id);
-  const typeOrCat = asset.categoryLabel || asset.category || asset.model || 'Protected';
-  if (typeOrCat && (!id || !id.includes(typeOrCat))) parts.push(typeOrCat);
-  return parts.length > 0 ? parts.join(' · ') : 'Protected';
-}
-
-function assetCoverageStatus(asset) {
-  const ins = daysUntil(asset.insuranceExpiry);
-  const puc = daysUntil(asset.pucExpiry);
-  const svc = daysUntil(asset.nextServiceDue);
-  const war = daysUntil(asset.warrantyExpiry);
-
-  if (ins != null && ins < 0) return { label: 'Insurance expired', tone: 'error' };
-  if (puc != null && puc < 0) return { label: 'PUC expired', tone: 'error' };
-  if (svc != null && svc < 0) return { label: 'Service overdue', tone: 'error' };
-  if (ins != null && ins <= 15) return { label: `Insurance ${ins}d left`, tone: 'warning' };
-  if (puc != null && puc <= 15) return { label: `PUC ${puc}d left`, tone: 'warning' };
-  if (svc != null && svc <= 15) return { label: `Service ${svc}d left`, tone: 'warning' };
-  if (war != null && war > 0) return { label: 'Warranty active', tone: 'success' };
-  if (ins != null && ins > 15) return { label: 'Insurance active', tone: 'success' };
-  return { label: 'Healthy', tone: 'success' };
 }
 
 function countDocuments(asset) {
@@ -95,17 +75,23 @@ export function DashboardScreen({ navigation }) {
   const colors = useThemeColors();
   const { user, profile, isAuthenticated } = useAuth();
   const { assets, loading, refreshAssets } = useAssets();
+  const { hasFamilyVault, vaultData, members, sharedAssets } = useFamilyVault();
   const { openDrawer } = useDrawer();
 
   const [refreshing, setRefreshing] = useState(false);
 
   const userName =
-    profile?.name || user?.displayName || user?.email?.split('@')[0] || 'there';
+    profile?.name || user?.displayName || user?.email?.split('@')[0] || '';
   const greeting = getGreeting();
 
+  // Clean active assets
+  const activeAssets = useMemo(() => {
+    return (assets || []).filter((a) => !a.isArchived && !a.deletedAt);
+  }, [assets]);
+
+  // Overall Portfolio Health Statistics
   const healthStats = useMemo(() => {
-    const list = (assets || []).filter((a) => !a.isArchived && !a.deletedAt);
-    if (!list.length) {
+    if (!activeAssets.length) {
       return {
         score: null,
         displayScore: '—',
@@ -122,7 +108,7 @@ export function DashboardScreen({ navigation }) {
     let urgent = 0;
     let docs = 0;
 
-    for (const a of list) {
+    for (const a of activeAssets) {
       const res = calculateHealthScore(a);
       const scoreVal = typeof res === 'number' ? res : res?.score;
       if (Number.isFinite(scoreVal)) {
@@ -137,8 +123,8 @@ export function DashboardScreen({ navigation }) {
       return {
         score: null,
         displayScore: '—',
-        label: 'Building health score',
-        protectedCount: list.length,
+        label: 'Building Score',
+        protectedCount: activeAssets.length,
         urgentCount: urgent,
         documentCount: docs,
         isEmpty: true,
@@ -146,148 +132,135 @@ export function DashboardScreen({ navigation }) {
     }
 
     const avg = Math.round(totalScore / validCount);
-    const label = avg >= 90 ? 'Excellent' : avg >= 75 ? 'Good' : avg >= 60 ? 'Fair' : 'Attention';
+    const label = avg >= 85 ? 'EXCELLENT' : avg >= 70 ? 'GOOD' : avg >= 50 ? 'FAIR' : 'ATTENTION';
 
     return {
       score: avg,
       displayScore: String(avg),
       label,
-      protectedCount: list.length,
+      protectedCount: activeAssets.length,
       urgentCount: urgent,
       documentCount: docs,
       isEmpty: false,
     };
-  }, [assets]);
+  }, [activeAssets]);
 
-  const priorityItems = useMemo(() => {
-    const list = assets || [];
+  // Needs Your Attention Items
+  const attentionItems = useMemo(() => {
     const items = [];
 
-    for (const a of list) {
-      const ins = daysUntil(a.insuranceExpiry);
-      const puc = daysUntil(a.pucExpiry);
+    for (const a of activeAssets) {
+      const isVeh = isVehicleAsset(a);
+      const ins = isVeh ? daysUntil(a.insuranceExpiry) : null;
+      const puc = isVeh ? daysUntil(a.pucExpiry) : null;
       const svc = daysUntil(a.nextServiceDue);
-      const war = daysUntil(a.warrantyExpiry);
       const kmLeft =
-        Number.isFinite(Number(a.nextServiceOdometerKm)) && Number.isFinite(Number(a.odometerKm))
+        isVeh && Number.isFinite(Number(a.nextServiceOdometerKm)) && Number.isFinite(Number(a.odometerKm))
           ? Number(a.nextServiceOdometerKm) - Number(a.odometerKm)
           : null;
 
       if (ins != null && ins <= 30) {
         items.push({
           id: `${a.assetId || a.id}-ins`,
-          title: a.assetName,
-          subtitle: ins < 0 ? 'Insurance has expired' : `Insurance expires in ${ins} days`,
-          actionLabel: 'View policy →',
-          onAction: () => navigation.navigate('AssetPassport', { assetId: a.assetId || a.id }),
+          assetName: a.assetName || a.name || 'Vehicle',
+          title: 'Insurance renewal',
+          subtitle: ins < 0 ? `${Math.abs(ins)} days overdue` : `Expires in ${ins} days`,
+          severity: ins < 0 ? 'urgent' : 'warning',
+          assetId: a.assetId || a.id,
         });
       }
       if (puc != null && puc <= 15) {
         items.push({
           id: `${a.assetId || a.id}-puc`,
-          title: a.assetName,
-          subtitle: puc < 0 ? 'PUC certificate expired' : `PUC expires in ${puc} days`,
-          actionLabel: 'View asset →',
-          onAction: () => navigation.navigate('AssetPassport', { assetId: a.assetId || a.id }),
+          assetName: a.assetName || a.name || 'Vehicle',
+          title: 'PUC renewal',
+          subtitle: puc < 0 ? `${Math.abs(puc)} days overdue` : `Expires in ${puc} days`,
+          severity: puc < 0 ? 'urgent' : 'warning',
+          assetId: a.assetId || a.id,
         });
       }
       if (svc != null && svc <= 15) {
         items.push({
           id: `${a.assetId || a.id}-svc`,
-          title: a.assetName,
-          subtitle: svc < 0 ? 'Service schedule overdue' : `Service due in ${svc} days`,
-          actionLabel: 'View asset →',
-          onAction: () => navigation.navigate('AssetPassport', { assetId: a.assetId || a.id }),
+          assetName: a.assetName || a.name || 'Asset',
+          title: 'Scheduled maintenance',
+          subtitle: svc < 0 ? `${Math.abs(svc)} days overdue` : `Due in ${svc} days`,
+          severity: svc < 0 ? 'urgent' : 'warning',
+          assetId: a.assetId || a.id,
         });
       } else if (kmLeft != null && kmLeft <= 800) {
         items.push({
           id: `${a.assetId || a.id}-km`,
-          title: a.assetName,
-          subtitle:
-            kmLeft <= 0
-              ? 'Service odometer interval reached'
-              : `Service due in ${Math.round(kmLeft)} KM`,
-          actionLabel: 'View asset →',
-          onAction: () => navigation.navigate('AssetPassport', { assetId: a.assetId || a.id }),
-        });
-      }
-      if (war != null && war > 0 && war <= 90) {
-        items.push({
-          id: `${a.assetId || a.id}-war`,
-          title: a.assetName,
-          subtitle: `Warranty active until ${formatDateIN(a.warrantyExpiry)}`,
-          actionLabel: 'View warranty →',
-          onAction: () => navigation.navigate('AssetPassport', { assetId: a.assetId || a.id }),
+          assetName: a.assetName || a.name || 'Vehicle',
+          title: 'Service interval reached',
+          subtitle: kmLeft <= 0 ? 'Overdue by mileage' : `Due in ${Math.round(kmLeft)} KM`,
+          severity: kmLeft <= 0 ? 'urgent' : 'warning',
+          assetId: a.assetId || a.id,
         });
       }
     }
-    return items.slice(0, 6);
-  }, [assets, navigation]);
+    return items.slice(0, 4);
+  }, [activeAssets]);
 
-  const intelligenceFeed = useMemo(() => {
-    if (priorityItems.length) return priorityItems.slice(0, 4);
-    const list = (assets || []).filter((a) => !a.isArchived).slice(0, 3);
-    return list.map((a) => {
-      const cov = assetCoverageStatus(a);
-      return {
-        id: a.assetId || a.id,
-        title: a.assetName,
-        subtitle: cov.label,
-        actionLabel: 'View asset →',
-        onAction: () => navigation.navigate('AssetPassport', { assetId: a.assetId || a.id }),
-      };
-    });
-  }, [assets, navigation, priorityItems]);
+  // Smart Insights (2-3 items)
+  const smartInsights = useMemo(() => {
+    const insights = [];
+    if (!activeAssets.length) return insights;
 
-  // Vehicles — shown in the Home "Vehicle Insights" section.
-  // A vehicle is surfaced when it supports fuel tracking (petrol/diesel/CNG)
-  // OR mileage/odometer (which also covers EVs). This keeps the entry point
-  // visible even for a brand-new vehicle with no fuel logs yet.
-  const vehicles = useMemo(
-    () =>
-      (assets || []).filter((a) => {
-        if (a.isArchived || a.deletedAt) return false;
-        // Robust vehicle detection first so vehicles carried by category /
-        // identifiers are always surfaced on Home (fuel + mileage).
-        if (isHomeVehicle(a)) return true;
-        const caps = resolveAssetCapabilities(a);
-        if (caps.supportsFuelTracking) return true;
-        return caps.supportsOdometer && caps.supportsMileage;
-      }),
-    [assets],
-  );
-
-  const categorySummaries = useMemo(() => {
-    const groups = [
-      { key: 'vehicle', label: 'Vehicles', icon: 'car', category: 'vehicle', count: 0, health: [] },
-      { key: 'gadget', label: 'Gadgets & Electronics', icon: 'smartphone', category: 'gadget', count: 0, health: [] },
-      { key: 'home', label: 'Home & Appliances', icon: 'house', category: 'home', count: 0, health: [] },
-      { key: 'equipment', label: 'Equipment & Tools', icon: 'wrench', category: 'equipment', count: 0, health: [] },
-    ];
-    const indexByKey = Object.fromEntries(groups.map((g, i) => [g.key, i]));
-    const bump = (idx, asset) => {
-      groups[idx].count += 1;
-      const res = calculateHealthScore(asset);
-      const scoreVal = typeof res === 'number' ? res : res?.score;
-      if (Number.isFinite(scoreVal)) groups[idx].health.push(scoreVal);
-    };
-
-    for (const a of assets || []) {
-      if (a.isArchived) continue;
-      const resolved = resolveAssetCategory(a) || 'other';
-      const idx = indexByKey[resolved];
-      // Skip categories no longer surfaced on the Home grid (business / other).
-      if (idx == null) continue;
-      bump(idx, a);
+    // Insight 1: Highest value or depreciation insight
+    const valuedAssets = activeAssets.filter((a) => Number(a.purchasePrice || a.price || a.value) > 0);
+    if (valuedAssets.length > 0) {
+      const top = valuedAssets[0];
+      const name = top.assetName || top.name || 'Asset';
+      const cost = Number(top.purchasePrice || top.price || top.value);
+      insights.push({
+        id: 'ins-value',
+        icon: '💰',
+        title: `${name} Portfolio Value`,
+        description: `Acquired for ₹${formatINRCompact(cost)}. Track maintenance & fuel to protect resale value.`,
+        actionLabel: 'View analytics →',
+        onAction: () => navigation.navigate('AssetAnalytics', { assetId: top.assetId || top.id }),
+      });
     }
 
-    return groups.map((g) => {
-      const avg = g.health.length ? Math.round(g.health.reduce((s, n) => s + n, 0) / g.health.length) : null;
-      const healthLabel = avg == null ? null : avg >= 75 ? 'Healthy' : avg >= 60 ? 'Fair' : 'Attention';
-      const healthTone = avg == null ? 'neutral' : avg >= 75 ? 'success' : avg >= 60 ? 'warning' : 'error';
-      return { ...g, avg, healthLabel, healthTone };
-    });
-  }, [assets]);
+    // Insight 2: Fuel/Mileage insight if vehicle present
+    const vehicles = activeAssets.filter((a) => isVehicleAsset(a));
+    if (vehicles.length > 0) {
+      const v = vehicles[0];
+      insights.push({
+        id: 'ins-fuel',
+        icon: '⛽',
+        title: `${v.assetName || 'Vehicle'} Efficiency`,
+        description: 'Log full-tank refills to compute real km/L and running cost per km.',
+        actionLabel: 'Fuel vault →',
+        onAction: () => navigation.navigate('FuelVault', { assetId: v.assetId || v.id }),
+      });
+    }
+
+    // Insight 3: Energy intelligence if appliances present
+    const appliances = activeAssets.filter((a) => isHomeApplianceAsset(a));
+    if (appliances.length > 0) {
+      insights.push({
+        id: 'ins-energy',
+        icon: '⚡',
+        title: 'Energy Intelligence',
+        description: 'Track appliance power usage, daily kWh and monthly electricity costs.',
+        actionLabel: 'View energy insights →',
+        onAction: () => navigation.navigate('EnergyOverview'),
+      });
+    } else if (healthStats.score != null) {
+      insights.push({
+        id: 'ins-health',
+        icon: '🛡️',
+        title: 'Vault Security & Warranty',
+        description: `${healthStats.documentCount} documents active. All records are backed up with encryption.`,
+        actionLabel: 'Documents vault →',
+        onAction: () => navigation.navigate('DocumentsVault'),
+      });
+    }
+
+    return insights.slice(0, 3);
+  }, [activeAssets, healthStats, navigation]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -299,274 +272,330 @@ export function DashboardScreen({ navigation }) {
     }
   };
 
+  const [scanModalVisible, setScanModalVisible] = useState(false);
+
   const onScan = () => {
     Haptics.select();
-    openScanInvoice(navigation);
+    setScanModalVisible(true);
   };
 
-  const healthTone =
-    healthStats.isEmpty ? 'neutral' : healthStats.score >= 85 ? 'success' : healthStats.score >= 60 ? 'warning' : 'error';
-  const barColor =
-    healthStats.score >= 85 ? colors.success : healthStats.score >= 60 ? colors.warning : colors.danger;
+  const onAddAsset = () => {
+    Haptics.select();
+    requireAuth({
+      isAuthenticated,
+      navigation,
+      message: 'Sign in to add assets to your vault.',
+      onAuthed: () => navigation.navigate('AddAsset'),
+    });
+  };
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <ScanAndAddModal
+        visible={scanModalVisible}
+        onClose={() => setScanModalVisible(false)}
+      />
+      {/* 1. Header */}
       <View style={[styles.headerWrap, { paddingTop: Math.max(insets.top, 12) }]}>
         <View style={styles.headerLeft}>
-          <IconButton name="menu" label="Open navigation menu" onPress={openDrawer} />
-          <View style={{ marginLeft: 12, flex: 1 }}>
+          <IconButton name="menu" label="Open navigation drawer" onPress={openDrawer} />
+          <View style={{ marginLeft: 12 }}>
             <Text style={[TYPE.caption, { color: colors.textMuted }]}>{greeting}</Text>
-            <Text style={[TYPE.h1, { color: colors.text }]} numberOfLines={1}>
-              {userName}
+            <Text style={[TYPE.h2, { color: colors.text, fontWeight: '700' }]} numberOfLines={1}>
+              {userName ? `${userName} 👋` : 'Welcome 👋'}
             </Text>
           </View>
         </View>
         <View style={styles.headerRight}>
-          <Pressable
-            onPress={onScan}
-            style={({ pressed }) => [styles.headerScan, { backgroundColor: colors.primary, opacity: pressed ? 0.9 : 1 }]}
-            accessibilityRole="button"
-            accessibilityLabel="Scan document"
-          >
-            <PremiumIcon name="scan" size={16} color="#FFFFFF" />
-            <Text style={styles.headerScanText}>Scan</Text>
-          </Pressable>
           <IconButton
             name="bell"
             label="View alerts and reminders"
-            onPress={() => navigation.navigate('Alerts')}
+            onPress={() => navigation.navigate('NotificationCenter')}
             badge={healthStats.urgentCount > 0}
-            style={{ marginLeft: 8 }}
           />
         </View>
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 28 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 24 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
-        {healthStats.isEmpty && !loading ? (
-          <EmptyState
-            icon="shield"
-            title="Welcome to Asset Doctor."
-            message="Protect everything you own. Start by scanning a bill, warranty, insurance policy or purchase receipt."
-            ctaLabel="Scan my first document"
-            onCta={onScan}
-            secondaryLabel="Add asset manually"
-            onSecondary={() =>
-              requireAuth({
-                isAuthenticated,
-                navigation,
-                message: 'Sign in to add assets.',
-                onAuthed: () => navigation.navigate('AddAsset'),
-              })
-            }
-            style={{ marginBottom: SPACING.md }}
-          />
-        ) : null}
-
-        <HeroCard style={{ marginBottom: SPACING.md }}>
-          <View style={styles.heroTop}>
-            <Text style={[TYPE.label, { color: 'rgba(248,250,252,0.55)' }]}>ASSET HEALTH</Text>
-            <StatusBadge label={healthStats.label} tone={healthTone} />
-          </View>
-          <View style={styles.heroScoreRow}>
-            <CountUp
-              value={healthStats.score}
-              style={[TYPE.display, { color: '#F8FAFC', fontVariant: ['tabular-nums'] }]}
-            />
-            <Text style={[TYPE.caption, { color: 'rgba(248,250,252,0.45)', marginLeft: 8, marginTop: 12 }]}>/ 100</Text>
-          </View>
-          <Text style={[TYPE.body, { color: 'rgba(248,250,252,0.72)', marginTop: 4 }]}>
-            {healthStats.isEmpty
-              ? 'Your vault is ready to protect what you own'
-              : healthStats.urgentCount === 0
-              ? 'Your vault is well protected'
-              : `${healthStats.urgentCount} item${healthStats.urgentCount === 1 ? '' : 's'} need attention`}
-          </Text>
-          {!healthStats.isEmpty ? (
-            <View style={styles.heroBarTrack}>
-              <View
-                style={[
-                  styles.heroBarFill,
-                  { width: `${Math.min(100, Math.max(4, healthStats.score || 0))}%`, backgroundColor: barColor },
-                ]}
-              />
+        {/* 2. Signature Asset Health Hero Card */}
+        <View style={[styles.heroCard, { backgroundColor: '#07111F', borderColor: 'rgba(15,143,135,0.25)' }]}>
+          <View style={styles.heroHeader}>
+            <View style={styles.heroTagRow}>
+              <View style={styles.heroPill}>
+                <Text style={styles.heroPillText}>PORTFOLIO VAULT</Text>
+              </View>
+              <Text style={[styles.heroScoreLabel, { color: healthStats.score >= 80 ? '#10B981' : '#F59E0B' }]}>
+                {healthStats.label}
+              </Text>
             </View>
-          ) : (
-            <View style={styles.heroBarTrack} />
-          )}
-          <View style={styles.heroMetrics}>
-            <MetricCard title="Assets" value={String(healthStats.protectedCount)} />
-            <MetricCard title="Documents" value={String(healthStats.documentCount)} />
-            <MetricCard title="Urgent" value={String(healthStats.urgentCount)} />
+            <Text style={styles.heroTitle}>YOUR ASSET HEALTH</Text>
           </View>
+
+          <View style={styles.heroScoreRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+              <CountUp value={healthStats.score} style={styles.heroScoreLarge} />
+              <Text style={styles.heroScoreMax}>/ 100</Text>
+            </View>
+            <View style={styles.heroBadgeBox}>
+              <Text style={styles.heroSummaryText}>
+                {healthStats.protectedCount} Asset{healthStats.protectedCount === 1 ? '' : 's'}  ·  {healthStats.documentCount} Doc{healthStats.documentCount === 1 ? '' : 's'}  ·  {healthStats.urgentCount} Due
+              </Text>
+            </View>
+          </View>
+
           <Pressable
             onPress={() => {
               Haptics.tap();
               navigation.navigate('AssetAnalytics');
             }}
-            style={{ marginTop: 14, minHeight: 44, justifyContent: 'center' }}
+            style={styles.heroActionBtn}
             accessibilityRole="button"
             accessibilityLabel="View health report"
           >
-            <Text style={[TYPE.caption, { color: colors.electricTeal || '#00B8A9', fontWeight: '600' }]}>
-              View health report →
-            </Text>
-          </Pressable>
-        </HeroCard>
-
-        <Pressable
-          onPress={onScan}
-          style={({ pressed }) => [styles.scanHero, { opacity: pressed ? 0.94 : 1 }]}
-          accessibilityRole="button"
-          accessibilityLabel="Scan document"
-        >
-          <View style={styles.scanRow}>
-            <View style={styles.scanFrame}>
-              <PremiumIcon name="scan" size={22} color="#00B8A9" />
-              <ScanBeam />
-            </View>
-            <View style={{ flex: 1, marginLeft: 14 }}>
-              <Text style={[TYPE.h2, { color: '#F8FAFC' }]}>Scan a document</Text>
-              <Text style={[TYPE.caption, { color: 'rgba(248,250,252,0.6)', marginTop: 4 }]}>
-                Invoice · Insurance · Warranty · RC · PUC · Service Bill
-              </Text>
-            </View>
-            <View style={styles.energyArrow}>
-              <Text style={{ color: '#00B8A9', fontSize: 20, fontWeight: '800' }}>→</Text>
-            </View>
-          </View>
-        </Pressable>
-
-        {/* Quick Actions Row */}
-        <View style={{ flexDirection: 'row', marginVertical: SPACING.md, gap: 10 }}>
-          <Pressable
-            onPress={() => {
-              Haptics.tap();
-              requireAuth({
-                isAuthenticated,
-                navigation,
-                message: 'Sign in to add assets.',
-                onAuthed: () => navigation.navigate('AddAsset'),
-              });
-            }}
-            style={{ flex: 1, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, padding: 12, borderRadius: RADIUS.md, alignItems: 'center' }}
-          >
-            <Text style={{ fontSize: 20 }}>➕</Text>
-            <Text style={[TYPE.micro, { color: colors.text, marginTop: 4, fontWeight: '700' }]}>Add Asset</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => {
-              Haptics.tap();
-              navigation.navigate('FuelVault');
-            }}
-            style={{ flex: 1, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, padding: 12, borderRadius: RADIUS.md, alignItems: 'center' }}
-          >
-            <Text style={{ fontSize: 20 }}>⛽</Text>
-            <Text style={[TYPE.micro, { color: colors.text, marginTop: 4, fontWeight: '700' }]}>Fuel & Mileage</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => {
-              Haptics.tap();
-              navigation.navigate('Maintenance');
-            }}
-            style={{ flex: 1, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, padding: 12, borderRadius: RADIUS.md, alignItems: 'center' }}
-          >
-            <Text style={{ fontSize: 20 }}>🔧</Text>
-            <Text style={[TYPE.micro, { color: colors.text, marginTop: 4, fontWeight: '700' }]}>Maintenance</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => {
-              Haptics.tap();
-              navigation.navigate('DocsVault');
-            }}
-            style={{ flex: 1, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, padding: 12, borderRadius: RADIUS.md, alignItems: 'center' }}
-          >
-            <Text style={{ fontSize: 20 }}>📁</Text>
-            <Text style={[TYPE.micro, { color: colors.text, marginTop: 4, fontWeight: '700' }]}>Vault</Text>
+            <Text style={styles.heroActionText}>View health report →</Text>
           </Pressable>
         </View>
 
-        <SectionHeader title="Smart Insights" subtitle="Energy & network intelligence" />
-        <Pressable
-          onPress={() => {
-            Haptics.tap();
-            navigation.navigate('EnergyOverview');
-          }}
-          style={[styles.energyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-          accessibilityRole="button"
-          accessibilityLabel="Open energy intelligence"
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View style={{ flex: 1, marginRight: SPACING.md }}>
-              <Text style={[TYPE.label, { color: colors.textMuted }]}>⚡ ENERGY INTELLIGENCE</Text>
-              <Text style={[TYPE.h3, { color: colors.text, marginTop: 4 }]}>
-                Appliance power bill
-              </Text>
-              <Text style={[TYPE.caption, { color: colors.textMuted, marginTop: 4 }]}>
-                Daily & monthly kWh and cost for AC, refrigerator, washing machine, TV, microwave,
-                geyser and other electrical assets.
+        {/* 3. Primary Actions */}
+        <View style={styles.actionSection}>
+          <PrimaryButton
+            title="+ Add / Scan Asset"
+            onPress={onScan}
+            size="lg"
+            style={{ borderRadius: RADIUS.lg }}
+          />
+          <Pressable
+            onPress={onScan}
+            style={[styles.secondaryScanBanner, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          >
+            <View style={styles.scanIconBox}>
+              <PremiumIcon name="scan" size={20} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={[TYPE.bodyStrong, { color: colors.text }]}>Scan document</Text>
+              <Text style={[TYPE.micro, { color: colors.textMuted, marginTop: 2 }]}>
+                Invoice · RC · Insurance · Warranty · Service Bill
               </Text>
             </View>
-            <View style={styles.energyArrow}>
-              <Text style={{ color: colors.primary, fontSize: 18, fontWeight: '800' }}>→</Text>
+            <Text style={{ color: colors.primary, fontSize: 18, fontWeight: '700' }}>→</Text>
+          </Pressable>
+        </View>
+
+        {/* 4. Needs Your Attention */}
+        {attentionItems.length > 0 ? (
+          <View style={styles.section}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={[TYPE.label, { color: colors.textMuted }]}>NEEDS YOUR ATTENTION</Text>
+              <Pressable onPress={() => navigation.navigate('NotificationCenter')}>
+                <Text style={[TYPE.caption, { color: colors.primary, fontWeight: '700' }]}>View all →</Text>
+              </Pressable>
             </View>
+            {attentionItems.map((item) => (
+              <Pressable
+                key={item.id}
+                onPress={() => {
+                  Haptics.tap();
+                  navigation.navigate('AssetPassport', { assetId: item.assetId });
+                }}
+                style={[styles.attentionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              >
+                <View style={[styles.attentionDot, { backgroundColor: item.severity === 'urgent' ? '#EF4444' : '#F59E0B' }]} />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={[TYPE.bodyStrong, { color: colors.text }]} numberOfLines={1}>
+                    {item.assetName} · {item.title}
+                  </Text>
+                  <Text style={[TYPE.caption, { color: item.severity === 'urgent' ? '#EF4444' : colors.textMuted, marginTop: 2 }]}>
+                    {item.subtitle}
+                  </Text>
+                </View>
+                <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 16 }}>→</Text>
+              </Pressable>
+            ))}
           </View>
-        </Pressable>
+        ) : null}
 
-        <NetworkIntelligenceSection navigation={navigation} style={{ marginTop: SPACING.sm }} />
+        {/* 5. Quick Actions Grid */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={[TYPE.label, { color: colors.textMuted }]}>QUICK ACTIONS</Text>
+          </View>
+          <View style={styles.quickActionGrid}>
+            <Pressable
+              onPress={onScan}
+              style={[styles.quickActionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <View style={[styles.quickActionIconBox, { backgroundColor: 'rgba(15,143,135,0.12)' }]}>
+                <PremiumIcon name="scan" size={20} color={colors.primary} />
+              </View>
+              <Text style={[TYPE.caption, { color: colors.text, fontWeight: '700', marginTop: 8 }]}>Scan Bill</Text>
+              <Text style={[TYPE.micro, { color: colors.textMuted, marginTop: 2 }]}>Invoice, RC, Policy</Text>
+            </Pressable>
 
-        <SectionHeader title="Vehicle Insights & Fuel" subtitle="Mileage · running cost · refills" />
-        <VehicleInsightsSection vehicles={vehicles} navigation={navigation} loading={loading} />
+            <Pressable
+              onPress={() => navigation.navigate('FuelVault')}
+              style={[styles.quickActionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <View style={[styles.quickActionIconBox, { backgroundColor: 'rgba(245,158,11,0.12)' }]}>
+                <Text style={{ fontSize: 18 }}>⛽</Text>
+              </View>
+              <Text style={[TYPE.caption, { color: colors.text, fontWeight: '700', marginTop: 8 }]}>Fuel Vault</Text>
+              <Text style={[TYPE.micro, { color: colors.textMuted, marginTop: 2 }]}>Mileage & Logs</Text>
+            </Pressable>
 
-        <SectionHeader title="Your asset collection" />
-        <View style={styles.collectionGrid}>
-          {categorySummaries.map((cat) => (
-            <AssetCollectionCard
-              key={cat.key}
-              icon={cat.icon}
-              title={cat.label}
-              count={cat.count}
-              healthLabel={cat.healthLabel}
-              healthTone={cat.healthTone}
+            <Pressable
+              onPress={() => navigation.navigate('DocumentsVault')}
+              style={[styles.quickActionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <View style={[styles.quickActionIconBox, { backgroundColor: 'rgba(59,130,246,0.12)' }]}>
+                <Text style={{ fontSize: 18 }}>📁</Text>
+              </View>
+              <Text style={[TYPE.caption, { color: colors.text, fontWeight: '700', marginTop: 8 }]}>Vault</Text>
+              <Text style={[TYPE.micro, { color: colors.textMuted, marginTop: 2 }]}>All Documents</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => navigation.navigate('EnergyDoctor')}
+              style={[styles.quickActionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <View style={[styles.quickActionIconBox, { backgroundColor: 'rgba(16,185,129,0.12)' }]}>
+                <Text style={{ fontSize: 18 }}>⚡</Text>
+              </View>
+              <Text style={[TYPE.caption, { color: colors.text, fontWeight: '700', marginTop: 8 }]}>Energy Doctor</Text>
+              <Text style={[TYPE.micro, { color: colors.textMuted, marginTop: 2 }]}>Bills & Health</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => navigation.navigate('FamilyVault')}
+              style={[styles.quickActionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <View style={[styles.quickActionIconBox, { backgroundColor: 'rgba(168,85,247,0.12)' }]}>
+                <Text style={{ fontSize: 18 }}>👨‍👩‍👧</Text>
+              </View>
+              <Text style={[TYPE.caption, { color: colors.text, fontWeight: '700', marginTop: 8 }]}>Family</Text>
+              <Text style={[TYPE.micro, { color: colors.textMuted, marginTop: 2 }]}>Shared Assets</Text>
+            </Pressable>
+
+            <Pressable
               onPress={() => {
                 Haptics.tap();
-                const opened = openAssetCategoryList(cat.category);
-                if (!opened) {
-                  navigation.navigate('Assets', {
-                    screen: 'AssetList',
-                    params: { category: cat.category },
-                  });
-                }
+                navigation.navigate('OcrTest');
               }}
-            />
-          ))}
+              style={[styles.quickActionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <View style={[styles.quickActionIconBox, { backgroundColor: 'rgba(14,165,233,0.12)' }]}>
+                <Text style={{ fontSize: 18 }}>🧪</Text>
+              </View>
+              <Text style={[TYPE.caption, { color: colors.text, fontWeight: '700', marginTop: 8 }]}>OCR Test</Text>
+              <Text style={[TYPE.micro, { color: colors.textMuted, marginTop: 2 }]}>Lab & Inspect</Text>
+            </Pressable>
+          </View>
         </View>
 
-        <SectionHeader title="Upcoming alerts" actionLabel="View all →" onAction={() => navigation.navigate('Alerts')} />
-        {intelligenceFeed.length ? (
-          intelligenceFeed.map((item) => (
-            <InsightCard
-              key={item.id}
-              title={item.title}
-              subtitle={item.subtitle}
-              actionLabel={item.actionLabel}
-              onPress={item.onAction}
+        {/* 6. Your Assets */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={[TYPE.label, { color: colors.textMuted }]}>YOUR ASSETS</Text>
+            <Pressable onPress={() => navigation.navigate('Assets')}>
+              <Text style={[TYPE.caption, { color: colors.primary, fontWeight: '700' }]}>View all →</Text>
+            </Pressable>
+          </View>
+
+          {activeAssets.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 12, paddingVertical: 4 }}
+            >
+              {activeAssets.map((asset) => {
+                const health = calculateHealthScore(asset);
+                const score = typeof health === 'number' ? health : health?.score || 85;
+                const value = Number(asset.purchasePrice || asset.price || asset.value);
+                return (
+                  <Pressable
+                    key={asset.assetId || asset.id}
+                    onPress={() => {
+                      Haptics.tap();
+                      navigation.navigate('AssetPassport', { assetId: asset.assetId || asset.id });
+                    }}
+                    style={[styles.assetCard, { backgroundColor: colors.surface, borderColor: colors.border }, elevation(1, colors.shadow)]}
+                  >
+                    <View style={styles.assetCardHeader}>
+                      <View style={[styles.assetIconWrapper, { backgroundColor: colors.accentLight }]}>
+                        <CategoryIcon category={asset.category || asset.categoryId || 'other'} size={22} color={colors.primary} />
+                      </View>
+                      <View style={styles.assetHealthTag}>
+                        <Text style={styles.assetHealthText}>{score}</Text>
+                      </View>
+                    </View>
+                    <Text style={[TYPE.bodyStrong, { color: colors.text, marginTop: 10 }]} numberOfLines={1}>
+                      {asset.assetName || asset.name || 'Protected Asset'}
+                    </Text>
+                    <Text style={[TYPE.caption, { color: colors.primary, fontWeight: '700', marginTop: 4 }]}>
+                      {value > 0 ? `₹${formatINRCompact(value)}` : 'Active'}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          ) : (
+            <EmptyState
+              icon="box"
+              title="No assets yet"
+              message="Scan a bill or add an asset to start tracking health, warranties, and maintenance."
+              ctaLabel="+ Add first asset"
+              onCta={onAddAsset}
             />
-          ))
-        ) : (
-          <InsightCard
-            title="No alerts right now"
-            subtitle="Scan documents to start receiving service, warranty and insurance intelligence."
-            actionLabel="Scan →"
-            onPress={onScan}
-          />
-        )}
+          )}
+        </View>
+
+        {/* 7. Smart Insights */}
+        {smartInsights.length > 0 ? (
+          <View style={styles.section}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={[TYPE.label, { color: colors.textMuted }]}>SMART INSIGHTS</Text>
+            </View>
+            {smartInsights.map((insight) => (
+              <Pressable
+                key={insight.id}
+                onPress={() => {
+                  Haptics.tap();
+                  insight.onAction?.();
+                }}
+                style={[styles.insightCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              >
+                <Text style={styles.insightIcon}>{insight.icon}</Text>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={[TYPE.bodyStrong, { color: colors.text }]}>{insight.title}</Text>
+                  <Text style={[TYPE.caption, { color: colors.textMuted, marginTop: 2 }]}>
+                    {insight.description}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+
+        {/* 8. Recent Activity */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={[TYPE.label, { color: colors.textMuted }]}>RECENT ACTIVITY</Text>
+          </View>
+          <View style={[styles.activityBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.activityRow}>
+              <View style={[styles.activityDot, { backgroundColor: colors.primary }]} />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={[TYPE.caption, { color: colors.text, fontWeight: '600' }]}>
+                  Vault synchronized & protected
+                </Text>
+                <Text style={[TYPE.micro, { color: colors.textMuted, marginTop: 2 }]}>Today</Text>
+              </View>
+            </View>
+          </View>
+        </View>
       </ScrollView>
     </View>
   );
@@ -583,86 +612,195 @@ const styles = StyleSheet.create({
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   headerRight: { flexDirection: 'row', alignItems: 'center' },
-  headerScan: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    minHeight: 44,
-    borderRadius: RADIUS.full,
-  },
-  headerScanText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: 14,
-    marginLeft: 6,
-  },
   scrollContent: {
     paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.xs,
   },
-  heroTop: {
+  heroCard: {
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    padding: SPACING.lg,
+    marginBottom: SPACING.md,
+  },
+  heroHeader: {
+    marginBottom: SPACING.xs,
+  },
+  heroTagRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  heroPill: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+  },
+  heroPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#94A3B8',
+    letterSpacing: 0.8,
+  },
+  heroScoreLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  heroTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#94A3B8',
+    letterSpacing: 0.6,
   },
   heroScoreRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginTop: 8,
-  },
-  heroBarTrack: {
-    height: 6,
-    borderRadius: 99,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    marginTop: 16,
-    overflow: 'hidden',
-  },
-  heroBarFill: {
-    height: 6,
-    borderRadius: 99,
-  },
-  heroMetrics: {
-    flexDirection: 'row',
-    marginTop: 18,
-  },
-  scanHero: {
-    backgroundColor: '#07111F',
-    borderRadius: RADIUS.hero,
-    padding: SPACING.lg,
-    marginBottom: SPACING.md,
-    overflow: 'hidden',
-  },
-  scanRow: {
-    flexDirection: 'row',
     alignItems: 'center',
-  },
-  scanFrame: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(0,184,169,0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  collectionGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'space-between',
+    marginTop: 4,
   },
-  portfolio: {
-    padding: SPACING.lg,
-    borderRadius: RADIUS.hero,
-    borderWidth: 1,
+  heroScoreLarge: {
+    fontSize: 44,
+    fontWeight: '800',
+    color: '#F8FAFC',
+    lineHeight: 48,
   },
-  energyCard: {
-    padding: SPACING.lg,
+  heroScoreMax: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#64748B',
+    marginLeft: 6,
+  },
+  heroBadgeBox: {
+    alignItems: 'flex-end',
+  },
+  heroSummaryText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#94A3B8',
+  },
+  heroActionBtn: {
+    marginTop: 14,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  heroActionText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#00B8A9',
+  },
+  actionSection: {
+    marginBottom: SPACING.lg,
+    gap: 10,
+  },
+  secondaryScanBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.md,
     borderRadius: RADIUS.lg,
     borderWidth: 1,
   },
-  energyArrow: {
-    padding: SPACING.sm,
-    borderRadius: 999,
+  scanIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: RADIUS.md,
+    backgroundColor: 'rgba(15,143,135,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  section: {
+    marginBottom: SPACING.lg,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
+  },
+  attentionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  attentionDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  assetCard: {
+    width: 150,
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+  },
+  assetCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  assetIconWrapper: {
+    width: 38,
+    height: 38,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  assetHealthTag: {
+    backgroundColor: 'rgba(16,185,129,0.12)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  assetHealthText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#10B981',
+  },
+  insightCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  insightIcon: {
+    fontSize: 22,
+  },
+  activityBox: {
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+  },
+  activityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  activityDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  quickActionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  quickActionCard: {
+    width: '48%',
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+  },
+  quickActionIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
   },

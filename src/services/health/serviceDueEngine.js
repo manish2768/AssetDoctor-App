@@ -1,9 +1,17 @@
 /**
  * Service due engine — time and/or odometer. Intervals labeled Recommended.
+ * Strictly enforces vehicle vs non-vehicle domain boundaries:
+ * Non-vehicles NEVER access odometer fields, never compute kmRemaining, and never produce mileage overdue.
  */
 
 import { daysUntil } from '../../utils/dates';
 import { RECOMMENDED_SERVICE_INTERVAL_DAYS } from './healthScoreConfig';
+import {
+  isVehicleAsset,
+  supportsOdometer as guardSupportsOdometer,
+  supportsMileage as guardSupportsMileage,
+  supportsFuelTracking as guardSupportsFuel,
+} from '../../domain/asset/assetGuards';
 
 export const SERVICE_STATUS = Object.freeze({
   SERVICE_OVERDUE: 'SERVICE_OVERDUE',
@@ -31,21 +39,27 @@ function addDaysIso(iso, days) {
 
 /**
  * @returns {{
+ *   supportsOdometer: boolean,
+ *   supportsMileage: boolean,
+ *   supportsFuel: boolean,
  *   status: string,
  *   nextServiceDate: string|null,
  *   recommended: boolean,
  *   daysRemaining: number|null,
  *   kmRemaining: number|null,
  *   message: string,
- *   source: string
+ *   source: string,
+ *   intervalDays: number
  * }}
  */
 export function evaluateServiceDue(asset = {}, opts = {}) {
   const now = opts.now || new Date();
-  const odometer = asset.odometerKm != null ? Number(asset.odometerKm) : null;
-  const nextKm =
-    asset.nextServiceOdometerKm != null ? Number(asset.nextServiceOdometerKm) : null;
+  const isVehicle = isVehicleAsset(asset);
+  const supportsOdo = isVehicle && guardSupportsOdometer(asset);
+  const supportsMil = isVehicle && guardSupportsMileage(asset);
+  const supportsFuel = isVehicle && guardSupportsFuel(asset);
 
+  // 1. Resolve Calendar Date Boundaries
   let nextDate = asset.nextServiceDate || asset.nextServiceDue || null;
   let recommended = false;
   let source = 'user_schedule';
@@ -60,7 +74,6 @@ export function evaluateServiceDue(asset = {}, opts = {}) {
   const days =
     nextDate != null
       ? (() => {
-          // daysUntil uses today; for tests allow override via opts.now by comparing manually
           if (opts.now) {
             const target = new Date(`${String(nextDate).slice(0, 10)}T12:00:00`);
             const base = new Date(now);
@@ -71,21 +84,31 @@ export function evaluateServiceDue(asset = {}, opts = {}) {
         })()
       : null;
 
-  const kmRemaining =
-    odometer != null && nextKm != null && Number.isFinite(odometer) && Number.isFinite(nextKm)
-      ? Math.round(nextKm - odometer)
-      : null;
+  // 2. Resolve Odometer Boundaries ONLY for Vehicles
+  let kmRemaining = null;
+  let kmOverdue = false;
+  let kmDueSoon = false;
+  let kmUpcoming = false;
 
-  // Whichever condition occurs first
+  if (isVehicle && supportsOdo) {
+    const odometer = asset.odometerKm != null ? Number(asset.odometerKm) : null;
+    const nextKm = asset.nextServiceOdometerKm != null ? Number(asset.nextServiceOdometerKm) : null;
+
+    if (odometer != null && nextKm != null && Number.isFinite(odometer) && Number.isFinite(nextKm)) {
+      kmRemaining = Math.round(nextKm - odometer);
+      kmOverdue = kmRemaining <= 0;
+      kmDueSoon = kmRemaining > 0 && kmRemaining <= 200;
+      kmUpcoming = kmRemaining > 200 && kmRemaining <= 700;
+    }
+  }
+
+  // 3. Evaluate Status & Message
   let status = SERVICE_STATUS.UNKNOWN;
-  let message = 'Service schedule not set';
+  let message = isVehicle ? 'Vehicle service schedule not set' : 'Maintenance schedule not set';
 
   const dateOverdue = days != null && days < 0;
-  const kmOverdue = kmRemaining != null && kmRemaining <= 0;
   const dateDueSoon = days != null && days >= 0 && days <= 7;
-  const kmDueSoon = kmRemaining != null && kmRemaining > 0 && kmRemaining <= 200;
   const dateUpcoming = days != null && days > 7 && days <= 30;
-  const kmUpcoming = kmRemaining != null && kmRemaining > 200 && kmRemaining <= 700;
 
   if (dateOverdue || kmOverdue) {
     status = SERVICE_STATUS.SERVICE_OVERDUE;
@@ -125,6 +148,9 @@ export function evaluateServiceDue(asset = {}, opts = {}) {
   }
 
   return {
+    supportsOdometer: supportsOdo,
+    supportsMileage: supportsMil,
+    supportsFuel,
     status,
     nextServiceDate: nextDate,
     recommended,

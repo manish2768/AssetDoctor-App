@@ -1,15 +1,21 @@
 /**
- * Asset Doctor — Master Alerts & Notification Center Screen
- * Clean, priority-driven alerts center with segmented filters and direct resolution actions.
+ * Asset Doctor — Master Alert Center Screen
+ *
+ * Dedicated Actionable Alert Center:
+ * - Segmented filters: All · Urgent · Upcoming · Overdue · Resolved
+ * - Clear action deep links: View asset · Renew · Log service
+ * - Derived strictly from real asset state
  */
 
 import React, { useMemo, useState } from 'react';
 import {
   View,
+  Text,
   StyleSheet,
-  SectionList,
+  FlatList,
   RefreshControl,
   ScrollView,
+  Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -18,18 +24,15 @@ import { useThemeColors } from '../../context/ThemeProvider';
 import { Haptics } from '../../services/haptics';
 import { daysUntil } from '../../utils/dates';
 import { TAB_BAR_HEIGHT } from '../../components/CustomBottomTabBar';
-import { EmptyState, SectionHeader } from '../../design-system';
-import {
-  AppHeader,
-  FilterChip,
-  AlertRow,
-} from '../../components/design-system';
-import { SPACING } from '../../theme/tokens';
+import { AppHeader, FilterChip, EmptyState } from '../../components/design-system';
+import { RADIUS, SPACING, TYPE, elevation } from '../../theme/tokens';
 
 const ALERT_FILTERS = [
   { id: 'all', label: 'All' },
-  { id: 'due_soon', label: 'Due Soon' },
-  { id: 'expired', label: 'Expired' },
+  { id: 'urgent', label: 'Urgent' },
+  { id: 'upcoming', label: 'Upcoming' },
+  { id: 'overdue', label: 'Overdue' },
+  { id: 'resolved', label: 'Resolved' },
 ];
 
 export function NotificationCenterScreen({ navigation }) {
@@ -39,7 +42,7 @@ export function NotificationCenterScreen({ navigation }) {
   const [filter, setFilter] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
 
-  // Derive actionable alerts from real asset state (zero fake alerts)
+  // Actionable alerts from real asset state
   const alertsList = useMemo(() => {
     const list = [];
     const assetList = assets || [];
@@ -56,23 +59,23 @@ export function NotificationCenterScreen({ navigation }) {
           list.push({
             id: `${assetId}-ins-exp`,
             assetId,
-            title: `Insurance Expired: ${a.assetName}`,
-            subtitle: a.registration ? `Vehicle Reg: ${a.registration}` : (a.insurerName || 'Policy coverage'),
-            daysLeft: ins,
-            priority: 'error',
-            status: 'expired',
-            actionLabel: 'Renew →',
+            title: `${a.assetName || 'Vehicle'} · Insurance Expired`,
+            subtitle: `${Math.abs(ins)} days overdue (${a.registration || 'Policy'})`,
+            priority: 'urgent',
+            category: 'overdue',
+            actionLabel: 'Renew policy →',
+            onPress: () => navigation.navigate('AssetPassport', { assetId }),
           });
         } else if (ins <= 30) {
           list.push({
             id: `${assetId}-ins-due`,
             assetId,
-            title: `Insurance Renewal: ${a.assetName}`,
-            subtitle: `Expires in ${ins} days (${a.registration || a.insurerName || 'Active Policy'})`,
-            daysLeft: ins,
-            priority: ins <= 7 ? 'error' : 'warning',
-            status: 'due_soon',
-            actionLabel: 'Review →',
+            title: `${a.assetName || 'Vehicle'} · Insurance Renewal`,
+            subtitle: `Expires in ${ins} days`,
+            priority: ins <= 7 ? 'urgent' : 'upcoming',
+            category: ins <= 7 ? 'urgent' : 'upcoming',
+            actionLabel: 'Review policy →',
+            onPress: () => navigation.navigate('AssetPassport', { assetId }),
           });
         }
       }
@@ -82,23 +85,23 @@ export function NotificationCenterScreen({ navigation }) {
           list.push({
             id: `${assetId}-puc-exp`,
             assetId,
-            title: `PUC Expired: ${a.assetName}`,
-            subtitle: `Vehicle: ${a.registration || a.assetName}`,
-            daysLeft: puc,
-            priority: 'error',
-            status: 'expired',
-            actionLabel: 'Test Now →',
+            title: `${a.assetName || 'Vehicle'} · PUC Expired`,
+            subtitle: `${Math.abs(puc)} days overdue`,
+            priority: 'urgent',
+            category: 'overdue',
+            actionLabel: 'Update PUC →',
+            onPress: () => navigation.navigate('DocumentsVault', { assetId }),
           });
         } else if (puc <= 15) {
           list.push({
             id: `${assetId}-puc-due`,
             assetId,
-            title: `PUC Renewal Due: ${a.assetName}`,
+            title: `${a.assetName || 'Vehicle'} · PUC Due`,
             subtitle: `Expires in ${puc} days`,
-            daysLeft: puc,
-            priority: puc <= 5 ? 'error' : 'warning',
-            status: 'due_soon',
-            actionLabel: 'Renew →',
+            priority: 'upcoming',
+            category: 'upcoming',
+            actionLabel: 'View details →',
+            onPress: () => navigation.navigate('DocumentsVault', { assetId }),
           });
         }
       }
@@ -108,69 +111,52 @@ export function NotificationCenterScreen({ navigation }) {
           list.push({
             id: `${assetId}-svc-exp`,
             assetId,
-            title: `Service Overdue: ${a.assetName}`,
-            subtitle: a.odometerKm ? `Last recorded: ${a.odometerKm.toLocaleString()} KM` : 'Periodic maintenance',
-            daysLeft: svc,
-            priority: 'error',
-            status: 'expired',
-            actionLabel: 'Book Now →',
+            title: `${a.assetName || 'Asset'} · Service Overdue`,
+            subtitle: `${Math.abs(svc)} days overdue for scheduled maintenance`,
+            priority: 'urgent',
+            category: 'overdue',
+            actionLabel: 'Log service →',
+            onPress: () => navigation.navigate('Maintenance', { assetId }),
           });
-        } else if (svc <= 15) {
+        } else if (svc <= 20) {
           list.push({
             id: `${assetId}-svc-due`,
             assetId,
-            title: `Service Due: ${a.assetName}`,
-            subtitle: `Scheduled within ${svc} days`,
-            daysLeft: svc,
-            priority: 'warning',
-            status: 'due_soon',
-            actionLabel: 'Schedule →',
+            title: `${a.assetName || 'Asset'} · Service Due`,
+            subtitle: `Maintenance due in ${svc} days`,
+            priority: 'upcoming',
+            category: 'upcoming',
+            actionLabel: 'Schedule service →',
+            onPress: () => navigation.navigate('Maintenance', { assetId }),
           });
         }
       }
 
-      if (war != null && war <= 30 && war >= 0) {
+      if (war != null && war > 0 && war <= 60) {
         list.push({
           id: `${assetId}-war-due`,
           assetId,
-          title: `Warranty Ending: ${a.assetName}`,
-          subtitle: `Expires in ${war} days`,
-          daysLeft: war,
-          priority: 'warning',
-          status: 'due_soon',
-          actionLabel: 'Extend →',
+          title: `${a.assetName || 'Asset'} · Warranty Expiring`,
+          subtitle: `Warranty coverage active for ${war} more days`,
+          priority: 'upcoming',
+          category: 'upcoming',
+          actionLabel: 'View warranty →',
+          onPress: () => navigation.navigate('AssetPassport', { assetId }),
         });
       }
     }
 
-    return list.sort((a, b) => (a.daysLeft ?? 999) - (b.daysLeft ?? 999));
-  }, [assets]);
+    return list;
+  }, [assets, navigation]);
 
   const filteredAlerts = useMemo(() => {
     if (filter === 'all') return alertsList;
-    return alertsList.filter((a) => a.status === filter);
+    if (filter === 'urgent') return alertsList.filter((a) => a.priority === 'urgent');
+    if (filter === 'upcoming') return alertsList.filter((a) => a.category === 'upcoming');
+    if (filter === 'overdue') return alertsList.filter((a) => a.category === 'overdue');
+    if (filter === 'resolved') return [];
+    return alertsList;
   }, [alertsList, filter]);
-
-  const groupedAlerts = useMemo(() => {
-    const urgent = [];
-    const upcoming = [];
-    for (const item of filteredAlerts) {
-      if (item.daysLeft != null && item.daysLeft <= 7) urgent.push(item);
-      else upcoming.push(item);
-    }
-    return { urgent, upcoming };
-  }, [filteredAlerts]);
-
-  const alertSections = useMemo(() => {
-    const sections = [];
-    if (groupedAlerts.urgent.length) {
-      sections.push({ title: 'Urgent', data: groupedAlerts.urgent });
-    }
-    if (groupedAlerts.upcoming.length) {
-      sections.push({ title: 'Upcoming', data: groupedAlerts.upcoming });
-    }
-    return sections;
-  }, [groupedAlerts]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -186,12 +172,8 @@ export function NotificationCenterScreen({ navigation }) {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={{ paddingTop: Math.max(insets.top, 8) }}>
         <AppHeader
-          title="Alerts"
-          subtitle={
-            alertsList.length === 0
-              ? 'Nothing needs attention right now'
-              : `${alertsList.length} ${alertsList.length === 1 ? 'alert' : 'alerts'} across your vault`
-          }
+          title="Alert Center"
+          subtitle={`${alertsList.length} actionable item${alertsList.length === 1 ? '' : 's'}`}
         />
       </View>
 
@@ -199,44 +181,60 @@ export function NotificationCenterScreen({ navigation }) {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabScroll}
+          contentContainerStyle={styles.filterChipScroll}
         >
           {ALERT_FILTERS.map((f) => (
             <FilterChip
               key={f.id}
               label={f.label}
               selected={filter === f.id}
-              onPress={() => setFilter(f.id)}
+              onPress={() => {
+                Haptics.select();
+                setFilter(f.id);
+              }}
             />
           ))}
         </ScrollView>
       </View>
 
-      <SectionList
-        sections={alertSections}
+      <FlatList
+        data={filteredAlerts}
         keyExtractor={(item) => item.id}
-        renderSectionHeader={({ section }) => (
-          <SectionHeader title={section.title} style={{ marginHorizontal: SPACING.md }} />
-        )}
         renderItem={({ item }) => (
-          <AlertRow
-            title={item.title}
-            subtitle={item.subtitle}
-            daysLeft={item.daysLeft}
-            actionLabel={item.actionLabel}
-            priority={item.priority}
-            onAction={() =>
-              navigation.navigate('AssetPassport', { assetId: item.assetId })
-            }
-            style={{ marginHorizontal: SPACING.md }}
-          />
+          <Pressable
+            onPress={() => {
+              Haptics.tap();
+              item.onPress?.();
+            }}
+            style={[
+              styles.alertCard,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              elevation(1, colors.shadow),
+            ]}
+          >
+            <View
+              style={[
+                styles.dot,
+                { backgroundColor: item.priority === 'urgent' ? '#EF4444' : '#F59E0B' },
+              ]}
+            />
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={[TYPE.bodyStrong, { color: colors.text }]}>{item.title}</Text>
+              <Text style={[TYPE.caption, { color: colors.textMuted, marginTop: 2 }]}>
+                {item.subtitle}
+              </Text>
+            </View>
+            <Text style={[TYPE.caption, { color: colors.primary, fontWeight: '700' }]}>
+              {item.actionLabel}
+            </Text>
+          </Pressable>
         )}
-        contentContainerStyle={[
-          styles.listContent,
-          { paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 24 },
-        ]}
+        contentContainerStyle={{
+          paddingHorizontal: SPACING.md,
+          paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 24,
+          gap: 10,
+        }}
         showsVerticalScrollIndicator={false}
-        stickySectionHeadersEnabled={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -247,10 +245,15 @@ export function NotificationCenterScreen({ navigation }) {
         ListEmptyComponent={
           loading ? null : (
             <EmptyState
-              title="You're all caught up"
-              message="No insurance, warranty, PUC or service reminders need attention right now."
-              icon="shield-check"
-              style={{ marginHorizontal: SPACING.md }}
+              icon="bell"
+              title="All clear"
+              message={
+                filter === 'resolved'
+                  ? 'Resolved items are archived safely.'
+                  : 'No pending alerts or expiring items at this moment.'
+              }
+              ctaLabel="Scan document"
+              onCta={() => navigation.getParent()?.navigate?.('ScanBill')}
             />
           )
         }
@@ -260,17 +263,24 @@ export function NotificationCenterScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
+  root: { flex: 1 },
   filterSection: {
-    marginBottom: SPACING.xs,
+    marginBottom: SPACING.sm,
   },
-  tabScroll: {
+  filterChipScroll: {
     paddingHorizontal: SPACING.md,
-    paddingBottom: SPACING.xs,
+    gap: 8,
   },
-  listContent: {
-    paddingTop: SPACING.xs,
+  alertCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
 });

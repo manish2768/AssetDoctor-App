@@ -70,7 +70,9 @@ export function validateFuelInput(input = {}, previousOdometerKM = null) {
       return {
         valid: false,
         odometerRegression: true,
-        error: 'Odometer reading cannot be lower than your previous reading.',
+        previousOdometerKM: Number(previousOdometerKM),
+        enteredOdometerKM: odometerKM,
+        error: 'Odometer reading cannot be lower than the previous reading.',
       };
     }
   }
@@ -128,7 +130,12 @@ export function computeFuelCalculation(input = {}, previous = null, asset = {}) 
 
   let distanceSincePrevious = null;
   if (previous && Number.isFinite(Number(previous.odometerKM)) && previous.odometerKM > 0) {
-    distanceSincePrevious = odometerKM - Number(previous.odometerKM); // already guarded non-negative by validation
+    if (odometerKM >= Number(previous.odometerKM)) {
+      distanceSincePrevious = odometerKM - Number(previous.odometerKM);
+    } else {
+      // Invariant: negative distance is NEVER allowed
+      distanceSincePrevious = null;
+    }
   }
 
   const { fuelConsumed } = deriveFuelConsumed(input);

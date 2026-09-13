@@ -83,14 +83,14 @@ export function SplashScreen({ onFinish, holdMs = FALLBACK_MS }) {
 
     Animated.sequence([
       Animated.parallel([
-        Animated.timing(opacity, { toValue: 1, duration: 450, useNativeDriver: true }),
-        Animated.spring(scale, { toValue: 1, friction: 7, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+        Animated.spring(scale, { toValue: 1, friction: 8, useNativeDriver: true }),
       ]),
-      Animated.timing(greet, { toValue: 1, duration: 320, useNativeDriver: true }),
+      Animated.timing(greet, { toValue: 1, duration: 220, useNativeDriver: true }),
     ]).start();
 
-    const maxWait = Math.min(Math.max(Number(holdMs) || FALLBACK_MS, 800), 2500);
-    const hardFallback = setTimeout(finish, maxWait + 800);
+    const maxWait = Math.min(Math.max(Number(holdMs) || 900, 600), 2500);
+    const hardFallback = setTimeout(finish, maxWait + 600);
 
     (async () => {
       const minHold = new Promise((resolve) => setTimeout(resolve, maxWait));

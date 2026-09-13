@@ -11,10 +11,11 @@ import firestore from '@react-native-firebase/firestore';
 
 import { Haptics } from '../haptics/triggerHaptic';
 import { EXPIRY_ALERT_PROFILES } from '../../theme/branding';
-import { daysUntil } from '../../utils/dates';
+import { daysUntil, parseFlexibleDate } from '../../utils/dates';
 import { isAlertableStatus } from '../../constants/assetStatus';
 import { COLLECTIONS } from '../constants';
 import { resolveCanonicalAssetId, assetIdOf } from '../assets/assetIdentity';
+import { ContextEngine } from '../../smartCore/ContextEngine';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -46,21 +47,31 @@ function notificationKey(assetId, field, alertDay) {
 }
 
 function fireDate(dateStr, alertDay) {
-  const date = new Date(`${String(dateStr).slice(0, 10)}T09:00:00`);
+  const iso = parseFlexibleDate(dateStr);
+  if (!iso) return null;
+  const date = new Date(`${iso}T09:00:00`);
   if (Number.isNaN(date.getTime())) return null;
   date.setDate(date.getDate() - alertDay);
   return date;
 }
 
+function resolveNotificationAssetName(asset) {
+  if (!asset) return 'Asset';
+  return (
+    asset.assetName ||
+    asset.name ||
+    (asset.brand && asset.model ? `${asset.brand} ${asset.model}` : null) ||
+    asset.registration ||
+    asset.registrationNumber ||
+    'Asset'
+  );
+}
+
 function contentFor(asset, field, alertDay) {
-  const profile = EXPIRY_ALERT_PROFILES[field];
-  const name = asset.assetName || 'Asset';
+  const formatted = ContextEngine.formatExpiryNotification(asset, field, alertDay);
   return {
-    title:
-      field === 'pucExpiry'
-        ? `Fine protection: ${name}`
-        : `${profile.label} reminder: ${name}`,
-    body: `${profile.message} ${alertDay} day${alertDay === 1 ? '' : 's'} remaining.`,
+    title: formatted.title,
+    body: formatted.body,
     data: {
       assetId: assetIdOf(asset),
       field,
@@ -222,7 +233,7 @@ export class ExpiryAlertService {
         const notificationId = await Notifications.scheduleNotificationAsync({
           content: {
             title: `${profile.label || field} Expired`,
-            body: `${asset.assetName || 'Asset'}: ${profile.label || field} expired ${Math.abs(remaining)} day(s) ago. Renew now.`,
+            body: `${resolveNotificationAssetName(asset)}: ${profile.label || field} expired ${Math.abs(remaining)} day(s) ago. Renew now.`,
             data: { assetId: id, field, status: 'expired' },
             sound: true,
           },
@@ -399,7 +410,7 @@ export class ExpiryAlertService {
     };
 
     const docType = docTypeLabelMap[field] || 'Document';
-    const vehicleName = asset.registrationNumber || asset.assetName || 'Vehicle';
+    const vehicleName = resolveNotificationAssetName(asset);
 
     try {
       const { WhatsAppService } = await import('../whatsapp/WhatsAppService.js');

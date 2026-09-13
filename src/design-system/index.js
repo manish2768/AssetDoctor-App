@@ -58,6 +58,27 @@ export {
   DocumentCard,
 } from './primitives';
 
+export {
+  AppHeader,
+  PrimaryButton,
+  SecondaryButton,
+  IconButton as MobileIconButton,
+  StatusBadge as MobileStatusBadge,
+  HealthScore,
+  ConfidenceBadge,
+  AssetRow,
+  DocumentRow,
+  AlertRow,
+  SectionHeader as MobileSectionHeader,
+  FilterChip as MobileFilterChip,
+  SearchBar as MobileSearchBar,
+  EmptyState as MobileEmptyState,
+  LoadingState,
+  ExtractionField,
+  MetricCard as MobileMetricCard,
+  TimelineItem,
+} from '../components/design-system';
+
 export { ConfirmDialog } from '../components/ConfirmDialog';
 export { HealthScoreExplain } from '../components/HealthScoreExplain';
 export { SmartActionCard } from '../components/SmartActionCard';
@@ -78,3 +99,4 @@ export {
   resolveIntelligenceLayout,
   categoryFamilyLabel,
 } from './assetIntelligenceSchema';
+

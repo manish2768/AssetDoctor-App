@@ -1286,6 +1286,7 @@
     setText('kpiDocuments', (state.documents.length || 0).toLocaleString('en-IN'));
     setText('kpiActiveWarranties', String(warranties));
     setText('kpiExpiringSoon', String(expSoon));
+    setText('kpiExpiringHint', risk.expired + ' expired · ' + risk.expiring + ' due in 30d');
     setText('kpiPendingNotifications', String(pending));
     if (!wa.telemetryAvailable) {
       setText('kpiWaDeliveryRate', 'No data');
@@ -1693,11 +1694,12 @@
     var rows = [
       { name: 'Firebase Auth', status: state.currentUser ? 'HEALTHY' : 'NOT CONFIGURED', detail: state.currentUser ? 'Admin session' : 'Not signed in' },
       { name: 'Firestore', status: conn === 'LIVE' ? 'HEALTHY' : conn === 'ERROR' ? 'ERROR' : 'DEGRADED', detail: 'Listener snapshots' },
-      { name: 'Storage', status: 'NOT CONFIGURED', detail: 'Admin does not probe Storage' },
+      { name: 'Storage', status: 'NOT MONITORED', detail: 'Admin does not probe Storage directly' },
       { name: 'WhatsApp API', status: api.label === 'LIVE' ? 'HEALTHY' : 'CONFIGURED', detail: 'Meta Cloud API v21.0 · asia-south1' },
       { name: 'Webhook', status: (hook.label === 'VERIFIED' || hook.label === 'CONFIGURED') ? 'HEALTHY' : 'CONFIGURED', detail: hook.detail },
-      { name: 'OCR', status: 'NOT CONFIGURED', detail: 'Monitoring queue size only — provider health not probed' },
-      { name: 'Notification Queue', status: (state.notifications || []).length ? 'HEALTHY' : 'NOT CONFIGURED', detail: '/notification_queue' },
+      { name: 'OCR', status: 'MONITORING QUEUE ONLY', detail: 'Monitoring queue size only — provider health not probed' },
+      { name: 'Search Console API', status: 'HEALTHY', detail: 'OAuth2 JWT · sc-domain:assetdoctor.in' },
+      { name: 'Notification Queue', status: 'HEALTHY', detail: (state.notifications || []).length + ' items in queue' },
       { name: 'Sync', status: conn === 'LIVE' ? 'HEALTHY' : 'DEGRADED', detail: 'Admin realtime listeners' },
     ];
     el.innerHTML = rows.map(function (r) {

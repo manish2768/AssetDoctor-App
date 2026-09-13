@@ -128,6 +128,30 @@ function ensureCryptoSurface() {
     }
   }
 
+  // Hook CryptoJS.lib.WordArray.random directly if available, ensuring it never throws
+  // "Native crypto module could not be used to get secure random number."
+  try {
+    const CryptoJS = require('crypto-js');
+    if (CryptoJS?.lib?.WordArray) {
+      CryptoJS.lib.WordArray.random = function (nBytes) {
+        const words = [];
+        const bytes = new Uint8Array(nBytes);
+        safeGetRandomValues(bytes);
+        for (let i = 0; i < nBytes; i += 4) {
+          words.push(
+            ((bytes[i] || 0) << 24) |
+            ((bytes[i + 1] || 0) << 16) |
+            ((bytes[i + 2] || 0) << 8) |
+            (bytes[i + 3] || 0)
+          );
+        }
+        return new CryptoJS.lib.WordArray.init(words, nBytes);
+      };
+    }
+  } catch {
+    /* crypto-js not yet loaded or optional */
+  }
+
   return root.crypto;
 }
 
@@ -135,3 +159,4 @@ ensureCryptoSurface();
 
 export { ensureCryptoSurface, safeGetRandomValues, safeRandomUUID };
 export default ensureCryptoSurface;
+

@@ -4,6 +4,7 @@
  */
 
 import type { Asset, AssetCategory } from '../../types';
+import { isVehicleAsset, isHomeApplianceAsset } from '../../domain/asset/assetGuards';
 
 export interface TimelineEvent {
   id: string;
@@ -147,7 +148,7 @@ export class AssetTimelineEngine {
     }
 
     // Event 6: Non-Vehicle Specific (Appliances / HVAC filter upkeep)
-    if (!isVehicle && (asset.category === 'Appliances' || (asset.name && asset.name.toLowerCase().includes('ac')))) {
+    if (isHomeApplianceAsset(asset)) {
       events.push({
         id: `ev_filter_${asset.id}`,
         date: new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0],

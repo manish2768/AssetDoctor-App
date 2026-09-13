@@ -63,7 +63,7 @@ export function classifyFromCategoryId(categoryId = '', assetName = '') {
   const id = String(categoryId || '').toLowerCase();
   const text = `${id} ${assetName}`.toLowerCase();
 
-  if (['car', 'bike', 'scooter', 'ev', 'commercial', 'vehicle', 'motorcycle', 'vehicle_parts'].includes(id)) {
+  if (['car', 'bike', 'scooter', 'ev', 'commercial', 'vehicle', 'vehicles', 'motorcycle', 'vehicle_parts'].includes(id)) {
     let vehicleType = VEHICLE_TYPE.OTHER;
     if (id === 'car' || /\bcar\b|suv|sedan|nexon/.test(text)) vehicleType = VEHICLE_TYPE.CAR;
     else if (id === 'bike' || /bike|motorcycle|pulsar|ronin/.test(text)) vehicleType = VEHICLE_TYPE.BIKE;

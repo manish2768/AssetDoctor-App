@@ -488,7 +488,7 @@ export function ReviewAssetModal({
         return;
       }
 
-      const result = await createAsset(payload, null);
+      const result = await createAsset(payload, previewUri || imageUri || null);
       if (result?.needsVehicleLink) {
         ui.info(
           'Select a vehicle',
@@ -586,7 +586,7 @@ export function ReviewAssetModal({
               label="Seller / Dealer / Vendor"
               value={form.shopName}
               onChangeText={(t) => patch('shopName', t)}
-              placeholder="e.g. RAFTAAR MOTO LEGENDS / ICICI LOMBARD"
+              placeholder="e.g. Authorized Dealer / Workshop / Insurer"
             />
             <GlassInput
               label="Owner / Buyer Name"

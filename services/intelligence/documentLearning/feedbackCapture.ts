@@ -187,8 +187,8 @@ export function diffReviewCorrections(opts: {
               correctionType: CORRECTION_TYPES.USER_CONFIRMED,
               fieldPresence: presence,
               originalConfidence: opts.fieldReviews?.[fieldName] ? undefined : 0.9,
-            }),
-          ),
+            }) as unknown as Record<string, unknown>,
+          ) as unknown as LearningFeedbackEvent,
         );
       }
       continue;
@@ -202,8 +202,8 @@ export function diffReviewCorrections(opts: {
           correctedValue: b,
           fieldPresence: presence,
           originalConfidence: opts.fieldReviews?.[fieldName] ? undefined : null,
-        }),
-      ),
+        }) as unknown as Record<string, unknown>,
+      ) as unknown as LearningFeedbackEvent,
     );
   }
   return events;

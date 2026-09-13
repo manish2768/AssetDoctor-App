@@ -49,9 +49,10 @@ export function LoginScreen({ navigation }) {
     sendOTP,
     verifyOTP,
     enterGuestBrowse,
+    sendPasswordResetEmail,
   } = useAuth();
 
-  const [method, setMethod] = useState('choose'); // choose | email | phone
+  const [method, setMethod] = useState('choose'); // choose | email | phone | forgot
   const [emailMode, setEmailMode] = useState('login'); // login | register
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -64,6 +65,8 @@ export function LoginScreen({ navigation }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetSent, setResetSent] = useState(false);
 
   const finish = () => {
     setShowSuccess(false);
@@ -202,6 +205,26 @@ export function LoginScreen({ navigation }) {
     }
   };
 
+  const onSendResetEmail = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const cleanEmail = normalizeEmail(resetEmail || email);
+      if (!cleanEmail || !cleanEmail.includes('@')) {
+        throw new Error('Enter a valid email address to receive the reset link.');
+      }
+      const result = await sendPasswordResetEmail(cleanEmail);
+      if (!result.success) throw new Error(result.error);
+      Haptics.success();
+      setResetSent(true);
+    } catch (e) {
+      Haptics.error();
+      showAuthError(toErrorMessage(e, 'Could not send reset email'), 'Forgot Password');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <Screen>
       <View style={{ flex: 1 }}>
@@ -307,6 +330,20 @@ export function LoginScreen({ navigation }) {
                   secureTextEntry
                   placeholder={emailMode === 'register' ? 'Min 6 characters' : '••••••••'}
                 />
+                {emailMode === 'login' ? (
+                  <Pressable
+                    onPress={() => {
+                      Haptics.select();
+                      setResetEmail(email);
+                      setResetSent(false);
+                      setError('');
+                      setMethod('forgot');
+                    }}
+                    style={{ alignSelf: 'flex-end', marginBottom: 4, marginTop: 2 }}
+                  >
+                    <Text style={styles.forgotLink}>Forgot Password?</Text>
+                  </Pressable>
+                ) : null}
                 <GlassButton
                   title={emailMode === 'register' ? 'Create account' : 'Log in'}
                   onPress={onEmailSubmit}
@@ -323,6 +360,74 @@ export function LoginScreen({ navigation }) {
                   <Text style={styles.link}>← All sign-in options</Text>
                 </Pressable>
                 {error ? <Text style={styles.error}>{error}</Text> : null}
+              </GlassCard>
+            ) : null}
+
+            {method === 'forgot' ? (
+              <GlassCard style={{ marginTop: SPACING.lg }} glow>
+                <Text style={[styles.brand, { fontSize: 18, marginBottom: 4 }]}>Forgot Password?</Text>
+                {resetSent ? (
+                  <>
+                    <Text style={[styles.hint, { fontSize: 14, color: '#10B981', marginBottom: 12 }]}>
+                      ✓ Reset link sent! Check your email inbox (and spam folder).{'\n\n'}
+                      Tap the link in the email to set a new password, then sign in here.
+                    </Text>
+                    <GlassButton
+                      title="Back to Sign In"
+                      onPress={() => {
+                        Haptics.select();
+                        setResetSent(false);
+                        setMethod('email');
+                        setEmailMode('login');
+                        setError('');
+                      }}
+                    />
+                    <Pressable
+                      onPress={() => {
+                        Haptics.select();
+                        setResetSent(false);
+                        setError('');
+                        onSendResetEmail();
+                      }}
+                      style={{ marginTop: 12 }}
+                    >
+                      <Text style={styles.link}>Resend reset email</Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.hint}>
+                      Enter your email address and we'll send you a secure link to reset your password.
+                    </Text>
+                    <GlassInput
+                      label="Email address"
+                      value={resetEmail}
+                      onChangeText={setResetEmail}
+                      onBlur={() => setResetEmail(normalizeEmail(resetEmail))}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType="email-address"
+                      placeholder="you@email.com"
+                    />
+                    <GlassButton
+                      title="Send Reset Link"
+                      onPress={onSendResetEmail}
+                      loading={busy}
+                    />
+                    {error ? <Text style={styles.error}>{error}</Text> : null}
+                    <Pressable
+                      onPress={() => {
+                        Haptics.select();
+                        setMethod('email');
+                        setEmailMode('login');
+                        setError('');
+                      }}
+                      style={{ marginTop: 12 }}
+                    >
+                      <Text style={styles.link}>← Back to Sign In</Text>
+                    </Pressable>
+                  </>
+                )}
               </GlassCard>
             ) : null}
 
@@ -472,6 +577,7 @@ const styles = StyleSheet.create({
   toggleTextOn: { color: '#2563EB' },
   hint: { color: COLORS.muted, fontSize: 12, lineHeight: 17, marginBottom: 8 },
   link: { color: '#2563EB', textAlign: 'center', fontWeight: '700' },
+  forgotLink: { color: '#2563EB', fontWeight: '600', fontSize: 13, opacity: 0.85 },
   error: { color: COLORS.rose, textAlign: 'center', marginTop: 12, fontSize: 13 },
   guestBtn: {
     marginTop: SPACING.lg,

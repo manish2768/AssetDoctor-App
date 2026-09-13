@@ -3,7 +3,7 @@
  * Compact floating bottom bar (68dp height), subtle elevation, clean #0F8F87 active indicator.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useWindowDimensions } from 'react-native';
@@ -16,16 +16,18 @@ import { useThemeColors } from '../context/ThemeProvider';
 import {
   IconHome,
   IconAssets,
-  IconDocuments,
-  IconAlerts,
+  IconScan,
+  IconVault,
   IconProfile,
 } from './icons/TabIcons';
+import { openScanInvoice } from '../navigation/navActions';
+import { ScanAndAddModal } from './scan/ScanAndAddModal';
 
 const TAB_CONFIG = [
   { name: 'Home', label: 'Home', Icon: IconHome },
   { name: 'Assets', label: 'Assets', Icon: IconAssets },
-  { name: 'Documents', label: 'Docs', Icon: IconDocuments },
-  { name: 'Alerts', label: 'Alerts', Icon: IconAlerts },
+  { name: 'Scan', label: 'Scan', Icon: IconScan, isPrimaryAction: true },
+  { name: 'Vault', label: 'Vault', Icon: IconVault },
   { name: 'Profile', label: 'Profile', Icon: IconProfile },
 ];
 
@@ -34,10 +36,15 @@ export function CustomBottomTabBar({ state, descriptors, navigation }) {
   const { width } = useWindowDimensions();
   const colors = useThemeColors();
   const active = colors.primary || '#0F8F87';
-  const barWidth = Math.min(width - 24, 600);
+  const barWidth = Math.min(width - 20, 560);
+  const [scanModalVisible, setScanModalVisible] = useState(false);
 
   return (
-    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+      <ScanAndAddModal
+        visible={scanModalVisible}
+        onClose={() => setScanModalVisible(false)}
+      />
       <View
         style={[
           styles.floatingBar,
@@ -46,10 +53,42 @@ export function CustomBottomTabBar({ state, descriptors, navigation }) {
             backgroundColor: colors.surface,
             borderColor: colors.border,
           },
-          elevation(2, colors.shadow),
+          elevation(3, colors.shadow),
         ]}
       >
         {TAB_CONFIG.map((config) => {
+          if (config.isPrimaryAction) {
+            return (
+              <TouchableOpacity
+                key="central-scan-action"
+                onPress={() => {
+                  Haptics.select();
+                  setScanModalVisible(true);
+                }}
+                activeOpacity={0.88}
+                style={styles.scanActionContainer}
+                accessibilityRole="button"
+                accessibilityLabel="Scan invoice or document"
+              >
+                <View
+                  style={[
+                    styles.scanActionCircle,
+                    {
+                      backgroundColor: active,
+                      shadowColor: active,
+                    },
+                    elevation(3, active),
+                  ]}
+                >
+                  <IconScan color="#FFFFFF" size={24} />
+                </View>
+                <Text style={[styles.tabLabel, { color: active, fontWeight: '700', marginTop: 2 }]}>
+                  Scan
+                </Text>
+              </TouchableOpacity>
+            );
+          }
+
           const route = state.routes.find((r) => r.name === config.name);
           if (!route) return <View key={config.name} style={styles.tabItem} />;
 
@@ -135,11 +174,11 @@ const styles = StyleSheet.create({
   floatingBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
+    justifyContent: 'space-around',
+    paddingHorizontal: 6,
     paddingVertical: 6,
     height: TAB_BAR_HEIGHT,
-    borderRadius: RADIUS.large,
+    borderRadius: RADIUS.hero,
     borderWidth: 1,
   },
   tabItem: {
@@ -149,16 +188,32 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     minHeight: HIT.min,
   },
+  scanActionContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -18,
+    minHeight: HIT.min,
+  },
+  scanActionCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: RADIUS.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+  },
   iconWrap: {
-    width: 38,
-    height: 28,
+    width: 36,
+    height: 26,
     borderRadius: RADIUS.small,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 2,
   },
   activeDot: {
-    width: 12,
+    width: 10,
     height: 2,
     borderRadius: 2,
     marginBottom: 2,
@@ -168,7 +223,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   tabLabel: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '500',
     fontFamily: FONTS.medium,
   },

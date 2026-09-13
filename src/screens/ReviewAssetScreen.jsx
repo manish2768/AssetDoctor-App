@@ -41,6 +41,7 @@ import { ShareAssetModal } from '../components/ShareAssetModal';
 import { pickPrimaryItem } from '../utils/billLineItems';
 import { InvoiceOfflineCache } from '../services/ocr/InvoiceOfflineCache';
 import { goHomeDashboard, openRescanInvoice } from '../navigation/navActions';
+import { markScanSession, clearScanSession } from '../utils/scanNavGuard';
 import { formatINRExact } from '../utils/format';
 import { ASSET_CATEGORY_OPTIONS } from '../theme/branding';
 import {
@@ -48,6 +49,8 @@ import {
   listVehicleAssets,
   findAssetByChassis,
 } from '../utils/vehicleFolder';
+import { VehicleLinkingEngine } from '../services/vehicles/VehicleLinkingEngine';
+import { DuplicateProtectionService } from '../services/duplicateProtectionService';
 import { matchVehicleForDocument } from '../services/vehicles/VehicleMatchService';
 import { getExpiryTone } from '../utils/warrantyStatus';
 import { formatDateIN } from '../utils/dates';
@@ -145,24 +148,24 @@ function FieldLearningHint({ review, currentValue, onUseCandidate }) {
 }
 
 function StatusBadge({ status }) {
-  let label = 'Not found';
+  let label = '— Not found';
   let badgeStyle = styles.badgeNotFound;
   let textStyle = styles.badgeTextNotFound;
 
   if (status === 'VERIFIED' || status === 'USER_VERIFIED') {
-    label = 'Verified';
+    label = '✓ Verified';
     badgeStyle = styles.badgeVerified;
     textStyle = styles.badgeTextVerified;
   } else if (status === 'HIGH_CONFIDENCE') {
-    label = 'High confidence';
+    label = '✓ Auto-filled';
     badgeStyle = styles.badgeVerified;
     textStyle = styles.badgeTextVerified;
   } else if (status === 'CONFLICT') {
-    label = 'Conflict';
+    label = '⚠ Conflict';
     badgeStyle = styles.badgeConflict;
     textStyle = styles.badgeTextConflict;
   } else if (status === 'NEEDS_REVIEW' || status === 'NEEDS_VERIFICATION') {
-    label = 'Please verify';
+    label = '⚠ Review';
     badgeStyle = styles.badgeReview;
     textStyle = styles.badgeTextReview;
   }
@@ -229,10 +232,34 @@ function readSafeReviewParams(route) {
       sweetBill:
         params.sweetBill && typeof params.sweetBill === 'object' ? params.sweetBill : {},
       ocrFailed: Boolean(
-        params.ocrFailed || params.hasOcrError || params.audit?.manualEntry,
+        (params.ocrFailed || params.hasOcrError) &&
+          !invoiceCandidate.productName &&
+          !invoiceCandidate.assetName &&
+          invoiceCandidate.totalAmount == null &&
+          !invoiceCandidate.shopName &&
+          !invoiceCandidate.vendor &&
+          !invoiceCandidate.invoiceNumber &&
+          !(invoiceCandidate.rawOcrText && invoiceCandidate.rawOcrText.length >= 25) &&
+          !(invoiceCandidate.rawText && invoiceCandidate.rawText.length >= 25) &&
+          !invoiceCandidate.isDocumentReadable,
       ),
-      hasOcrError: Boolean(params.hasOcrError || params.ocrFailed),
+      hasOcrError: Boolean(params.hasOcrError && !invoiceCandidate.productName && invoiceCandidate.totalAmount == null),
+      needsManualReview: Boolean(params.audit?.manualEntry || invoiceCandidate.needsManualReview),
     };
+
+    const populatedReviewFields = [
+      invoiceCandidate.productName,
+      invoiceCandidate.shopName,
+      invoiceCandidate.totalAmount,
+      invoiceCandidate.invoiceNumber,
+      invoiceCandidate.invoiceDate,
+    ].filter((v) => v != null && v !== '').length;
+
+    console.log(
+      `[OCR_TRACE_10_REVIEW] screen=ReviewAsset populatedCount=${populatedReviewFields} productName=${invoiceCandidate.productName || 'none'} totalAmount=${invoiceCandidate.totalAmount ?? 'none'} ocrFailed=${Boolean(params.ocrFailed || params.hasOcrError)}`,
+    );
+
+    return result;
   } catch (error) {
     console.error('[ReviewAssetScreen Error]:', error);
     return {
@@ -248,6 +275,7 @@ function readSafeReviewParams(route) {
       sweetBill: {},
       ocrFailed: true,
       hasOcrError: true,
+      needsManualReview: true,
     };
   }
 }
@@ -267,6 +295,27 @@ export function ReviewAssetScreen({ navigation, route }) {
   const items = Array.isArray(initialInvoice?.items) ? initialInvoice.items : [];
   const defaultSelected = pickPrimaryItem(items)?.index || items[0]?.index || 1;
 
+  // Fail-safe redirect: If an insurance policy reaches ReviewAsset, immediately forward to ReviewInsurance
+  useEffect(() => {
+    const docType = String(
+      initialInvoice?.documentType ||
+      initialInvoice?.classifiedDocumentType ||
+      route?.params?.documentType ||
+      route?.params?.classifiedDocumentType ||
+      ''
+    ).toUpperCase();
+
+    const isInsurance =
+      docType === 'VEHICLE_INSURANCE' ||
+      docType === 'INSURANCE' ||
+      Boolean(initialInvoice?.policyNumber && (initialInvoice?.insurerName || initialInvoice?.premiumAmount || initialInvoice?.idv));
+
+    if (isInsurance) {
+      console.warn('[ReviewAsset] Insurance document redirected from ReviewAsset to ReviewInsurance');
+      navigation.replace('ReviewInsurance', route?.params || {});
+    }
+  }, []);
+
   const [invoice, setInvoice] = useState(() => {
     try {
       return sanitizeInvoice(initialInvoice);
@@ -281,7 +330,7 @@ export function ReviewAssetScreen({ navigation, route }) {
   const [selectedItemIndex, setSelectedItemIndex] = useState(defaultSelected);
   const [saveAllItems, setSaveAllItems] = useState(false);
   const [openCheck, setOpenCheck] = useState(true);
-  const [openItems, setOpenItems] = useState(items.length > 0);
+  const [openItems, setOpenItems] = useState(false);
   const [openMore, setOpenMore] = useState(false);
   const [linkAssetId, setLinkAssetId] = useState(null);
   const [smartMapHint, setSmartMapHint] = useState(null);
@@ -327,9 +376,28 @@ export function ReviewAssetScreen({ navigation, route }) {
   ]);
 
   const [shareCard, setShareCard] = useState(null);
+  const [saveToVaultCopy, setSaveToVaultCopy] = useState(false);
   const auditTimer = useRef(null);
   const manualToastShown = useRef(false);
   const originalReady = useRef(false);
+
+  // Persist review session in scanNavGuard to survive Activity kill
+  useEffect(() => {
+    markScanSession('ReviewAsset', {
+      scanSessionId: scanId || route?.params?.scanSessionId || `scan_${Date.now()}`,
+      documentType:
+        route?.params?.documentType ||
+        route?.params?.classifiedDocumentType ||
+        invoice?.classifiedDocumentType ||
+        'VEHICLE_PURCHASE_INVOICE',
+      reviewRoute: 'ReviewAsset',
+      imageUri,
+      assetData: invoice,
+      invoice,
+      audit,
+      engine: safeParams.engine,
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (originalReady.current) return;
@@ -357,16 +425,20 @@ export function ReviewAssetScreen({ navigation, route }) {
     }
   }, [invoice]);
 
-  // Re-hydrate when a new scan payload arrives — auto-fill from scannedData / OCR aliases
+  const rehydrateMountRef = useRef(true);
   useEffect(() => {
+    if (rehydrateMountRef.current) {
+      rehydrateMountRef.current = false;
+      return;
+    }
     try {
       const scanned =
         route?.params?.scannedData ||
         route?.params?.parsedData ||
         route?.params?.assetData ||
         route?.params?.invoice ||
-        initialInvoice ||
-        {};
+        null;
+      if (!scanned) return;
       setInvoice(
         sanitizeInvoice({
           ...initialInvoice,
@@ -377,10 +449,8 @@ export function ReviewAssetScreen({ navigation, route }) {
       setAudit(initialAudit);
     } catch (error) {
       console.error('[ReviewAssetScreen Error]:', error);
-      setInvoice(sanitizeInvoice({}));
-      setAudit(null);
     }
-  }, [initialInvoice, initialAudit, route?.params]);
+  }, [route?.params]);
 
   // Toast once when OCR could not auto-fill — stay on Review, never Home
   useEffect(() => {
@@ -395,9 +465,6 @@ export function ReviewAssetScreen({ navigation, route }) {
   const docKind = String(
     invoice.documentKind || invoice.documentType || invoice.scanDocumentType || 'bill',
   ).toLowerCase();
-  const gstOk = audit?.gstStatus === 'verified';
-  const itemList = Array.isArray(invoice.items) ? invoice.items : [];
-  const itemCount = Number(invoice.itemCount) || itemList.length;
   const reviewFamily = familyFromDocumentType(
     invoice.classifiedDocumentType ||
       invoice.classification?.documentType ||
@@ -410,14 +477,31 @@ export function ReviewAssetScreen({ navigation, route }) {
   const isElectronics = reviewFamily === 'electronics';
   const isAppliance = reviewFamily === 'appliance';
   const isGenericPurchase = reviewFamily === 'generic' || reviewFamily === 'warranty';
-  const isInsurance = reviewFamily === 'insurance';
-  const isPuc = reviewFamily === 'puc';
+  const isInsurance =
+    reviewFamily === 'insurance' ||
+    String(invoice.documentType || '').toUpperCase() === 'INSURANCE' ||
+    docKind.includes('insurance');
+  const isPuc =
+    reviewFamily === 'puc' ||
+    String(invoice.documentType || '').toUpperCase() === 'PUC' ||
+    docKind.includes('puc');
   const isRc = reviewFamily === 'rc';
-  const isService = reviewFamily === 'service';
+  const itemList = (isInsurance || isPuc || isRc)
+    ? []
+    : Array.isArray(invoice.items) ? invoice.items : [];
+  const itemCount = (isInsurance || isPuc || isRc)
+    ? 0
+    : Number(invoice.itemCount) || itemList.length;
+  const isVehicleService =
+    reviewFamily === 'service' ||
+    String(invoice.documentType || '').toUpperCase() === 'VEHICLE_SERVICE' ||
+    docKind.includes('service');
+  const isService = isVehicleService;
   const isVehiclePurchase = reviewFamily === 'vehicle_purchase';
   const isAttachDoc =
     isInsurance ||
     isPuc ||
+    isVehicleService ||
     isRc ||
     isVehicleAttachDocument(docKind) ||
     Boolean(invoice.requiresVehicleLink && !isElectronics && !isAppliance);
@@ -438,14 +522,35 @@ export function ReviewAssetScreen({ navigation, route }) {
       isRc);
   const vehicleOptions = useMemo(() => listVehicleAssets(assets), [assets]);
 
+  const vehicleLinkResolution = useMemo(() => {
+    if (!isAttachDoc && !isInsurance && !isPuc && !isVehicleService) return null;
+    return VehicleLinkingEngine.resolveVehicleLink(
+      {
+        registrationNumber: invoice.vehicleRegistrationNumber || invoice.registration,
+        chassisNumber: invoice.chassisNumber,
+        engineNumber: invoice.engineNumber,
+        vehicleMake: invoice.vehicleMake || invoice.brand,
+        vehicleModel: invoice.vehicleModel || invoice.model,
+        ownerName: invoice.customerName,
+      },
+      assets || [],
+    );
+  }, [isAttachDoc, isInsurance, isPuc, isVehicleService, invoice, assets]);
+
   useEffect(() => {
     if (!isAttachDoc) return;
     if (linkAssetId) return;
+    if (vehicleLinkResolution?.matchedVehicle) {
+      const v = vehicleLinkResolution.matchedVehicle;
+      const vId = v.assetId || v.id;
+      if (vId) setLinkAssetId(vId);
+      return;
+    }
     const match = matchVehicleForDocument(assets, invoice);
     if (match.matched) {
       setLinkAssetId(match.matched.assetId || match.matched.id || null);
     }
-  }, [assets, invoice, isAttachDoc, linkAssetId]);
+  }, [assets, invoice, isAttachDoc, linkAssetId, vehicleLinkResolution]);
   const insuranceTone = getExpiryTone(invoice.insuranceExpiry, { urgentDays: 30 });
   const pucTone = getExpiryTone(invoice.pucExpiry, { urgentDays: 15 });
   const classifiedType = normalizeDocumentType(
@@ -709,14 +814,14 @@ export function ReviewAssetScreen({ navigation, route }) {
   const promptVehicleLink = async (vehicles) => {
     if (!vehicles?.length) {
       ui.info(
-        'Vehicle required',
-        'Pehle vehicle invoice save karein, phir Insurance / PUC / RC scan karein.',
+        'Vehicle Required',
+        'Please save your vehicle invoice first, then scan Insurance / PUC / RC.',
       );
       return null;
     }
     ui.info(
-      'Link to vehicle',
-      'Insurance / PUC alag asset nahi banega — existing vehicle choose karein from the list above.',
+      'Link to Vehicle',
+      'Insurance and PUC attach to your existing vehicle — please select your vehicle from the list above.',
     );
     return null;
   };
@@ -827,7 +932,7 @@ export function ReviewAssetScreen({ navigation, route }) {
         if (chosenLink && isAttachDoc) {
           payload.linkAssetId = chosenLink;
         }
-        const result = await createAsset(payload, durableImageUri);
+        const result = await createAsset(payload, saveToVaultCopy ? durableImageUri : null);
         if (result?.needsVehicleLink) {
           const picked = await promptVehicleLink(result.vehicles || vehicleOptions);
           if (!picked) throw new Error(result.error || 'Vehicle link required');
@@ -841,7 +946,7 @@ export function ReviewAssetScreen({ navigation, route }) {
                 vehicleOptions.find((a) => (a.assetId || a.id) === picked)?.registration ||
                 '',
             },
-            durableImageUri,
+            saveToVaultCopy ? durableImageUri : null,
           );
           if (!retry?.success) throw new Error(retry?.error || 'Could not attach document');
           lastId = retry.id;
@@ -857,8 +962,6 @@ export function ReviewAssetScreen({ navigation, route }) {
         const confirmed = { ...(invoice.userConfirmedFields || {}) };
         [
           'imei',
-          'shopGstin',
-          'customerPhone',
           'invoiceNumber',
           'registration',
           'chassisNumber',
@@ -892,7 +995,6 @@ export function ReviewAssetScreen({ navigation, route }) {
       }
       if (!isAttachDoc) {
         await rememberBillFingerprint({
-          gstin: invoice.shopGstin,
           invoiceNumber: invoice.invoiceNumber,
           totalAmount: invoice.totalAmount,
           invoiceDate: invoice.invoiceDate,
@@ -932,46 +1034,87 @@ export function ReviewAssetScreen({ navigation, route }) {
 
   const onSave = async () => {
     Haptics.tap();
-    const latestAudit = await refreshAudit(invoice);
-    const extractionGate = canSaveExtractedInvoice(invoice);
-    if (!extractionGate.allowed) {
+
+    const currentDocType = isInsurance
+      ? 'INSURANCE'
+      : isPuc
+      ? 'PUC'
+      : isVehicleService
+      ? 'VEHICLE_SERVICE'
+      : 'INVOICE';
+    const gate = canSaveExtractedInvoice(invoice, currentDocType);
+    if (!gate.allowed) {
       Haptics.warning();
-      ui.info(
-        'Review required',
-        extractionGate.message || 'Resolve conflicting or unverified fields before saving.',
+      ui.info('Details required', gate.message || 'Please fill required fields before saving.');
+      return;
+    }
+
+    // Duplicate check for Vehicle Service
+    if (isVehicleService && linkAssetId) {
+      const targetVehicle = assets.find((a) => (a.assetId || a.id) === linkAssetId);
+      const dup = DuplicateProtectionService.checkVehicleServiceDuplicate(
+        invoice.serviceInvoiceNumber || invoice.invoiceNumber,
+        invoice.serviceDate || invoice.invoiceDate,
+        targetVehicle,
       );
-      return;
-    }
-    if (!isAttachDoc && (latestAudit.missingTotal || !totalOk)) {
-      Haptics.warning();
-      ui.info('Bill total required', 'Enter Grand Total before saving (e.g. 135500).');
-      return;
-    }
-    if (!isAttachDoc && !invoice.productName?.trim()) {
-      const selected =
-        itemList.find((i) => i.index === selectedItemIndex) || pickPrimaryItem(itemList);
-      if (!selected?.name) {
-        ui.info('Product required', 'Add product / asset name before saving.');
-        return;
+      if (dup.isDuplicate) {
+        Haptics.warning();
+        const ok = await ui.confirm({
+          title: 'Service Bill Already Recorded',
+          message: `${dup.reason}\n\nDo you want to update this service record on the vehicle?`,
+          confirmLabel: 'Update Service',
+        });
+        if (!ok) return;
       }
     }
-    if (isAttachDoc && !invoice.insuranceExpiry && docKind === 'insurance') {
-      ui.info(
-        'Insurance expiry required',
-        'Insurance expiry date (YYYY-MM-DD) daalein — e.g. 2026-07-13',
+
+    // Duplicate check for Insurance
+    if (isInsurance && linkAssetId) {
+      const targetVehicle = assets.find((a) => (a.assetId || a.id) === linkAssetId);
+      const dup = DuplicateProtectionService.checkInsuranceDuplicate(
+        invoice.policyNumber || invoice.invoiceNumber,
+        targetVehicle,
       );
-      return;
+      if (dup.isDuplicate) {
+        Haptics.warning();
+        const ok = await ui.confirm({
+          title: 'Insurance Policy Already Recorded',
+          message: `${dup.reason}\n\nDo you want to update the policy details on this vehicle?`,
+          confirmLabel: 'Update Policy',
+        });
+        if (!ok) return;
+      }
     }
+
+    // Duplicate check for PUC
+    if (isPuc && linkAssetId) {
+      const targetVehicle = assets.find((a) => (a.assetId || a.id) === linkAssetId);
+      const dup = DuplicateProtectionService.checkPucDuplicate(
+        invoice.certificateNumber || invoice.invoiceNumber,
+        targetVehicle,
+      );
+      if (dup.isDuplicate) {
+        Haptics.warning();
+        const ok = await ui.confirm({
+          title: 'PUC Certificate Already Recorded',
+          message: `${dup.reason}\n\nDo you want to update the certificate details on this vehicle?`,
+          confirmLabel: 'Update Certificate',
+        });
+        if (!ok) return;
+      }
+    }
+
+    const latestAudit = await refreshAudit(invoice);
 
     if (!isAttachDoc && latestAudit.isDuplicate) {
       const existing = findExistingForUpdate();
       Haptics.warning();
       const ok = await ui.confirm({
-        title: 'Invoice already saved',
+        title: 'Invoice Already Saved',
         message: existing
-          ? 'Yeh invoice pehle save ho chuka hai. Abhi jo details aapne bhare hain unse existing passport update karein?'
-          : 'Yeh invoice number + GSTIN pehle scan ho chuka hai. Phir bhi save / update karein?',
-        confirmLabel: existing ? 'Update passport' : 'Save anyway',
+          ? 'This invoice was already recorded. Do you want to update the existing asset passport with your reviewed details?'
+          : 'An invoice with this number was already saved. Would you like to save anyway?',
+        confirmLabel: existing ? 'Update Passport' : 'Save Anyway',
       });
       if (!ok) return;
       await persistSave(latestAudit, { allowDuplicate: true });
@@ -983,19 +1126,20 @@ export function ReviewAssetScreen({ navigation, route }) {
 
   const checkSummary = useMemo(() => {
     const bits = [];
-    bits.push(gstOk ? 'GST Verified Store' : 'Local bill');
     bits.push(totalOk ? `Total ${formatMoney(invoice.totalAmount)}` : 'Total needed');
-    bits.push(itemCount ? `${itemCount} item(s)` : 'No items');
+    if (itemCount > 1) bits.push(`${itemCount} items`);
     if (audit?.isDuplicate) bits.push('Duplicate');
     return bits.join(' · ');
-  }, [gstOk, totalOk, invoice.totalAmount, itemCount, audit?.isDuplicate]);
+  }, [totalOk, invoice.totalAmount, itemCount, audit?.isDuplicate]);
 
   const [openDocSec, setOpenDocSec] = useState(true);
-  const [openVehicleSec, setOpenVehicleSec] = useState(true);
-  const [openServiceSec, setOpenServiceSec] = useState(true);
-  const [openFinSec, setOpenFinSec] = useState(true);
-  const [openIdentitySec, setOpenIdentitySec] = useState(false);
-  const [openDatesSec, setOpenDatesSec] = useState(true);
+  const [openShopSec, setOpenShopSec] = useState(true);
+  const [openAssetSec, setOpenAssetSec] = useState(true);
+  const [openVehicleSec, setOpenVehicleSec] = useState(Boolean(showVehicleReg || isService || isVehiclePurchase));
+  const [openInsuranceSec, setOpenInsuranceSec] = useState(Boolean(isInsurance || isPuc));
+  const [openWarrantySec, setOpenWarrantySec] = useState(Boolean(!isInsurance && !isPuc && !isRc && (invoice.warrantyExpiry || !isService)));
+  const [openTotalSec, setOpenTotalSec] = useState(true);
+  const [openAdvancedSec, setOpenAdvancedSec] = useState(false);
   const [openDebugSec, setOpenDebugSec] = useState(false);
 
   // Helper for field metadata & confidence
@@ -1004,7 +1148,9 @@ export function ReviewAssetScreen({ navigation, route }) {
     const hasVal = val !== null && val !== undefined && val !== '';
     const conf =
       invoice.fieldConfidence?.[fieldName] ??
-      (hasVal ? (Number(invoice.confidence) > 0 ? Number(invoice.confidence) : 0.92) : 0);
+      (hasVal && Number(invoice.confidence) > 0
+        ? (Number(invoice.confidence) > 1 ? Number(invoice.confidence) / 100 : Number(invoice.confidence))
+        : 0);
     const rounded = Math.round(conf * 100);
 
     let status = 'NOT_FOUND';
@@ -1024,6 +1170,7 @@ export function ReviewAssetScreen({ navigation, route }) {
       ) {
         status = 'NEEDS_REVIEW';
       } else if (invoice.fieldDecisions?.[fieldName]?.decision === 'AUTO_ACCEPT') status = 'HIGH_CONFIDENCE';
+      else if (conf >= 0.70) status = 'HIGH_CONFIDENCE';
       else status = 'NEEDS_REVIEW';
     } else if (invoice.fieldDecisions?.[fieldName]?.decision === 'NOT_FOUND') {
       status = 'NOT_FOUND';
@@ -1042,23 +1189,91 @@ export function ReviewAssetScreen({ navigation, route }) {
     };
   };
 
+  const renderVehiclePicker = () => {
+    const list = vehicleOptions || [];
+    if (list.length === 0) {
+      return (
+        <View style={styles.noVehicleBox}>
+          <Text style={styles.noVehicleText}>No vehicles in your garage yet</Text>
+          <Text style={styles.noVehicleHint}>
+            This document will be saved in your Vault. Once you add your vehicle invoice, you can link this anytime.
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={{ marginTop: SPACING.xs }}>
+        {list.map((v) => {
+          const vId = v.assetId || v.id;
+          const isSelected = linkAssetId === vId;
+          const isAutoMatched =
+            vehicleLinkResolution?.matchedVehicle &&
+            (vehicleLinkResolution.matchedVehicle.assetId || vehicleLinkResolution.matchedVehicle.id) === vId;
+
+          return (
+            <Pressable
+              key={vId}
+              onPress={() => {
+                Haptics.select();
+                setLinkAssetId(vId);
+              }}
+              style={[
+                styles.vehicleOptionCard,
+                isSelected && styles.vehicleOptionCardSelected,
+              ]}
+            >
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text style={[styles.vehicleOptionName, isSelected && styles.vehicleOptionNameSelected]}>
+                  {v.name || v.assetName || 'Unnamed Vehicle'}
+                </Text>
+                <Text style={styles.vehicleOptionReg}>
+                  {v.registration || v.chassisNumber || 'No plate registered'}
+                </Text>
+              </View>
+              {isAutoMatched ? (
+                <View style={styles.matchedBadge}>
+                  <Text style={styles.matchedBadgeText}>AUTO-MATCHED</Text>
+                </View>
+              ) : isSelected ? (
+                <View style={styles.selectedBadge}>
+                  <Text style={styles.selectedBadgeText}>SELECTED</Text>
+                </View>
+              ) : null}
+            </Pressable>
+          );
+        })}
+      </View>
+    );
+  };
+
   return (
     <Screen style={styles.root}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.topRow}>
           <View style={styles.headerIconBox}>
-            <Text style={styles.headerIconEmoji}>{ocrFailed ? '⚠️' : '✅'}</Text>
+            <Text style={styles.headerIconEmoji}>
+              {ocrFailed ? '⚠️' : (invoice.needsManualReview || safeParams.audit?.manualEntry) ? '📋' : '✅'}
+            </Text>
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.eyebrow}>
-              {ocrFailed ? 'MANUAL ENTRY NEEDED' : 'AI ANALYSIS COMPLETE'}
+              {ocrFailed
+                ? 'MANUAL ENTRY NEEDED'
+                : (invoice.needsManualReview || safeParams.audit?.manualEntry)
+                ? 'REVIEW & CONFIRM DETAILS'
+                : 'AI ANALYSIS COMPLETE'}
             </Text>
             <Text style={styles.title} numberOfLines={2}>
               {documentTypeBadge || 'Review document'}
             </Text>
             {ocrFailed ? (
               <Text style={styles.manualBanner}>
-                We couldn't read this document. The image may be blurred, dark, or partially cropped.
+                {safeParams.quality?.ok === false
+                  ? 'The image quality is too low. Please retake the document photo.'
+                  : (invoice.rawOcrText && invoice.rawOcrText.trim().length >= 10) || (invoice.rawText && invoice.rawText.trim().length >= 10)
+                  ? "We read the document, but couldn't confidently identify all required fields."
+                  : "We couldn't read enough text from this document."}
               </Text>
             ) : Number.isFinite(Number(invoice.confidence)) && Number(invoice.confidence) > 0 ? (
               <View style={styles.confidenceRow}>
@@ -1112,709 +1327,707 @@ export function ReviewAssetScreen({ navigation, route }) {
           needsManualReview={invoice.needsManualReview}
         />
 
-        {/* Rapid review summary — one glance at what still needs a human decision */}
-        <View
-          style={[
-            styles.rapidSummary,
-            {
-              borderColor:
-                gstOk && totalOk && !invoice.needsManualReview
-                  ? 'rgba(16,185,129,0.45)'
-                  : 'rgba(245,158,11,0.5)',
-              backgroundColor:
-                gstOk && totalOk && !invoice.needsManualReview
-                  ? 'rgba(16,185,129,0.1)'
-                  : 'rgba(245,158,11,0.1)',
-            },
-          ]}
-        >
-          <View style={styles.rapidSummaryHeader}>
-            <Text
-              style={[
-                styles.rapidSummaryTitle,
-                {
-                  color:
-                    gstOk && totalOk && !invoice.needsManualReview
-                      ? COLORS.emerald
-                      : COLORS.amber,
-                },
-              ]}
-            >
-              {gstOk && totalOk && !invoice.needsManualReview
-                ? 'Looks good to save'
-                : 'Confirm before saving'}
-            </Text>
-            <Text style={styles.rapidSummaryMeta}>{checkSummary}</Text>
-          </View>
-          <View style={styles.rapidChips}>
-            {!totalOk ? (
-              <View style={styles.rapidChipWarn}>
-                <Text style={styles.rapidChipWarnText}>Add Grand Total</Text>
-              </View>
-            ) : null}
-            {!gstOk && !isAttachDoc ? (
-              <View style={styles.rapidChipWarn}>
-                <Text style={styles.rapidChipWarnText}>GST unverified</Text>
-              </View>
-            ) : null}
-            {invoice.warrantyNeedsReview ? (
-              <View style={styles.rapidChipWarn}>
-                <Text style={styles.rapidChipWarnText}>Warranty date</Text>
-              </View>
-            ) : null}
-          </View>
-        </View>
+        {/* 1. INSURANCE DOCUMENT REVIEW CARDS */}
+        {isInsurance ? (
+          <>
+            {/* CARD 1: INSURANCE DETAILS */}
+            <GlassCard style={styles.cleanSectionCard}>
+              <Text style={styles.cleanSectionTitle}>1. Insurance Details</Text>
+              <Text style={styles.cleanSectionSubtitle}>Insurer, policy number & coverage type</Text>
 
-        {/* 1. DOCUMENT ESSENTIALS SECTION */}
-        <Section
-          title="1. Document Details"
-          open={openDocSec}
-          onToggle={() => setOpenDocSec((v) => !v)}
-        >
-          {isAttachDoc ? (
-            <Text style={styles.attachHint}>
-              {isInsurance
-                ? 'Insurance policy — vehicle passport mein merge hogi (alag asset nahi).'
-                : isPuc
-                  ? 'PUC certificate — existing vehicle mein attach hogi.'
-                  : 'Yeh document existing vehicle folder mein save hoga.'}
-            </Text>
-          ) : null}
-
-          <View style={styles.fieldItem}>
-            <View style={styles.fieldHeaderRow}>
-              <Text style={styles.fieldLabel}>
-                {isInsurance ? 'Insurer / Insurance Company' : isService ? 'Workshop / Service Center' : 'Seller / Dealer / Vendor'}
-              </Text>
-              <StatusBadge status={getFieldInfo('shopName').status} conf={getFieldInfo('shopName').confidence} />
-            </View>
-            <GlassInput
-              value={blank(invoice.shopName)}
-              onChangeText={(t) => patch('shopName', t)}
-              placeholder="Not found on document"
-            />
-          </View>
-
-          <View style={styles.fieldItem}>
-            <View style={styles.fieldHeaderRow}>
-              <Text style={styles.fieldLabel}>
-                {isInsurance
-                  ? 'Policy Number'
-                  : isRc
-                    ? 'RC / Certificate No'
-                    : isPuc
-                      ? 'PUC Certificate No'
-                      : 'Invoice Number'}
-              </Text>
-              <StatusBadge status={getFieldInfo('invoiceNumber').status} conf={getFieldInfo('invoiceNumber').confidence} />
-            </View>
-              <GlassInput
-                value={blank(invoice.invoiceNumber)}
-                onChangeText={(t) => patch('invoiceNumber', t)}
-                placeholder="Not found on document"
-              />
-              <FieldLearningHint
-                review={invoice.fieldIntelligence?.invoiceNumber}
-                currentValue={invoice.invoiceNumber}
-                onUseCandidate={(v) => patch('invoiceNumber', v)}
-              />
-          </View>
-
-          <View style={styles.fieldItem}>
-            <View style={styles.fieldHeaderRow}>
-              <Text style={styles.fieldLabel}>
-                {isInsurance ? 'Policy Issue Date' : isService ? 'Service Date' : 'Invoice / Purchase Date'}
-              </Text>
-              <StatusBadge status={getFieldInfo('invoiceDate').status} conf={getFieldInfo('invoiceDate').confidence} />
-            </View>
-            <GlassInput
-              value={blank(invoice.invoiceDate)}
-              onChangeText={(t) => patch('invoiceDate', t.trim() || null)}
-              placeholder="Not found on document"
-            />
-          </View>
-
-          {!isInsurance && !isPuc && (
-            <View style={styles.fieldItem}>
-              <View style={styles.fieldHeaderRow}>
-                <Text style={styles.fieldLabel}>Shop GSTIN</Text>
-                <StatusBadge status={getFieldInfo('shopGstin').status} conf={getFieldInfo('shopGstin').confidence} />
-              </View>
-              <GlassInput
-                value={blank(invoice.shopGstin)}
-                onChangeText={(t) => patch('shopGstin', t.toUpperCase().trim())}
-                autoCapitalize="characters"
-                placeholder="Not found on document"
-              />
-              <FieldLearningHint
-                review={invoice.fieldIntelligence?.shopGstin || invoice.fieldIntelligence?.gstin}
-                currentValue={invoice.shopGstin}
-                onUseCandidate={(v) => patch('shopGstin', String(v).toUpperCase().trim())}
-              />
-            </View>
-          )}
-
-          {!isAttachDoc ? (
-            <View style={styles.linkBlock}>
-              <Text style={styles.linkLabel}>Category</Text>
-              <View style={styles.linkRow}>
-                {REVIEW_CATEGORY_CHIPS.map((chip) => {
-                  const on = activeReviewCategory === chip.id;
-                  return (
-                    <Pressable
-                      key={chip.id}
-                      onPress={() => setReviewCategory(chip.id)}
-                      style={[styles.linkChip, on && styles.catChipOn]}
-                    >
-                      <Text style={[styles.linkChipText, on && styles.catChipTextOn]}>{chip.label}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-          ) : null}
-
-          {(showVehicleReg || isAttachDoc) && vehicleOptions.length ? (
-            <View style={styles.linkBlock}>
-              <Text style={styles.linkLabel}>Link to vehicle *</Text>
-              <View style={styles.linkRow}>
-                {vehicleOptions.slice(0, 12).map((v) => {
-                  const id = v.assetId || v.id;
-                  const on = linkAssetId === id;
-                  return (
-                    <Pressable
-                      key={id}
-                      onPress={() => {
-                        Haptics.select();
-                        setLinkAssetId(id);
-                      }}
-                      style={[styles.linkChip, on && styles.linkChipOn]}
-                    >
-                      <Text style={[styles.linkChipText, on && styles.linkChipTextOn]} numberOfLines={1}>
-                        {v.assetName || 'Vehicle'}
-                        {v.registration ? ` · ${v.registration}` : ''}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-          ) : null}
-        </Section>
-
-        {/* 2. VEHICLE / ASSET DETAILS SECTION */}
-        <Section
-          title="2. Vehicle / Asset Details"
-          open={openVehicleSec}
-          onToggle={() => setOpenVehicleSec((v) => !v)}
-        >
-          {!isAttachDoc && (
-            <View style={styles.fieldItem}>
-              <View style={styles.fieldHeaderRow}>
-                <Text style={styles.fieldLabel}>Asset / Item Name *</Text>
-                <StatusBadge status={getFieldInfo('productName').status} conf={getFieldInfo('productName').confidence} />
-              </View>
-              <GlassInput
-                value={blank(invoice.productName)}
-                onChangeText={(t) => patch('productName', t)}
-                placeholder="Not found on document"
-              />
-            </View>
-          )}
-
-          {(showVehicleReg || isAttachDoc || isService || isInsurance || isPuc || isRc) && (
-            <>
-              <View style={styles.fieldItem}>
-                <View style={styles.fieldHeaderRow}>
-                  <Text style={styles.fieldLabel}>Vehicle Registration No</Text>
-                  <StatusBadge status={getFieldInfo('registration').status} conf={getFieldInfo('registration').confidence} />
-                </View>
+              <View style={styles.cleanFieldItem}>
+                <Text style={styles.cleanFieldLabel}>Insurance Company / Insurer *</Text>
                 <GlassInput
-                  value={blank(invoice.registration)}
-                  onChangeText={(t) => patch('registration', t.toUpperCase().replace(/\s+/g, ''))}
-                  autoCapitalize="characters"
-                  placeholder="Not found on document"
-                />
-                <FieldLearningHint
-                  review={invoice.fieldIntelligence?.registration}
-                  currentValue={invoice.registration}
-                  onUseCandidate={(v) => patch('registration', String(v).toUpperCase().replace(/\s+/g, ''))}
+                  value={blank(invoice.insurerName || invoice.shopName)}
+                  onChangeText={(t) => {
+                    patch('insurerName', t);
+                    patch('shopName', t);
+                  }}
+                  placeholder="e.g. Tata AIG, HDFC ERGO, ICICI Lombard"
                 />
               </View>
 
-              <View style={styles.fieldItem}>
-                <View style={styles.fieldHeaderRow}>
-                  <Text style={styles.fieldLabel}>Chassis / VIN / Frame No</Text>
-                  <StatusBadge status={getFieldInfo('chassisNumber').status} conf={getFieldInfo('chassisNumber').confidence} />
-                </View>
-                <GlassInput
-                  value={blank(invoice.chassisNumber)}
-                  onChangeText={(t) => patch('chassisNumber', t.trim())}
-                  autoCapitalize="characters"
-                  placeholder="Not found on document"
-                />
-                <FieldLearningHint
-                  review={invoice.fieldIntelligence?.chassisNumber}
-                  currentValue={invoice.chassisNumber}
-                  onUseCandidate={(v) => patch('chassisNumber', String(v).trim())}
-                />
-              </View>
-
-              <View style={styles.fieldItem}>
-                <View style={styles.fieldHeaderRow}>
-                  <Text style={styles.fieldLabel}>Engine No</Text>
-                  <StatusBadge status={getFieldInfo('engineNumber').status} conf={getFieldInfo('engineNumber').confidence} />
-                </View>
-                <GlassInput
-                  value={blank(invoice.engineNumber)}
-                  onChangeText={(t) => patch('engineNumber', t.trim())}
-                  autoCapitalize="characters"
-                  placeholder="Not found on document"
-                />
-                <FieldLearningHint
-                  review={invoice.fieldIntelligence?.engineNumber}
-                  currentValue={invoice.engineNumber}
-                  onUseCandidate={(v) => patch('engineNumber', String(v).trim())}
-                />
-              </View>
-            </>
-          )}
-
-          {!showVehicleReg && !isService && !isInsurance && !isPuc && !isRc && (
-            <>
-              <View style={styles.fieldItem}>
-                <View style={styles.fieldHeaderRow}>
-                  <Text style={styles.fieldLabel}>Serial Number</Text>
-                  <StatusBadge status={getFieldInfo('serialNumber').status} conf={getFieldInfo('serialNumber').confidence} />
-                </View>
-                <GlassInput
-                  value={blank(invoice.serialNumber)}
-                  onChangeText={(t) => patch('serialNumber', t)}
-                  placeholder="Not found on document"
-                />
-                <FieldLearningHint
-                  review={invoice.fieldIntelligence?.serialNumber}
-                  currentValue={invoice.serialNumber}
-                  onUseCandidate={(v) => patch('serialNumber', v)}
-                />
-              </View>
-
-              <View style={styles.fieldItem}>
-                <View style={styles.fieldHeaderRow}>
-                  <Text style={styles.fieldLabel}>IMEI</Text>
-                  <StatusBadge status={getFieldInfo('imei').status} conf={getFieldInfo('imei').confidence} />
-                </View>
-                <GlassInput
-                  value={blank(invoice.imei)}
-                  onChangeText={(t) => patch('imei', t.replace(/\D/g, '').slice(0, 15))}
-                  keyboardType="number-pad"
-                  placeholder="Not found on document"
-                />
-                <FieldLearningHint
-                  review={invoice.fieldIntelligence?.imei}
-                  currentValue={invoice.imei}
-                  onUseCandidate={(v) => patch('imei', String(v).replace(/\D/g, '').slice(0, 15))}
-                />
-              </View>
-            </>
-          )}
-        </Section>
-
-        {/* 3. SERVICE SECTION (SERVICE INVOICE ONLY — STRICTLY GATED) */}
-        {isService && (
-          <Section
-            title="3. Service & Odometer Details"
-            open={openServiceSec}
-            onToggle={() => setOpenServiceSec((v) => !v)}
-          >
-            <View style={styles.fieldItem}>
-              <View style={styles.fieldHeaderRow}>
-                <Text style={styles.fieldLabel}>Current Odometer Reading (KM)</Text>
-                <StatusBadge status={getFieldInfo('odometerKm').status} conf={getFieldInfo('odometerKm').confidence} />
-              </View>
-              <GlassInput
-                value={invoice.odometerKm != null ? String(invoice.odometerKm) : ''}
-                onChangeText={(t) => {
-                  const n = t.trim() ? Number(t.replace(/,/g, '')) : null;
-                  patch('odometerKm', Number.isFinite(n) ? n : null);
-                }}
-                keyboardType="number-pad"
-                placeholder="Not found on document"
-              />
-            </View>
-
-            <View style={styles.fieldItem}>
-              <View style={styles.fieldHeaderRow}>
-                <Text style={styles.fieldLabel}>Next Service Target (KM) — (If on bill)</Text>
-                <StatusBadge
-                  status={getFieldInfo('nextServiceOdometerKm').status}
-                  conf={getFieldInfo('nextServiceOdometerKm').confidence}
-                />
-              </View>
-              <GlassInput
-                value={
-                  invoice.nextServiceOdometerKm != null
-                    ? String(invoice.nextServiceOdometerKm)
-                    : ''
-                }
-                onChangeText={(t) => {
-                  const n = t.trim() ? Number(t.replace(/,/g, '')) : null;
-                  patch('nextServiceOdometerKm', Number.isFinite(n) ? n : null);
-                }}
-                keyboardType="number-pad"
-                placeholder="Not found on document"
-              />
-            </View>
-
-            <View style={styles.fieldItem}>
-              <View style={styles.fieldHeaderRow}>
-                <Text style={styles.fieldLabel}>Next Service Date — (If on bill)</Text>
-                <StatusBadge status={getFieldInfo('nextServiceDue').status} conf={getFieldInfo('nextServiceDue').confidence} />
-              </View>
-              <GlassInput
-                value={blank(invoice.nextServiceDue)}
-                onChangeText={(t) => patch('nextServiceDue', t.trim() || null)}
-                placeholder="Not found on document"
-              />
-            </View>
-          </Section>
-        )}
-
-        {/* 4. FINANCIAL SECTION */}
-        <Section
-          title="4. Financial Breakdown"
-          open={openFinSec}
-          onToggle={() => setOpenFinSec((v) => !v)}
-        >
-          {isInsurance && invoice.idvAmount != null && (
-            <View style={styles.fieldItem}>
-              <View style={styles.fieldHeaderRow}>
-                <Text style={styles.fieldLabel}>Insured Declared Value (IDV ₹)</Text>
-                <StatusBadge status={getFieldInfo('idvAmount').status} conf={getFieldInfo('idvAmount').confidence} />
-              </View>
-              <GlassInput
-                value={String(invoice.idvAmount)}
-                onChangeText={(t) => patch('idvAmount', parseMoneyInput(t))}
-                keyboardType="decimal-pad"
-                placeholder="Not found on document"
-              />
-            </View>
-          )}
-
-          {isService && (
-            <>
-              <View style={styles.fieldItem}>
-                <View style={styles.fieldHeaderRow}>
-                  <Text style={styles.fieldLabel}>Labour Charges (₹)</Text>
-                  <StatusBadge status={getFieldInfo('labourCharges').status} conf={getFieldInfo('labourCharges').confidence} />
-                </View>
-                <GlassInput
-                  value={invoice.labourCharges != null ? String(invoice.labourCharges) : ''}
-                  onChangeText={(t) => patch('labourCharges', parseMoneyInput(t))}
-                  keyboardType="decimal-pad"
-                  placeholder="Not found on document"
-                />
-              </View>
-
-              <View style={styles.fieldItem}>
-                <View style={styles.fieldHeaderRow}>
-                  <Text style={styles.fieldLabel}>Parts Total (₹)</Text>
-                  <StatusBadge status={getFieldInfo('partsTotal').status} conf={getFieldInfo('partsTotal').confidence} />
-                </View>
-                <GlassInput
-                  value={invoice.partsTotal != null ? String(invoice.partsTotal) : ''}
-                  onChangeText={(t) => patch('partsTotal', parseMoneyInput(t))}
-                  keyboardType="decimal-pad"
-                  placeholder="Not found on document"
-                />
-              </View>
-            </>
-          )}
-
-          <View style={styles.fieldItem}>
-            <View style={styles.fieldHeaderRow}>
-              <Text style={styles.fieldLabel}>Tax / GST Amount (₹)</Text>
-              <StatusBadge status={getFieldInfo('taxAmount').status} conf={getFieldInfo('taxAmount').confidence} />
-            </View>
-            <GlassInput
-              value={invoice.taxAmount != null ? String(invoice.taxAmount) : ''}
-              onChangeText={(t) => patch('taxAmount', parseMoneyInput(t))}
-              keyboardType="decimal-pad"
-              placeholder="Not found on document"
-            />
-          </View>
-
-          <View style={styles.fieldItem}>
-            <View style={styles.fieldHeaderRow}>
-              <Text style={styles.fieldLabel}>
-                {isInsurance ? 'Total Premium Paid (₹) *' : 'Grand Total / Price (₹) *'}
-              </Text>
-              <StatusBadge status={getFieldInfo('totalAmount').status} conf={getFieldInfo('totalAmount').confidence} />
-            </View>
-            <GlassInput
-              value={
-                invoice.totalAmount != null && Number.isFinite(Number(invoice.totalAmount))
-                  ? String(invoice.totalAmount)
-                  : ''
-              }
-              onChangeText={(t) => patch('totalAmount', parseMoneyInput(t))}
-              keyboardType="decimal-pad"
-              placeholder="Not found on document"
-            />
-            <FieldLearningHint
-              review={invoice.fieldIntelligence?.totalAmount}
-              currentValue={invoice.totalAmount}
-              onUseCandidate={(v) => patch('totalAmount', parseMoneyInput(String(v)))}
-            />
-          </View>
-        </Section>
-
-        {/* 5. IDENTITY SECTION */}
-        <Section
-          title="5. Identity & Contact"
-          open={openIdentitySec}
-          onToggle={() => setOpenIdentitySec((v) => !v)}
-        >
-          <View style={styles.fieldItem}>
-            <View style={styles.fieldHeaderRow}>
-              <Text style={styles.fieldLabel}>
-                {isInsurance ? 'Insured / Policyholder Name' : 'Owner / Buyer / Customer Name'}
-              </Text>
-              <StatusBadge status={getFieldInfo('customerName').status} conf={getFieldInfo('customerName').confidence} />
-            </View>
-            <GlassInput
-              value={blank(invoice.customerName)}
-              onChangeText={(t) => patch('customerName', t)}
-              placeholder="Not found on document"
-            />
-          </View>
-
-          <View style={styles.fieldItem}>
-            <View style={styles.fieldHeaderRow}>
-              <Text style={styles.fieldLabel}>Customer Contact Phone</Text>
-              <StatusBadge status={getFieldInfo('customerPhone').status} conf={getFieldInfo('customerPhone').confidence} />
-            </View>
-            <GlassInput
-              value={blank(invoice.customerPhone)}
-              onChangeText={(t) => patch('customerPhone', t)}
-              keyboardType="phone-pad"
-              placeholder="Not found on document"
-            />
-            <FieldLearningHint
-              review={invoice.fieldIntelligence?.customerPhone || invoice.fieldIntelligence?.phone}
-              currentValue={invoice.customerPhone}
-              onUseCandidate={(v) => patch('customerPhone', v)}
-            />
-          </View>
-        </Section>
-
-        {/* 6. DATES & VALIDITY SECTION */}
-        {(isInsurance || isPuc || showVehicleReg || !isAttachDoc) && (
-          <Section
-            title="6. Validity & Expiry Dates"
-            open={openDatesSec}
-            onToggle={() => setOpenDatesSec((v) => !v)}
-          >
-            {isInsurance && (
-              <>
-                <View style={styles.fieldItem}>
-                  <View style={styles.fieldHeaderRow}>
-                    <Text style={styles.fieldLabel}>Policy Start Date</Text>
-                    <StatusBadge status={getFieldInfo('policyStartDate').status} conf={getFieldInfo('policyStartDate').confidence} />
-                  </View>
+              <View style={styles.cleanRowTwoCol}>
+                <View style={[styles.cleanFieldItem, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.cleanFieldLabel}>Policy Number *</Text>
                   <GlassInput
-                    value={blank(invoice.policyStartDate || invoice.insuranceStart)}
-                    onChangeText={(t) => patch('policyStartDate', t.trim() || null)}
-                    placeholder="Not found on document"
-                  />
-                </View>
-
-                <View style={styles.fieldItem}>
-                  <View style={styles.fieldHeaderRow}>
-                    <Text style={styles.fieldLabel}>Policy Expiry Date</Text>
-                    <StatusBadge status={getFieldInfo('insuranceExpiry').status} conf={getFieldInfo('insuranceExpiry').confidence} />
-                  </View>
-                  <GlassInput
-                    value={blank(invoice.insuranceExpiry)}
-                    onChangeText={(t) => patch('insuranceExpiry', t.trim() || null)}
-                    placeholder="Not found on document"
-                  />
-                  {invoice.insuranceExpiry ? (
-                    <Text style={[styles.expiryHint, { color: insuranceTone.color, marginTop: 4 }]}>
-                      Insurance · {formatDateIN(invoice.insuranceExpiry)} · {insuranceTone.label}
-                    </Text>
-                  ) : null}
-                </View>
-              </>
-            )}
-
-            {(isPuc || showVehicleReg) && (
-              <View style={styles.fieldItem}>
-                <View style={styles.fieldHeaderRow}>
-                  <Text style={styles.fieldLabel}>PUC Expiry Date</Text>
-                  <StatusBadge status={getFieldInfo('pucExpiry').status} conf={getFieldInfo('pucExpiry').confidence} />
-                </View>
-                <GlassInput
-                  value={blank(invoice.pucExpiry)}
-                  onChangeText={(t) => patch('pucExpiry', t.trim() || null)}
-                  placeholder="Not found on document"
-                />
-                {invoice.pucExpiry ? (
-                  <Text style={[styles.expiryHint, { color: pucTone.color, marginTop: 4 }]}>
-                    PUC · {formatDateIN(invoice.pucExpiry)} · {pucTone.label}
-                  </Text>
-                ) : null}
-              </View>
-            )}
-
-            {!isAttachDoc && !isInsurance && !isPuc && (
-              <>
-                <View style={styles.fieldItem}>
-                  <View style={styles.fieldHeaderRow}>
-                    <Text style={styles.fieldLabel}>Warranty (Months)</Text>
-                    <StatusBadge status={getFieldInfo('warrantyPeriodMonths').status} conf={getFieldInfo('warrantyPeriodMonths').confidence} />
-                  </View>
-                  <GlassInput
-                    value={invoice.warrantyPeriodMonths != null ? String(invoice.warrantyPeriodMonths) : ''}
+                    value={blank(invoice.policyNumber || invoice.invoiceNumber)}
                     onChangeText={(t) => {
-                      const n = t.trim() ? Number(t) : null;
-                      patch('warrantyPeriodMonths', Number.isFinite(n) ? n : null);
+                      patch('policyNumber', t);
+                      patch('invoiceNumber', t);
                     }}
-                    keyboardType="number-pad"
-                    placeholder="Not found on document"
+                    placeholder="e.g. 0159988223"
                   />
                 </View>
-
-                <View style={styles.fieldItem}>
-                  <View style={styles.fieldHeaderRow}>
-                    <Text style={styles.fieldLabel}>Warranty Expiry Date</Text>
-                    <StatusBadge status={getFieldInfo('warrantyExpiry').status} conf={getFieldInfo('warrantyExpiry').confidence} />
-                  </View>
+                <View style={[styles.cleanFieldItem, { flex: 1 }]}>
+                  <Text style={styles.cleanFieldLabel}>Policy Type</Text>
                   <GlassInput
-                    value={blank(invoice.warrantyExpiry || invoice.warrantyEndDate)}
-                    onChangeText={(t) => patch('warrantyExpiry', t.trim() || null)}
-                    placeholder="Not found on document"
+                    value={blank(invoice.policyType)}
+                    onChangeText={(t) => patch('policyType', t)}
+                    placeholder="Comprehensive / Third Party"
                   />
-                  {invoice.warrantyPeriodMonths != null ? (
-                    <View style={styles.warrantyComputedRow}>
-                      <Text style={styles.warrantyComputedText}>
-                        {invoice.warrantyExpiry
-                          ? `Warranty runs until ${formatDateIN(invoice.warrantyExpiry)} (${invoice.warrantyPeriodMonths} mo from purchase date).`
-                          : `Warranty period (${invoice.warrantyPeriodMonths} mo) found, but no start date — add the purchase date to auto-calculate expiry.`}
-                      </Text>
-                      {invoice.warrantyNeedsReview ? (
-                        <Text style={[styles.warrantyReviewFlag]}>Needs review</Text>
-                      ) : null}
+                </View>
+              </View>
+            </GlassCard>
+
+            {/* CARD 2: VEHICLE DETAILS */}
+            <GlassCard style={styles.cleanSectionCard}>
+              <Text style={styles.cleanSectionTitle}>2. Vehicle Details</Text>
+              <Text style={styles.cleanSectionSubtitle}>Registration, chassis, engine & make/model</Text>
+
+              <View style={styles.cleanRowTwoCol}>
+                <View style={[styles.cleanFieldItem, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.cleanFieldLabel}>Registration Number</Text>
+                  <GlassInput
+                    value={blank(invoice.registration || invoice.vehicleRegistrationNumber)}
+                    onChangeText={(t) => {
+                      const reg = t.toUpperCase().replace(/\s+/g, '');
+                      patch('registration', reg);
+                      patch('vehicleRegistrationNumber', reg);
+                    }}
+                    autoCapitalize="characters"
+                    placeholder="e.g. KA01AB1234"
+                  />
+                </View>
+                <View style={[styles.cleanFieldItem, { flex: 1 }]}>
+                  <Text style={styles.cleanFieldLabel}>Chassis / VIN</Text>
+                  <GlassInput
+                    value={blank(invoice.chassisNumber)}
+                    onChangeText={(t) => patch('chassisNumber', t.toUpperCase().replace(/\s+/g, ''))}
+                    autoCapitalize="characters"
+                    placeholder="Chassis No"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.cleanRowTwoCol}>
+                <View style={[styles.cleanFieldItem, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.cleanFieldLabel}>Engine Number</Text>
+                  <GlassInput
+                    value={blank(invoice.engineNumber)}
+                    onChangeText={(t) => patch('engineNumber', t.toUpperCase().replace(/\s+/g, ''))}
+                    autoCapitalize="characters"
+                    placeholder="Engine No"
+                  />
+                </View>
+                <View style={[styles.cleanFieldItem, { flex: 1 }]}>
+                  <Text style={styles.cleanFieldLabel}>Make / Model</Text>
+                  <GlassInput
+                    value={blank(
+                      invoice.vehicleMake || invoice.brand
+                        ? `${invoice.vehicleMake || invoice.brand} ${invoice.vehicleModel || invoice.model || ''}`.trim()
+                        : invoice.productName
+                    )}
+                    onChangeText={(t) => {
+                      patch('productName', t);
+                      patch('vehicleMake', t);
+                    }}
+                    placeholder="e.g. TVS Ronin"
+                  />
+                </View>
+              </View>
+            </GlassCard>
+
+            {/* CARD 3: POLICY PERIOD & AMOUNT */}
+            <GlassCard style={styles.cleanSectionCard}>
+              <Text style={styles.cleanSectionTitle}>3. Policy Period & Premium</Text>
+              <Text style={styles.cleanSectionSubtitle}>Validity dates, IDV and premium paid</Text>
+
+              <View style={styles.cleanRowTwoCol}>
+                <View style={[styles.cleanFieldItem, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.cleanFieldLabel}>Start Date</Text>
+                  <GlassInput
+                    value={blank(invoice.policyStartDate || invoice.invoiceDate)}
+                    onChangeText={(t) => {
+                      patch('policyStartDate', t.trim() || null);
+                      patch('invoiceDate', t.trim() || null);
+                    }}
+                    placeholder="YYYY-MM-DD"
+                  />
+                </View>
+                <View style={[styles.cleanFieldItem, { flex: 1 }]}>
+                  <Text style={styles.cleanFieldLabel}>Policy Expiry Date *</Text>
+                  <GlassInput
+                    value={blank(invoice.policyExpiryDate || invoice.insuranceExpiry)}
+                    onChangeText={(t) => {
+                      patch('policyExpiryDate', t.trim() || null);
+                      patch('insuranceExpiry', t.trim() || null);
+                    }}
+                    placeholder="YYYY-MM-DD"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.cleanRowTwoCol}>
+                <View style={[styles.cleanFieldItem, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.cleanFieldLabel}>IDV / Insured Value (₹)</Text>
+                  <GlassInput
+                    value={invoice.idv != null ? String(invoice.idv) : ''}
+                    onChangeText={(t) => patch('idv', parseMoneyInput(t))}
+                    keyboardType="numeric"
+                    placeholder="e.g. 120000"
+                  />
+                </View>
+                <View style={[styles.cleanFieldItem, { flex: 1 }]}>
+                  <Text style={styles.cleanFieldLabel}>Premium Paid (₹)</Text>
+                  <GlassInput
+                    value={
+                      invoice.premium != null
+                        ? String(invoice.premium)
+                        : invoice.totalAmount != null
+                        ? String(invoice.totalAmount)
+                        : ''
+                    }
+                    onChangeText={(t) => {
+                      const n = parseMoneyInput(t);
+                      patch('premium', n);
+                      patch('totalAmount', n);
+                      patch('purchaseAmount', n);
+                    }}
+                    keyboardType="numeric"
+                    placeholder="e.g. 4500"
+                  />
+                </View>
+              </View>
+            </GlassCard>
+
+            {/* CARD 4: VEHICLE PASSPORT LINK */}
+            <GlassCard style={styles.cleanSectionCard}>
+              <Text style={styles.cleanSectionTitle}>4. Link to Vehicle Passport</Text>
+              <Text style={styles.cleanSectionSubtitle}>Select which vehicle this policy belongs to</Text>
+              {renderVehiclePicker()}
+            </GlassCard>
+          </>
+        ) : isPuc ? (
+          <>
+            {/* CARD 1: PUC DETAILS */}
+            <GlassCard style={styles.cleanSectionCard}>
+              <Text style={styles.cleanSectionTitle}>1. PUC Details</Text>
+              <Text style={styles.cleanSectionSubtitle}>Certificate number, test date & validity</Text>
+
+              <View style={styles.cleanFieldItem}>
+                <Text style={styles.cleanFieldLabel}>Certificate Number *</Text>
+                <GlassInput
+                  value={blank(invoice.certificateNumber || invoice.invoiceNumber)}
+                  onChangeText={(t) => {
+                    patch('certificateNumber', t);
+                    patch('invoiceNumber', t);
+                  }}
+                  placeholder="e.g. DL0123456789"
+                />
+              </View>
+
+              <View style={styles.cleanRowTwoCol}>
+                <View style={[styles.cleanFieldItem, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.cleanFieldLabel}>Test Date</Text>
+                  <GlassInput
+                    value={blank(invoice.testDate || invoice.invoiceDate)}
+                    onChangeText={(t) => {
+                      patch('testDate', t.trim() || null);
+                      patch('invoiceDate', t.trim() || null);
+                    }}
+                    placeholder="YYYY-MM-DD"
+                  />
+                </View>
+                <View style={[styles.cleanFieldItem, { flex: 1 }]}>
+                  <Text style={styles.cleanFieldLabel}>Valid Until / Expiry *</Text>
+                  <GlassInput
+                    value={blank(invoice.validUntil || invoice.pucExpiry)}
+                    onChangeText={(t) => {
+                      patch('validUntil', t.trim() || null);
+                      patch('pucExpiry', t.trim() || null);
+                      patch('pucValidUntil', t.trim() || null);
+                    }}
+                    placeholder="YYYY-MM-DD"
+                  />
+                </View>
+              </View>
+            </GlassCard>
+
+            {/* CARD 2: VEHICLE DETAILS */}
+            <GlassCard style={styles.cleanSectionCard}>
+              <Text style={styles.cleanSectionTitle}>2. Vehicle Details</Text>
+              <Text style={styles.cleanSectionSubtitle}>Registration, chassis, engine & make/model</Text>
+
+              <View style={styles.cleanRowTwoCol}>
+                <View style={[styles.cleanFieldItem, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.cleanFieldLabel}>Registration Number</Text>
+                  <GlassInput
+                    value={blank(invoice.registration || invoice.vehicleRegistrationNumber)}
+                    onChangeText={(t) => {
+                      const reg = t.toUpperCase().replace(/\s+/g, '');
+                      patch('registration', reg);
+                      patch('vehicleRegistrationNumber', reg);
+                    }}
+                    autoCapitalize="characters"
+                    placeholder="e.g. KA01AB1234"
+                  />
+                </View>
+                <View style={[styles.cleanFieldItem, { flex: 1 }]}>
+                  <Text style={styles.cleanFieldLabel}>Chassis Number</Text>
+                  <GlassInput
+                    value={blank(invoice.chassisNumber)}
+                    onChangeText={(t) => patch('chassisNumber', t.toUpperCase().replace(/\s+/g, ''))}
+                    autoCapitalize="characters"
+                    placeholder="Chassis No"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.cleanRowTwoCol}>
+                <View style={[styles.cleanFieldItem, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.cleanFieldLabel}>Engine Number</Text>
+                  <GlassInput
+                    value={blank(invoice.engineNumber)}
+                    onChangeText={(t) => patch('engineNumber', t.toUpperCase().replace(/\s+/g, ''))}
+                    autoCapitalize="characters"
+                    placeholder="Engine No"
+                  />
+                </View>
+                <View style={[styles.cleanFieldItem, { flex: 1 }]}>
+                  <Text style={styles.cleanFieldLabel}>Fuel Type</Text>
+                  <GlassInput
+                    value={blank(invoice.fuelType)}
+                    onChangeText={(t) => patch('fuelType', t)}
+                    placeholder="Petrol / Diesel / CNG / EV"
+                  />
+                </View>
+              </View>
+            </GlassCard>
+
+            {/* CARD 3: EMISSION & TESTING CENTER */}
+            <GlassCard style={styles.cleanSectionCard}>
+              <Text style={styles.cleanSectionTitle}>3. Emission & Testing Center</Text>
+              <Text style={styles.cleanSectionSubtitle}>Emission readings and testing station</Text>
+
+              <View style={styles.cleanFieldItem}>
+                <Text style={styles.cleanFieldLabel}>Emission Readings (CO / HC / Smoke)</Text>
+                <GlassInput
+                  value={blank(invoice.emissionValues)}
+                  onChangeText={(t) => patch('emissionValues', t)}
+                  placeholder="e.g. CO: 0.12%, HC: 150 ppm"
+                />
+              </View>
+
+              <View style={styles.cleanFieldItem}>
+                <Text style={styles.cleanFieldLabel}>Testing Center / Authority</Text>
+                <GlassInput
+                  value={blank(invoice.issuingAuthority || invoice.shopName)}
+                  onChangeText={(t) => {
+                    patch('issuingAuthority', t);
+                    patch('shopName', t);
+                  }}
+                  placeholder="Testing Center / Agency Name"
+                />
+              </View>
+            </GlassCard>
+
+            {/* CARD 4: VEHICLE PASSPORT LINK */}
+            <GlassCard style={styles.cleanSectionCard}>
+              <Text style={styles.cleanSectionTitle}>4. Link to Vehicle Passport</Text>
+              <Text style={styles.cleanSectionSubtitle}>Select which vehicle this certificate belongs to</Text>
+              {renderVehiclePicker()}
+            </GlassCard>
+          </>
+        ) : isVehicleService ? (
+          <>
+            {/* CARD 1: SERVICE & WORKSHOP DETAILS */}
+            <GlassCard style={styles.cleanSectionCard}>
+              <Text style={styles.cleanSectionTitle}>1. Service & Workshop Details</Text>
+              <Text style={styles.cleanSectionSubtitle}>Workshop, invoice number & service date</Text>
+
+              <View style={styles.cleanFieldItem}>
+                <Text style={styles.cleanFieldLabel}>Dealer / Workshop Name *</Text>
+                <GlassInput
+                  value={blank(invoice.workshopName || invoice.shopName)}
+                  onChangeText={(t) => {
+                    patch('workshopName', t);
+                    patch('shopName', t);
+                  }}
+                  placeholder="e.g. Authorized Workshop, Apex Motors"
+                />
+              </View>
+
+              <View style={styles.cleanRowTwoCol}>
+                <View style={[styles.cleanFieldItem, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.cleanFieldLabel}>Service Invoice / Job Card *</Text>
+                  <GlassInput
+                    value={blank(invoice.serviceInvoiceNumber || invoice.invoiceNumber)}
+                    onChangeText={(t) => {
+                      patch('serviceInvoiceNumber', t);
+                      patch('invoiceNumber', t);
+                    }}
+                    placeholder="e.g. DL-2024-88910"
+                  />
+                </View>
+                <View style={[styles.cleanFieldItem, { flex: 1 }]}>
+                  <Text style={styles.cleanFieldLabel}>Service Date</Text>
+                  <GlassInput
+                    value={blank(invoice.serviceDate || invoice.invoiceDate)}
+                    onChangeText={(t) => {
+                      patch('serviceDate', t);
+                      patch('invoiceDate', t);
+                    }}
+                    placeholder="YYYY-MM-DD"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.cleanFieldItem}>
+                <Text style={styles.cleanFieldLabel}>Job Type / Description</Text>
+                <GlassInput
+                  value={blank(invoice.jobType)}
+                  onChangeText={(t) => patch('jobType', t)}
+                  placeholder="e.g. Periodic Maintenance / Paid Service"
+                />
+              </View>
+            </GlassCard>
+
+            {/* CARD 2: VEHICLE & ODOMETER */}
+            <GlassCard style={styles.cleanSectionCard}>
+              <Text style={styles.cleanSectionTitle}>2. Vehicle & Odometer</Text>
+              <Text style={styles.cleanSectionSubtitle}>Vehicle identifiers & current mileage</Text>
+
+              <View style={styles.cleanRowTwoCol}>
+                <View style={[styles.cleanFieldItem, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.cleanFieldLabel}>Registration Number</Text>
+                  <GlassInput
+                    value={blank(invoice.registration || invoice.vehicleRegistrationNumber)}
+                    onChangeText={(t) => {
+                      const reg = t.toUpperCase().replace(/\s+/g, '');
+                      patch('registration', reg);
+                      patch('vehicleRegistrationNumber', reg);
+                    }}
+                    autoCapitalize="characters"
+                    placeholder="e.g. KA01AB1234"
+                  />
+                </View>
+                <View style={[styles.cleanFieldItem, { flex: 1 }]}>
+                  <Text style={styles.cleanFieldLabel}>Odometer (km)</Text>
+                  <GlassInput
+                    value={blank(invoice.odometerKm != null ? String(invoice.odometerKm) : '')}
+                    onChangeText={(t) => patch('odometerKm', t ? parseInt(t, 10) : null)}
+                    keyboardType="numeric"
+                    placeholder="e.g. 5240"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.cleanRowTwoCol}>
+                <View style={[styles.cleanFieldItem, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.cleanFieldLabel}>Chassis / Frame Number</Text>
+                  <GlassInput
+                    value={blank(invoice.chassisNumber)}
+                    onChangeText={(t) => patch('chassisNumber', t.toUpperCase().replace(/\s+/g, ''))}
+                    autoCapitalize="characters"
+                    placeholder="Chassis No"
+                  />
+                </View>
+                <View style={[styles.cleanFieldItem, { flex: 1 }]}>
+                  <Text style={styles.cleanFieldLabel}>Engine Number</Text>
+                  <GlassInput
+                    value={blank(invoice.engineNumber)}
+                    onChangeText={(t) => patch('engineNumber', t.toUpperCase().replace(/\s+/g, ''))}
+                    autoCapitalize="characters"
+                    placeholder="Engine No"
+                  />
+                </View>
+              </View>
+            </GlassCard>
+
+            {/* CARD 3: BILL BREAKDOWN & NEXT SERVICE */}
+            <GlassCard style={styles.cleanSectionCard}>
+              <Text style={styles.cleanSectionTitle}>3. Bill Breakdown & Next Service</Text>
+              <Text style={styles.cleanSectionSubtitle}>Charges, grand total & upcoming service</Text>
+
+              <View style={styles.cleanRowTwoCol}>
+                <View style={[styles.cleanFieldItem, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.cleanFieldLabel}>Parts Amount (₹)</Text>
+                  <GlassInput
+                    value={blank(invoice.partsAmount != null ? String(invoice.partsAmount) : '')}
+                    onChangeText={(t) => patch('partsAmount', t ? parseFloat(t) : null)}
+                    keyboardType="numeric"
+                    placeholder="0.00"
+                  />
+                </View>
+                <View style={[styles.cleanFieldItem, { flex: 1 }]}>
+                  <Text style={styles.cleanFieldLabel}>Labour Amount (₹)</Text>
+                  <GlassInput
+                    value={blank(invoice.labourAmount != null ? String(invoice.labourAmount) : '')}
+                    onChangeText={(t) => patch('labourAmount', t ? parseFloat(t) : null)}
+                    keyboardType="numeric"
+                    placeholder="0.00"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.cleanFieldItem}>
+                <Text style={styles.cleanFieldLabel}>Grand Total (₹) *</Text>
+                <GlassInput
+                  value={blank(invoice.totalAmount != null ? String(invoice.totalAmount) : '')}
+                  onChangeText={(t) => {
+                    patch('totalAmount', t);
+                    patch('purchaseAmount', t);
+                  }}
+                  keyboardType="numeric"
+                  placeholder="Total bill amount"
+                />
+              </View>
+
+              <View style={styles.cleanRowTwoCol}>
+                <View style={[styles.cleanFieldItem, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.cleanFieldLabel}>Next Service Date</Text>
+                  <GlassInput
+                    value={blank(invoice.nextServiceDate || invoice.nextServiceDue)}
+                    onChangeText={(t) => {
+                      patch('nextServiceDate', t);
+                      patch('nextServiceDue', t);
+                    }}
+                    placeholder="YYYY-MM-DD"
+                  />
+                </View>
+                <View style={[styles.cleanFieldItem, { flex: 1 }]}>
+                  <Text style={styles.cleanFieldLabel}>Next Service Odometer (km)</Text>
+                  <GlassInput
+                    value={blank(invoice.nextServiceKm != null ? String(invoice.nextServiceKm) : '')}
+                    onChangeText={(t) => patch('nextServiceKm', t ? parseInt(t, 10) : null)}
+                    keyboardType="numeric"
+                    placeholder="e.g. 10000"
+                  />
+                </View>
+              </View>
+            </GlassCard>
+
+            {/* CARD 4: VEHICLE PASSPORT LINK */}
+            <GlassCard style={styles.cleanSectionCard}>
+              <Text style={styles.cleanSectionTitle}>4. Link to Vehicle Passport</Text>
+              <Text style={styles.cleanSectionSubtitle}>Select which vehicle this service history belongs to</Text>
+              {renderVehiclePicker()}
+            </GlassCard>
+          </>
+        ) : (
+          <>
+            {/* CARD 1: ASSET DETAILS */}
+            <GlassCard style={styles.cleanSectionCard}>
+              <Text style={styles.cleanSectionTitle}>1. Asset Details</Text>
+              <Text style={styles.cleanSectionSubtitle}>Product name, brand, model & unique identifiers</Text>
+
+              <View style={styles.cleanFieldItem}>
+                <Text style={styles.cleanFieldLabel}>Product / Asset Name *</Text>
+                <GlassInput
+                  value={blank(invoice.productName)}
+                  onChangeText={(t) => patch('productName', t)}
+                  placeholder="e.g. TVS Ronin or CMF Buds 2 Plus"
+                />
+              </View>
+
+              <View style={styles.cleanRowTwoCol}>
+                <View style={[styles.cleanFieldItem, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.cleanFieldLabel}>Brand / Make</Text>
+                  <GlassInput
+                    value={blank(invoice.brand || invoice.make)}
+                    onChangeText={(t) => {
+                      patch('brand', t);
+                      patch('make', t);
+                    }}
+                    placeholder="e.g. TVS, CMF"
+                  />
+                </View>
+                <View style={[styles.cleanFieldItem, { flex: 1 }]}>
+                  <Text style={styles.cleanFieldLabel}>Model / Variant</Text>
+                  <GlassInput
+                    value={blank(invoice.model)}
+                    onChangeText={(t) => patch('model', t)}
+                    placeholder="e.g. Base Lightning Black"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.cleanFieldItem}>
+                <View style={styles.identifierHeaderRow}>
+                  <Text style={styles.cleanFieldLabel}>
+                    {invoice.identifierType === 'CHASSIS_NUMBER' || isVehiclePurchase || invoice.chassisNumber
+                      ? 'Chassis / Frame Number'
+                      : invoice.identifierType === 'IMEI' || isElectronics || invoice.imei
+                      ? 'IMEI Number'
+                      : invoice.identifierType === 'ENGINE_NUMBER' || invoice.engineNumber
+                      ? 'Engine Number'
+                      : 'Serial / Unique Identifier'}
+                  </Text>
+                  {invoice.identifierType && invoice.identifierType !== 'UNKNOWN' ? (
+                    <View style={styles.cleanTypeBadge}>
+                      <Text style={styles.cleanTypeBadgeText}>{invoice.identifierType}</Text>
                     </View>
                   ) : null}
                 </View>
-              </>
-            )}
-          </Section>
-        )}
-
-        {/* 7. LINE ITEMS (FOR SERVICE INVOICES OR MULTI-ITEM RECEIPTS) */}
-        {!isInsurance && !isPuc && !isRc && (
-          <Section
-            title={`Line Items (${itemCount})`}
-            open={openItems}
-            onToggle={() => setOpenItems((v) => !v)}
-          >
-            {itemList.length ? (
-              itemList.map((item) => (
-                <ItemDetailCard
-                  key={`${item.index}-${item.name}`}
-                  title={`${item.index}. ${item.name}`}
-                  qty={item.qty}
-                  rate={item.rate}
-                  amount={item.amount}
-                  warrantyExpiry={invoice.warrantyExpiry}
-                  pucExpiry={item.trackPucService ? invoice.pucExpiry : null}
-                  nextServiceDue={
-                    item.trackPucService || item.seasonalServiceAlerts
-                      ? invoice.nextServiceDue
-                      : null
-                  }
-                  selected={item.index === selectedItemIndex}
-                  smartCategory={item.smartCategory}
-                  trackImei={item.trackImei}
-                  trackPucService={item.trackPucService}
-                  seasonalServiceAlerts={item.seasonalServiceAlerts}
-                  showCategoryPicker={!item.isFee}
-                  onCategoryChange={(cat) => setItemCategory(item.index, cat)}
-                  onPress={() => {
-                    Haptics.select();
-                    setSelectedItemIndex(item.index);
-                    setSaveAllItems(false);
-                    if (item.name) patch('productName', item.name);
+                <GlassInput
+                  value={blank(
+                    invoice.chassisNumber ||
+                    invoice.imei ||
+                    invoice.serialNumber ||
+                    invoice.serialOrIdentifier
+                  )}
+                  onChangeText={(t) => {
+                    const val = t.trim();
+                    patch('serialOrIdentifier', val);
+                    if (invoice.identifierType === 'CHASSIS_NUMBER' || isVehiclePurchase) {
+                      patch('chassisNumber', val.toUpperCase().replace(/\s+/g, ''));
+                    } else if (invoice.identifierType === 'IMEI' || isElectronics) {
+                      patch('imei', val.replace(/\D/g, '').slice(0, 15));
+                    } else {
+                      patch('serialNumber', val);
+                    }
                   }}
+                  placeholder="e.g. MD637AN115ZF03328 or IMEI / Serial No"
+                  autoCapitalize="characters"
                 />
-              ))
-            ) : (
-              <Text style={styles.hint}>No itemized lines detected on bill.</Text>
-            )}
-            {itemList.length > 1 ? (
-              <Pressable
-                onPress={() => {
-                  Haptics.select();
-                  setSaveAllItems((v) => !v);
-                }}
-                style={styles.saveAllToggle}
-              >
-                <Text style={styles.saveAllText}>
-                  {saveAllItems ? '✓ Save all items separately' : 'Save selected item only'}
-                </Text>
-              </Pressable>
-            ) : null}
-          </Section>
+              </View>
+            </GlassCard>
+
+            {/* CARD 2: PURCHASE & WARRANTY */}
+            <GlassCard style={styles.cleanSectionCard}>
+              <Text style={styles.cleanSectionTitle}>2. Purchase & Warranty</Text>
+              <Text style={styles.cleanSectionSubtitle}>Purchase date, total price paid & warranty details</Text>
+
+              <View style={styles.cleanRowTwoCol}>
+                <View style={[styles.cleanFieldItem, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.cleanFieldLabel}>Purchase Date</Text>
+                  <GlassInput
+                    value={blank(invoice.invoiceDate)}
+                    onChangeText={(t) => {
+                      patch('invoiceDate', t.trim() || null);
+                      if (invoice.warrantyPeriod) {
+                        try {
+                          const { computeWarrantyExpiry } = require('../services/vlm/ConsumerAssetVlmService');
+                          const exp = computeWarrantyExpiry(t.trim(), invoice.warrantyPeriod);
+                          if (exp) patch('warrantyExpiry', exp);
+                        } catch {}
+                      }
+                    }}
+                    placeholder="YYYY-MM-DD"
+                  />
+                </View>
+                <View style={[styles.cleanFieldItem, { flex: 1 }]}>
+                  <Text style={styles.cleanFieldLabel}>Grand Total (₹) *</Text>
+                  <GlassInput
+                    value={invoice.totalAmount != null ? String(invoice.totalAmount) : ''}
+                    onChangeText={(t) => {
+                      const n = parseMoneyInput(t);
+                      patch('totalAmount', n);
+                      patch('purchaseAmount', n);
+                    }}
+                    keyboardType="numeric"
+                    placeholder="Total Paid (e.g. 135500)"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.cleanRowTwoCol}>
+                <View style={[styles.cleanFieldItem, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.cleanFieldLabel}>Warranty Period</Text>
+                  <GlassInput
+                    value={blank(invoice.warrantyPeriod)}
+                    onChangeText={(t) => {
+                      patch('warrantyPeriod', t);
+                      if (invoice.invoiceDate) {
+                        try {
+                          const { computeWarrantyExpiry } = require('../services/vlm/ConsumerAssetVlmService');
+                          const exp = computeWarrantyExpiry(invoice.invoiceDate, t);
+                          if (exp) patch('warrantyExpiry', exp);
+                        } catch {}
+                      }
+                    }}
+                    placeholder="e.g. 1 Year, 2 Years"
+                  />
+                </View>
+                <View style={[styles.cleanFieldItem, { flex: 1 }]}>
+                  <Text style={styles.cleanFieldLabel}>Warranty Expiry</Text>
+                  <GlassInput
+                    value={blank(invoice.warrantyExpiry)}
+                    onChangeText={(t) => patch('warrantyExpiry', t.trim() || null)}
+                    placeholder="YYYY-MM-DD"
+                  />
+                </View>
+              </View>
+            </GlassCard>
+
+            {/* CARD 3: DEALER & REFERENCE */}
+            <GlassCard style={styles.cleanSectionCard}>
+              <Text style={styles.cleanSectionTitle}>3. Dealer & Reference</Text>
+              <Text style={styles.cleanSectionSubtitle}>Seller store name, invoice number & buyer info</Text>
+
+              <View style={styles.cleanFieldItem}>
+                <Text style={styles.cleanFieldLabel}>Shop / Dealer Name</Text>
+                <GlassInput
+                  value={blank(invoice.shopName || invoice.vendor)}
+                  onChangeText={(t) => {
+                    patch('shopName', t);
+                    patch('vendor', t);
+                  }}
+                  placeholder="e.g. ABC Motors or Store Name"
+                />
+              </View>
+
+              <View style={styles.cleanRowTwoCol}>
+                <View style={[styles.cleanFieldItem, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.cleanFieldLabel}>Invoice / Bill Number</Text>
+                  <GlassInput
+                    value={blank(invoice.invoiceNumber)}
+                    onChangeText={(t) => patch('invoiceNumber', t)}
+                    placeholder="e.g. 180725130771"
+                  />
+                </View>
+                <View style={[styles.cleanFieldItem, { flex: 1 }]}>
+                  <Text style={styles.cleanFieldLabel}>Buyer Name (on bill)</Text>
+                  <GlassInput
+                    value={blank(invoice.customerName)}
+                    onChangeText={(t) => patch('customerName', t)}
+                    placeholder="e.g. Customer Name"
+                  />
+                </View>
+              </View>
+            </GlassCard>
+          </>
         )}
 
-        {typeof __DEV__ !== 'undefined' && __DEV__ ? (
-        <Section
-          title="Developer Diagnostics"
-          open={openDebugSec}
-          onToggle={() => setOpenDebugSec((v) => !v)}
-        >
-          <Text style={styles.hint}>
-            OCR Engine {safeParams.engine || invoice.engine || 'unknown'}
-            {invoice.fallbackUsed ? ' · Fallback used' : ' · Fallback not used'}
-          </Text>
-          <View style={styles.debugTable}>
-            <View style={styles.debugHeaderRow}>
-              <Text style={[styles.debugCellHeader, { flex: 1.2 }]}>Field</Text>
-              <Text style={[styles.debugCellHeader, { flex: 1.5 }]}>Value</Text>
-              <Text style={[styles.debugCellHeader, { flex: 0.8 }]}>Conf</Text>
-              <Text style={[styles.debugCellHeader, { flex: 1 }]}>Status</Text>
-              <Text style={[styles.debugCellHeader, { flex: 1 }]}>Source</Text>
+        {/* VAULT STORAGE TOGGLE */}
+        <GlassCard style={styles.vaultToggleCard}>
+          <Pressable
+            onPress={() => {
+              Haptics.select();
+              setSaveToVaultCopy((prev) => !prev);
+            }}
+            style={styles.vaultToggleRow}
+          >
+            <View style={{ flex: 1, marginRight: 12 }}>
+              <Text style={styles.vaultToggleTitle}>Save scanned copy to Document Vault</Text>
+              <Text style={styles.vaultToggleSubtitle}>
+                {saveToVaultCopy
+                  ? isInsurance
+                    ? '✓ Scanned insurance policy will be stored in your Vehicle Passport vault'
+                    : isPuc
+                    ? '✓ Scanned PUC certificate will be stored in your Vehicle Passport vault'
+                    : isVehicleService
+                    ? '✓ Scanned service bill will be stored in your Vehicle Passport vault'
+                    : '✓ Scanned bill image will be securely uploaded to your asset vault'
+                  : 'Image is only used in-memory for extraction and discarded (saves cloud storage)'}
+              </Text>
             </View>
-            {[
-              { label: 'Doc Type', info: getFieldInfo('classifiedDocumentType', classifiedType) },
-              { label: 'Workshop/Vendor', info: getFieldInfo('shopName') },
-              { label: 'Registration', info: getFieldInfo('registration') },
-              { label: 'Odometer (KM)', info: getFieldInfo('odometerKm') },
-              { label: 'Next Service KM', info: getFieldInfo('nextServiceOdometerKm') },
-              { label: 'Chassis / VIN', info: getFieldInfo('chassisNumber') },
-              { label: 'Engine No', info: getFieldInfo('engineNumber') },
-              { label: 'Invoice / Policy No', info: getFieldInfo('invoiceNumber') },
-              { label: 'Issue / Service Date', info: getFieldInfo('invoiceDate') },
-              { label: 'Policy Expiry', info: getFieldInfo('insuranceExpiry') },
-              { label: 'Grand Total (₹)', info: getFieldInfo('totalAmount') },
-            ].map((row, idx) => (
-              <View key={idx} style={[styles.debugRow, idx % 2 === 1 && styles.debugRowAlt]}>
-                <Text style={[styles.debugCell, { flex: 1.2, fontWeight: '700' }]}>{row.label}</Text>
-                <Text style={[styles.debugCell, { flex: 1.5, color: row.info.value ? COLORS.text : COLORS.muted }]}>
-                  {row.info.value != null ? String(row.info.value) : 'null'}
-                </Text>
-                <Text style={[styles.debugCell, { flex: 0.8 }]}>{row.info.confidence}%</Text>
-                <Text style={[styles.debugCell, { flex: 1, color: getStatusColor(row.info.status) }]}>
-                  {row.info.status}
-                </Text>
-                <Text style={[styles.debugCell, { flex: 1, fontSize: 9 }]}>{row.info.sourceType}</Text>
-              </View>
-            ))}
-          </View>
-        </Section>
-        ) : null}
+            <View
+              style={[
+                styles.vaultToggleSwitch,
+                saveToVaultCopy ? styles.vaultToggleSwitchOn : styles.vaultToggleSwitchOff,
+              ]}
+            >
+              <View
+                style={[
+                  styles.vaultToggleKnob,
+                  saveToVaultCopy ? styles.vaultToggleKnobOn : styles.vaultToggleKnobOff,
+                ]}
+              />
+            </View>
+          </Pressable>
+        </GlassCard>
 
         <GlassButton
           title={
@@ -1837,10 +2050,9 @@ export function ReviewAssetScreen({ navigation, route }) {
           disabled={saving}
           style={styles.rescanBtn}
         />
-        {!totalOk ? <Text style={styles.blockHint}>Enter bill total to save.</Text> : null}
         {audit?.isDuplicate ? (
           <Text style={styles.blockHint}>
-            Invoice pehle save ho chuka hai — Save dabao, phir Update passport choose karo.
+            This invoice was already saved — Tap Save to update your asset passport.
           </Text>
         ) : null}
       </ScrollView>
@@ -1849,8 +2061,10 @@ export function ReviewAssetScreen({ navigation, route }) {
         visible={Boolean(shareCard)}
         assetName={shareCard?.assetName || ''}
         price={shareCard?.price}
-        imageUri={shareCard?.imageUri || ''}
-        onClose={() => setShareCard(null)}
+        onClose={() => {
+          setShareCard(null);
+          goHomeDashboard();
+        }}
         onDone={() => {
           setShareCard(null);
           goHomeDashboard();
@@ -1901,6 +2115,8 @@ function sanitizeInvoice(raw = {}) {
     next.item_name,
     next.title,
     next.assetName,
+    Array.isArray(next.items) && next.items[0] ? next.items[0].name : null,
+    Array.isArray(next.lineItems) && next.lineItems[0] ? next.lineItems[0].description : null,
     scanned.item_name,
     scanned.asset_name,
     scanned.itemName,
@@ -1912,6 +2128,9 @@ function sanitizeInvoice(raw = {}) {
     next.vendor,
     next.vendor_name,
     next.vendorName,
+    next.sellerName,
+    next.seller_name,
+    next.merchant,
     next.vendor_dealer_name,
     scanned.vendor_name,
     scanned.vendor,
@@ -1934,6 +2153,7 @@ function sanitizeInvoice(raw = {}) {
   next.invoiceNumber = pickStr(
     next.invoiceNumber,
     next.invoice_number,
+    next.billNumber,
     next.invoice_or_policy_no,
     scanned.invoice_number,
     scanned.invoice_or_policy_no,
@@ -1953,6 +2173,8 @@ function sanitizeInvoice(raw = {}) {
   );
   const total = pickNum(
     next.totalAmount,
+    next.grandTotal,
+    next.purchasePrice,
     next.amount,
     next.price,
     next.total_amount,
@@ -1961,6 +2183,21 @@ function sanitizeInvoice(raw = {}) {
     extract.total_amount,
   );
   if (total != null) next.totalAmount = total;
+
+  next.warrantyMonths = pickNum(
+    next.warrantyMonths,
+    next.warranty_months,
+    scanned.warranty_months,
+    scanned.warrantyMonths,
+    extract.warranty_months,
+  );
+  next.warrantyExpiry = pickStr(
+    next.warrantyExpiry,
+    next.warrantyExpiryDate,
+    next.warranty_expiry,
+    scanned.warrantyExpiry,
+    extract.warranty_expiry,
+  );
 
   const category = pickStr(
     next.category,
@@ -2088,9 +2325,6 @@ function sanitizeInvoice(raw = {}) {
 
   const stringKeys = [
     'shopName',
-    'shopGstin',
-    'shopPhone',
-    'shopAddress',
     'invoiceNumber',
     'productName',
     'serialNumber',
@@ -2098,9 +2332,7 @@ function sanitizeInvoice(raw = {}) {
     'chassisNumber',
     'engineNumber',
     'registration',
-    'paymentMode',
     'customerName',
-    'customerPhone',
     'pucExpiry',
     'nextServiceDue',
     'insuranceExpiry',
@@ -2137,20 +2369,138 @@ function sanitizeInvoice(raw = {}) {
   if (next.engineNumber && String(next.engineNumber).replace(/\s/g, '').length < 8) {
     next.engineNumber = '';
   }
-  if (!Array.isArray(next.items)) next.items = [];
-  next.items = next.items.map((item, i) => {
-    const withIndex = { ...item, index: item.index || i + 1 };
-    if (withIndex.isFee) return withIndex;
-    if (withIndex.smartCategory) return withIndex;
-    return enrichItemWithCategory(withIndex, next.productName || '');
-  });
-  next.itemCount = Number(next.itemCount) || next.items.length;
+  const docHint = String(
+    next.classifiedDocumentType ||
+    next.documentKind ||
+    next.documentType ||
+    next.scanDocumentType ||
+    ''
+  ).toUpperCase();
+  const isAttachOrInsurance =
+    docHint.includes('INSURANCE') ||
+    docHint.includes('PUC') ||
+    docHint.includes('RC') ||
+    Boolean(next.isInsurance || next.isPuc || next.isRc);
+
+  if (isAttachOrInsurance) {
+    next.items = [];
+    next.lineItems = [];
+    next.itemCount = 0;
+  } else {
+    if (!Array.isArray(next.items)) next.items = [];
+    next.items = next.items.map((item, i) => {
+      const withIndex = { ...item, index: item.index || i + 1 };
+      if (withIndex.isFee) return withIndex;
+      if (withIndex.smartCategory) return withIndex;
+      return enrichItemWithCategory(withIndex, next.productName || '');
+    });
+    next.itemCount = Number(next.itemCount) || next.items.length;
+  }
   return next;
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg },
   content: { padding: SPACING.md, paddingBottom: 40 },
+  cleanSectionCard: {
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderRadius: RADIUS.lg,
+  },
+  cleanSectionTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.text,
+    letterSpacing: 0.2,
+  },
+  cleanSectionSubtitle: {
+    fontSize: 12,
+    color: COLORS.muted,
+    marginBottom: SPACING.sm,
+    marginTop: 2,
+  },
+  cleanFieldItem: {
+    marginTop: SPACING.sm,
+  },
+  cleanFieldLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.muted,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  cleanRowTwoCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  identifierHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  cleanTypeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.3)',
+  },
+  cleanTypeBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.neonBlue || '#3B82F6',
+    letterSpacing: 0.5,
+  },
+  vaultToggleCard: {
+    padding: SPACING.md,
+    marginBottom: SPACING.lg,
+    borderRadius: RADIUS.lg,
+    borderColor: 'rgba(59, 130, 246, 0.25)',
+  },
+  vaultToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  vaultToggleTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  vaultToggleSubtitle: {
+    fontSize: 11,
+    color: COLORS.muted,
+    marginTop: 3,
+    lineHeight: 15,
+  },
+  vaultToggleSwitch: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    padding: 3,
+    justifyContent: 'center',
+  },
+  vaultToggleSwitchOn: {
+    backgroundColor: COLORS.emerald || '#10B981',
+  },
+  vaultToggleSwitchOff: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  vaultToggleKnob: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FFFFFF',
+  },
+  vaultToggleKnobOn: {
+    alignSelf: 'flex-end',
+  },
+  vaultToggleKnobOff: {
+    alignSelf: 'flex-start',
+  },
   topRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   eyebrow: {
     color: COLORS.neonBlue,
@@ -2244,6 +2594,10 @@ const styles = StyleSheet.create({
     color: COLORS.amber,
     fontSize: 10,
     fontWeight: '800',
+  },
+  rowTwoCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   section: { marginBottom: 10, paddingVertical: 4 },
   sectionHeader: {
@@ -2474,6 +2828,79 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontWeight: '700',
     fontSize: 12,
+  },
+  noVehicleBox: {
+    padding: SPACING.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: RADIUS.md,
+    marginTop: SPACING.xs,
+  },
+  noVehicleText: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  noVehicleHint: {
+    color: COLORS.muted,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  vehicleOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    marginBottom: SPACING.xs,
+  },
+  vehicleOptionCardSelected: {
+    borderColor: COLORS.emerald || '#10B981',
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+  },
+  vehicleOptionName: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  vehicleOptionNameSelected: {
+    color: COLORS.emerald || '#10B981',
+  },
+  vehicleOptionReg: {
+    color: COLORS.muted,
+    fontSize: 12,
+    marginTop: 2,
+    textTransform: 'uppercase',
+  },
+  matchedBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.sm,
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    borderWidth: 1,
+    borderColor: COLORS.emerald || '#10B981',
+  },
+  matchedBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: COLORS.emerald || '#10B981',
+    letterSpacing: 0.5,
+  },
+  selectedBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.sm,
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+  },
+  selectedBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#3B82F6',
+    letterSpacing: 0.5,
   },
 });
 

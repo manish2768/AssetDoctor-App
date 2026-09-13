@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef } from 'react';
-import { Modal, View, Text, Pressable, StyleSheet, ScrollView, Switch } from 'react-native';
+import { Modal, View, Text, Pressable, StyleSheet, ScrollView, Switch, Share } from 'react-native';
 import * as Sharing from 'expo-sharing';
 
 import { useThemeColors } from '../../context/ThemeProvider';
@@ -46,9 +46,10 @@ export function SharePassportSheet({ visible, onClose, asset, ui }) {
       'Shared from Asset Doctor.',
     ].join('\n');
     try {
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(message);
-      }
+      await Share.share({
+        message,
+        title: `${asset?.assetName || 'Asset'} Passport`,
+      });
       onClose?.();
     } catch {
       // cancelled

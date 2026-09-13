@@ -2,12 +2,23 @@
  * Date / expiry helpers — accepts YYYY-MM-DD and common IN formats (DD/MM/YYYY).
  */
 
-/** @returns {string|null} YYYY-MM-DD */
+export function formatToISTDateOnly(dateObj) {
+  if (!dateObj || Number.isNaN(dateObj.getTime())) return null;
+  const istFormatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return istFormatter.format(dateObj); // Returns YYYY-MM-DD
+}
+
+/** @returns {string|null} YYYY-MM-DD in Asia/Kolkata */
 export function parseFlexibleDate(input) {
   if (input == null || input === '') return null;
   if (typeof input === 'object' && typeof input.toDate === 'function') {
     try {
-      return input.toDate().toISOString().slice(0, 10);
+      return formatToISTDateOnly(input.toDate());
     } catch {
       return null;
     }
@@ -28,25 +39,27 @@ export function parseFlexibleDate(input) {
     }
   }
 
-  // MM/DD/YYYY only if first part > 12 (ambiguous otherwise prefer DMY for India)
-  const mdy = s.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/);
-  if (mdy && Number(mdy[1]) > 12) {
-    // already handled as DMY failure above
-  }
-
+  // Full timestamp or ISO string -> convert to IST calendar date
   const d = new Date(s);
-  if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  if (!Number.isNaN(d.getTime())) return formatToISTDateOnly(d);
   return null;
 }
 
-export function daysUntil(dateStr) {
+export function daysUntil(dateStr, referenceDate) {
   const iso = parseFlexibleDate(dateStr);
   if (!iso) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(target.getTime())) return null;
-  return Math.round((target - today) / (1000 * 60 * 60 * 24));
+
+  const ref = referenceDate instanceof Date ? referenceDate : new Date();
+  const todayISTStr = formatToISTDateOnly(ref);
+  if (!todayISTStr) return null;
+
+  const [tYear, tMonth, tDay] = todayISTStr.split('-').map(Number);
+  const [expYear, expMonth, expDay] = iso.split('-').map(Number);
+
+  const utcToday = Date.UTC(tYear, tMonth - 1, tDay);
+  const utcTarget = Date.UTC(expYear, expMonth - 1, expDay);
+
+  return Math.round((utcTarget - utcToday) / (1000 * 60 * 60 * 24));
 }
 
 export function yearsSince(dateStr) {

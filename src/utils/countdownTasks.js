@@ -4,6 +4,7 @@
 
 import { daysUntil } from './dates';
 import { isAlertableStatus } from '../constants/assetStatus';
+import { isVehicleAsset } from '../domain/asset/assetGuards';
 
 const FIELD_META = {
   insuranceExpiry: { label: 'Insurance Expiry', emoji: '🛡️', action: 'Renew insurance' },
@@ -96,34 +97,36 @@ export function buildCountdownTasks(assets = [], opts = {}) {
       });
     }
 
-    // KM-based service countdown (vehicles)
-    const odo = Number(asset.odometerKm);
-    const nextKm =
-      Number(asset.nextServiceOdometerKm) ||
-      (Number(asset.lastServiceOdometerKm) && Number(asset.serviceIntervalKm)
-        ? Number(asset.lastServiceOdometerKm) + Number(asset.serviceIntervalKm)
-        : null);
-    if (Number.isFinite(odo) && Number.isFinite(nextKm)) {
-      const kmRemaining = Math.round(nextKm - odo);
-      // Only show when within 500 km or overdue
-      if (kmRemaining <= 500) {
-        const tone = toneForKm(kmRemaining);
-        tasks.push({
-          id: `${assetId}-service-km`,
-          tone,
-          emoji: '🚗',
-          title: `${name} Service Due`,
-          subtitle:
-            kmRemaining <= 0
-              ? `${Math.abs(kmRemaining)} KM overdue`
-              : `${kmRemaining} KM remaining`,
-          detail: 'Book service before overdue',
-          days: null,
-          kmRemaining,
-          sortKey: kmRemaining <= 0 ? -1000 + kmRemaining : kmRemaining / 10,
-          assetId,
-          kind: 'service_km',
-        });
+    // KM-based service countdown (vehicles ONLY)
+    if (isVehicleAsset(asset)) {
+      const odo = Number(asset.odometerKm);
+      const nextKm =
+        Number(asset.nextServiceOdometerKm) ||
+        (Number(asset.lastServiceOdometerKm) && Number(asset.serviceIntervalKm)
+          ? Number(asset.lastServiceOdometerKm) + Number(asset.serviceIntervalKm)
+          : null);
+      if (Number.isFinite(odo) && Number.isFinite(nextKm)) {
+        const kmRemaining = Math.round(nextKm - odo);
+        // Only show when within 500 km or overdue
+        if (kmRemaining <= 500) {
+          const tone = toneForKm(kmRemaining);
+          tasks.push({
+            id: `${assetId}-service-km`,
+            tone,
+            emoji: '🚗',
+            title: `${name} Service Due`,
+            subtitle:
+              kmRemaining <= 0
+                ? `${Math.abs(kmRemaining)} KM overdue`
+                : `${kmRemaining} KM remaining`,
+            detail: 'Book service before overdue',
+            days: null,
+            kmRemaining,
+            sortKey: kmRemaining <= 0 ? -1000 + kmRemaining : kmRemaining / 10,
+            assetId,
+            kind: 'service_km',
+          });
+        }
       }
     }
   }

@@ -21,11 +21,14 @@ import { AuthService } from '../services/auth';
 import { UserService } from '../services/user';
 import { Haptics } from '../services/haptics';
 import { CrashlyticsService } from '../services/crashlytics/CrashlyticsService';
-import { needsProfileSetup as checkProfileSetup } from '../utils/profileSetup';
+import { needsProfileSetup as checkProfileSetup, needsProfileOnboarding } from '../utils/profileSetup';
+import { computeProfileCompletion, PROFILE_STATUS } from '../utils/profileCompletion';
 import { resolveDisplayName } from '../utils/displayUserName';
-import { loadLocalProfile, saveLocalProfile, DEFAULT_PROFILE } from '../utils/userProfileStorage';
+import { loadLocalProfile, saveLocalProfile, clearLocalProfile, DEFAULT_PROFILE } from '../utils/userProfileStorage';
 import { persistAuthSession, clearAuthSession, loadAuthSession } from '../services/authService';
 import { ensureFirebaseApp, waitForFirebaseApp } from '../config/firebaseApp';
+
+export { PROFILE_STATUS };
 
 const AuthContext = createContext(null);
 
@@ -69,6 +72,7 @@ export function AuthProvider({ children }) {
   const [localProfile, setLocalProfile] = useState({ ...DEFAULT_PROFILE });
   const [loading, setLoading] = useState(true);
   const [profileReady, setProfileReady] = useState(false);
+  const [profileStatus, setProfileStatus] = useState(PROFILE_STATUS.IDLE);
   /** Logged-out users may Skip → browse Home without Auth welcome */
   const [allowGuestBrowse, setAllowGuestBrowse] = useState(false);
   /** Skip live subscribe until the first hydrate for this uid finishes */
@@ -84,7 +88,7 @@ export function AuthProvider({ children }) {
     localProfileRef.current = localProfile;
   }, [localProfile]);
 
-  // Hydrate device profile cache for Home greeting ("Good Morning, Manish")
+  // Hydrate device profile cache for Home greeting
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -102,24 +106,41 @@ export function AuthProvider({ children }) {
     setProfile((prev) => ({
       ...(prev || {}),
       ...local,
-      name: local.name || prev?.name || DEFAULT_PROFILE.name,
+      name: local.name || prev?.name || '',
       photoURL: local.photoURL || prev?.photoURL || '',
       city: local.city || prev?.city || '',
     }));
     return local;
   }, []);
 
-  const applyAuthenticatedProfile = useCallback((firebaseUser, nextProfile) => {
+  const applyAuthenticatedProfile = useCallback((firebaseUser, nextProfile, { isReady = true } = {}) => {
     const local = localProfileRef.current || {};
     const authFallback = authFallbackProfile(firebaseUser) || {};
+    const resolvedName =
+      nextProfile?.fullName ||
+      nextProfile?.name ||
+      profileRef.current?.fullName ||
+      profileRef.current?.name ||
+      authFallback?.name ||
+      local?.fullName ||
+      local?.name ||
+      (firebaseUser?.displayName ? String(firebaseUser.displayName).trim() : '');
+
+    const resolvedPincode =
+      nextProfile?.pinCode ||
+      nextProfile?.pincode ||
+      profileRef.current?.pinCode ||
+      profileRef.current?.pincode ||
+      local?.pinCode ||
+      local?.pincode ||
+      '';
+
     const merged = {
       ...(nextProfile || profileRef.current || authFallback || {}),
-      name:
-        nextProfile?.name ||
-        profileRef.current?.name ||
-        authFallback?.name ||
-        local?.name ||
-        DEFAULT_PROFILE.name,
+      fullName: resolvedName,
+      name: resolvedName,
+      pinCode: resolvedPincode,
+      pincode: resolvedPincode,
       // Prefer Firebase Auth photoURL over stale local cache
       photoURL:
         nextProfile?.photoURL ||
@@ -135,28 +156,34 @@ export function AuthProvider({ children }) {
         firebaseUser?.phoneNumber ||
         local?.phone ||
         '',
-      city: nextProfile?.city || local?.city || '',
+      city: nextProfile?.city || profileRef.current?.city || local?.city || '',
+      state: nextProfile?.state || profileRef.current?.state || local?.state || '',
     };
     merged.phoneNumber = merged.phone;
     setProfile(merged);
-    setProfileReady(true);
-    persistAuthSession(firebaseUser, merged)
-      .then((saved) => {
-        if (!saved?.profile) return;
-        setLocalProfile((prev) => {
-          const next = saved.profile;
-          if (
-            prev?.name === next.name &&
-            prev?.photoURL === next.photoURL &&
-            prev?.email === next.email &&
-            (prev?.phone || prev?.phoneNumber) === (next.phone || next.phoneNumber)
-          ) {
-            return prev;
-          }
-          return { ...prev, ...next };
-        });
-      })
-      .catch(() => {});
+    if (isReady) {
+      setProfileReady(true);
+      persistAuthSession(firebaseUser, merged)
+        .then((saved) => {
+          if (!saved?.profile) return;
+          setLocalProfile((prev) => {
+            const next = saved.profile;
+            if (
+              prev?.name === next.name &&
+              prev?.photoURL === next.photoURL &&
+              prev?.email === next.email &&
+              (prev?.phone || prev?.phoneNumber) === (next.phone || next.phoneNumber) &&
+              (prev?.pinCode || prev?.pincode) === (next.pinCode || next.pincode) &&
+              prev?.city === next.city &&
+              prev?.state === next.state
+            ) {
+              return prev;
+            }
+            return { ...prev, ...next };
+          });
+        })
+        .catch(() => {});
+    }
     return merged;
   }, []);
 
@@ -202,6 +229,7 @@ export function AuthProvider({ children }) {
             setUser(null);
             setProfile(null);
             setProfileReady(true);
+            setProfileStatus(PROFILE_STATUS.IDLE);
             CrashlyticsService.clearUser();
             setLoading(false);
             return;
@@ -215,7 +243,8 @@ export function AuthProvider({ children }) {
           if (!sameUidAlreadyReady) {
             setLoading(true);
             setProfileReady(false);
-            applyAuthenticatedProfile(firebaseUser, authFallbackProfile(firebaseUser));
+            setProfileStatus(PROFILE_STATUS.LOADING);
+            applyAuthenticatedProfile(firebaseUser, authFallbackProfile(firebaseUser), { isReady: false });
           }
 
           try {
@@ -225,7 +254,10 @@ export function AuthProvider({ children }) {
               'profile_sync_timeout',
             );
             if (cancelled) return;
-            applyAuthenticatedProfile(firebaseUser, synced);
+            const comp = computeProfileCompletion({ user: firebaseUser, profile: synced });
+            const isEstablished = comp.isComplete || Boolean(synced?.profileSetupComplete) || !comp.needsOnboarding;
+            setProfileStatus(isEstablished ? PROFILE_STATUS.FOUND_COMPLETE : PROFILE_STATUS.FOUND_INCOMPLETE);
+            applyAuthenticatedProfile(firebaseUser, synced, { isReady: true });
             hydrateUidRef.current = firebaseUser.uid;
           } catch (error) {
             console.warn('[AssetDoctor] profile sync failed/timeout:', error?.message || error);
@@ -236,10 +268,14 @@ export function AuthProvider({ children }) {
                 'profile_get_timeout',
               );
               if (cancelled) return;
-              applyAuthenticatedProfile(firebaseUser, existing);
+              const comp = computeProfileCompletion({ user: firebaseUser, profile: existing });
+              const isEstablished = comp.isComplete || Boolean(existing?.profileSetupComplete) || !comp.needsOnboarding;
+              setProfileStatus(isEstablished ? PROFILE_STATUS.FOUND_COMPLETE : PROFILE_STATUS.FOUND_INCOMPLETE);
+              applyAuthenticatedProfile(firebaseUser, existing, { isReady: true });
             } catch {
               if (cancelled) return;
-              applyAuthenticatedProfile(firebaseUser, authFallbackProfile(firebaseUser));
+              setProfileStatus(PROFILE_STATUS.ERROR);
+              applyAuthenticatedProfile(firebaseUser, authFallbackProfile(firebaseUser), { isReady: true });
             }
             hydrateUidRef.current = firebaseUser.uid;
           } finally {
@@ -251,6 +287,7 @@ export function AuthProvider({ children }) {
         });
       } catch (error) {
         console.warn('[AssetDoctor] Auth listener failed:', error?.message || error);
+        setProfileStatus(PROFILE_STATUS.ERROR);
         setProfileReady(true);
         setLoading(false);
       }
@@ -284,7 +321,15 @@ export function AuthProvider({ children }) {
         phone: next.phone || next.phoneNumber || user.phoneNumber || '',
       };
       merged.phoneNumber = merged.phone;
-      setProfile(merged);
+      setProfile((prev) => {
+        if (prev?.profileSetupComplete && !next.profileSetupComplete && !next.pinCode && !next.pincode) {
+          return prev;
+        }
+        return merged;
+      });
+      const comp = computeProfileCompletion({ user, profile: merged });
+      const isEstablished = comp.isComplete || Boolean(merged?.profileSetupComplete) || !comp.needsOnboarding;
+      setProfileStatus(isEstablished ? PROFILE_STATUS.FOUND_COMPLETE : PROFILE_STATUS.FOUND_INCOMPLETE);
       setProfileReady(true);
     });
   }, [user?.uid, user]);
@@ -294,10 +339,13 @@ export function AuthProvider({ children }) {
       if (!result?.success || !result.user) return result;
       setLoading(true);
       setProfileReady(false);
+      setProfileStatus(PROFILE_STATUS.LOADING);
       setUser(result.user);
       CrashlyticsService.setUser(result.user);
-      // Instant credentials from Auth + any profile already on the result
-      applyAuthenticatedProfile(result.user, result.profile || authFallbackProfile(result.user));
+      // Instant credentials from Auth + any profile already on the result.
+      // NEVER set isReady: true when falling back to bare authFallbackProfile!
+      const initialReady = Boolean(result.profile?.profileSetupComplete || (result.profile?.name && result.profile?.pinCode));
+      applyAuthenticatedProfile(result.user, result.profile || authFallbackProfile(result.user), { isReady: initialReady });
       try {
         let nextProfile = result.profile || null;
         if (!nextProfile) {
@@ -314,11 +362,20 @@ export function AuthProvider({ children }) {
             'post_login_sync_timeout',
           );
         }
-        applyAuthenticatedProfile(result.user, nextProfile);
+        if (nextProfile) {
+          const comp = computeProfileCompletion({ user: result.user, profile: nextProfile });
+          const isEstablished = comp.isComplete || Boolean(nextProfile.profileSetupComplete) || !comp.needsOnboarding;
+          setProfileStatus(isEstablished ? PROFILE_STATUS.FOUND_COMPLETE : PROFILE_STATUS.FOUND_INCOMPLETE);
+          applyAuthenticatedProfile(result.user, nextProfile, { isReady: true });
+        } else {
+          setProfileStatus(PROFILE_STATUS.NOT_FOUND);
+          applyAuthenticatedProfile(result.user, authFallbackProfile(result.user), { isReady: true });
+        }
         hydrateUidRef.current = result.user.uid;
       } catch (error) {
         console.warn('[AssetDoctor] post-login profile hydrate:', error?.message || error);
-        applyAuthenticatedProfile(result.user, result.profile || authFallbackProfile(result.user));
+        setProfileStatus(PROFILE_STATUS.ERROR);
+        applyAuthenticatedProfile(result.user, result.profile || authFallbackProfile(result.user), { isReady: true });
         hydrateUidRef.current = result.user.uid;
       } finally {
         setProfileReady(true);
@@ -370,35 +427,28 @@ export function AuthProvider({ children }) {
     return result;
   }, []);
 
+  const sendPasswordResetEmail = useCallback(async (email) => {
+    return AuthService.sendPasswordResetEmail(email);
+  }, []);
+
   const updateProfile = useCallback(
     async (updates) => {
-      // Always mirror to AsyncStorage so greeting updates instantly
-      const localResult = await saveLocalProfile(updates || {});
-      if (localResult.success) {
-        setLocalProfile(localResult.profile);
-        setProfile((prev) => ({
-          ...(prev || { uid: user?.uid }),
-          ...localResult.profile,
-          updatedAt: Date.now(),
-        }));
-      }
-
       if (!user?.uid) {
+        const localResult = await saveLocalProfile(updates || {});
+        if (localResult.success) {
+          setLocalProfile(localResult.profile);
+          setProfile(localResult.profile);
+        }
         Haptics.success();
         return localResult.success
           ? { success: true, profile: localResult.profile }
           : { success: false, error: localResult.error || 'Not signed in' };
       }
-      // Optimistic UI — Home header must reflect avatar immediately
-      if (updates && typeof updates === 'object') {
-        setProfile((prev) => ({
-          ...(prev || { uid: user.uid }),
-          ...updates,
-          updatedAt: Date.now(),
-        }));
-      }
+
       const result = await UserService.updateProfile(user.uid, updates);
-      if (result.success) {
+      if (result.success && result.profile) {
+        await saveLocalProfile(result.profile).catch(() => {});
+        setLocalProfile(result.profile);
         setProfile((prev) => ({
           ...(prev || {}),
           ...(result.profile || {}),
@@ -435,8 +485,11 @@ export function AuthProvider({ children }) {
         return { success: false, error: 'Not signed in' };
       }
       const result = await UserService.completeProfileSetup(user.uid, payload);
-      if (result.success) {
-        setProfile(result.profile || null);
+      if (result.success && result.profile) {
+        applyAuthenticatedProfile(user, result.profile, { isReady: true });
+        setProfile(result.profile);
+        setLocalProfile(result.profile);
+        setProfileStatus(PROFILE_STATUS.FOUND_COMPLETE);
         try {
           if (payload?.name && user.displayName !== payload.name) {
             await user.updateProfile({ displayName: payload.name });
@@ -447,13 +500,42 @@ export function AuthProvider({ children }) {
       }
       return result;
     },
-    [user],
+    [user, applyAuthenticatedProfile],
   );
 
-  const needsProfileSetup = useMemo(
-    () => checkProfileSetup(profile, user),
+  const profileHydrationPending = Boolean(
+    loading ||
+    (!profileReady && Boolean(user)) ||
+    profileStatus === PROFILE_STATUS.LOADING
+  );
+
+  const profileCompletion = useMemo(
+    () => computeProfileCompletion({ user, profile }),
     [profile, user],
   );
+
+  const needsProfileOnboarding = useMemo(() => {
+    if (profileHydrationPending || !user) return false;
+    if (profileStatus === PROFILE_STATUS.LOADING) return false;
+    if (profileStatus === PROFILE_STATUS.FOUND_COMPLETE) return false;
+    if (profileStatus === PROFILE_STATUS.ERROR) return false;
+    return profileCompletion.needsOnboarding;
+  }, [profileHydrationPending, user, profileStatus, profileCompletion]);
+
+  const needsProfileSetup = needsProfileOnboarding;
+
+  useEffect(() => {
+    if (!__DEV__) return;
+    if (user?.uid) {
+      console.log('[PROFILE_BOOT]', {
+        authUserResolved: Boolean(user?.uid),
+        canonicalProfileLoaded: Boolean(profileReady && profile),
+        profileComplete: profileCompletion.isComplete,
+        needsOnboarding: needsProfileOnboarding,
+        hydrationPending: profileHydrationPending,
+      });
+    }
+  }, [user?.uid, profileReady, profileCompletion.isComplete, needsProfileOnboarding, profileHydrationPending]);
 
   const enterGuestBrowse = useCallback(() => {
     setAllowGuestBrowse(true);
@@ -503,7 +585,7 @@ export function AuthProvider({ children }) {
     }
     try {
       setLocalProfile({ ...DEFAULT_PROFILE });
-      await saveLocalProfile({ ...DEFAULT_PROFILE });
+      await clearLocalProfile();
     } catch {
       setLocalProfile({ ...DEFAULT_PROFILE });
     }
@@ -526,8 +608,8 @@ export function AuthProvider({ children }) {
     return (
       fromProfile ||
       localProfile?.name ||
-      DEFAULT_PROFILE.name ||
-      (user ? 'Asset Owner' : 'Guest')
+      (user?.displayName ? String(user.displayName).trim() : '') ||
+      (user ? 'Asset Owner' : '')
     );
   }, [profile, localProfile, user]);
 
@@ -564,6 +646,7 @@ export function AuthProvider({ children }) {
       signUpWithEmail,
       signInWithEmail,
       sendEmailVerification,
+      sendPasswordResetEmail,
       reloadUser,
       sendOTP,
       verifyOTP,
@@ -576,6 +659,11 @@ export function AuthProvider({ children }) {
       allowGuestBrowse,
       isAuthenticated: Boolean(user?.uid),
       needsProfileSetup,
+      needsProfileOnboarding,
+      profileHydrationPending,
+      profileCompletion,
+      profileStatus,
+      PROFILE_STATUS,
       emailVerified: Boolean(user?.emailVerified || profile?.emailVerified),
     }),
     [
@@ -584,11 +672,13 @@ export function AuthProvider({ children }) {
       localProfile,
       loading,
       profileReady,
+      profileStatus,
       displayName,
       signInWithGoogle,
       signUpWithEmail,
       signInWithEmail,
       sendEmailVerification,
+      sendPasswordResetEmail,
       reloadUser,
       sendOTP,
       verifyOTP,
@@ -600,6 +690,9 @@ export function AuthProvider({ children }) {
       enterGuestBrowse,
       allowGuestBrowse,
       needsProfileSetup,
+      needsProfileOnboarding,
+      profileHydrationPending,
+      profileCompletion,
     ],
   );
 

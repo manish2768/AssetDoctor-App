@@ -62,6 +62,17 @@ export function IconCar(p) {
     </Base>
   );
 }
+export function IconBike(p) {
+  return (
+    <Base {...p}>
+      <Circle cx="5.5" cy="17.5" r="3.5" />
+      <Circle cx="18.5" cy="17.5" r="3.5" />
+      <Path d="M15 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-3 11.5L9 11l3-4h3l2 4" />
+      <Path d="m5.5 17.5 4.5-6.5" />
+      <Path d="M14 6h3" />
+    </Base>
+  );
+}
 export function IconSmartphone(p) {
   return (
     <Base {...p}>
@@ -263,6 +274,9 @@ const MAP = {
   plus: IconPlus,
   car: IconCar,
   vehicle: IconCar,
+  bike: IconBike,
+  motorcycle: IconBike,
+  scooter: IconBike,
   smartphone: IconSmartphone,
   gadget: IconSmartphone,
   electronics: IconSmartphone,

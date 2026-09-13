@@ -32,10 +32,17 @@ import {
 } from '../../utils/userProfileStorage';
 import { AssetDoctorProtectedBadge } from '../../components/trust/AssetDoctorProtectedBadge';
 import {
+  computeProtectionStatus,
   profileProtectionChecklist,
   calculateProtectionScore,
   resolveProtectionBadgeState,
 } from '../../trust/protectionStatus';
+import {
+  validateIndianPincode,
+  lookupPincode,
+  normalizeCanonicalEmail,
+  normalizeCanonicalPhone,
+} from '../../services/identity/identityNormalizer';
 import { appVersionLabel } from '../../utils/appInfo';
 
 
@@ -84,14 +91,16 @@ export function ProfileScreen({ navigation }) {
     refreshLocalProfile,
     sendOTP,
     verifyOTP,
+    sendPasswordResetEmail,
   } = useAuth();
   const { assets, isGuestDemo } = useAssets();
   const ui = useUiFeedback();
   const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(DEFAULT_PROFILE.name);
+  const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
   const [email, setEmail] = useState('');
   const [city, setCity] = useState('');
+  const [state, setState] = useState('');
   const [address, setAddress] = useState('');
   const [pincode, setPincode] = useState('');
   const [photoURL, setPhotoURL] = useState('');
@@ -132,20 +141,17 @@ export function ProfileScreen({ navigation }) {
       whatsappOptIn: profile?.whatsappOptIn,
       pincode: profile?.pincode || pincode,
       city: profile?.city || city,
+      state: profile?.state || state,
     };
     const list = (assets || []).filter((a) => !a.isDemo && !a.deletedAt);
-    return {
-      checklist: profileProtectionChecklist(userShape, list, []),
-      score: calculateProtectionScore({ user: userShape, assets: list, documents: [] }),
-      badge: resolveProtectionBadgeState({ user: userShape, documents: [] }),
-    };
-  }, [profile, name, authDisplayName, mobile, pincode, city, assets]);
+    return computeProtectionStatus({ user: userShape, assets: list, documents: [] });
+  }, [profile, name, authDisplayName, mobile, pincode, city, state, assets]);
 
   const hydrateFromSources = async () => {
     const local = await loadLocalProfile();
     const authPhone = user?.phoneNumber || '';
     const authEmail = user?.email || '';
-    setName(profile?.name || local.name || user?.displayName || DEFAULT_PROFILE.name);
+    setName(profile?.name || local.name || user?.displayName || '');
     setMobile(
       profile?.phone ||
         profile?.phoneNumber ||
@@ -156,6 +162,7 @@ export function ProfileScreen({ navigation }) {
     );
     setEmail(profile?.email || authEmail || local.email || '');
     setCity(profile?.city || local.city || '');
+    setState(profile?.state || local.state || '');
     setAddress(profile?.address || local.address || '');
     setPincode(profile?.pincode || local.pincode || '');
     setPhotoURL(user?.photoURL || profile?.photoURL || local.photoURL || '');
@@ -178,12 +185,11 @@ export function ProfileScreen({ navigation }) {
           nextPhoto = uploaded.downloadUrl;
           await updateProfile({ photoURL: nextPhoto });
         } else if (!uploaded.success) {
-          // Keep local file URI so avatar still updates offline
           console.warn('[Profile] upload failed, using local uri:', uploaded.error);
         }
       }
       setPhotoURL(nextPhoto);
-      await saveLocalProfile({ photoURL: nextPhoto, name, email, phone: mobile, city, address, pincode, gender });
+      await saveLocalProfile({ photoURL: nextPhoto, name, email, phone: mobile, city, state, address, pincode, gender });
       refreshLocalProfile?.();
       Haptics.success();
     } catch (error) {
@@ -227,49 +233,58 @@ export function ProfileScreen({ navigation }) {
   };
 
   const onSave = async () => {
-    if (!name.trim()) {
-      ui.info('Profile', 'Full name is required.');
+    const cleanName = name.trim();
+    if (!cleanName || cleanName.length < 2) {
+      ui.info('Profile', 'Full Name is required (min 2 characters).');
       return;
     }
-    const cleanPhone = normalizePhone(mobile);
+    if (/^\+?[0-9\s\-\(\)\.]{7,18}$/.test(cleanName)) {
+      ui.info('Profile', 'Full Name cannot be a mobile number.');
+      return;
+    }
+
+    const pinCheck = validateIndianPincode(pincode);
+    if (pincode && !pinCheck.valid) {
+      ui.info('Profile', pinCheck.error || 'Please enter a valid 6-digit Indian PIN Code.');
+      return;
+    }
+
+    const cleanPhone = normalizeCanonicalPhone(mobile);
+    const cleanEmail = normalizeCanonicalEmail(email);
+
     const payload = {
-      name: name.trim() || DEFAULT_PROFILE.name,
-      phone: cleanPhone,
-      phoneNumber: cleanPhone,
-      email: email.trim(),
+      name: cleanName,
+      phone: cleanPhone || mobile.trim(),
+      phoneNumber: cleanPhone || mobile.trim(),
+      email: cleanEmail || email.trim(),
       city: city.trim(),
+      state: state.trim(),
       address: address.trim(),
-      pincode: pincode.trim(),
+      pincode: pinCheck.valid ? pinCheck.pincode : pincode.trim(),
       gender: gender || '',
       photoURL: photoURL || '',
-      profileSetupComplete: true,
+      profileSetupComplete: Boolean(cleanName && pinCheck.valid && city.trim() && state.trim()),
     };
 
     setBusy(true);
-    const local = await saveLocalProfile(payload);
-    if (!local.success) {
-      setBusy(false);
-      ui.error('Profile', local.error || 'Could not save locally');
-      return;
-    }
 
     if (isAuthenticated) {
       const result = await updateProfile(payload);
-      setBusy(false);
       if (!result?.success) {
-        // Local save already succeeded — still refresh greeting
-        refreshLocalProfile?.();
-        ui.info(
-          'Saved on device',
-          result?.error
-            ? `Cloud sync failed (${result.error}). Local profile still updated.`
-            : 'Local profile updated.',
+        setBusy(false);
+        ui.error(
+          'Mobile Number',
+          result?.error || 'Could not update profile.',
         );
-        setEditing(false);
         return;
       }
-    } else {
-      setBusy(false);
+    }
+
+    const local = await saveLocalProfile(payload);
+    setBusy(false);
+    if (!local.success && !isAuthenticated) {
+      ui.error('Profile', local.error || 'Could not save locally');
+      return;
     }
 
     refreshLocalProfile?.();
@@ -283,7 +298,7 @@ export function ProfileScreen({ navigation }) {
       openLogin(navigation);
       return;
     }
-    const cleanPhone = normalizePhone(mobile);
+    const cleanPhone = normalizeCanonicalPhone(mobile);
     if (!cleanPhone || cleanPhone.length < 10) {
       ui.info('Mobile', 'Enter a valid mobile number first.');
       return;
@@ -324,7 +339,7 @@ export function ProfileScreen({ navigation }) {
         ui.error('OTP', result?.error || 'Invalid OTP');
         return;
       }
-      const linkedPhone = result.user?.phoneNumber || normalizePhone(mobile);
+      const linkedPhone = result.user?.phoneNumber || normalizeCanonicalPhone(mobile);
       if (linkedPhone) {
         setMobile(linkedPhone);
         await saveLocalProfile({
@@ -349,15 +364,32 @@ export function ProfileScreen({ navigation }) {
     }
   };
 
-  const shownName =
-    name || authDisplayName || profile?.name || DEFAULT_PROFILE.name || 'Asset Owner';
+  const cleanShown = (name && !/^\+?[0-9\s\-()]{7,18}$/.test(name) && name !== 'Name not set')
+    ? name
+    : (authDisplayName && !/^\+?[0-9\s\-()]{7,18}$/.test(authDisplayName))
+      ? authDisplayName
+      : (isAuthenticated ? 'Asset Owner' : 'Guest');
+  const shownName = cleanShown;
 
   return (
     <Screen>
+      <View style={styles.headerBar}>
+        {navigation?.canGoBack?.() ? (
+          <Pressable
+            onPress={() => {
+              Haptics.tap();
+              navigation.goBack();
+            }}
+            hitSlop={12}
+            style={styles.backBtn}
+          >
+            <Text style={styles.backArrow}>←</Text>
+          </Pressable>
+        ) : null}
+        <Text style={styles.headerTitle}>Profile & Account</Text>
+      </View>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Account</Text>
-
-        <GlassCard glow style={{ marginTop: 10 }}>
+        <GlassCard glow style={{ marginTop: 6 }}>
           <View style={styles.avatarRow}>
             <Pressable
               onPress={() => {
@@ -380,7 +412,7 @@ export function ProfileScreen({ navigation }) {
               <Text style={styles.welcome}>{greeting()}</Text>
               <Text style={styles.name}>{shownName}</Text>
               <Text style={styles.sub} numberOfLines={1}>
-                {email || mobile || city || 'Tap Edit Profile to update'}
+                {email || mobile || (city && state ? `${city}, ${state}` : city) || 'Tap Edit Profile to update'}
               </Text>
             </View>
           </View>
@@ -410,42 +442,83 @@ export function ProfileScreen({ navigation }) {
         </GlassCard>
 
         <GlassCard style={{ marginTop: 12 }}>
-          <Text style={styles.editTitle}>Your Protection Identity</Text>
-          <View style={{ marginTop: 8 }}>
+          <View style={styles.protectionCardHeader}>
+            <Text style={styles.editTitle}>Your Protection Identity</Text>
             <AssetDoctorProtectedBadge state={protectionIdentity.badge} />
           </View>
-          <Text style={[styles.sub, { marginTop: 10 }]}>
-            Protection Score {protectionIdentity.score.display}
-          </Text>
-          {protectionIdentity.checklist.items.map((item) => (
-            <Text key={item.id} style={[styles.rowValue, { marginTop: 6 }]}>
-              {item.complete ? 'Complete' : 'Needs setup'} · {item.label}
+          <View style={styles.protectionScoreBox}>
+            <Text style={styles.protectionScoreText}>
+              Protection Score <Text style={{ color: protectionIdentity.isComplete ? '#10B981' : '#F59E0B', fontWeight: '800' }}>{protectionIdentity.score.display}</Text>
             </Text>
-          ))}
-          <View style={styles.statRow}>
+          </View>
+          <View style={{ marginTop: 8, gap: 6 }}>
+            {protectionIdentity.items.map((item) => (
+              <View key={item.id} style={styles.checklistItemRow}>
+                <Text style={[styles.checklistStatus, { color: item.complete ? '#10B981' : '#94A3B8' }]}>
+                  {item.complete ? '✓ Complete' : '○ Needs setup'}
+                </Text>
+                <Text style={styles.checklistLabel}> · {item.label}</Text>
+              </View>
+            ))}
+          </View>
+          <View style={[styles.statRow, { marginTop: 14 }]}>
             <View style={styles.statChip}>
-              <Text style={styles.statNum}>{protectionIdentity.checklist.assetsProtected}</Text>
+              <Text style={styles.statNum}>{protectionIdentity.assetsProtected}</Text>
               <Text style={styles.statLabel}>Assets Protected</Text>
             </View>
             <View style={styles.statChip}>
-              <Text style={styles.statNum}>{protectionIdentity.checklist.documentsProtected}</Text>
-              <Text style={styles.statLabel}>Documents Protected</Text>
+              <Text style={styles.statNum}>{protectionIdentity.documentsProtected}</Text>
+              <Text style={styles.statLabel}>Docs Protected</Text>
             </View>
             <View style={styles.statChip}>
-              <Text style={styles.statNum}>{protectionIdentity.checklist.upcomingAttention}</Text>
+              <Text style={styles.statNum}>{protectionIdentity.upcomingAttention}</Text>
               <Text style={styles.statLabel}>Upcoming Attention</Text>
             </View>
           </View>
         </GlassCard>
 
-        {editing ? (
+        {!editing ? (
+          <GlassCard style={{ marginTop: 12 }}>
+            <Text style={styles.editTitle}>Personal Details</Text>
+            <View style={{ gap: 8, marginTop: 4 }}>
+              <View style={styles.detailRow}>
+                <Text style={styles.rowLabel}>Full Name</Text>
+                <Text style={styles.rowValue}>{shownName}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.rowLabel}>Email</Text>
+                <Text style={styles.rowValue}>{email || '—'}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.rowLabel}>Mobile</Text>
+                <Text style={styles.rowValue}>{mobile || 'Add phone'}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.rowLabel}>PIN Code</Text>
+                <Text style={styles.rowValue}>{pincode || 'Add PIN'}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.rowLabel}>City / State</Text>
+                <Text style={styles.rowValue}>
+                  {city && state ? `${city}, ${state}` : city || state || '—'}
+                </Text>
+              </View>
+              {address ? (
+                <View style={styles.detailRow}>
+                  <Text style={styles.rowLabel}>Address</Text>
+                  <Text style={styles.rowValue}>{address}</Text>
+                </View>
+              ) : null}
+            </View>
+          </GlassCard>
+        ) : (
           <GlassCard style={{ marginTop: 12 }}>
             <Text style={styles.editTitle}>Edit your details</Text>
             <GlassInput
-              label="Full Name"
+              label="Full Name *"
               value={name}
               onChangeText={setName}
-              placeholder={DEFAULT_PROFILE.name}
+              placeholder="Your Full Name"
             />
             <GlassInput
               label="Email Address"
@@ -494,12 +567,45 @@ export function ProfileScreen({ navigation }) {
                 )}
               </View>
             ) : null}
+
             <GlassInput
-              label="City"
-              value={city}
-              onChangeText={setCity}
-              placeholder="e.g. Lucknow"
+              label="6-Digit PIN Code *"
+              value={pincode}
+              onChangeText={(text) => {
+                setPincode(text);
+                const check = validateIndianPincode(text);
+                if (check.valid) {
+                  const derived = lookupPincode(check.pincode);
+                  if (derived) {
+                    if (!city && derived.city) setCity(derived.city);
+                    if (!state && derived.state) setState(derived.state);
+                  }
+                }
+              }}
+              keyboardType="number-pad"
+              placeholder="e.g. 226010"
+              maxLength={6}
             />
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <GlassInput
+                  label="City *"
+                  value={city}
+                  onChangeText={setCity}
+                  placeholder="e.g. Lucknow"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <GlassInput
+                  label="State *"
+                  value={state}
+                  onChangeText={setState}
+                  placeholder="e.g. Uttar Pradesh"
+                />
+              </View>
+            </View>
+
             <Text style={styles.genderLabel}>Gender (optional)</Text>
             <View style={styles.genderRow}>
               {[
@@ -527,14 +633,6 @@ export function ProfileScreen({ navigation }) {
               onChangeText={setAddress}
               placeholder="House / street / landmark"
               multiline
-            />
-            <GlassInput
-              label="Pincode"
-              value={pincode}
-              onChangeText={setPincode}
-              keyboardType="number-pad"
-              placeholder="e.g. 226010"
-              maxLength={10}
             />
             
             <Text style={styles.genderLabel}>Choose avatar</Text>
@@ -579,122 +677,233 @@ export function ProfileScreen({ navigation }) {
               </Pressable>
             ) : null}
           </GlassCard>
-        ) : (
-          <GlassCard style={{ marginTop: 12 }}>
-            <Text style={styles.rowLabel}>Name</Text>
-            <Text style={styles.rowValue}>{shownName}</Text>
-            <Text style={styles.rowLabel}>Email</Text>
-            <Text style={styles.rowValue}>{email || '—'}</Text>
-            <Text style={styles.rowLabel}>Phone</Text>
-            <Text style={styles.rowValue}>{mobile || 'Add phone'}</Text>
-            <Text style={styles.rowLabel}>City</Text>
-            <Text style={styles.rowValue}>{city || '—'}</Text>
-          </GlassCard>
         )}
 
-        <View style={styles.scoreWrap}>
-          <Text style={styles.scoreLabel}>Asset Health</Text>
-          <Text style={styles.scoreValue}>
-            {vaultHealth == null ? '—' : vaultHealth}
-            {vaultHealth != null ? <Text style={styles.scoreUnit}> / 100</Text> : null}
-          </Text>
-          <Text style={styles.scoreHint}>
-            {vaultHealth == null
-              ? 'Add assets to see Asset Health from real documents and coverage.'
-              : 'Average Asset Health of assets in your vault. Separate from Protection Score.'}
-          </Text>
-        </View>
 
+
+        {/* Section: Account & Security */}
         <View style={styles.sectionContainer}>
-          <Text style={styles.sectionHeading}>ACCOUNT</Text>
-          <Pressable
-            style={styles.settingItem}
-            onPress={() => {
-              Haptics.tap();
-              navigation?.navigate?.('SettingsHome');
-            }}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={styles.familyTitle}>App Lock & Security</Text>
-              <Text style={styles.sub}>Biometrics, passcode protection</Text>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </Pressable>
+          <Text style={styles.sectionHeading}>ACCOUNT & SECURITY</Text>
+          <GlassCard style={{ padding: 0 }}>
+            {/* App Lock row — always shown */}
+            <Pressable
+              style={styles.menuRow}
+              onPress={() => {
+                Haptics.tap();
+                navigation?.navigate?.('SettingsHome');
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.familyTitle}>App Lock & Security</Text>
+                <Text style={styles.sub}>Biometrics, passcode protection</Text>
+              </View>
+              <Text style={styles.chevron}>›</Text>
+            </Pressable>
+
+            {/* Password & Security — provider-aware */}
+            {isAuthenticated ? (() => {
+              const providers = (user?.providerData || []).map((p) => p?.providerId);
+              const hasPassword = providers.includes('password');
+              const hasGoogle = providers.includes('google.com');
+
+              if (hasPassword) {
+                // Email/password user — show Change Password + Reset Password
+                return (
+                  <>
+                    <View style={styles.menuDivider} />
+                    <View style={[styles.menuRow, { flexDirection: 'column', alignItems: 'flex-start' }]}>
+                      <Text style={styles.familyTitle}>Password & Security</Text>
+                      <Text style={[styles.sub, { marginBottom: 10 }]}>Email / password account</Text>
+                      <Pressable
+                        onPress={async () => {
+                          Haptics.tap();
+                          const userEmail = user?.email || profile?.email || email;
+                          if (!userEmail) {
+                            ui.info('Reset Password', 'No email address found on this account.');
+                            return;
+                          }
+                          const ok = await ui.confirm({
+                            title: 'Reset Password',
+                            message: `A password reset link will be sent to ${userEmail}.\n\nCheck your inbox after confirming.`,
+                            confirmLabel: 'Send Reset Email',
+                            cancelLabel: 'Cancel',
+                          });
+                          if (!ok) return;
+                          setBusy(true);
+                          try {
+                            const result = await sendPasswordResetEmail(userEmail);
+                            setBusy(false);
+                            if (result?.success) {
+                              Haptics.success();
+                              ui.success('Reset email sent! Check your inbox (and spam) to set a new password.');
+                            } else {
+                              ui.error('Reset Password', result?.error || 'Could not send reset email. Try again.');
+                            }
+                          } catch (e) {
+                            setBusy(false);
+                            ui.error('Reset Password', e?.message || 'Could not send reset email.');
+                          }
+                        }}
+                        disabled={busy}
+                        style={[styles.menuRow, { paddingTop: 0, paddingBottom: 4 }]}
+                      >
+                        <Text style={{ color: COLORS.primary || '#0F766E', fontWeight: '700', fontSize: 14 }}>
+                          Change / Reset Password →
+                        </Text>
+                      </Pressable>
+                      <Text style={[styles.sub, { marginTop: 2 }]}>
+                        A secure reset link is emailed to your registered address.
+                      </Text>
+                    </View>
+                    {hasGoogle ? (
+                      <>
+                        <View style={styles.menuDivider} />
+                        <View style={[styles.menuRow, { flexDirection: 'column', alignItems: 'flex-start' }]}>
+                          <Text style={styles.familyTitle}>Also signed in with Google</Text>
+                          <Text style={styles.sub}>Google account is linked to this vault.</Text>
+                        </View>
+                      </>
+                    ) : null}
+                  </>
+                );
+              }
+
+              if (hasGoogle && !hasPassword) {
+                // Google-only user — no Asset Doctor password reset
+                return (
+                  <>
+                    <View style={styles.menuDivider} />
+                    <View style={[styles.menuRow, { flexDirection: 'column', alignItems: 'flex-start' }]}>
+                      <Text style={styles.familyTitle}>Password & Security</Text>
+                      <Text style={[styles.sub, { marginBottom: 6 }]}>Signed in with Google</Text>
+                      <Text style={styles.sub}>
+                        🔒 Your password is managed by Google.{'\n'}
+                        To change your password, visit myaccount.google.com.{'\n'}
+                        Asset Doctor does not store or manage your Google password.
+                      </Text>
+                    </View>
+                  </>
+                );
+              }
+
+              return null;
+            })() : null}
+          </GlassCard>
         </View>
 
+        {/* Section: Preferences */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionHeading}>PREFERENCES</Text>
-          <Pressable
-            style={styles.settingItem}
-            onPress={() => {
-              Haptics.tap();
-              navigation?.navigate?.('NotificationCenter');
-            }}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={styles.familyTitle}>Alerts & Reminders</Text>
-              <Text style={styles.sub}>Manage expiry and service notices</Text>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </Pressable>
+          <GlassCard style={{ padding: 0 }}>
+            <Pressable
+              style={styles.menuRow}
+              onPress={() => {
+                Haptics.tap();
+                navigation?.navigate?.('NotificationCenter');
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.familyTitle}>Alerts & Reminders</Text>
+                <Text style={styles.sub}>Manage expiry and service notices</Text>
+              </View>
+              <Text style={styles.chevron}>›</Text>
+            </Pressable>
+          </GlassCard>
         </View>
 
+        {/* Section: Privacy & Trust */}
         <View style={styles.sectionContainer}>
-          <Text style={styles.sectionHeading}>VAULT</Text>
-          <Pressable
-            style={styles.settingItem}
-            onPress={() => {
-              Haptics.tap();
-              navigation?.navigate?.('PrivacySecurity');
-            }}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={styles.familyTitle}>Privacy & Trust Center</Text>
-              <Text style={styles.sub}>How your data, documents, and notifications are handled</Text>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </Pressable>
+          <Text style={styles.sectionHeading}>PRIVACY & TRUST</Text>
+          <GlassCard style={{ padding: 0 }}>
+            <Pressable
+              style={styles.menuRow}
+              onPress={() => {
+                Haptics.tap();
+                navigation?.navigate?.('PrivacySecurity');
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.familyTitle}>Privacy & Trust Center</Text>
+                <Text style={styles.sub}>Encrypted data, document vaults & permissions</Text>
+              </View>
+              <Text style={styles.chevron}>›</Text>
+            </Pressable>
+            <View style={styles.menuDivider} />
+            <Pressable
+              style={styles.menuRow}
+              onPress={() => {
+                Haptics.tap();
+                navigation?.navigate?.('PrivacyPolicy');
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.familyTitle}>Privacy Policy</Text>
+                <Text style={styles.sub}>Terms of use and privacy charter</Text>
+              </View>
+              <Text style={styles.chevron}>›</Text>
+            </Pressable>
+          </GlassCard>
         </View>
 
+        {/* Section: Support */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionHeading}>FEEDBACK & SUPPORT</Text>
-          <Pressable
-            style={styles.settingItem}
-            onPress={() => {
-              Haptics.tap();
-              navigation?.navigate?.('ReportIssue');
-            }}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={styles.familyTitle}>Feedback / Report Bug</Text>
-              <Text style={styles.sub}>Share ideas or report an issue directly</Text>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </Pressable>
+          <GlassCard style={{ padding: 0 }}>
+            <Pressable
+              style={styles.menuRow}
+              onPress={() => {
+                Haptics.tap();
+                navigation?.navigate?.('ReportIssue');
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.familyTitle}>Feedback / Report Bug</Text>
+                <Text style={styles.sub}>Share feedback or report an issue</Text>
+              </View>
+              <Text style={styles.chevron}>›</Text>
+            </Pressable>
+            <View style={styles.menuDivider} />
+            <Pressable
+              style={styles.menuRow}
+              onPress={() => {
+                Haptics.tap();
+                navigation?.navigate?.('ContactUs');
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.familyTitle}>Contact Support</Text>
+                <Text style={styles.sub}>Reach our support team</Text>
+              </View>
+              <Text style={styles.chevron}>›</Text>
+            </Pressable>
+          </GlassCard>
         </View>
 
+        {/* Section: About */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionHeading}>ABOUT</Text>
-          <Pressable
-            style={styles.settingItem}
-            onPress={() => {
-              Haptics.tap();
-              navigation?.navigate?.('About');
-            }}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={styles.familyTitle}>About Asset Doctor</Text>
-              <Text style={styles.sub}>{appVersionLabel()}</Text>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </Pressable>
+          <GlassCard style={{ padding: 0 }}>
+            <Pressable
+              style={styles.menuRow}
+              onPress={() => {
+                Haptics.tap();
+                navigation?.navigate?.('About');
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.familyTitle}>About Asset Doctor</Text>
+                <Text style={styles.sub}>{appVersionLabel()}</Text>
+              </View>
+              <Text style={styles.chevron}>›</Text>
+            </Pressable>
+          </GlassCard>
         </View>
 
         {isAuthenticated ? (
           <GlassButton
             title="Logout"
             variant="danger"
-            style={{ marginTop: 16 }}
+            style={{ marginTop: 20, marginBottom: 8 }}
             onPress={async () => {
               Haptics.tap();
               const ok = await ui.confirm({
@@ -713,13 +922,12 @@ export function ProfileScreen({ navigation }) {
                 return;
               }
               Haptics.success();
-              // RootNavigator remounts AuthWelcome (Google / Mobile / Guest)
             }}
           />
         ) : (
           <GlassButton
             title="Sign in / Switch account"
-            style={{ marginTop: 16 }}
+            style={{ marginTop: 20, marginBottom: 8 }}
             onPress={() => {
               Haptics.tap();
               openLogin(navigation);
@@ -779,6 +987,27 @@ export function ProfileScreen({ navigation }) {
 export default ProfileScreen;
 
 const styles = StyleSheet.create({
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingTop: 16,
+    paddingBottom: 4,
+  },
+  backBtn: {
+    marginRight: 12,
+    padding: 4,
+  },
+  backArrow: {
+    fontSize: 22,
+    color: COLORS.text,
+    fontWeight: '700',
+  },
+  headerTitle: {
+    color: COLORS.text,
+    fontSize: 20,
+    fontWeight: '800',
+  },
   content: { padding: SPACING.lg, paddingBottom: 48 },
   title: { color: COLORS.text, fontSize: 22, fontWeight: '900' },
   sub: { color: COLORS.muted, fontSize: 12, marginTop: 4 },
@@ -810,8 +1039,9 @@ const styles = StyleSheet.create({
   },
   statNum: { color: COLORS.emerald, fontWeight: '900', fontSize: 20 },
   statLabel: { color: COLORS.muted, fontSize: 11, marginTop: 2, fontWeight: '600' },
-  rowLabel: { color: COLORS.muted, fontSize: 11, fontWeight: '700', marginTop: 10 },
-  rowValue: { color: COLORS.text, fontSize: 15, fontWeight: '700', marginTop: 2 },
+  detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
+  rowLabel: { color: COLORS.muted, fontSize: 13, fontWeight: '600' },
+  rowValue: { color: COLORS.text, fontSize: 14, fontWeight: '700' },
   aboutLink: {
     marginTop: 10,
     padding: 14,
@@ -851,8 +1081,25 @@ const styles = StyleSheet.create({
   scoreValue: { color: COLORS.emerald, fontSize: 28, fontWeight: '900', marginTop: 4 },
   scoreUnit: { color: COLORS.muted, fontSize: 14, fontWeight: '700' },
   scoreHint: { color: COLORS.muted, fontSize: 12, marginTop: 6, lineHeight: 17 },
-  sectionContainer: { marginTop: 14 },
-  sectionHeading: { color: COLORS.muted, fontSize: 11, fontWeight: '800', letterSpacing: 0.6, marginBottom: 6, paddingHorizontal: 4 },
+  sectionContainer: { marginTop: 16 },
+  sectionHeading: { color: COLORS.muted, fontSize: 11, fontWeight: '800', letterSpacing: 0.6, marginBottom: 8, paddingHorizontal: 4 },
+  protectionCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  protectionScoreBox: { marginTop: 4, marginBottom: 8 },
+  protectionScoreText: { color: COLORS.muted, fontSize: 13, fontWeight: '600' },
+  checklistItemRow: { flexDirection: 'row', alignItems: 'center' },
+  checklistStatus: { fontSize: 13, fontWeight: '700' },
+  checklistLabel: { color: COLORS.text, fontSize: 13, fontWeight: '500' },
+  menuRow: {
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginHorizontal: 14,
+  },
   settingItem: {
     padding: 14,
     borderRadius: 14,

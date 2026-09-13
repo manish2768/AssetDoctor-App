@@ -97,7 +97,7 @@ export async function runOcrIntelligenceTestSuite(): Promise<{ passed: number; f
   // 3. Purchase Invoice without Odometer -> Odometer is strictly NOT_FOUND / undefined (Zero Hallucination)
   try {
     const purchaseText = `
-      RAFTAAR MOTO LEGENDS PVT LTD
+      APEX MOTO SERVICES PVT LTD
       VEHICLE SALE INVOICE
       Invoice No: 10092
       Date: 10/01/2024

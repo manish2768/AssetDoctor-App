@@ -66,22 +66,28 @@ export async function persistAuthSession(user, profile = {}) {
       return { success: true, profile: null };
     }
 
-    const name =
-      String(profile?.name || user.displayName || DEFAULT_PROFILE.name).trim() ||
-      DEFAULT_PROFILE.name;
+    const name = String(profile?.fullName || profile?.name || user.displayName || '').trim();
     const email = String(profile?.email || user.email || '').trim();
     const phone = String(
       profile?.phone || profile?.phoneNumber || user.phoneNumber || '',
     ).trim();
     const photoURL = String(profile?.photoURL || user.photoURL || '').trim();
+    const pincode = String(profile?.pinCode || profile?.pincode || '').trim();
+    const city = String(profile?.city || '').trim();
+    const state = String(profile?.state || '').trim();
 
     const session = {
       uid: user.uid,
       name,
+      fullName: name,
       email,
       phone,
       phoneNumber: phone,
       photoURL,
+      pincode,
+      pinCode: pincode,
+      city,
+      state,
       providerId: user.providerData?.[0]?.providerId || '',
       updatedAt: Date.now(),
     };
@@ -89,11 +95,16 @@ export async function persistAuthSession(user, profile = {}) {
     await writeSession(session);
     const local = await saveLocalProfile({
       name,
+      fullName: name,
       email,
       phone,
       phoneNumber: phone,
       photoURL,
-    });
+      pincode,
+      pinCode: pincode,
+      city,
+      state,
+    }, user.uid);
 
     return { success: true, session, profile: local.profile || session };
   } catch (error) {
@@ -109,10 +120,15 @@ export async function loadAuthSession() {
     const local = await loadLocalProfile();
     return {
       uid: null,
-      name: local.name || DEFAULT_PROFILE.name,
+      name: local.name || '',
+      fullName: local.name || '',
       email: local.email || '',
       phone: local.phone || '',
       photoURL: local.photoURL || '',
+      pincode: local.pincode || '',
+      pinCode: local.pincode || '',
+      city: local.city || '',
+      state: local.state || '',
     };
   } catch {
     return { ...DEFAULT_PROFILE, uid: null };
@@ -124,7 +140,7 @@ export async function clearAuthSession({ keepLocalProfile = true } = {}) {
     await wipeSession();
     if (!keepLocalProfile) {
       await saveLocalProfile({
-        name: DEFAULT_PROFILE.name,
+        name: '',
         email: '',
         phone: '',
         phoneNumber: '',

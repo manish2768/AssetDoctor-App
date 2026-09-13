@@ -6,6 +6,12 @@ export interface PucCertificateFields {
   vehicleRegistration: ExtractedField<string | null>;
   issueDate: ExtractedField<string | null>;
   expiryDate: ExtractedField<string | null>;
+  fuelType?: ExtractedField<string | null>;
+  testingCenterName?: ExtractedField<string | null>;
+  issuingAuthority?: ExtractedField<string | null>;
+  coValue?: ExtractedField<string | null>;
+  hcValue?: ExtractedField<string | null>;
+  co2Value?: ExtractedField<string | null>;
   emissionResult: ExtractedField<string | null>;
 }
 
@@ -25,13 +31,42 @@ export class PucExtractor {
     }
 
     let issueDate = createNotFoundField<string | null>();
-    let expiryDate = createNotFoundField<string | null>();
+    const issueMatch = text.match(/(?:DATE\s*OF\s*ISSUE|ISSUE\s*DATE|TEST\s*DATE)[:\s\-]*([0-3]?[0-9][\/\-\.][0-1]?[0-9][\/\-\.](?:20)?[1-3][0-9])/i);
+    if (issueMatch) {
+      const normIss = OcrFieldNormalizer.normalizeDate(issueMatch[1]);
+      if (normIss) issueDate = createVerifiedField(normIss, 0.98, issueMatch[0]);
+    }
 
-    const expMatch = text.match(/(?:VALID\s*UPTO|EXPIRY\s*DATE|VALID\s*TILL)[:\s\-]*([0-3]?[0-9][\/\-\.][0-1]?[0-9][\/\-\.]20[2-3][0-9])/i);
+    let expiryDate = createNotFoundField<string | null>();
+    const expMatch = text.match(/(?:VALID\s*UPTO|EXPIRY\s*DATE|VALID\s*TILL)[:\s\-]*([0-3]?[0-9][\/\-\.][0-1]?[0-9][\/\-\.](?:20)?[1-3][0-9])/i);
     if (expMatch) {
       const normExp = OcrFieldNormalizer.normalizeDate(expMatch[1]);
       if (normExp) expiryDate = createVerifiedField(normExp, 0.98, expMatch[0]);
     }
+
+    let fuelType: ExtractedField<string | null> = createNotFoundField();
+    const fuelMatch = text.match(/(?:FUEL(?:\s*TYPE)?|FUEL\s*USED)[:\s\-]*([A-Za-z]+)\b/i) || text.match(/\b(PETROL|DIESEL|CNG|LPG|ELECTRIC|HYBRID)\b/i);
+    if (fuelMatch) {
+      fuelType = createVerifiedField(fuelMatch[1].trim(), 0.95, fuelMatch[0]);
+    }
+
+    let testingCenterName: ExtractedField<string | null> = createNotFoundField();
+    const testCenterMatch = text.match(/(?:TESTING\s*CENTRE(?:\s*NAME)?|TESTING\s*CENTER(?:\s*NAME)?|ISSUING\s*AUTHORITY|CENTRE\s*NAME)[:\s\-]+([A-Za-z0-9\s,.\-&]+?)(?:\r?\n|$)/i);
+    if (testCenterMatch) {
+      testingCenterName = createVerifiedField(testCenterMatch[1].trim(), 0.95, testCenterMatch[0]);
+    }
+
+    let coValue: ExtractedField<string | null> = createNotFoundField();
+    const coMatch = text.match(/(?:\bCO\b|\bCARBON\s*MONOXIDE\b)[:\s\-]*([0-9]+(?:\.[0-9]+)?)\s*%?/i);
+    if (coMatch) coValue = createVerifiedField(coMatch[1], 0.95, coMatch[0]);
+
+    let hcValue: ExtractedField<string | null> = createNotFoundField();
+    const hcMatch = text.match(/(?:\bHC\b|\bHYDROCARBONS?\b)[:\s\-]*([0-9]+(?:\.[0-9]+)?)\s*(?:PPM)?/i);
+    if (hcMatch) hcValue = createVerifiedField(hcMatch[1], 0.95, hcMatch[0]);
+
+    let co2Value: ExtractedField<string | null> = createNotFoundField();
+    const co2Match = text.match(/(?:\bCO2\b|\bCARBON\s*DIOXIDE\b)[:\s\-]*([0-9]+(?:\.[0-9]+)?)\s*%?/i);
+    if (co2Match) co2Value = createVerifiedField(co2Match[1], 0.95, co2Match[0]);
 
     let emissionResult = createNotFoundField<string | null>();
     if (/\b(?:PASSED|PASS|SATISFACTORY|WITHIN\s*LIMITS)\b/i.test(text)) {
@@ -43,6 +78,12 @@ export class PucExtractor {
       vehicleRegistration,
       issueDate,
       expiryDate,
+      fuelType,
+      testingCenterName,
+      issuingAuthority: testingCenterName,
+      coValue,
+      hcValue,
+      co2Value,
       emissionResult
     };
   }

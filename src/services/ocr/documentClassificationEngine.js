@@ -324,8 +324,8 @@ const ISSUER_FINGERPRINTS = [
     labels: ['job card', 'labour', 'odometer'],
   },
   {
-    id: 'raftaar_motors',
-    match: /raftaar/i,
+    id: 'authorized_workshop',
+    match: /\b(?:authorized\s+service|workshop|service\s+center|auto\s+care|motor\s+works)\b/i,
     documentType: 'SERVICE_BILL',
     boost: 0.4,
     labels: ['service invoice'],

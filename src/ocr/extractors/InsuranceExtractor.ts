@@ -28,13 +28,13 @@ export class InsuranceExtractor {
     }
 
     let policyNumber: ExtractedField<string | null> = createNotFoundField();
-    const polMatch = text.match(/(?:POLICY\s*(?:NO|NUMBER|CERTIFICATE\s*NO)?|SCHEDULE\s*NO)[:\s\-]*([A-Z0-9\/\-\.]+)/i);
+    const polMatch = text.match(/(?:POLICY\s*(?:NO\.?|NUMBER|#|CERTIFICATE\s*NO\.?)|SCHEDULE\s*(?:NO\.?|NUMBER|#))[:\s\-]*([A-Z0-9\/\-\.]{6,35})/i);
     if (polMatch) {
       policyNumber = createVerifiedField(polMatch[1].trim(), 0.98, polMatch[0]);
     }
 
     let insuredName: ExtractedField<string | null> = createNotFoundField();
-    const insuredMatch = text.match(/(?:INSURED\s*NAME|NAME\s*OF\s*INSURED|POLICY\s*HOLDER)[:\s\-]*([A-Za-z\s\.]+)/i);
+    const insuredMatch = text.match(/(?:INSURED\s*NAME|NAME\s*OF\s*INSURED|POLICY\s*HOLDER)[:\s\-]+([A-Za-z\s.]+?)(?:\r?\n|$)/i);
     if (insuredMatch) {
       insuredName = createVerifiedField(insuredMatch[1].trim(), 0.95, insuredMatch[0]);
     }
@@ -42,7 +42,8 @@ export class InsuranceExtractor {
     let policyStartDate: ExtractedField<string | null> = createNotFoundField();
     let policyEndDate: ExtractedField<string | null> = createNotFoundField();
 
-    const periodMatch = text.match(/(?:FROM|PERIOD\s*OF\s*INSURANCE[:\s\w]*FROM)?\s*([0-3]?[0-9][\/\-\.][0-1]?[0-9][\/\-\.]20[2-3][0-9])\s*(?:TO|UNTIL|\-)\s*([0-3]?[0-9][\/\-\.][0-1]?[0-9][\/\-\.]20[2-3][0-9])/i);
+    const dateToken = '(?:[0-3]?[0-9][\\/\\-\\.](?:[0-1]?[0-9]|[A-Za-z]{3,9})[\\/\\-\\.](?:20)?[1-3][0-9])';
+    const periodMatch = text.match(new RegExp(`(?:FROM|PERIOD\\s*OF\\s*INSURANCE[:\\s\\w]*FROM)?\\s*(${dateToken})\\s*(?:TO|UNTIL|\\-)\\s*(${dateToken})`, 'i'));
     if (periodMatch) {
       const s = OcrFieldNormalizer.normalizeDate(periodMatch[1]);
       const e = OcrFieldNormalizer.normalizeDate(periodMatch[2]);
@@ -59,7 +60,7 @@ export class InsuranceExtractor {
     }
 
     let vehicleModel: ExtractedField<string | null> = createNotFoundField();
-    const modelMatch = text.match(/(?:VEHICLE\s*MAKE\s*&?\s*MODEL|MAKE\s*&?\s*MODEL|MODEL)[:\s\-]*([A-Za-z0-9\s\-]+)/i);
+    const modelMatch = text.match(/(?:(?:^|\n)[^\n]*(?:VEHICLE\s*MAKE\s*&?\s*MODEL|MAKE\s*\/?\s*MODEL|MODEL)[:\s\-]+([A-Za-z0-9\s\-]+?)(?:\r?\n|$))/i);
     if (modelMatch) {
       vehicleModel = createVerifiedField(modelMatch[1].trim(), 0.95, modelMatch[0]);
     }
@@ -77,14 +78,14 @@ export class InsuranceExtractor {
     }
 
     let idvAmount: ExtractedField<number | null> = createNotFoundField();
-    const idvMatch = text.match(/(?:INSURED\s*DECLARED\s*VALUE|IDV)[:\s\-]*[₹Rs\s]*([0-9,]+(?:\.[0-9]{2})?)/i);
+    const idvMatch = text.match(/(?:IDV(?:\s*\([A-Za-z\s]+\))?|INSURED\s*DECLARED\s*VALUE(?:\s*\([A-Za-z\s]+\))?)[:\s\-]+(?:Rs\.?|INR|₹|\s)*([0-9,]+(?:\.[0-9]{2})?)/i);
     if (idvMatch) {
       const amt = OcrFieldNormalizer.normalizeAmount(idvMatch[1]);
       if (amt) idvAmount = createVerifiedField(amt, 0.98, idvMatch[0]);
     }
 
     let premiumAmount: ExtractedField<number | null> = createNotFoundField();
-    const premMatch = text.match(/(?:TOTAL\s*PREMIUM\s*PAYABLE|PREMIUM\s*AMOUNT|NET\s*PREMIUM|GROSS\s*PREMIUM)[:\s\-]*[₹Rs\s]*([0-9,]+(?:\.[0-9]{2})?)/i);
+    const premMatch = text.match(/(?:TOTAL\s*PREMIUM\s*PAYABLE|PREMIUM\s*(?:PAYABLE|AMOUNT)?|NET\s*PREMIUM|GROSS\s*PREMIUM)[:\s\-]+(?:Rs\.?|INR|₹|\s)*([0-9,]+(?:\.[0-9]{2})?)/i);
     if (premMatch) {
       const amt = OcrFieldNormalizer.normalizeAmount(premMatch[1]);
       if (amt) premiumAmount = createVerifiedField(amt, 0.98, premMatch[0]);

@@ -29,4 +29,6 @@ export {
   vaultTypeFromGeminiDocumentType,
   resolveDocumentClassification,
 } from './documentTypeClassifier';
+export { UnifiedOcrService } from './UnifiedOcrService';
+export { UnifiedAssetExtractor } from './UnifiedAssetExtractor';
 export { default } from './OcrService';

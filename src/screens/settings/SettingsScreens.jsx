@@ -314,14 +314,6 @@ export function SettingsScreen({ navigation }) {
                   setEditing(true);
                 }}
               />
-              <GlassButton
-                title="Profile Settings"
-                style={{ marginTop: 8 }}
-                onPress={() => {
-                  Haptics.tap();
-                  navigation?.navigate?.('ProfileHome');
-                }}
-              />
             </>
           ) : (
             <>
@@ -481,14 +473,17 @@ export function SettingsScreen({ navigation }) {
             onPress={() => navigation?.navigate?.('PlayStoreListing')}
           />
           <Row
+            title="OCR Test & Pipeline Inspection"
+            subtitle="Developer workspace, 8-stage trace & test fixtures"
+            onPress={() => {
+              Haptics.tap();
+              navigation?.navigate?.('OcrTest');
+            }}
+          />
+          <Row
             title="Replay onboarding"
             subtitle="Show the first-run tutorial again"
             onPress={onReplayOnboarding}
-          />
-          <Row
-            title="Edit profile"
-            subtitle="Name, phone, address, optional PIN"
-            onPress={() => navigation?.navigate?.('ProfileHome')}
             isLast
           />
         </GlassCard>

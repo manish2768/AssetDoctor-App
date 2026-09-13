@@ -135,7 +135,7 @@ export async function runMobileSyncTestSuite(): Promise<{ passed: number; failed
   // 5. OCR Integration & Automatic Odometer Refresh Test
   try {
     const billText = `
-      RAFTAAR MOTO LEGENDS PVT LTD
+      APEX MOTO SERVICES PVT LTD
       SERVICE INVOICE
       Invoice No: 81587
       Date: 20/08/2024

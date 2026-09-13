@@ -59,16 +59,34 @@ export function CategoryFoldersScreen({ navigation, route }) {
     });
   };
 
+  const handleBack = () => {
+    Haptics.tap();
+    if (navigation?.canGoBack?.()) {
+      navigation.goBack();
+    } else {
+      navigation?.navigate?.('Home');
+    }
+  };
+
   return (
     <Screen>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}>
-        <View style={styles.headerRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title}>Category Folders</Text>
-            <Text style={styles.sub}>Organized vaults for invoices & documents</Text>
-          </View>
+      <View style={[styles.headerBar, { paddingTop: Math.max(insets.top, 12) }]}>
+        <Pressable
+          onPress={handleBack}
+          hitSlop={12}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Text style={styles.backArrow}>←</Text>
+        </Pressable>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title} numberOfLines={1}>Category Folders</Text>
+          <Text style={styles.sub} numberOfLines={1}>Organized vaults for invoices & documents</Text>
         </View>
+      </View>
 
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}>
         {Object.values(FOLDER_META).map((folder) => (
           <Pressable
             key={folder.id}
@@ -169,10 +187,28 @@ export function CategoryFoldersScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: SPACING.lg },
-  headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 16 },
-  title: { color: COLORS.text, fontSize: 22, fontWeight: '900' },
-  sub: { color: COLORS.muted, fontSize: 12, marginTop: 4 },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: 10,
+    gap: 12,
+  },
+  backBtn: {
+    padding: 6,
+    borderRadius: RADIUS.md,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  backArrow: {
+    fontSize: 20,
+    color: COLORS.text,
+    fontWeight: '700',
+  },
+  content: { padding: SPACING.lg, paddingTop: 4 },
+  title: { color: COLORS.text, fontSize: 20, fontWeight: '900' },
+  sub: { color: COLORS.muted, fontSize: 12, marginTop: 2 },
   folderCard: { marginBottom: 12 },
   folderRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   folderTitle: { color: COLORS.text, fontWeight: '800', fontSize: 14 },

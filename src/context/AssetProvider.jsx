@@ -72,18 +72,12 @@ export function AssetProvider({ children }) {
     setLoading(true);
     // Prefer live Firestore only when Firebase user is confirmed
     if (user?.uid) {
-      let settled = false;
-      const finish = (list) => {
-        if (settled) return;
-        settled = true;
-        if (Array.isArray(list)) setAssets(list);
-        setLoading(false);
-      };
+      let isFirstEmission = true;
 
       // Warm local encrypted cache immediately
       OfflineVaultCache.getAssets(user.uid)
         .then((list) => {
-          if (!settled && Array.isArray(list) && list.length) {
+          if (isFirstEmission && Array.isArray(list) && list.length) {
             setAssets(filterActiveAssets(list));
           }
         })
@@ -91,13 +85,21 @@ export function AssetProvider({ children }) {
 
       const unsub = AssetService.listenToUserAssets(
         user.uid,
-        (list) => finish(list),
-        () => finish(undefined),
+        (list) => {
+          isFirstEmission = false;
+          if (Array.isArray(list)) {
+            setAssets(filterActiveAssets(list));
+          }
+          setLoading(false);
+        },
+        (error) => {
+          console.warn('[AssetProvider] Live listen error:', error?.message || error);
+          setLoading(false);
+        },
       );
-      // Strict 5s: never leave Dashboard on "Loading vault…" forever
-      const timer = setTimeout(() => finish(undefined), 5000);
+      // Fallback timeout to clear loading spinner if network is silent
+      const timer = setTimeout(() => setLoading(false), 3000);
       return () => {
-        settled = true;
         clearTimeout(timer);
         try {
           unsub?.();
@@ -175,6 +177,20 @@ export function AssetProvider({ children }) {
             error: renewed.error || 'Could not renew document on vehicle',
           };
         }
+        if (renewed.asset) {
+          const mergedRenewed = {
+            ...existing,
+            ...renewed.asset,
+            assetId,
+            id: assetId,
+          };
+          await OfflineVaultCache.upsertAsset(effectiveUid, mergedRenewed).catch(() => {});
+          setAssets((current) =>
+            current.map((a) =>
+              (a.assetId || a.id) === assetId ? mergedRenewed : a,
+            ),
+          );
+        }
         return {
           success: true,
           id: assetId,
@@ -190,12 +206,81 @@ export function AssetProvider({ children }) {
       if (existing && (isVehicleCategory(form) || form.isVehicleInvoice || form.linkAssetId)) {
         const assetId = existing.assetId || existing.id;
         const vaultMeta = resolveVaultDocumentMeta(form);
-        const isTrustedUpdate = !form.needsManualReview && (form.identityConfidence == null || form.identityConfidence >= 0.85) || form.userConfirmed === true;
+        const isServiceDoc =
+          form.scanDocumentType === 'vehicle_service' ||
+          form.documentType === 'VEHICLE_SERVICE' ||
+          form.reviewFamily === 'service';
+
+        let nextServiceHistory = Array.isArray(existing.serviceHistory) ? [...existing.serviceHistory] : [];
+        if (isServiceDoc) {
+          const serviceEntry = {
+            id: form.serviceInvoiceNumber || `srv_${Date.now()}`,
+            serviceInvoiceNumber: form.serviceInvoiceNumber || form.invoiceNumber || '',
+            serviceDate: form.serviceDate || form.invoiceDate || new Date().toISOString().slice(0, 10),
+            workshopName: form.workshopName || form.shopName || '',
+            odometerKm: form.odometerKm ?? null,
+            jobType: form.jobType || '',
+            labourAmount: form.labourAmount ?? null,
+            partsAmount: form.partsAmount ?? null,
+            taxAmount: form.taxAmount ?? null,
+            totalAmount: form.totalAmount || form.purchaseAmount || null,
+            nextServiceDate: form.nextServiceDate || form.nextServiceDue || '',
+            nextServiceKm: form.nextServiceKm ?? null,
+            createdAt: new Date().toISOString(),
+          };
+          nextServiceHistory.push(serviceEntry);
+        }
+
+        const isTrustedUpdate =
+          form.isTrustedUpdate !== false &&
+          !form.hasConflict &&
+          !form.isConflict;
+
         const updates = isTrustedUpdate ? {
           ...(form.warrantyExpiry ? { warrantyExpiry: form.warrantyExpiry } : {}),
-          ...(form.pucExpiry ? { pucExpiry: form.pucExpiry } : {}),
-          ...(form.insuranceExpiry ? { insuranceExpiry: form.insuranceExpiry } : {}),
-          ...(form.nextServiceDue ? { nextServiceDue: form.nextServiceDue } : {}),
+          ...(form.warrantyMonths != null ? { warrantyMonths: Number(form.warrantyMonths) } : {}),
+          ...(form.assetName ? { assetName: form.assetName } : {}),
+          ...(form.brandName || form.brand ? { brandName: form.brandName || form.brand, brand: form.brandName || form.brand } : {}),
+          ...(form.model || form.modelName ? { model: form.model || form.modelName } : {}),
+          ...(form.rtoCode ? { rtoCode: form.rtoCode } : {}),
+          ...(form.fuelNorm ? { fuelNorm: form.fuelNorm } : {}),
+          ...(form.fuelType ? { fuelType: form.fuelType } : {}),
+          ...(form.emissionNorm ? { emissionNorm: form.emissionNorm } : {}),
+          ...(form.condition ? { condition: form.condition } : {}),
+          ...(form.supportPhone ? { supportPhone: form.supportPhone } : {}),
+          ...(form.supportUrl ? { supportUrl: form.supportUrl } : {}),
+          ...(form.lastServiceDate ? { lastServiceDate: form.lastServiceDate } : {}),
+          ...(form.dailyHours != null ? { dailyHours: Number(form.dailyHours) } : {}),
+          ...(form.powerWatts != null ? { powerWatts: Number(form.powerWatts) } : {}),
+          ...(form.powerFactor != null ? { powerFactor: Number(form.powerFactor) } : {}),
+          ...(isServiceDoc ? { serviceHistory: nextServiceHistory } : {}),
+          ...(form.pucExpiry || form.pucValidUntil
+            ? {
+                pucExpiry: form.pucExpiry || form.pucValidUntil,
+                pucValidUntil: form.pucValidUntil || form.pucExpiry,
+              }
+            : {}),
+          ...(form.certificateNumber || form.pucCertificateNumber
+            ? { pucCertificateNumber: form.certificateNumber || form.pucCertificateNumber }
+            : {}),
+          ...(form.insuranceExpiry || form.policyExpiryDate
+            ? {
+                insuranceExpiry: form.insuranceExpiry || form.policyExpiryDate,
+                insuranceExpiryDate: form.policyExpiryDate || form.insuranceExpiry,
+              }
+            : {}),
+          ...(form.policyNumber
+            ? {
+                policyNumber: form.policyNumber,
+                insurancePolicyNumber: form.policyNumber,
+              }
+            : {}),
+          ...(form.insurerName ? { insuranceInsurer: form.insurerName } : {}),
+          ...(form.idv != null ? { insuranceIdv: form.idv } : {}),
+          ...(form.premium != null ? { insurancePremium: form.premium } : {}),
+          ...(form.nextServiceDate || form.nextServiceDue ? { nextServiceDue: form.nextServiceDate || form.nextServiceDue } : {}),
+          ...(form.nextServiceKm != null ? { nextServiceKm: form.nextServiceKm } : {}),
+          ...(form.nextServiceOdometerKm != null ? { nextServiceOdometerKm: form.nextServiceOdometerKm } : {}),
           ...(form.chassisNumber && !/^(?:no|n\/a|na|nil)$/i.test(String(form.chassisNumber).trim())
             ? { chassisNumber: form.chassisNumber }
             : {}),
@@ -208,9 +293,9 @@ export function AssetProvider({ children }) {
           ...(form.storeName ? { storeName: form.storeName } : {}),
           ...(form.invoiceMeta ? { invoiceMeta: form.invoiceMeta } : {}),
           ...(form.odometerKm != null ? { odometerKm: form.odometerKm } : {}),
-          registration: existing.registration || form.registration || '',
+          registration: form.registration || existing.registration || '',
         } : {
-          registration: existing.registration || '',
+          registration: form.registration || existing.registration || '',
         };
         const updated = await AssetService.updateAsset(effectiveUid, assetId, updates, null);
         if (!updated?.success) {
@@ -219,6 +304,17 @@ export function AssetProvider({ children }) {
             error: updated?.error || 'Could not update existing vehicle passport',
           };
         }
+        const mergedAsset = {
+          ...existing,
+          ...(updated.asset || {}),
+          ...updates,
+          assetId,
+          id: assetId,
+        };
+        await OfflineVaultCache.upsertAsset(effectiveUid, mergedAsset).catch(() => {});
+        setAssets((current) =>
+          current.map((a) => ((a.assetId || a.id) === assetId ? mergedAsset : a)),
+        );
         if (localImagePath) {
           await DocumentVaultService.uploadDocument(effectiveUid, assetId, {
             localPath: localImagePath,
@@ -230,7 +326,7 @@ export function AssetProvider({ children }) {
           success: true,
           id: assetId,
           merged: true,
-          asset: { ...existing, ...updates },
+          asset: mergedAsset,
         };
       }
 
@@ -255,26 +351,33 @@ export function AssetProvider({ children }) {
         }).catch(() => {});
       }
       const result = await AssetService.createFromForm(effectiveUid, formWithId, localImagePath);
-      if (!result.success && result.queuedOffline) {
-        const offlineRow = {
+      if (result.success || result.queuedOffline) {
+        const resolvedId = result.id || id;
+        const newAssetRow = {
           ...(result.asset || formWithId),
-          id: result.id || id,
-          assetId: result.id || id,
-          pendingSync: true,
-          syncStatus: 'PENDING_CREATE',
-          createdAt: new Date().toISOString(),
+          id: resolvedId,
+          assetId: resolvedId,
+          syncStatus: result.queuedOffline ? 'PENDING_CREATE' : 'SYNCED',
+          pendingSync: Boolean(result.queuedOffline),
+          createdAt: result.asset?.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         };
-        await OfflineVaultCache.upsertAsset(effectiveUid, offlineRow).catch(() => {});
+        await OfflineVaultCache.upsertAsset(effectiveUid, newAssetRow).catch(() => {});
         setAssets((current) => {
-          const exists = current.some((a) => (a.assetId || a.id) === offlineRow.assetId);
+          const exists = current.some((a) => (a.assetId || a.id) === resolvedId);
           if (exists) {
             return current.map((a) =>
-              (a.assetId || a.id) === offlineRow.assetId ? { ...a, ...offlineRow } : a,
+              (a.assetId || a.id) === resolvedId ? { ...a, ...newAssetRow } : a,
             );
           }
-          return [offlineRow, ...current];
+          return [newAssetRow, ...current];
         });
-        return { success: true, queuedOffline: true, id: offlineRow.assetId };
+        return {
+          success: true,
+          queuedOffline: Boolean(result.queuedOffline),
+          id: resolvedId,
+          asset: newAssetRow,
+        };
       }
       return result;
     },
@@ -295,22 +398,29 @@ export function AssetProvider({ children }) {
         updates,
         localImagePath,
       );
-      if (!result.success && result.queuedOffline) {
+      if (result.success || result.queuedOffline) {
         await OfflineVaultCache.upsertAsset(uid, {
           assetId,
           id: assetId,
           ...updates,
-          pendingSync: true,
-          syncStatus: 'PENDING_UPDATE',
+          pendingSync: Boolean(result.queuedOffline),
+          syncStatus: result.queuedOffline ? 'PENDING_UPDATE' : 'SYNCED',
+          clientUpdatedAt: new Date().toISOString(),
         }).catch(() => {});
         setAssets((current) =>
           current.map((asset) =>
             (asset.assetId || asset.id) === assetId
-              ? { ...asset, ...updates, pendingSync: true, syncStatus: 'PENDING_UPDATE' }
+              ? {
+                  ...asset,
+                  ...updates,
+                  pendingSync: Boolean(result.queuedOffline),
+                  syncStatus: result.queuedOffline ? 'PENDING_UPDATE' : (asset.syncStatus || 'SYNCED'),
+                  clientUpdatedAt: new Date().toISOString(),
+                }
               : asset,
           ),
         );
-        return { success: true, queuedOffline: true, id: assetId };
+        return { success: true, queuedOffline: Boolean(result.queuedOffline), id: assetId };
       }
       return result;
     },
@@ -328,12 +438,30 @@ export function AssetProvider({ children }) {
       const existing = assets.find((a) => (a.assetId || a.id) === assetId) || null;
       const result = await AssetService.softDeleteAsset(uid, assetId, { existingAsset: existing });
       if (result?.success) {
+        await OfflineVaultCache.removeAsset(uid, assetId).catch(() => {});
         setAssets((current) => removeAssetFromList(current, assetId));
       }
       return result;
     },
     [user?.uid, sessionUid, assets],
   );
+
+  const refreshAssets = useCallback(async () => {
+    const uid = user?.uid || sessionUid;
+    if (!uid) return [];
+    try {
+      const list = await AssetService.getUserAssets(uid);
+      if (Array.isArray(list)) {
+        const active = filterActiveAssets(list);
+        setAssets(active);
+        await OfflineVaultCache.cacheAssets(uid, active).catch(() => {});
+        return active;
+      }
+    } catch (e) {
+      console.warn('[AssetProvider] refreshAssets error:', e?.message || e);
+    }
+    return assets;
+  }, [user?.uid, sessionUid, assets]);
 
   const portfolioHealth = useMemo(() => calculatePortfolioHealth(assets), [assets]);
   const dailyPower = useMemo(() => {
@@ -350,13 +478,14 @@ export function AssetProvider({ children }) {
       createAsset,
       updateAsset,
       removeAsset,
+      refreshAssets,
       portfolioHealth,
       dailyPower,
       urgent,
       isGuestDemo: !isAuthenticated,
       getAsset: (id) => assets.find((a) => a.id === id || a.assetId === id),
     }),
-    [assets, loading, createAsset, updateAsset, removeAsset, portfolioHealth, dailyPower, urgent, isAuthenticated],
+    [assets, loading, createAsset, updateAsset, removeAsset, refreshAssets, portfolioHealth, dailyPower, urgent, isAuthenticated],
   );
 
   return <AssetContext.Provider value={value}>{children}</AssetContext.Provider>;

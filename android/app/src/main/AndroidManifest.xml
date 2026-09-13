@@ -3,13 +3,24 @@
   <uses-permission android:name="android.permission.VIBRATE"/>
   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" tools:replace="android:maxSdkVersion"/>
   <queries>
+    <package android:name="com.whatsapp"/>
+    <package android:name="com.whatsapp.w4b"/>
     <intent>
       <action android:name="android.intent.action.VIEW"/>
       <category android:name="android.intent.category.BROWSABLE"/>
       <data android:scheme="https"/>
     </intent>
+    <intent>
+      <action android:name="android.intent.action.VIEW"/>
+      <data android:scheme="whatsapp"/>
+    </intent>
+    <intent>
+      <action android:name="android.intent.action.SEND"/>
+      <data android:mimeType="*/*"/>
+    </intent>
   </queries>
   <application android:name=".MainApplication" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:allowBackup="false" android:theme="@style/AppTheme" android:supportsRtl="true">
+    <meta-data android:name="com.google.ml.vision.DEPENDENCIES" android:value="ocr" />
     <meta-data android:name="DEV_CLIENT_DEFAULT_LAUNCHER_URL" android:value="http://127.0.0.1:8081"/>
     <meta-data android:name="DEV_CLIENT_TRY_TO_LAUNCH_LAST_BUNDLE" android:value="true"/>
     <meta-data android:name="EXDevClientEmbeddedBundle" android:value="true"/>

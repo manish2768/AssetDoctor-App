@@ -2,12 +2,13 @@ import React from 'react';
 import { ShieldCheck, IndianRupee, AlertTriangle, PackageX, TrendingUp, Sparkles, Wrench, Bike, Droplets, Wind, Car, CalendarClock } from 'lucide-react';
 import { Asset, MetricSummary } from '../types';
 import { formatINR } from '../utils/assetUtils';
+import { isVehicleAsset, isHomeApplianceAsset, isElectronicsAsset } from '../domain/asset/assetGuards';
 
 interface MetricCardsProps {
   metrics: MetricSummary;
   assets?: Asset[];
   onFilterStatus?: (status: 'all' | 'active' | 'expiring_soon' | 'expired') => void;
-  activeFilter?: string;
+  activeFilter?: 'all' | 'active' | 'expiring_soon' | 'expired';
   onOpenEmergencyModal?: () => void;
 }
 
@@ -29,17 +30,19 @@ export const MetricCards: React.FC<MetricCardsProps> = ({
     };
 
     assets.forEach((ast) => {
-      const lname = ast.name.toLowerCase();
-      if (lname.includes('bike') || lname.includes('motorcycle') || lname.includes('scooter') || ast.category === 'Vehicles') {
-        if (lname.includes('car') || lname.includes('creta')) {
+      const lname = (ast.name || '').toLowerCase();
+      if (isVehicleAsset(ast)) {
+        if (lname.includes('car') || lname.includes('creta') || (ast as any).vehicleType === 'car') {
           counts.Car = (counts.Car || 0) + 1;
         } else {
           counts.Bike = (counts.Bike || 0) + 1;
         }
-      } else if (lname.includes('ac') || lname.includes('air conditioner')) {
-        counts.AC = (counts.AC || 0) + 1;
-      } else if (lname.includes('ro') || lname.includes('purifier') || lname.includes('water')) {
-        counts.RO = (counts.RO || 0) + 1;
+      } else if (isHomeApplianceAsset(ast)) {
+        if (lname.includes('ac') || lname.includes('air conditioner') || (ast as any).categoryId === 'ac') {
+          counts.AC = (counts.AC || 0) + 1;
+        } else {
+          counts.RO = (counts.RO || 0) + 1;
+        }
       } else {
         counts.Electronics = (counts.Electronics || 0) + 1;
       }

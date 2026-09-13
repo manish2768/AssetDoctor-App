@@ -43,6 +43,7 @@ import {
   estimatePowerCost,
 } from '../../utils/powerCost';
 import { useAuth } from '../../context/AuthProvider';
+import { DuplicateProtectionService } from '../../services/duplicateProtectionService';
 import { openLogin } from '../../navigation/authGate';
 import { OcrService } from '../../services/ocr/OcrService';
 import { CategoryIcon } from '../../components/icons/CategoryIcon';
@@ -139,7 +140,7 @@ export function AddAssetScreen({ navigation, route }) {
   const editingId = route?.params?.assetId || null;
   const openScanner = Boolean(route?.params?.openScanner);
   const scanLabel = route?.params?.scanLabel || 'Scan Bill / RC with Camera';
-  const { createAsset, updateAsset, getAsset } = useAssets();
+  const { assets, createAsset, updateAsset, getAsset } = useAssets();
   const { isAuthenticated } = useAuth();
   const ui = useUiFeedback();
   const existing = editingId ? getAsset(editingId) : null;
@@ -483,9 +484,28 @@ export function AddAssetScreen({ navigation, route }) {
       setError('Review the scanned values against the document, then confirm before saving.');
       return;
     }
+    const payload = buildPayload();
+    if (!isEdit && assets && assets.length > 0) {
+      const candidate = {
+        name: payload.assetName || payload.name || '',
+        brand: payload.brandName || payload.brand || '',
+        serialNumber: payload.serialNumber || payload.chassisNumber || payload.imei || '',
+        registration: payload.registration || '',
+      };
+      const dup = DuplicateProtectionService.checkForDuplicate(candidate, assets);
+      if (dup.isDuplicate) {
+        Haptics.warning();
+        const proceed = await ui.confirm({
+          title: 'Potential Duplicate Asset',
+          message: `${dup.reason}\n\nDo you still want to create a new asset record?`,
+          confirmLabel: 'Add Anyway',
+          cancelLabel: 'Review',
+        });
+        if (!proceed) return;
+      }
+    }
     setBusy(true);
     setError('');
-    const payload = buildPayload();
     const result = isEdit
       ? await updateAsset(editingId, payload, scanUri)
       : await createAsset(payload, scanUri);

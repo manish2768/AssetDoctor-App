@@ -100,14 +100,14 @@ export async function runPhase93HardeningSuite() {
     registration: 'UP32QU2187',
     chassisNumber: 'MD637AN11S2F03328',
     engineNumber: 'BN1FS2302943',
-  } as Asset;
+  } as unknown as Asset;
   const roninClone: Asset = {
     id: 'ast_ronin_vault_02',
     assetId: 'ast_ronin_vault_02',
     name: 'TVS Ronin Copy',
     registration: 'UP 32 QU 2187',
     chassisNumber: 'MD637AN11S2F03328',
-  } as Asset;
+  } as unknown as Asset;
 
   const iciciText = `
     ICICI Lombard General Insurance Company Limited

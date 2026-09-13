@@ -24,52 +24,80 @@ function normalizeEmail(value) {
     .toLowerCase();
 }
 
+import { IdentityResolver } from '../identity/identityResolver';
+import {
+  normalizeCanonicalEmail,
+  normalizeCanonicalPhone,
+} from '../identity/identityNormalizer';
+
 export class IdentityService {
   /**
    * @param {{ email?: string, phone?: string, excludeUid?: string }} input
    * @returns {Promise<{ available: boolean, field?: string, message?: string, error?: string, skipped?: boolean }>}
    */
   static async checkAvailable({ email, phone, excludeUid } = {}) {
-    const payload = {
-      email: email ? normalizeEmail(email) : undefined,
-      phone: phone ? normalizePhone(phone) : undefined,
-      excludeUid: excludeUid || undefined,
-    };
-    if (!payload.email && !payload.phone) {
+    const normEmail = email ? normalizeCanonicalEmail(email) : '';
+    const normPhone = phone ? normalizeCanonicalPhone(phone) : '';
+
+    if (!normEmail && !normPhone) {
       return { available: true };
     }
 
+    // 1. Authoritative check via IdentityResolver (L1 index + Firestore identityMappings + users)
     try {
-      const res = await fetch(ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+      const result = await IdentityResolver.checkIdentityAvailable({
+        email: normEmail || undefined,
+        phone: normPhone || undefined,
+        excludeUid,
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        console.warn('[IdentityService] HTTP', res.status, data);
-        return { available: true, skipped: true, error: data?.error || `HTTP ${res.status}` };
-      }
-      if (data.available === false) {
+
+      if (result.available === false) {
         return {
           available: false,
-          field: data.field,
+          field: result.field,
           message:
-            data.message ||
-            (data.field === 'email'
-              ? 'This email is already on another Asset Doctor account — sign in with it.'
-              : 'This mobile is already a login. Use OTP verify to open that vault (no duplicate block).'),
+            result.message ||
+            (result.field === 'phone'
+              ? 'This mobile number is already linked to another account.'
+              : 'This email is already associated with another account.'),
+          existingUserId: result.existingUserId,
         };
       }
-      return { available: true, skipped: Boolean(data.skipped) };
-    } catch (error) {
-      console.warn('[IdentityService]', error?.message || error);
-      const msg = String(error?.message || '');
-      if (/already registered/i.test(msg)) {
-        return { available: false, message: msg };
-      }
-      return { available: true, skipped: true, error: msg };
+    } catch (resolverErr) {
+      console.warn('[IdentityService] IdentityResolver check warning:', resolverErr?.message || resolverErr);
     }
+
+    // 2. Optional HTTP Cloud Function check if configured
+    if (process.env.EXPO_PUBLIC_IDENTITY_CHECK_URL) {
+      try {
+        const payload = {
+          email: normEmail || undefined,
+          phone: normPhone || undefined,
+          excludeUid: excludeUid || undefined,
+        };
+        const res = await fetch(process.env.EXPO_PUBLIC_IDENTITY_CHECK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.available === false) {
+          return {
+            available: false,
+            field: data.field,
+            message:
+              data.message ||
+              (data.field === 'phone'
+                ? 'This mobile number is already linked to another account.'
+                : 'This email is already associated with another account.'),
+          };
+        }
+      } catch (httpErr) {
+        /* non-fatal */
+      }
+    }
+
+    return { available: true };
   }
 }
 

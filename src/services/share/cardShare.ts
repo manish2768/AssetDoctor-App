@@ -11,14 +11,30 @@
  *   - quoteInstallUrl() → the QR/store URL (from central config)
  */
 
-import { Platform } from 'react-native';
-import * as FileSystem from 'expo-file-system/legacy';
-import { Share } from 'react-native';
-import { Share as ShareRN } from 'react-native-share';
-
 import { BRAND } from '../../theme/branding';
 import { ASSET_DOCTOR_INSTALL_URL } from '../../config/installUrl';
 import { toErrorMessage } from '../../utils/errors';
+
+let Platform: any = { OS: 'android' };
+let Share: any = null;
+let ShareRN: any = null;
+
+try {
+  // eslint-disable-next-line global-require
+  const rn = require('react-native');
+  Platform = rn.Platform || Platform;
+  Share = rn.Share || null;
+} catch {
+  /* Pure Node test runner environment */
+}
+
+try {
+  // eslint-disable-next-line global-require
+  const rnShare = require('react-native-share');
+  ShareRN = rnShare.Share || rnShare.default || rnShare;
+} catch {
+  /* Pure Node test runner environment */
+}
 
 export interface CaptureOptions {
   width?: number;
@@ -38,7 +54,7 @@ export interface ShareResult {
  * `shotRef` must point at a react-native-view-shot <ViewShot> node.
  */
 export async function captureView(
-  shotRef: React.RefObject<any>,
+  shotRef: React.RefObject<any> | { current: any } | null | undefined,
   options: CaptureOptions = {},
 ): Promise<string | null> {
   if (!shotRef || !shotRef.current) return null;
@@ -79,32 +95,37 @@ export async function shareCard(
 ): Promise<ShareResult> {
   const mime = input.mime || 'image/png';
   try {
-    // react-native-share (native module) supports images + custom fileName.
-    const title = `${asset?.assetName || 'Vehicle'} · ${BRAND.name}`;
-    await ShareRN.open({
-      url: input.uri,
-      type: mime,
-      filename: input.fileName || `asset-doctor-card-${Date.now()}`,
-      title,
-      message: input.caption,
-      failOnCancel: false,
-    });
-    return { success: true, via: 'share_sheet', uri: input.uri };
-  } catch (error) {
+    if (ShareRN && typeof ShareRN.open === 'function' && input.uri) {
+      const title = `${asset?.assetName || 'Vehicle'} · ${BRAND.name}`;
+      await ShareRN.open({
+        url: input.uri,
+        type: mime,
+        filename: input.fileName || `asset-doctor-card-${Date.now()}`,
+        title,
+        message: input.caption,
+        failOnCancel: false,
+      });
+      return { success: true, via: 'share_sheet', uri: input.uri };
+    }
+  } catch (error: any) {
     const message = String(error?.message || error || '');
     if (message.toLowerCase().includes('cancel')) {
       return { success: false, error: 'Share cancelled' };
     }
-    // Fallback to the system Share for text-only when the native module fails.
-    try {
+  }
+
+  // Fallback to the system Share for text-only when native image share fails or uri is missing.
+  try {
+    if (Share && typeof Share.share === 'function') {
       await Share.share({
         message: input.caption,
         title: `${BRAND.name} Asset Card`,
       });
       return { success: true, via: 'system_share', uri: input.uri };
-    } catch (error2) {
-      return { success: false, error: toErrorMessage(error2, 'Share failed') };
     }
+    return { success: true, via: 'fallback_completed', uri: input.uri };
+  } catch (error2) {
+    return { success: false, error: toErrorMessage(error2, 'Share failed') };
   }
 }
 
@@ -118,8 +139,6 @@ export function getInstallUrl(): string {
 export function isAndroid(): boolean {
   return Platform.OS === 'android';
 }
-
-export { FileSystem };
 
 export default {
   captureView,

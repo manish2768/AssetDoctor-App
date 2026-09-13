@@ -35,17 +35,18 @@ import {
 } from '../../services/ocr/ocrDiagnosticService';
 
 const DOC_TYPES = [
-  { id: 'SERVICE_BILL', label: 'Service Bill' },
-  { id: 'INSURANCE', label: 'Insurance' },
+  { id: 'INSURANCE', label: 'Insurance Policy' },
   { id: 'VEHICLE_INVOICE', label: 'Vehicle Invoice' },
-  { id: 'REGISTRATION_RC', label: 'RC / Plate' },
-  { id: 'WARRANTY', label: 'Warranty' },
-  { id: 'OTHER', label: 'Other' },
+  { id: 'PUC', label: 'PUC Certificate' },
+  { id: 'TAX_INVOICE', label: 'Retail Invoice' },
+  { id: 'WARRANTY', label: 'Warranty Card' },
+  { id: 'SERVICE_BILL', label: 'Service Bill' },
+  { id: 'OTHER', label: 'Unknown Doc' },
 ];
 
 export function OcrDiagnosticScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const [selectedType, setSelectedType] = useState('SERVICE_BILL');
+  const [selectedType, setSelectedType] = useState('INSURANCE');
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState('');
   const [diagnosticData, setDiagnosticData] = useState(null);
@@ -291,7 +292,7 @@ export function OcrDiagnosticScreen({ navigation }) {
                 style={[styles.tabItem, activeTab === 'pipeline' && styles.tabItemActive]}
               >
                 <Text style={[styles.tabText, activeTab === 'pipeline' && styles.tabTextActive]}>
-                  7-Stage Pipeline
+                  8-Stage Pipeline
                 </Text>
               </Pressable>
               <Pressable
@@ -333,11 +334,11 @@ export function OcrDiagnosticScreen({ navigation }) {
             {/* TAB 1: 7-STAGE PIPELINE TRACE */}
             {activeTab === 'pipeline' && (
               <View style={styles.tabContent}>
-                {/* STEP 1: IMAGE */}
+                {/* STEP 1: IMAGE PREPROCESSING */}
                 <GlassCard style={styles.stageCard}>
                   <View style={styles.stageHeader}>
                     <Text style={styles.stageNumber}>STEP 1</Text>
-                    <Text style={styles.stageTitle}>IMAGE PREVIEW & INPUT</Text>
+                    <Text style={styles.stageTitle}>IMAGE PREPROCESSING & INPUT</Text>
                   </View>
                   {diagnosticData.imageMeta?.uri ? (
                     <Image
@@ -374,22 +375,66 @@ export function OcrDiagnosticScreen({ navigation }) {
                   </Pressable>
                 </GlassCard>
 
-                {/* STEP 3: EXTRACTED FIELDS */}
+                {/* STEP 3: DOCUMENT CLASSIFICATION */}
                 <GlassCard style={styles.stageCard}>
                   <View style={styles.stageHeader}>
                     <Text style={styles.stageNumber}>STEP 3</Text>
-                    <Text style={styles.stageTitle}>EXTRACTED FIELDS</Text>
+                    <Text style={styles.stageTitle}>DOCUMENT CLASSIFICATION</Text>
                   </View>
-                  <View style={styles.fieldGrid}>
+                  <View style={styles.classificationBox}>
+                    <View style={styles.classBadge}>
+                      <Text style={styles.classBadgeText}>
+                        {diagnosticData.classification?.documentType || 'UNKNOWN'}
+                      </Text>
+                    </View>
+                    <Text style={styles.classMeta}>
+                      Category: <Text style={{ color: COLORS.emerald, fontWeight: '700' }}>{diagnosticData.classification?.category || 'GENERAL'}</Text> • Confidence: <Text style={{ color: COLORS.emerald, fontWeight: '700' }}>{Math.round((diagnosticData.classification?.confidence || 0) * 100)}%</Text>
+                    </Text>
+                    {diagnosticData.classification?.signals && diagnosticData.classification.signals.length > 0 ? (
+                      <View style={{ marginTop: 8 }}>
+                        <Text style={styles.fieldLabel}>Detection Signals:</Text>
+                        {diagnosticData.classification.signals.map((sig, sIdx) => (
+                          <Text key={sIdx} style={styles.signalText}>• {sig}</Text>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+                </GlassCard>
+
+                {/* STEP 4: DOCUMENT-SPECIFIC EXTRACTION */}
+                <GlassCard style={styles.stageCard}>
+                  <View style={styles.stageHeader}>
+                    <Text style={styles.stageNumber}>STEP 4</Text>
+                    <Text style={styles.stageTitle}>DOCUMENT-SPECIFIC EXTRACTION</Text>
+                  </View>
+                  {diagnosticData.extractionAudit && (
+                    <View style={styles.auditBox}>
+                      <Text style={styles.auditTitle}>Extractor Routing Audit:</Text>
+                      {Object.entries(diagnosticData.extractionAudit).map(([extractorName, audit]) => (
+                        <View key={extractorName} style={styles.auditRow}>
+                          <Text style={styles.auditName}>{extractorName}:</Text>
+                          <Text
+                            style={[
+                              styles.auditStatus,
+                              { color: audit.status === 'APPLIED' ? COLORS.emerald : COLORS.textMuted },
+                            ]}
+                          >
+                            {audit.status === 'APPLIED' ? '✅ APPLIED' : `SKIPPED (${audit.reason})`}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                  <View style={[styles.fieldGrid, { marginTop: 12 }]}>
                     <FieldRow label="Registration" value={diagnosticData.finalMapping.registration} />
                     <FieldRow
                       label="Odometer"
                       value={diagnosticData.finalMapping.odometerKm != null ? `${diagnosticData.finalMapping.odometerKm} KM` : null}
                     />
-                    <FieldRow label="Invoice #" value={diagnosticData.finalMapping.invoiceNumber} />
+                    <FieldRow label="Invoice / Policy #" value={diagnosticData.finalMapping.invoiceNumber} />
                     <FieldRow label="Date" value={diagnosticData.finalMapping.purchaseDate} />
-                    <FieldRow label="Workshop / Seller" value={diagnosticData.finalMapping.sellerName} />
-                    <FieldRow label="Customer / Buyer" value={diagnosticData.finalMapping.buyerName} />
+                    <FieldRow label="Seller / Workshop / Insurer" value={diagnosticData.finalMapping.sellerName} />
+                    <FieldRow label="Customer / Buyer / Insured" value={diagnosticData.finalMapping.buyerName} />
                     <FieldRow label="Make / Model" value={diagnosticData.finalMapping.productName} />
                     <FieldRow
                       label="Total Amount"
@@ -398,10 +443,10 @@ export function OcrDiagnosticScreen({ navigation }) {
                   </View>
                 </GlassCard>
 
-                {/* STEP 4: NORMALIZATION */}
+                {/* STEP 5: NORMALIZATION */}
                 <GlassCard style={styles.stageCard}>
                   <View style={styles.stageHeader}>
-                    <Text style={styles.stageNumber}>STEP 4</Text>
+                    <Text style={styles.stageNumber}>STEP 5</Text>
                     <Text style={styles.stageTitle}>NORMALIZATION TRACE (RAW → NORMALIZED)</Text>
                   </View>
                   {diagnosticData.normalizations.length === 0 ? (
@@ -420,58 +465,94 @@ export function OcrDiagnosticScreen({ navigation }) {
                   )}
                 </GlassCard>
 
-                {/* STEP 5: VALIDATION */}
-                <GlassCard style={styles.stageCard}>
-                  <View style={styles.stageHeader}>
-                    <Text style={styles.stageNumber}>STEP 5</Text>
-                    <Text style={styles.stageTitle}>VALIDATION RESULTS</Text>
-                  </View>
-                  {diagnosticData.validations.map((v, idx) => {
-                    const isPass = v.status === 'PASS';
-                    const isFail = v.status === 'FAIL';
-                    return (
-                      <View key={idx} style={styles.valRow}>
-                        <View style={styles.valLeft}>
-                          <Text style={styles.valField}>{v.field}</Text>
-                          <Text style={styles.valValue}>{v.value || '—'}</Text>
-                          <Text style={styles.valMsg}>{v.message}</Text>
-                        </View>
-                        <View
-                          style={[
-                            styles.valBadge,
-                            isPass ? styles.valPass : isFail ? styles.valFail : styles.valWarn,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.valBadgeText,
-                              { color: isPass ? COLORS.emerald : isFail ? '#EF4444' : '#F59E0B' },
-                            ]}
-                          >
-                            {isPass ? '✅ PASS' : isFail ? '❌ FAIL' : '⚠️ WARN'}
-                          </Text>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </GlassCard>
-
-                {/* STEP 6: FINAL REVIEW MAPPING */}
+                {/* STEP 6: ASSET MATCHING (VehicleLinkingEngine) */}
                 <GlassCard style={styles.stageCard}>
                   <View style={styles.stageHeader}>
                     <Text style={styles.stageNumber}>STEP 6</Text>
-                    <Text style={styles.stageTitle}>FINAL MAPPING TO REVIEW SCREEN</Text>
+                    <Text style={styles.stageTitle}>ASSET MATCHING (VehicleLinkingEngine)</Text>
                   </View>
-                  <Text style={styles.jsonText}>
-                    {JSON.stringify(diagnosticData.finalMapping, null, 2)}
-                  </Text>
+                  <View style={styles.linkingBox}>
+                    <View style={styles.linkHeader}>
+                      <Text style={styles.linkLabel}>Resolution Status:</Text>
+                      <View
+                        style={[
+                          styles.valBadge,
+                          diagnosticData.assetMatching?.action === 'AUTO_LINK'
+                            ? styles.valPass
+                            : diagnosticData.assetMatching?.action === 'PROMPT_USER'
+                            ? styles.valWarn
+                            : styles.valPass,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.valBadgeText,
+                            {
+                              color:
+                                diagnosticData.assetMatching?.action === 'AUTO_LINK'
+                                  ? COLORS.emerald
+                                  : diagnosticData.assetMatching?.action === 'PROMPT_USER'
+                                  ? '#F59E0B'
+                                  : COLORS.emerald,
+                            },
+                          ]}
+                        >
+                          {diagnosticData.assetMatching?.action || 'CREATE_NEW_ASSET'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.linkReason}>
+                      Reason: {diagnosticData.assetMatching?.reason || 'No existing duplicate or conflicting vehicle found'}
+                    </Text>
+                    {diagnosticData.assetMatching?.linkedAsset && (
+                      <Text style={styles.linkMatchedAsset}>
+                        Matched Asset: {diagnosticData.assetMatching.linkedAsset.assetName || diagnosticData.assetMatching.linkedAsset.name} ({diagnosticData.assetMatching.linkedAsset.registrationNumber})
+                      </Text>
+                    )}
+                  </View>
                 </GlassCard>
 
-                {/* STEP 7: PERSISTENCE CHECK */}
+                {/* STEP 7: REVIEW MODEL & DEDICATED ROUTE LAUNCH */}
                 <GlassCard style={styles.stageCard}>
                   <View style={styles.stageHeader}>
                     <Text style={styles.stageNumber}>STEP 7</Text>
-                    <Text style={styles.stageTitle}>PERSISTENCE STATUS</Text>
+                    <Text style={styles.stageTitle}>REVIEW MODEL & DEDICATED ROUTING</Text>
+                  </View>
+                  <View style={styles.routeHeader}>
+                    <Text style={styles.routeTargetLabel}>Target Review Screen:</Text>
+                    <Text style={styles.routeTargetValue}>
+                      {diagnosticData.dedicatedRoute || 'ReviewAsset'}
+                    </Text>
+                  </View>
+
+                  <GlassButton
+                    title={`🚀 Open Dedicated Screen (${diagnosticData.dedicatedRoute || 'ReviewAsset'})`}
+                    onPress={() => {
+                      Haptics.tap();
+                      const targetRoute = diagnosticData.dedicatedRoute || 'ReviewAsset';
+                      const navParams = {
+                        reviewData: diagnosticData.reviewModel,
+                        rawOcrText: diagnosticData.rawOcrText,
+                        extractedFields: diagnosticData.extractedFields,
+                        isFromDiagnostic: true,
+                        ...(diagnosticData.imageMeta?.uri ? { imageUri: diagnosticData.imageMeta.uri } : {}),
+                      };
+                      navigation?.navigate?.(targetRoute, navParams);
+                    }}
+                    style={{ marginVertical: 12 }}
+                  />
+
+                  <Text style={styles.jsonLabel}>Payload Passed to Review Screen:</Text>
+                  <Text style={styles.jsonText}>
+                    {JSON.stringify(diagnosticData.reviewModel || diagnosticData.finalMapping, null, 2)}
+                  </Text>
+                </GlassCard>
+
+                {/* STEP 8: PERSISTENCE STATUS */}
+                <GlassCard style={styles.stageCard}>
+                  <View style={styles.stageHeader}>
+                    <Text style={styles.stageNumber}>STEP 8</Text>
+                    <Text style={styles.stageTitle}>PERSISTENCE STATUS & VAULT READINESS</Text>
                   </View>
                   <View style={styles.persistRow}>
                     <Text style={styles.persistLabel}>Can Save Directly:</Text>
@@ -487,6 +568,11 @@ export function OcrDiagnosticScreen({ navigation }) {
                   <Text style={styles.persistSub}>
                     Saved Keys: {diagnosticData.persistenceCheck.savedFields.join(', ')}
                   </Text>
+                  {diagnosticData.persistenceCheck.targetCollections && (
+                    <Text style={[styles.persistSub, { marginTop: 2 }]}>
+                      Collections: {diagnosticData.persistenceCheck.targetCollections.join(' & ')}
+                    </Text>
+                  )}
                 </GlassCard>
               </View>
             )}
@@ -920,6 +1006,52 @@ const styles = StyleSheet.create({
   insField: { color: COLORS.emerald, fontSize: 11, fontWeight: '800' },
   insRaw: { color: COLORS.textMuted, fontSize: 11, marginTop: 1 },
   insFinal: { color: COLORS.text, fontSize: 12, fontWeight: '700' },
+  classificationBox: {
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 8,
+    padding: 12,
+  },
+  classBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#05966933',
+    borderColor: COLORS.emerald,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginBottom: 6,
+  },
+  classBadgeText: { color: COLORS.emerald, fontSize: 12, fontWeight: '800' },
+  classMeta: { color: COLORS.textMuted, fontSize: 11 },
+  signalText: { color: COLORS.textMuted, fontSize: 11, marginTop: 2 },
+  auditBox: {
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 8,
+  },
+  auditTitle: { color: COLORS.text, fontSize: 11, fontWeight: '800', marginBottom: 6 },
+  auditRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 },
+  auditName: { color: COLORS.textMuted, fontSize: 11 },
+  auditStatus: { fontSize: 11, fontWeight: '700', flexShrink: 1, textAlign: 'right' },
+  linkingBox: {
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 8,
+    padding: 12,
+  },
+  linkHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  linkLabel: { color: COLORS.textMuted, fontSize: 12, fontWeight: '700' },
+  linkReason: { color: COLORS.textMuted, fontSize: 11, marginTop: 6 },
+  linkMatchedAsset: { color: COLORS.emerald, fontSize: 12, fontWeight: '700', marginTop: 4 },
+  routeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  routeTargetLabel: { color: COLORS.textMuted, fontSize: 12 },
+  routeTargetValue: { color: COLORS.emerald, fontSize: 13, fontWeight: '800' },
+  jsonLabel: { color: COLORS.textMuted, fontSize: 11, fontWeight: '700', marginBottom: 4 },
   bhRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -16,21 +16,10 @@ export const PURCHASE_CATEGORIES = Object.freeze({
 export function emptyInvoiceData() {
   return {
     shopName: '',
-    shopPhone: '',
-    shopAddress: '',
-    shopGstin: '',
     customerName: '',
-    customerPhone: '',
-    customerAddress: '',
     invoiceNumber: '',
     invoiceDate: null,
     totalAmount: null,
-    taxAmount: null,
-    cgst: null,
-    sgst: null,
-    igst: null,
-    subtotal: null,
-    paymentMode: '',
     productName: '',
     serialNumber: '',
     imei: '',
@@ -55,10 +44,8 @@ export function emptyInvoiceData() {
     geminiCategory: '',
     ocrExtract: null,
     billThumbDataUrl: null,
-    /** Line items from multi-product invoices */
     items: [],
     itemCount: 0,
-    itemsSubtotal: null,
   };
 }
 
@@ -172,21 +159,10 @@ export function invoiceToAssetForm(invoice = {}, extras = {}) {
     requiresVehicleLink: Boolean(invoice.requiresVehicleLink) || isAttachDoc,
     invoiceMeta: {
       shopName: invoice.shopName || '',
-      shopPhone: invoice.shopPhone || '',
-      shopAddress: invoice.shopAddress || '',
-      shopGstin: invoice.shopGstin || '',
       customerName: invoice.customerName || '',
-      customerPhone: invoice.customerPhone || '',
-      customerAddress: invoice.customerAddress || '',
       invoiceNumber: invoice.invoiceNumber || '',
       invoiceDate: invoice.invoiceDate || null,
       totalAmount: invoice.totalAmount,
-      taxAmount: invoice.taxAmount,
-      cgst: invoice.cgst,
-      sgst: invoice.sgst,
-      igst: invoice.igst,
-      subtotal: invoice.subtotal,
-      paymentMode: invoice.paymentMode || '',
       warrantyPeriodMonths: invoice.warrantyPeriodMonths,
       warrantyExpiry: invoice.warrantyExpiry || null,
       warrantyStart: invoice.warrantyStart || null,
@@ -201,12 +177,14 @@ export function invoiceToAssetForm(invoice = {}, extras = {}) {
       chassisNumber: invoice.chassisNumber || '',
       engineNumber: invoice.engineNumber || '',
       itemCount: invoice.itemCount || (invoice.items || []).length,
-      itemsSubtotal: invoice.itemsSubtotal,
       items: invoice.items || [],
       lineItem: selectedItem || null,
       imei,
       serialNumber,
-      sweetBillAudit: extras.audit || null,
+      // Preserve legacy metadata if present on existing records
+      ...(invoice.shopGstin ? { shopGstin: invoice.shopGstin } : {}),
+      ...(invoice.shopAddress ? { shopAddress: invoice.shopAddress } : {}),
+      ...(invoice.customerPhone ? { customerPhone: invoice.customerPhone } : {}),
     },
   };
 }

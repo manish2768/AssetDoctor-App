@@ -95,6 +95,13 @@ export function formatRegistrationDisplay(registration) {
   return [m[1], m[2], m[3], m[4]].filter(Boolean).join(' ');
 }
 
+export function maskImeiDisplay(imeiOrSerial) {
+  const raw = String(imeiOrSerial || '').replace(/[^A-Za-z0-9]/g, '');
+  if (!raw) return '';
+  if (raw.length <= 4) return raw;
+  return `•••• ${raw.slice(-4)}`;
+}
+
 export { resolveAssetDisplayTitle };
 
-export default { cleanAssetDisplayName, formatRegistrationDisplay, resolveAssetDisplayTitle };
+export default { cleanAssetDisplayName, formatRegistrationDisplay, maskImeiDisplay, resolveAssetDisplayTitle };

@@ -76,6 +76,14 @@ const INTELLIGENCE_NAV = [
     route: 'Home',
     params: { screen: 'EnergyOverview' },
   },
+  {
+    id: 'family_vault',
+    label: 'Family Asset Vault',
+    subtitle: 'Collaborate & protect assets together',
+    icon: 'user',
+    route: 'Home',
+    params: { screen: 'FamilyVault' },
+  },
 ];
 
 const TOOLS_NAV = [
@@ -87,48 +95,13 @@ const TOOLS_NAV = [
     route: 'Home',
     params: { screen: 'GlobalSearch' },
   },
-];
-
-const ACCOUNT_NAV = [
   {
-    id: 'profile',
-    label: 'Profile',
-    subtitle: 'Your details & preferences',
-    icon: 'user',
-    route: 'Profile',
-    params: { screen: 'ProfileHome' },
-  },
-  {
-    id: 'privacy_security',
-    label: 'Privacy & Security',
-    subtitle: 'Biometric lock & encrypted storage',
-    icon: 'lock',
-    route: 'Profile',
-    params: { screen: 'PrivacySecurity' },
-  },
-  {
-    id: 'settings',
-    label: 'Settings',
-    subtitle: 'Notifications, currency, theme & sound',
-    icon: 'settings',
-    route: 'Profile',
-    params: { screen: 'SettingsHome' },
-  },
-  {
-    id: 'about',
-    label: 'About',
-    subtitle: 'Version, credits & licenses',
-    icon: 'shield-check',
-    route: 'Profile',
-    params: { screen: 'About' },
-  },
-  {
-    id: 'support',
-    label: 'Support',
-    subtitle: 'Contact, report issue & feedback',
-    icon: 'message',
-    route: 'Profile',
-    params: { screen: 'ContactUs' },
+    id: 'ocr_test_lab',
+    label: 'OCR Test Lab',
+    subtitle: '8-stage pipeline inspection & test fixtures',
+    icon: 'wrench',
+    route: 'Home',
+    params: { screen: 'OcrTest' },
   },
 ];
 
@@ -343,24 +316,6 @@ export function AssetDrawer() {
               defaultExpanded={false}
             >
               {TOOLS_NAV.map((item) => (
-                <DrawerItem
-                  key={item.id}
-                  icon={item.icon}
-                  label={item.label}
-                  subtitle={item.subtitle}
-                  badge={item.badge}
-                  onPress={() => handleNavigate(item)}
-                />
-              ))}
-            </DrawerSection>
-
-            {/* 5. Account */}
-            <DrawerSection
-              title="Account"
-              isCollapsible={true}
-              defaultExpanded={false}
-            >
-              {ACCOUNT_NAV.map((item) => (
                 <DrawerItem
                   key={item.id}
                   icon={item.icon}

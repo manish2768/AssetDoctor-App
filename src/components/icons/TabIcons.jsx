@@ -115,12 +115,25 @@ export function IconProfile({ color = '#64748B', solid = false }) {
   );
 }
 
+export function IconScan({ color = '#FFFFFF', size = 24 }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M3 7V5a2 2 0 0 1 2-2h2" />
+      <Path d="M17 3h2a2 2 0 0 1 2 2v2" />
+      <Path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+      <Path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+      <Line x1="6" y1="12" x2="18" y2="12" />
+    </Svg>
+  );
+}
+
 export const TAB_ICON_SIZE = SIZE;
 export const TAB_ICON_STROKE = STROKE;
 
 export default {
   IconHome,
   IconAssets,
+  IconScan,
   IconVault,
   IconEnergy,
   IconSettings,
@@ -129,3 +142,4 @@ export default {
   IconAlerts,
   IconProfile,
 };
+

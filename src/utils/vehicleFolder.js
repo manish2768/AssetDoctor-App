@@ -61,15 +61,27 @@ export function findAssetByEngine(assets = [], engine) {
  * Docs that belong on a vehicle passport — never create a standalone "Other" asset.
  */
 export function isVehicleAttachDocument(formOrType = {}) {
+  if (!formOrType) return false;
+  if (typeof formOrType === 'object' && (formOrType.isAttachDoc || formOrType.requiresVehicleLink)) {
+    return true;
+  }
   const t = String(
     typeof formOrType === 'string'
       ? formOrType
       : formOrType.scanDocumentType ||
           formOrType.documentType ||
+          formOrType.classifiedDocumentType ||
           formOrType.documentKind ||
           '',
   ).toLowerCase();
-  return ['insurance', 'puc', 'rc', 'warranty'].includes(t);
+  return (
+    ['insurance', 'puc', 'rc', 'warranty', 'vehicle_service', 'service'].includes(t) ||
+    t.includes('insurance') ||
+    t.includes('puc') ||
+    t.includes('rc') ||
+    t.includes('warranty') ||
+    t.includes('service')
+  );
 }
 
 /**

@@ -93,19 +93,40 @@ export function hardenOcrUnderstanding(input: HardenInput = {}) {
   });
 
   const flat = { ...learned.flatFields };
-  if (documentType === 'SERVICE_INVOICE' || documentType === 'RC' || documentType === 'PUC' || documentType === 'INSURANCE_POLICY') {
+  if (documentType === 'SERVICE_INVOICE' || documentType === 'RC' || documentType === 'PUC') {
     for (const leak of ['imei', 'imei1', 'imei2', 'serialNumber', 'policyNumber', 'idvAmount', 'premiumAmount', 'coverageType']) {
       if (!isEmpty(flat[leak])) flat[leak] = null;
     }
   }
   if (documentType === 'INSURANCE_POLICY') {
-    for (const leak of ['odometerKm', 'labourCharges', 'nextServiceDue', 'nextServiceOdometerKm', 'engineNumber', 'chassisNumber']) {
+    for (const leak of ['imei', 'imei1', 'imei2', 'odometerKm', 'labourCharges', 'nextServiceDue', 'nextServiceOdometerKm']) {
       if (!isEmpty(flat[leak])) flat[leak] = null;
     }
   }
-  if (documentType === 'PURCHASE_INVOICE' || documentType === 'ELECTRONICS_INVOICE' || documentType === 'APPLIANCE_INVOICE' || documentType === 'WARRANTY' || documentType === 'PUC') {
-    for (const leak of ['engineNumber', 'chassisNumber', 'odometerKm', 'jobCardNumber']) {
+  if (documentType === 'ELECTRONICS_INVOICE' || documentType === 'APPLIANCE_INVOICE') {
+    for (const leak of ['engineNumber', 'chassisNumber', 'odometerKm', 'jobCardNumber', 'policyNumber', 'idvAmount']) {
       if (!isEmpty(flat[leak])) flat[leak] = null;
+    }
+  }
+  if (documentType === 'PURCHASE_INVOICE') {
+    for (const leak of ['odometerKm', 'jobCardNumber']) {
+      if (!isEmpty(flat[leak])) flat[leak] = null;
+    }
+  }
+
+  // Cross-field guard: Odometer must never equal invoice grand total
+  if (documentType === 'SERVICE_INVOICE' && input.rawText) {
+    const rawOdo = flat.odometerKm != null ? Number(String(flat.odometerKm).replace(/[^0-9.]/g, '')) : null;
+    const totalMatch = input.rawText.match(/(?:Grand\s*Total|Total\s*Amount)[:\s\-]*[₹Rs\s]*([0-9,]+)/i);
+    const textTotal = totalMatch ? Number(totalMatch[1].replace(/,/g, '')) : null;
+    if (rawOdo != null && textTotal != null && Math.abs(rawOdo - textTotal) < 1) {
+      // Veto poisoned odometer and find real odometer from text
+      const realOdoMatch = input.rawText.match(/(?:Odometer|Current\s*KM|Meter\s*Reading)[:\s\-]*([0-9,]+)\s*(?:KM)?/i);
+      if (realOdoMatch) {
+        flat.odometerKm = Number(realOdoMatch[1].replace(/,/g, ''));
+      } else {
+        flat.odometerKm = null;
+      }
     }
   }
   const relational = evaluateRelationalValidation(documentType, flat);

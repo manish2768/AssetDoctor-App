@@ -18,6 +18,7 @@ import {
 import { RootErrorBoundary } from './src/components/RootErrorBoundary';
 import { AuthProvider } from './src/context/AuthProvider';
 import { AssetProvider } from './src/context/AssetProvider';
+import { FamilyVaultProvider } from './src/context/FamilyVaultContext';
 import { AppLockProvider } from './src/context/AppLockProvider';
 import { ThemeProvider } from './src/context/ThemeProvider';
 import { UiFeedbackProvider } from './src/context/UiFeedbackProvider';
@@ -142,13 +143,15 @@ export default function App() {
               <AppLockProvider>
                 <AuthProvider>
                   <AssetProvider>
-                    <DrawerProvider>
-                      <RootErrorBoundary onRestart={() => setBootKey((k) => k + 1)}>
-                        <RootNavigator />
-                        <ProfileSetupModal />
-                        <AssetDrawer />
-                      </RootErrorBoundary>
-                    </DrawerProvider>
+                    <FamilyVaultProvider>
+                      <DrawerProvider>
+                        <RootErrorBoundary onRestart={() => setBootKey((k) => k + 1)}>
+                          <RootNavigator />
+                          <ProfileSetupModal />
+                          <AssetDrawer />
+                        </RootErrorBoundary>
+                      </DrawerProvider>
+                    </FamilyVaultProvider>
                   </AssetProvider>
                 </AuthProvider>
               </AppLockProvider>

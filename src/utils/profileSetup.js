@@ -4,24 +4,23 @@
  */
 
 import { DEFAULT_DISPLAY_NAME } from '../services/constants';
+import {
+  normalizePhone,
+  normalizeE164Phone,
+  normalizeWhatsAppPhone,
+  isValidPhoneNumber as hasValidPhone,
+  toWhatsAppDigits,
+  formatDisplayPhone
+} from './phoneUtils';
 
-export function normalizePhone(value) {
-  const trimmed = String(value || '').replace(/[\s-]/g, '');
-  if (!trimmed) return '';
-  if (trimmed.startsWith('+')) return trimmed;
-  if (/^\d{10}$/.test(trimmed)) return `+91${trimmed}`;
-  if (trimmed.startsWith('91') && trimmed.length === 12) return `+${trimmed}`;
-  return trimmed;
-}
-
-/** @deprecated alias — use normalizePhone */
-export const normalizeWhatsAppPhone = normalizePhone;
-
-export function hasValidPhone(profile) {
-  const raw = profile?.phoneNumber || profile?.phone || '';
-  const e164 = normalizePhone(raw);
-  return /^\+[1-9]\d{9,14}$/.test(e164);
-}
+export {
+  normalizePhone,
+  normalizeE164Phone,
+  normalizeWhatsAppPhone,
+  hasValidPhone,
+  toWhatsAppDigits,
+  formatDisplayPhone
+};
 
 /** @deprecated alias — use hasValidPhone */
 export const hasValidWhatsAppPhone = hasValidPhone;
@@ -34,20 +33,25 @@ function hasRealName(profile, user) {
   return true;
 }
 
+import { computeProfileCompletion, needsProfileOnboarding, resolveProfileCompletion } from './profileCompletion';
+
 /**
- * Forced "Complete your profile" is DISABLED.
- * Google / email users go straight to Home; phone link is optional in Settings.
- * @param {object | null} _profile
- * @param {import('@react-native-firebase/auth').FirebaseAuthTypes.User | null} _user
+ * Profile setup gate:
+ * User needs profile setup if mandatory fields (Full Name, PIN Code, City, State) are not complete.
+ * @param {object | null} profile
+ * @param {import('@react-native-firebase/auth').FirebaseAuthTypes.User | null} user
  */
-export function needsProfileSetup(_profile, _user) {
-  return false;
+export function needsProfileSetup(profile, user) {
+  if (!user && !profile) return false;
+  return needsProfileOnboarding({ user, profile });
 }
 
-export { hasRealName };
+export { hasRealName, needsProfileOnboarding, resolveProfileCompletion };
 
 export default {
   needsProfileSetup,
+  needsProfileOnboarding,
+  resolveProfileCompletion,
   hasValidPhone,
   hasValidWhatsAppPhone,
   normalizePhone,

@@ -1,12 +1,12 @@
-﻿/**
+/**
  * Resize / compress bill photos before OCR / Gemini to avoid OOM crashes.
  * Soft-loads expo-image-manipulator — never throws at import or call time.
  */
 
 import { getImageManipulator } from './safeNativeModules';
 
-export const SCAN_IMAGE_MAX_WIDTH = 1400;
-export const SCAN_IMAGE_COMPRESS = 0.7;
+export const SCAN_IMAGE_MAX_WIDTH = 2400;
+export const SCAN_IMAGE_COMPRESS = 0.92;
 
 /**
  * @param {string} uri

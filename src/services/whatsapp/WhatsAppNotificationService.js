@@ -30,14 +30,14 @@ const memoryOtp = new Map();
 const memoryPrefs = new Map();
 
 /**
- * Approved Meta Template Names in WABA (2938269399848544)
+ * Approved Meta Template Names in WABA (2519296845235500)
  */
 export const APPROVED_META_TEMPLATES = Object.freeze({
   WELCOME_MESSAGE: {
-    name: 'welcome_message',
+    name: 'asset_doctor_welcome',
     language: 'en',
     category: 'MARKETING',
-    paramCount: 1, // {{1}} = User Name
+    paramCount: 1, // customer_name
   },
   WELCOME_BOT: {
     name: 'welcome_gadi_doctor_bot_sznk2',

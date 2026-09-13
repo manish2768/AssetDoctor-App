@@ -14,6 +14,12 @@ import { formatDateIN } from '../../utils/dates';
 import { calculateHealthScore } from '../../utils/healthScore';
 import { calculateResaleValue } from '../../utils/resaleCalculator';
 import { getAssetFolderType } from '../../utils/assetFolders';
+import {
+  buildWhatsAppLink,
+  isValidPhoneNumber,
+  normalizePhone,
+  toWhatsAppDigits
+} from '../../utils/phoneUtils';
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -255,21 +261,44 @@ export class ShareService {
   static async shareViaWhatsApp({ phone, message }) {
     Haptics.tap();
     try {
-      const text = encodeURIComponent(message || '');
-      const digits = String(phone || '').replace(/\D/g, '');
-      const url = digits
-        ? `whatsapp://send?phone=${digits}&text=${text}`
-        : `whatsapp://send?text=${text}`;
-
-      const can = await Linking.canOpenURL(url);
-      if (!can) {
-        await Share.share({ message: message || '' });
-        Haptics.success();
-        return { success: true, via: 'system_share' };
+      if (phone && !isValidPhoneNumber(phone)) {
+        Haptics.error();
+        return {
+          success: false,
+          error: `Invalid phone number (${phone}). Please provide a valid 10-digit Indian or international number.`,
+        };
       }
-      await Linking.openURL(url);
+
+      const { appUrl, webUrl, hasPhone } = buildWhatsAppLink({ phone, message });
+
+      // 1. Try native app scheme first
+      try {
+        const can = await Linking.canOpenURL(appUrl);
+        if (can) {
+          await Linking.openURL(appUrl);
+          Haptics.success();
+          return { success: true, via: 'whatsapp' };
+        }
+      } catch {
+        /* proceed to web fallback */
+      }
+
+      // 2. Fall back to https://wa.me/ universal link (works seamlessly on Android/iOS/Web)
+      try {
+        const canWeb = await Linking.canOpenURL(webUrl);
+        if (canWeb) {
+          await Linking.openURL(webUrl);
+          Haptics.success();
+          return { success: true, via: 'wa_web' };
+        }
+      } catch {
+        /* proceed to system share */
+      }
+
+      // 3. Fall back to native system share sheet if WhatsApp is not installed
+      await Share.share({ message: message || '' });
       Haptics.success();
-      return { success: true, via: 'whatsapp' };
+      return { success: true, via: 'system_share' };
     } catch (error) {
       Haptics.error();
       return { success: false, error: error?.message || 'WhatsApp share failed' };

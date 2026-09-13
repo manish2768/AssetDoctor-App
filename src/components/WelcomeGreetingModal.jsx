@@ -46,7 +46,7 @@ function firstName(fullName = '') {
     .trim()
     .split(/\s+/)
     .filter(Boolean);
-  return parts[0] || 'there';
+  return parts[0] || '';
 }
 
 /**
@@ -56,13 +56,13 @@ function firstName(fullName = '') {
  *   onDismiss: () => void,
  * }} props
  */
-export function WelcomeGreetingModal({ visible, displayName = 'Guest', onDismiss }) {
+export function WelcomeGreetingModal({ visible, displayName = '', onDismiss }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.92)).current;
 
   const greetLine = useMemo(() => {
     const first = firstName(displayName);
-    return `${timeGreeting()}, ${first}`;
+    return first ? `${timeGreeting()}, ${first}` : timeGreeting();
   }, [displayName]);
 
   useEffect(() => {
@@ -95,9 +95,11 @@ export function WelcomeGreetingModal({ visible, displayName = 'Guest', onDismiss
           </View>
           <Text style={styles.brand}>{BRAND.name}</Text>
           <Text style={styles.greet}>{greetLine}</Text>
-          <Text style={styles.name} numberOfLines={2}>
-            {String(displayName || 'Guest').trim() || 'Guest'}
-          </Text>
+          {displayName ? (
+            <Text style={styles.name} numberOfLines={2}>
+              {String(displayName).trim()}
+            </Text>
+          ) : null}
           <Text style={styles.sub}>
             Your vault is ready — vehicles, warranties & renewals in one place.
           </Text>

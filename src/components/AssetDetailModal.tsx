@@ -728,7 +728,7 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
                         type="text"
                         value={serviceProvider}
                         onChange={(e) => setServiceProvider(e.target.value)}
-                        placeholder="e.g. Raftaar TVS Motors"
+                        placeholder="e.g. Apex Authorized Service Center"
                         className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-xs focus:border-teal-500 focus:outline-none"
                       />
                     </div>

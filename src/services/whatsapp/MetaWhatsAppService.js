@@ -79,33 +79,22 @@ export function getWhatsAppConfigStatus() {
   };
 }
 
+import {
+  normalizePhone,
+  normalizeE164Phone,
+  toWhatsAppDigits,
+  isValidPhoneNumber,
+} from '../../utils/phoneUtils';
+
 /**
- * Normalizes phone numbers to standard E.164 digits without '+' or spaces.
+ * Normalizes phone numbers to standard E.164 digits without '+' or spaces for Meta API.
  * e.g., "+91 98765 43210" -> "919876543210"
  */
 export function normalizeWhatsAppNumber(phone) {
-  if (!phone) return '';
-  const digits = String(phone).replace(/\D/g, '');
-  // Default to India (+91) if 10 digits provided
-  if (digits.length === 10) {
-    return `91${digits}`;
-  }
-  return digits;
+  return toWhatsAppDigits(phone);
 }
 
-/**
- * Normalizes phone numbers to E.164 format with leading '+'
- * e.g., "9918288299" -> "+919918288299"
- */
-export function normalizeE164Phone(value) {
-  if (!value) return '';
-  const trimmed = String(value).replace(/[^\d+]/g, '');
-  if (!trimmed) return '';
-  if (trimmed.startsWith('+')) return trimmed;
-  if (/^\d{10}$/.test(trimmed)) return `+91${trimmed}`;
-  if (trimmed.startsWith('91') && trimmed.length === 12) return `+${trimmed}`;
-  return `+${trimmed}`;
-}
+export { normalizeE164Phone, normalizePhone, isValidPhoneNumber };
 
 /**
  * Parses and maps Meta Cloud API error responses to clean human-actionable errors.
@@ -444,7 +433,28 @@ export async function sendMetaWhatsAppMessage(options = {}) {
       },
     };
     if (options.components && Array.isArray(options.components) && options.components.length > 0) {
-      payload.template.components = options.components;
+      const templateParamNames = {
+        electricity_bill_due_reminder: ['customer_name', 'billing_month', 'due_date', 'current_bill_amount', 'total_payable_amount'],
+        warranty_expiry_reminder: ['customer_name', 'asset_name', 'warranty_expiry_date'],
+        asset_doctor_puc_expiry: ['customer_name', 'vehicle_name', 'puc_expiry_date'],
+        asset_doctor_insurance_expiry: ['customer_name', 'vehicle_name', 'insurance_expiry_date'],
+        service_due_reminder: ['customer_name', 'asset_name', 'service_due_date'],
+      };
+      const paramNames = templateParamNames[options.template] || [];
+      payload.template.components = options.components.map(c => {
+        if (c.type === 'body' && Array.isArray(c.parameters)) {
+          return {
+            ...c,
+            parameters: c.parameters.map((p, idx) => {
+              if (paramNames[idx] && !p.parameter_name) {
+                return { ...p, parameter_name: paramNames[idx] };
+              }
+              return p;
+            }),
+          };
+        }
+        return c;
+      });
     }
   } else if (options.text) {
     payload.type = 'text';
@@ -498,13 +508,111 @@ export async function sendMetaWhatsAppMessage(options = {}) {
   }
 }
 
+/**
+ * Verifies token validity and identity on Meta Graph API.
+ */
+export async function verifyWhatsAppToken() {
+  const config = getWhatsAppConfig();
+  if (!config.token) {
+    return { success: false, error: 'Missing token', errorCategory: 'MISSING_CREDENTIALS' };
+  }
+  try {
+    const res = await fetch(`${GRAPH_BASE_URL}/${config.apiVersion}/me?fields=id,name`, {
+      headers: { Authorization: `Bearer ${config.token}` },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) {
+      return parseMetaApiError(data, res.status);
+    }
+    return {
+      success: true,
+      id: data.id,
+      name: data.name,
+      apiVersion: config.apiVersion,
+    };
+  } catch (err) {
+    return { success: false, error: err.message, errorCategory: 'NETWORK_ERROR' };
+  }
+}
+
+/**
+ * Retrieves WABA entity details from Meta.
+ */
+export async function getWhatsAppWabaDetails() {
+  const config = getWhatsAppConfig();
+  if (!config.token || !config.businessAccountId) {
+    return { success: false, error: 'Missing token or WABA ID', errorCategory: 'MISSING_CREDENTIALS' };
+  }
+  try {
+    const res = await fetch(`${GRAPH_BASE_URL}/${config.apiVersion}/${config.businessAccountId}?fields=id,name,timezone_id,currency`, {
+      headers: { Authorization: `Bearer ${config.token}` },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) {
+      return parseMetaApiError(data, res.status);
+    }
+    return {
+      success: true,
+      id: data.id,
+      name: data.name,
+      currency: data.currency,
+      timezoneId: data.timezone_id,
+      status: 'CONNECTED',
+    };
+  } catch (err) {
+    return { success: false, error: err.message, errorCategory: 'NETWORK_ERROR' };
+  }
+}
+
+/**
+ * Lists all phone numbers registered under the WABA.
+ */
+export async function getWhatsAppPhoneNumbers() {
+  const config = getWhatsAppConfig();
+  if (!config.token || !config.businessAccountId) {
+    return { success: false, error: 'Missing token or WABA ID', errorCategory: 'MISSING_CREDENTIALS' };
+  }
+  try {
+    const res = await fetch(`${GRAPH_BASE_URL}/${config.apiVersion}/${config.businessAccountId}/phone_numbers?fields=id,display_phone_number,verified_name,code_verification_status,quality_rating,status`, {
+      headers: { Authorization: `Bearer ${config.token}` },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) {
+      return parseMetaApiError(data, res.status);
+    }
+    return {
+      success: true,
+      data: Array.isArray(data?.data) ? data.data : [],
+    };
+  } catch (err) {
+    return { success: false, error: err.message, errorCategory: 'NETWORK_ERROR' };
+  }
+}
+
+/**
+ * Retrieves a single template by name from Meta.
+ */
+export async function getWhatsAppTemplateByName(templateName) {
+  const tplRes = await getWhatsAppTemplates();
+  if (!tplRes.success) return tplRes;
+  const match = tplRes.templates.find((t) => t.name === templateName);
+  if (!match) {
+    return { success: false, error: `Template '${templateName}' not found in WABA`, errorCategory: 'TEMPLATE_NOT_FOUND' };
+  }
+  return { success: true, template: match };
+}
+
 export default {
   getWhatsAppConfig,
   getWhatsAppConfigStatus,
   normalizeWhatsAppNumber,
   registerWhatsAppPhoneNumber,
   getWhatsAppPhoneNumberDetails,
+  getWhatsAppWabaDetails,
+  getWhatsAppPhoneNumbers,
   getWhatsAppTemplates,
+  getWhatsAppTemplateByName,
   sendMetaWhatsAppMessage,
+  verifyWhatsAppToken,
   parseMetaApiError,
 };

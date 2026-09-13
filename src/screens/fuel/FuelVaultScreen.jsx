@@ -1,14 +1,16 @@
 /**
  * Asset Doctor — Fuel Vault Screen
  *
- * Per-asset fuel and mileage history + Monthly Asset Wrap:
- *   - Real-time fuel log list (Users/{uid}/Assets/{aid}/fuelLogs)
- *   - Month selector and per-period FuelSummary (distance, spend, litres, avg
- *     mileage, avg cost/km) computed by the shared summarizeMonthlyFuel engine.
- *   - "+ Log Fuel" quick action.
+ * Authoritative Fuel & Mileage Management Hub:
+ * - Pure selectedVehicleId state isolation (no cross-vehicle pollution)
+ * - Strict isVehicleAsset domain filtering
+ * - Compact View Switcher: [ Monthly View ] [ All History ]
+ * - Canonical computeFuelAnalytics engine for deterministic metrics
+ * - Unified Vehicle Identity & presentation (Car gets car icon, Bike gets bike icon)
+ * - Single Primary Screen Header (no duplicate title or excess blank space)
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -25,13 +27,15 @@ import { useThemeColors } from '../../context/ThemeProvider';
 import { useUiFeedback } from '../../context/UiFeedbackProvider';
 import { Haptics } from '../../services/haptics';
 import { FuelService, getCurrentPeriod } from '../../services/fuel/FuelService';
-import { summarizeMonthlyFuel } from '../../utils/fuelCalculator';
-import { getFuelVehicleType } from '../../utils/fuelCalculator';
+import { computeFuelAnalytics } from '../../services/fuel/fuelMetrics';
+import { isVehicleAsset } from '../../domain/asset/assetGuards';
 import { SPACING, TYPE, RADIUS, HIT } from '../../theme/tokens';
-import { IconButton, PrimaryButton, SecondaryButton, EmptyState } from '../../components/design-system';
+import { IconButton, PrimaryButton, EmptyState } from '../../components/design-system';
 import { PremiumIcon } from '../../design-system/icons';
 import { FuelLogCard } from '../../components/fuel/FuelLogCard';
 import { QuickFuelLogModal } from '../../components/fuel/QuickFuelLogModal';
+import { VehicleSelectCard } from '../../components/fuel/VehicleSelectCard';
+import { getVehiclePresentation } from '../../utils/vehiclePresentation';
 
 function monthLabel(period) {
   if (!period) return '—';
@@ -64,8 +68,6 @@ function FuelMetric({ label, value, subtitle }) {
   );
 }
 
-import { VehicleSelectCard } from '../../components/fuel/VehicleSelectCard';
-
 export function FuelVaultScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
@@ -73,45 +75,66 @@ export function FuelVaultScreen({ route, navigation }) {
   const { user } = useAuth();
   const { assets, getAsset } = useAssets();
 
-  const routeAssetId = route?.params?.assetId;
-  const routeAsset = getAsset?.(routeAssetId);
+  // Hide the native React Navigation header to prevent duplicate titles
+  useLayoutEffect(() => {
+    navigation.setOptions?.({ headerShown: false });
+  }, [navigation]);
 
+  const routeAssetId = route?.params?.assetId;
+
+  // 1. Authoritative Vehicle Asset List (strictly filtered via domain guard)
   const vehicleAssets = useMemo(() => {
-    return (assets || []).filter(
-      (a) => !a.isArchived && !a.deletedAt && (a.category === 'VEHICLE' || String(a.categoryId) === 'vehicles' || a.isVehicleInvoice || a.registrationNumber || a.registration)
-    );
+    return (assets || []).filter((a) => !a.isArchived && !a.deletedAt && isVehicleAsset(a));
   }, [assets]);
 
-  const [selectedAsset, setSelectedAsset] = useState(routeAsset || vehicleAssets[0] || null);
+  // 2. Canonical State: selectedVehicleId only
+  const [selectedVehicleId, setSelectedVehicleId] = useState(() => {
+    if (routeAssetId) return routeAssetId;
+    const first = vehicleAssets[0];
+    return (first && (first.assetId || first.id)) || null;
+  });
 
   useEffect(() => {
-    if (routeAsset) {
-      setSelectedAsset(routeAsset);
-    } else if (vehicleAssets.length > 0 && !selectedAsset) {
-      setSelectedAsset(vehicleAssets[0]);
+    if (routeAssetId) {
+      setSelectedVehicleId(routeAssetId);
+    } else if (vehicleAssets.length > 0 && !selectedVehicleId) {
+      const first = vehicleAssets[0];
+      setSelectedVehicleId((first && (first.assetId || first.id)) || null);
     }
-  }, [routeAsset, vehicleAssets]);
+  }, [routeAssetId, vehicleAssets, selectedVehicleId]);
 
-  const activeAsset = selectedAsset || routeAsset;
-  const assetId = (activeAsset && (activeAsset.assetId || activeAsset.id)) || null;
+  const activeVehicle = useMemo(() => {
+    if (!selectedVehicleId) return null;
+    return vehicleAssets.find((v) => (v.assetId || v.id) === selectedVehicleId) || getAsset?.(selectedVehicleId) || null;
+  }, [selectedVehicleId, vehicleAssets, getAsset]);
 
+  const pres = useMemo(() => getVehiclePresentation(activeVehicle), [activeVehicle]);
+
+  // 3. View Mode: 'MONTHLY' vs 'LIFETIME' (All History)
+  const [viewMode, setViewMode] = useState('MONTHLY');
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState(getCurrentPeriod());
   const [logOpen, setLogOpen] = useState(false);
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
+  // 4. Isolated Fuel Logs Subscription
   useEffect(() => {
     const uid = user?.uid;
-    if (!uid || !assetId) {
+    const vId = selectedVehicleId;
+    if (!uid || !vId) {
+      setLogs([]);
       setLoading(false);
       return undefined;
     }
     setLoading(true);
     const unsub = FuelService.subscribeFuelLogs(
       uid,
-      assetId,
+      vId,
       (next) => {
-        setLogs(next || []);
+        // Enforce strict assetId match
+        const filtered = (next || []).filter((l) => l && l.assetId === vId);
+        setLogs(filtered);
         setLoading(false);
       },
       () => setLoading(false),
@@ -123,14 +146,17 @@ export function FuelVaultScreen({ route, navigation }) {
         /* ignore */
       }
     };
-  }, [user?.uid, assetId]);
+  }, [user?.uid, selectedVehicleId, refreshNonce]);
 
-  const summary = useMemo(
-    () => summarizeMonthlyFuel(period, assetId || '', logs),
-    [period, assetId, logs],
-  );
-
-  const vehicleType = useMemo(() => getFuelVehicleType(asset || {}), [asset]);
+  // 5. Compute Unified Analytics & Filtered Dataset
+  const analytics = useMemo(() => {
+    return computeFuelAnalytics({
+      asset: activeVehicle || {},
+      logs,
+      mode: viewMode,
+      month: period,
+    });
+  }, [activeVehicle, logs, viewMode, period]);
 
   const onLogFuel = () => {
     if (!user?.uid) {
@@ -148,7 +174,7 @@ export function FuelVaultScreen({ route, navigation }) {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      {/* Header */}
+      {/* 1. Single Primary Screen Header */}
       <View style={[styles.headerWrap, { paddingTop: Math.max(insets.top, 8) }]}>
         <IconButton
           icon={<PremiumIcon name="arrow-left" size={18} color={colors.text} />}
@@ -157,12 +183,9 @@ export function FuelVaultScreen({ route, navigation }) {
           variant="surface"
           size={44}
         />
-        <View style={{ flex: 1, marginHorizontal: 8 }}>
+        <View style={{ flex: 1, marginHorizontal: 12 }}>
           <Text style={[TYPE.h2, { color: colors.text }]} numberOfLines={1}>
             Fuel & Mileage
-          </Text>
-          <Text style={[TYPE.caption, { color: colors.textMuted }]} numberOfLines={1}>
-            {asset?.assetName || 'Vehicle passport'}
           </Text>
         </View>
         <IconButton
@@ -181,131 +204,235 @@ export function FuelVaultScreen({ route, navigation }) {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <VehicleSelectCard
-          vehicleAssets={vehicleAssets}
-          selectedAssetId={assetId}
-          onSelectAsset={(v) => setSelectedAsset(v)}
-        />
-        {/* Summary card */}
-        <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.summaryHeader}>
-            <Text style={[TYPE.label, { color: colors.textMuted }]}>MONTHLY ASSET WRAP</Text>
-            <Text style={[TYPE.caption, { color: colors.textMuted }]}>{monthLabel(period)}</Text>
+        {/* 2. Vehicle Identity Card */}
+        <View style={[styles.vehicleIdentityCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.vehicleCardTop}>
+            <View style={[styles.vehicleIconBadge, { backgroundColor: colors.accentLight || 'rgba(16,185,129,0.12)' }]}>
+              <PremiumIcon name={pres.icon} size={24} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={[TYPE.h3, { color: colors.text }]} numberOfLines={1}>
+                {pres.displayName}
+              </Text>
+              <View style={styles.vehicleSubRow}>
+                <Text style={[TYPE.micro, { color: colors.primary, fontWeight: '700' }]}>
+                  {pres.registration || 'NO REGISTRATION'}
+                </Text>
+                <Text style={[TYPE.caption, { color: colors.textMuted }]}>
+                  • {pres.vehicleType}
+                </Text>
+              </View>
+            </View>
+            <IconButton
+              icon={<PremiumIcon name="plus" size={16} color={colors.primary} />}
+              label="Add Fuel"
+              onPress={onLogFuel}
+              variant="accent"
+              size={38}
+            />
           </View>
 
-          <View style={styles.summaryGrid}>
-            <FuelMetric label="Distance" value={summary.totalDistanceKm > 0 ? `${summary.totalDistanceKm} km` : '—'} />
-            <FuelMetric label="Spend" value={summary.totalFuelSpendInr > 0 ? `₹${summary.totalFuelSpendInr}` : '—'} />
-            <FuelMetric
-              label="Mileage"
-              value={summary.averageMileage != null ? `${summary.averageMileage} km/L` : '—'}
-              subtitle={vehicleType}
-            />
-            <FuelMetric
-              label="Cost / km"
-              value={summary.averageCostPerKm != null ? `₹${summary.averageCostPerKm}` : '—'}
-            />
-          </View>
-
-          {summary.fullTankCount > 0 ? (
-            <Text style={[TYPE.caption, { color: colors.textMuted, marginTop: 8 }]}>
-              {summary.fullTankCount} full-tank refill{summary.fullTankCount === 1 ? '' : 's'} this period.
-            </Text>
+          {/* Multiple Vehicles Switcher */}
+          {vehicleAssets.length > 1 ? (
+            <View style={[styles.multiVehicleContainer, { borderTopColor: colors.border }]}>
+              <VehicleSelectCard
+                vehicleAssets={vehicleAssets}
+                selectedVehicleId={selectedVehicleId}
+                onSelectVehicleId={(vId) => setSelectedVehicleId(vId)}
+              />
+            </View>
           ) : null}
         </View>
 
-        {/* Ride Passport entry — matte-black monthly passport card */}
+        {/* 3. Compact Segmented Control: [ Monthly View ] [ All History ] */}
+        <View style={[styles.modeSwitcherContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Pressable
+            onPress={() => {
+              Haptics.select();
+              setViewMode('MONTHLY');
+            }}
+            style={[
+              styles.modeTab,
+              viewMode === 'MONTHLY' && [styles.modeTabActive, { backgroundColor: colors.primary }],
+            ]}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: viewMode === 'MONTHLY' }}
+          >
+            <Text
+              style={[
+                styles.modeTabText,
+                { color: viewMode === 'MONTHLY' ? '#FFFFFF' : colors.textMuted },
+              ]}
+            >
+              Monthly View
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => {
+              Haptics.select();
+              setViewMode('LIFETIME');
+            }}
+            style={[
+              styles.modeTab,
+              viewMode === 'LIFETIME' && [styles.modeTabActive, { backgroundColor: colors.primary }],
+            ]}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: viewMode === 'LIFETIME' }}
+          >
+            <Text
+              style={[
+                styles.modeTabText,
+                { color: viewMode === 'LIFETIME' ? '#FFFFFF' : colors.textMuted },
+              ]}
+            >
+              All History
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* 4. Digital Vehicle Passport Card */}
         <Pressable
           onPress={() => {
             Haptics.tap();
-            if (assetId) {
-              navigation.navigate('VehiclePassport', { assetId });
+            if (selectedVehicleId) {
+              navigation.navigate('VehiclePassport', {
+                assetId: selectedVehicleId,
+                mode: viewMode,
+                monthKey: period,
+                analytics,
+              });
             } else {
-              ui.info('Ride Passport', 'Open the asset passport to see its monthly ride summary.');
+              ui.info('Ride Passport', 'Select a vehicle first to view its ride passport.');
             }
           }}
-          style={[styles.rideCard, { borderColor: 'rgba(16,185,129,0.4)' }]}
+          style={[styles.rideCard, { borderColor: 'rgba(16,185,129,0.45)' }]}
           accessibilityRole="button"
-          accessibilityLabel="Open monthly Ride Passport"
+          accessibilityLabel="Open Digital Vehicle Passport"
         >
           <View style={styles.rideBadge}>
             <PremiumIcon name="shield-check" size={18} color="#14B8A6" />
           </View>
           <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={styles.rideTitle}>Monthly Ride Passport</Text>
+            <Text style={styles.rideTitle}>
+              {viewMode === 'MONTHLY' ? `Monthly Passport (${monthLabel(period)})` : 'Digital Vehicle Passport (All History)'}
+            </Text>
             <Text style={styles.rideSub}>
-              {summary.totalDistanceKm > 0
-                ? `${summary.totalDistanceKm} km this month — shareable black card`
-                : 'See your mileage, spend & health as a shareable black card'}
+              {analytics.totalDistanceKm != null && analytics.totalDistanceKm > 0
+                ? `${analytics.totalDistanceKm.toLocaleString('en-IN')} km · ${analytics.averageMileageKmPerL != null ? analytics.averageMileageKmPerL + ' km/L · ' : ''}Shareable digital certificate`
+                : 'Verified mileage, running cost & health certificate'}
             </Text>
           </View>
           <PremiumIcon name="chevron" size={16} color="#6EE7B7" />
         </Pressable>
 
-        {/* Month selector */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.monthScroll}>
-          {recentPeriods().map((p) => {
-            const active = p === period;
-            return (
-              <Pressable
-                key={p}
-                onPress={() => {
-                  Haptics.select();
-                  setPeriod(p);
-                }}
-                style={[
-                  styles.monthChip,
-                  {
-                    backgroundColor: active ? colors.accentLight : colors.surface,
-                    borderColor: active ? colors.primary : colors.border,
-                  },
-                ]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                accessibilityLabel={monthLabel(p)}
-              >
-                <Text style={[TYPE.caption, { color: active ? colors.primary : colors.textMuted, fontWeight: '700' }]}>
-                  {monthLabel(p).split(' ')[0]}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+        {/* 5. Month Selector Chips (Shown ONLY in Monthly Mode) */}
+        {viewMode === 'MONTHLY' ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.monthScroll}>
+            {recentPeriods().map((p) => {
+              const active = p === period;
+              return (
+                <Pressable
+                  key={p}
+                  onPress={() => {
+                    Haptics.select();
+                    setPeriod(p);
+                  }}
+                  style={[
+                    styles.monthChip,
+                    {
+                      backgroundColor: active ? (colors.accentLight || '#0F766E20') : colors.surface,
+                      borderColor: active ? (colors.primary || '#0F766E') : colors.border,
+                      borderWidth: active ? 1.5 : 1,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={monthLabel(p)}
+                >
+                  <Text style={[TYPE.caption, { color: active ? colors.primary : colors.textMuted, fontWeight: '700' }]}>
+                    {monthLabel(p)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        ) : null}
 
-        {/* List */}
-        <View style={{ marginTop: SPACING.sm }}>
+        {/* 6. Fuel Analytics & History */}
+        <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border, marginTop: SPACING.sm }]}>
+          <View style={styles.summaryHeader}>
+            <Text style={[TYPE.label, { color: colors.textMuted }]}>
+              {viewMode === 'MONTHLY' ? 'MONTHLY METRICS' : 'ALL HISTORY TOTALS'}
+            </Text>
+            <Text style={[TYPE.caption, { color: colors.textMuted }]}>
+              {viewMode === 'MONTHLY' ? monthLabel(period) : `${analytics.refillCount} Refills Logged`}
+            </Text>
+          </View>
+
+          <View style={styles.summaryGrid}>
+            <FuelMetric
+              label={viewMode === 'MONTHLY' ? 'Monthly Distance' : 'Total Distance'}
+              value={analytics.totalDistanceKm != null && analytics.totalDistanceKm > 0 ? `${analytics.totalDistanceKm.toLocaleString('en-IN')} km` : '—'}
+            />
+            <FuelMetric
+              label={viewMode === 'MONTHLY' ? 'Monthly Spend' : 'Total Spend'}
+              value={analytics.totalSpend > 0 ? `₹${analytics.totalSpend.toLocaleString('en-IN')}` : '—'}
+            />
+            <FuelMetric
+              label="Avg Mileage"
+              value={analytics.averageMileageKmPerL != null && analytics.averageMileageKmPerL > 0 ? `${analytics.averageMileageKmPerL} km/L` : '—'}
+              subtitle={pres.vehicleType}
+            />
+            <FuelMetric
+              label="Cost / km"
+              value={analytics.costPerKm != null && analytics.costPerKm > 0 ? `₹${analytics.costPerKm}` : '—'}
+            />
+          </View>
+
+          {analytics.fullTankCount > 0 ? (
+            <Text style={[TYPE.caption, { color: colors.textMuted, marginTop: 4 }]}>
+              {analytics.fullTankCount} full-tank refill{analytics.fullTankCount === 1 ? '' : 's'} recorded.
+            </Text>
+          ) : null}
+        </View>
+
+        {/* 7. Fuel History Rows (strictly coupled with filtered dataset) */}
+        <View style={{ marginTop: SPACING.md }}>
           <Text style={[TYPE.label, { color: colors.textMuted, marginBottom: SPACING.xs }]}>
-            FUEL HISTORY
+            {viewMode === 'MONTHLY' ? `FUEL HISTORY (${monthLabel(period)})` : 'ALL RECORDED REFILLS'}
           </Text>
 
           {loading ? (
             <ActivityIndicator color={colors.primary} style={{ marginTop: SPACING.md }} />
-          ) : logs.length === 0 ? (
+          ) : analytics.filteredLogs.length === 0 ? (
             <EmptyState
-              title="No fuel logs yet"
-              message="Record your first top-up to start tracking mileage and running cost. Full-tank refills unlock real km/L."
-              ctaLabel="+ Log Fuel"
+              title={viewMode === 'MONTHLY' ? `No fuel records for ${monthLabel(period)}` : 'No fuel logs yet'}
+              message={viewMode === 'MONTHLY' ? `Add your first ${monthLabel(period).split(' ')[0]} fuel log to start tracking.` : 'Record your first top-up to start tracking mileage and running cost.'}
+              ctaLabel={viewMode === 'MONTHLY' ? `+ Add ${monthLabel(period).split(' ')[0]} Fuel Log` : '+ Log Fuel'}
               onCta={onLogFuel}
-              style={{ marginTop: SPACING.md }}
+              style={{ marginTop: SPACING.sm }}
             />
           ) : (
-            logs.map((log) => <FuelLogCard key={log.id} log={log} />)
+            analytics.filteredLogs.map((log) => <FuelLogCard key={log.id} log={log} />)
           )}
         </View>
 
-        {/* Action */}
-        {logs.length > 0 ? (
+        {/* 8. Bottom Action */}
+        {analytics.filteredLogs.length > 0 ? (
           <PrimaryButton
             title="+ Log Fuel"
             onPress={onLogFuel}
-            style={{ marginTop: SPACING.lg }}
+            style={{ marginTop: SPACING.md }}
           />
         ) : null}
       </ScrollView>
 
       <QuickFuelLogModal
         visible={logOpen}
-        asset={asset}
+        asset={activeVehicle}
+        selectedPeriod={period}
+        onSaved={() => setRefreshNonce((n) => n + 1)}
         onClose={() => setLogOpen(false)}
       />
     </View>
@@ -321,6 +448,58 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.xs,
   },
   scroll: { paddingHorizontal: SPACING.md, paddingTop: SPACING.xs },
+  vehicleIdentityCard: {
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+  },
+  vehicleCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  vehicleIconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vehicleSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  multiVehicleContainer: {
+    marginTop: SPACING.sm,
+    borderTopWidth: 1,
+    paddingTop: 2,
+  },
+  modeSwitcherContainer: {
+    flexDirection: 'row',
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    padding: 3,
+    marginBottom: SPACING.sm,
+  },
+  modeTab: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: RADIUS.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modeTabActive: {
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  modeTabText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
   summaryCard: {
     borderRadius: RADIUS.lg,
     borderWidth: 1,
@@ -329,11 +508,11 @@ const styles = StyleSheet.create({
   rideCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: SPACING.sm,
+    marginBottom: SPACING.xs,
     padding: SPACING.md,
     borderRadius: RADIUS.lg,
     borderWidth: 1.5,
-    backgroundColor: '#08141C',
+    backgroundColor: '#040912',
   },
   rideBadge: {
     width: 38,
@@ -343,7 +522,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rideTitle: { color: '#EAF9F5', fontSize: 14, fontWeight: '800' },
+  rideTitle: { color: '#EAF9F5', fontSize: 13.5, fontWeight: '800' },
   rideSub: { color: '#7FB3A8', fontSize: 11, marginTop: 2, fontWeight: '600' },
   summaryHeader: {
     flexDirection: 'row',
@@ -362,14 +541,13 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   monthScroll: {
-    marginTop: SPACING.sm,
+    marginVertical: SPACING.xs,
     flexGrow: 0,
   },
   monthChip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: RADIUS.full,
-    borderWidth: 1,
     marginRight: SPACING.xs,
     minHeight: HIT.min,
     justifyContent: 'center',

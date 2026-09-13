@@ -81,7 +81,9 @@ export function calculateExpiryDays(expiryDateStr?: string): {
   return { daysRemaining, status };
 }
 
-export function generateWhatsAppShareUrl(asset: Asset): string {
+import { buildWhatsAppLink } from './phoneUtils';
+
+export function generateWhatsAppShareUrl(asset: Asset, recipientPhone?: string): string {
   const statusEmoji = asset.status === 'active' ? '🟢 Active' : asset.status === 'expiring_soon' ? '⚠️ Expiring Soon' : '🔴 Expired';
   
   const text = `*AssetDoctor - Asset & Warranty Details* 🛡️\n\n` +
@@ -96,7 +98,7 @@ export function generateWhatsAppShareUrl(asset: Asset): string {
     (asset.vendor ? `🏪 *Merchant:* ${asset.vendor}\n` : '') +
     `\n*Managed with AssetDoctor - Smart Warranty Vault*`;
 
-  return `https://wa.me/?text=${encodeURIComponent(text)}`;
+  return buildWhatsAppLink({ phone: recipientPhone, message: text }).webUrl;
 }
 
 export function getBrandServiceHotline(brand?: string, category?: string, name?: string): { phone: string; label: string } {

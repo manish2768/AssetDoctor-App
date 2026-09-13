@@ -52,7 +52,7 @@ const args = process.argv.slice(2);
 const command = args[0] || 'status';
 
 console.log('================================================================');
-console.log('   ASSET DOCTOR (GADI DOCTOR) — META WHATSAPP CLOUD API ADMIN   ');
+console.log('        ASSET DOCTOR — META WHATSAPP CLOUD API ADMIN            ');
 console.log('================================================================\n');
 
 async function handleStatus() {
@@ -81,7 +81,7 @@ async function handleStatus() {
   if (details.success) {
     console.log('\n✓ META CLOUD API CONNECTION SUCCESSFUL!');
     console.log(`  Display Phone Number   : ${details.displayPhoneNumber || '—'}`);
-    console.log(`  Verified Business Name : ${details.verifiedName || 'Gadi Doctor'}`);
+    console.log(`  Verified Business Name : ${details.verifiedName || 'Asset Doctor'}`);
     console.log(`  Quality Rating         : ${details.qualityRating || 'UNKNOWN'}`);
     console.log(`  Code Verification      : ${details.codeVerificationStatus || '—'}`);
     console.log(`  Account Status         : ${details.status || 'ACTIVE'}`);
@@ -168,7 +168,7 @@ async function handleRegister() {
   if (result.success) {
     console.log('\n🎉 SUCCESS: WhatsApp phone number is successfully registered on Meta Cloud API!');
     console.log(`  Timestamp: ${result.registeredAt}`);
-    console.log('  Your WhatsApp Business number ("Gadi Doctor") is now active and ready to send messages.');
+    console.log('  Your WhatsApp Business number ("Asset Doctor") is now active and ready to send messages.');
   } else {
     console.error('\n✗ REGISTRATION FAILED:');
     console.error(`  Category: ${result.errorCategory}`);

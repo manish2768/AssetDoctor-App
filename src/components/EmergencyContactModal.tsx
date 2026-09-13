@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, Phone, MessageSquare, Wrench, ShieldAlert, Bike, Droplets, Wind, Car, Zap, UserCheck, AlertOctagon } from 'lucide-react';
 import { EmergencyContact } from '../types';
+import { normalizePhone, buildWhatsAppLink } from '../utils/phoneUtils';
 
 interface EmergencyContactModalProps {
   isOpen: boolean;
@@ -155,7 +156,7 @@ export const EmergencyContactModal: React.FC<EmergencyContactModalProps> = ({
 
                 <div className="pt-3 border-t border-slate-800/60 flex items-center gap-2">
                   <a
-                    href={`tel:${contact.phone.replace(/[^0-9+]/g, '')}`}
+                    href={`tel:${normalizePhone(contact.phone)}`}
                     className="flex-1 py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-md shadow-emerald-500/10 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                   >
                     <Phone className="w-3.5 h-3.5 fill-slate-950" />
@@ -163,9 +164,10 @@ export const EmergencyContactModal: React.FC<EmergencyContactModalProps> = ({
                   </a>
 
                   <a
-                    href={`https://wa.me/${contact.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-                      `Hello ${contact.name}, I need urgent repair/service assistance for my asset registered on AssetDoctor.`
-                    )}`}
+                    href={buildWhatsAppLink({
+                      phone: contact.phone,
+                      message: `Hello ${contact.name}, I need urgent repair/service assistance for my asset registered on AssetDoctor.`
+                    }).webUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex-1 py-2 px-3 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 text-teal-400 border border-teal-500/30 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"

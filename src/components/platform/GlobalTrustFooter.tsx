@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Mail } from 'lucide-react';
+import { Shield, Mail, Car, Wrench, Sparkles, Download, QrCode } from 'lucide-react';
 import { AssetDoctorProtectedBadge } from './trust/AssetDoctorProtectedBadge';
 
 interface GlobalTrustFooterProps {
@@ -13,22 +13,22 @@ export const GlobalTrustFooter: React.FC<GlobalTrustFooterProps> = ({
 }) => {
   const currentYear = new Date().getFullYear();
 
-  const handleLinkClick = (tab: string, e: React.MouseEvent) => {
+  const handleLinkClick = (path: string, e: React.MouseEvent) => {
     e.preventDefault();
-    onNavigateTab(tab);
+    onNavigateTab(path);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
-    <footer className="w-full border-t border-white/10 bg-[#070D18]/90 text-slate-400 mt-20 pt-16 pb-12 transition-colors">
+    <footer className="w-full border-t border-white/10 bg-[#070D18]/95 text-slate-400 mt-20 pt-16 pb-12 transition-colors">
       <div className="max-w-6xl mx-auto px-4 sm:px-8 space-y-12">
-        {/* Top Grid: Brand + 4 Columns */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-5 gap-8 lg:gap-10">
-          {/* Brand Column (2 cols on md) */}
+        {/* Top Grid: Brand + Columns */}
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-6 gap-8 lg:gap-8">
+          {/* Brand Column (2 cols) */}
           <div className="col-span-2 space-y-4">
             <a
               href="/"
-              onClick={(e) => handleLinkClick('home', e)}
+              onClick={(e) => handleLinkClick('/', e)}
               className="flex items-center gap-2.5 cursor-pointer inline-flex"
             >
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-emerald-500/20">
@@ -39,13 +39,13 @@ export const GlobalTrustFooter: React.FC<GlobalTrustFooterProps> = ({
                   Asset Doctor
                 </span>
                 <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400 block">
-                  Universal Intelligence
+                  Your Home & Vehicle Doctor
                 </span>
               </div>
             </a>
 
             <p className="text-xs text-slate-400 leading-relaxed max-w-sm">
-              Universal asset intelligence and lifecycle platform helping individuals, families, and businesses understand, maintain, and protect everything they own.
+              Universal asset intelligence platform helping people understand, maintain, and protect their vehicles, appliances, and household assets with zero advertiser sharing.
             </p>
 
             <div className="pt-1">
@@ -58,138 +58,182 @@ export const GlobalTrustFooter: React.FC<GlobalTrustFooterProps> = ({
             </div>
           </div>
 
-          {/* Column 1: PLATFORM */}
+          {/* Column 1: VEHICLE DOCTOR */}
           <div className="space-y-3 text-xs">
-            <h3 className="font-mono text-[11px] font-black uppercase tracking-wider text-white">
-              Platform
+            <h3 className="font-mono text-[11px] font-black uppercase tracking-wider text-white flex items-center gap-1.5">
+              <Car className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Vehicle Doctor</span>
             </h3>
             <ul className="space-y-2">
               <li>
-                <a
-                  href="/"
-                  onClick={(e) => handleLinkClick('home', e)}
-                  className="hover:text-emerald-400 transition"
-                >
-                  Home
+                <a href="/vehicle-doctor" onClick={(e) => handleLinkClick('/vehicle-doctor', e)} className="hover:text-emerald-400 transition">
+                  Overview
                 </a>
               </li>
               <li>
-                <a
-                  href="/tools"
-                  onClick={(e) => handleLinkClick('tools_hub', e)}
-                  className="hover:text-emerald-400 transition"
-                >
-                  Free Tools
+                <a href="/vehicle-doctor/cars" onClick={(e) => handleLinkClick('/vehicle-doctor/cars', e)} className="hover:text-emerald-400 transition">
+                  Cars Management
                 </a>
               </li>
               <li>
-                <a
-                  href="/knowledge"
-                  onClick={(e) => handleLinkClick('knowledge_hub', e)}
-                  className="hover:text-emerald-400 transition"
-                >
-                  Knowledge Hub
+                <a href="/vehicle-doctor/bikes" onClick={(e) => handleLinkClick('/vehicle-doctor/bikes', e)} className="hover:text-emerald-400 transition">
+                  Bikes & Scooters
                 </a>
               </li>
               <li>
-                <a
-                  href="/assets/explore"
-                  onClick={(e) => handleLinkClick('asset_explorer', e)}
-                  className="hover:text-emerald-400 transition"
-                >
-                  Explore Assets
+                <a href="/vehicle-doctor/warranty" onClick={(e) => handleLinkClick('/vehicle-doctor/warranty', e)} className="hover:text-emerald-400 transition">
+                  Vehicle Warranty
                 </a>
               </li>
               <li>
-                <a
-                  href="/tools/document-analyzer"
-                  onClick={(e) => handleLinkClick('invoice_analyzer', e)}
-                  className="hover:text-emerald-400 transition"
-                >
-                  Bill Analyzer
+                <a href="/vehicle-doctor/service" onClick={(e) => handleLinkClick('/vehicle-doctor/service', e)} className="hover:text-emerald-400 transition">
+                  Service History
                 </a>
               </li>
               <li>
-                <a
-                  href="https://play.google.com/store/apps/details?id=com.assetdoctor.app"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Download Asset Doctor from Google Play"
-                  className="hover:text-emerald-400 transition inline-flex items-center gap-1.5 text-slate-300"
-                >
-                  <span>Android App</span>
-                  <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Google Play</span>
+                <a href="/vehicle-doctor/documents" onClick={(e) => handleLinkClick('/vehicle-doctor/documents', e)} className="hover:text-emerald-400 transition">
+                  RC & PUC Vault
                 </a>
               </li>
             </ul>
           </div>
 
-          {/* Column 2: COMPANY & LEGAL */}
+          {/* Column 2: APPLIANCE DOCTOR */}
           <div className="space-y-3 text-xs">
-            <h3 className="font-mono text-[11px] font-black uppercase tracking-wider text-white">
-              Company &amp; Legal
+            <h3 className="font-mono text-[11px] font-black uppercase tracking-wider text-white flex items-center gap-1.5">
+              <Wrench className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Appliance Doctor</span>
             </h3>
             <ul className="space-y-2">
               <li>
-                <a
-                  href="/about"
-                  onClick={(e) => handleLinkClick('about', e)}
-                  className="hover:text-emerald-400 transition font-bold text-slate-300"
-                >
+                <a href="/appliance-doctor" onClick={(e) => handleLinkClick('/appliance-doctor', e)} className="hover:text-emerald-400 transition">
+                  Overview
+                </a>
+              </li>
+              <li>
+                <a href="/appliance-doctor/ac" onClick={(e) => handleLinkClick('/appliance-doctor/ac', e)} className="hover:text-emerald-400 transition">
+                  Air Conditioners (AC)
+                </a>
+              </li>
+              <li>
+                <a href="/appliance-doctor/refrigerator" onClick={(e) => handleLinkClick('/appliance-doctor/refrigerator', e)} className="hover:text-emerald-400 transition">
+                  Refrigerators
+                </a>
+              </li>
+              <li>
+                <a href="/appliance-doctor/washing-machine" onClick={(e) => handleLinkClick('/appliance-doctor/washing-machine', e)} className="hover:text-emerald-400 transition">
+                  Washing Machines
+                </a>
+              </li>
+              <li>
+                <a href="/appliance-doctor/ro" onClick={(e) => handleLinkClick('/appliance-doctor/ro', e)} className="hover:text-emerald-400 transition">
+                  RO Purifiers
+                </a>
+              </li>
+              <li>
+                <a href="/appliance-doctor/geyser" onClick={(e) => handleLinkClick('/appliance-doctor/geyser', e)} className="hover:text-emerald-400 transition">
+                  Geysers / Heaters
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          {/* Column 3: FREE TOOLS */}
+          <div className="space-y-3 text-xs">
+            <h3 className="font-mono text-[11px] font-black uppercase tracking-wider text-white flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Free Tools</span>
+            </h3>
+            <ul className="space-y-2">
+              <li>
+                <a href="/tools/warranty-calculator" onClick={(e) => handleLinkClick('/tools/warranty-calculator', e)} className="hover:text-emerald-400 transition">
+                  Warranty Calculator
+                </a>
+              </li>
+              <li>
+                <a href="/tools/asset-age-calculator" onClick={(e) => handleLinkClick('/tools/asset-age-calculator', e)} className="hover:text-emerald-400 transition">
+                  Asset Age Calculator
+                </a>
+              </li>
+              <li>
+                <a href="/tools/ac-electricity-calculator" onClick={(e) => handleLinkClick('/tools/ac-electricity-calculator', e)} className="hover:text-emerald-400 transition">
+                  AC Electricity Bill
+                </a>
+              </li>
+              <li>
+                <a href="/tools/service-due-calculator" onClick={(e) => handleLinkClick('/tools/service-due-calculator', e)} className="hover:text-emerald-400 transition">
+                  Service Due Calculator
+                </a>
+              </li>
+              <li>
+                <a href="/tools/repair-vs-replace" onClick={(e) => handleLinkClick('/tools/repair-vs-replace', e)} className="hover:text-emerald-400 transition">
+                  Repair vs Replace
+                </a>
+              </li>
+              <li>
+                <a href="/tools" onClick={(e) => handleLinkClick('/tools', e)} className="hover:text-emerald-400 transition font-bold text-slate-300">
+                  All Calculators →
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          {/* Column 4: KNOWLEDGE & TRUST */}
+          <div className="space-y-3 text-xs">
+            <h3 className="font-mono text-[11px] font-black uppercase tracking-wider text-white">
+              Company &amp; Hub
+            </h3>
+            <ul className="space-y-2">
+              <li>
+                <a href="/blog" onClick={(e) => handleLinkClick('/blog', e)} className="hover:text-emerald-400 transition font-bold text-emerald-400">
+                  Knowledge Hub (Blog)
+                </a>
+              </li>
+              <li>
+                <a href="/warranty" onClick={(e) => handleLinkClick('/warranty', e)} className="hover:text-emerald-400 transition">
+                  Warranty Vault
+                </a>
+              </li>
+              <li>
+                <a href="/maintenance" onClick={(e) => handleLinkClick('/maintenance', e)} className="hover:text-emerald-400 transition">
+                  Maintenance Care
+                </a>
+              </li>
+              <li>
+                <a href="/smart-qr" onClick={(e) => handleLinkClick('/smart-qr', e)} className="hover:text-emerald-400 transition">
+                  Smart QR Parking
+                </a>
+              </li>
+              <li>
+                <a href="/about" onClick={(e) => handleLinkClick('/about', e)} className="hover:text-emerald-400 transition font-bold text-slate-300">
                   About Us
                 </a>
               </li>
               <li>
-                <a
-                  href="/contact"
-                  onClick={(e) => handleLinkClick('contact', e)}
-                  className="hover:text-emerald-400 transition"
-                >
-                  Contact Us
+                <a href="/download" onClick={(e) => handleLinkClick('/download', e)} className="hover:text-emerald-400 transition">
+                  Download Mobile App
                 </a>
               </li>
               <li>
-                <a
-                  href="/privacy-policy"
-                  onClick={(e) => handleLinkClick('privacy_policy', e)}
-                  className="hover:text-emerald-400 transition"
-                >
+                <a href="/contact" onClick={(e) => handleLinkClick('/contact', e)} className="hover:text-emerald-400 transition">
+                  Contact Support
+                </a>
+              </li>
+              <li>
+                <a href="/privacy" onClick={(e) => handleLinkClick('/privacy', e)} className="hover:text-emerald-400 transition">
                   Privacy Policy
                 </a>
               </li>
               <li>
-                <a
-                  href="/terms-and-conditions"
-                  onClick={(e) => handleLinkClick('terms', e)}
-                  className="hover:text-emerald-400 transition"
-                >
+                <a href="/terms" onClick={(e) => handleLinkClick('/terms', e)} className="hover:text-emerald-400 transition">
                   Terms &amp; Conditions
                 </a>
               </li>
             </ul>
           </div>
-
-          {/* Column 3: SUPPORT */}
-          <div className="space-y-3 text-xs">
-            <h3 className="font-mono text-[11px] font-black uppercase tracking-wider text-white">
-              Support
-            </h3>
-            <div className="space-y-2 text-xs">
-              <a
-                href="mailto:support@assetdoctor.in"
-                className="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 font-mono font-bold transition underline"
-              >
-                <Mail className="w-3.5 h-3.5" />
-                <span>support@assetdoctor.in</span>
-              </a>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Have questions or need assistance? Reach out to our team anytime.
-              </p>
-            </div>
-          </div>
         </div>
 
-        {/* Bottom Bar: Copyright & Founder Credit */}
+        {/* Bottom Bar */}
         <div className="pt-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono text-slate-400">
           <div>
             © {currentYear} Asset Doctor. All rights reserved.
@@ -198,7 +242,7 @@ export const GlobalTrustFooter: React.FC<GlobalTrustFooterProps> = ({
           <div className="flex items-center gap-1.5 text-slate-400">
             <span>Created with passion by</span>
             <button
-              onClick={(e) => handleLinkClick('about', e)}
+              onClick={(e) => handleLinkClick('/about', e)}
               className="text-emerald-400 hover:text-emerald-300 font-bold transition underline cursor-pointer"
             >
               Ashutosh Rai

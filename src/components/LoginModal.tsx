@@ -42,14 +42,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [view, setView] = useState<'LOGIN' | 'FORGOT_PASSWORD' | 'NEW_PASSWORD' | 'SUCCESS'>('LOGIN');
 
   // Login Form state
-  const [emailOrPhone, setEmailOrPhone] = useState(userEmail || 'manish2768@gmail.com');
+  const [emailOrPhone, setEmailOrPhone] = useState(userEmail || '');
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Forgot Password state
   const [resetMethod, setResetMethod] = useState<'OTP' | 'EMAIL'>('OTP');
-  const [resetTarget, setResetTarget] = useState(userPhone || '+91 98765 43210');
+  const [resetTarget, setResetTarget] = useState(userPhone || '');
   const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
   const [generatedOtp, setGeneratedOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
@@ -69,7 +69,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setView('LOGIN');
-      setEmailOrPhone(userEmail || 'manish2768@gmail.com');
+      setEmailOrPhone(userEmail || '');
       setLoginPassword('');
       setErrorMsg('');
       setSuccessMsg('');
@@ -392,7 +392,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   type="button"
                   onClick={() => {
                     setResetMethod('EMAIL');
-                    setResetTarget(userEmail || 'manish2768@gmail.com');
+                    setResetTarget(userEmail || '');
                     setErrorMsg('');
                   }}
                   className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${

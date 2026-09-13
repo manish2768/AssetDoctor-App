@@ -124,6 +124,19 @@ service cloud.firestore {
     }
 
     // ----------------------------------------------------
+    // 1.5 Identity Mappings & Unique Registry (Enforces Unique Phone & Email Constraints)
+    // ----------------------------------------------------
+    match /identityMappings/{identityKey} {
+      allow read: if isSignedIn() || isAdmin();
+      allow create: if (isSignedIn() && request.resource.data.canonicalUserId == request.auth.uid
+                        && (!exists(/databases/$(database)/documents/identityMappings/$(identityKey))
+                            || get(/databases/$(database)/documents/identityMappings/$(identityKey)).data.canonicalUserId == request.auth.uid))
+                    || isSuperAdmin();
+      allow update: if (isSignedIn() && resource.data.canonicalUserId == request.auth.uid) || isSuperAdmin();
+      allow delete: if (isSignedIn() && resource.data.canonicalUserId == request.auth.uid) || isSuperAdmin();
+    }
+
+    // ----------------------------------------------------
     // Collection Group Rules (Super Admin Global Read)
     // ----------------------------------------------------
     match /{path=**}/Assets/{assetId} {

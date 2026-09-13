@@ -1,6 +1,7 @@
 /**
  * Asset Doctor — Next Service Due & Service Prediction Engine
  * Strictly implements OEM specifications, historical driving velocity, and safety bounds.
+ * Authoritative: ONLY Vehicle assets participate in odometer, velocity, and km prediction.
  */
 
 import type {
@@ -11,6 +12,7 @@ import type {
   UsageProfile
 } from './types.ts';
 import { matchOemSchedule } from './oemDatabase.ts';
+import { isVehicleAsset } from '../../src/domain/asset/assetGuards.ts';
 import { getAssetCapabilities } from '../../src/utils/assetCapabilities.ts';
 
 export interface PredictionOptions {
@@ -64,6 +66,16 @@ export function calculateDrivingVelocity(
   hasOdometerAnomaly: boolean;
   odometerAnomalyReason?: string;
 } {
+  // If not a vehicle, driving velocity is strictly not applicable
+  if (!isVehicleAsset(asset)) {
+    return {
+      avgDailyKm: null,
+      avgMonthlyKm: null,
+      confidence: 'INSUFFICIENT_HISTORY',
+      hasOdometerAnomaly: false,
+    };
+  }
+
   // Sort verified records chronologically
   const verifiedRecords = serviceRecords
     .filter(r => r.verificationStatus === 'VERIFIED' && r.odometerKm > 0)
@@ -152,7 +164,59 @@ export function predictNextServiceDue(
   const refDate = options?.referenceDateIST || new Date();
   const refDateStr = refDate.toISOString().split('T')[0];
 
-  // 1. Normalize Asset Odometer & Fields
+  // 1. Authoritative Domain Validation (Order of Operations: Validate category BEFORE touching odometer)
+  const isVehicle = isVehicleAsset(asset);
+  const capabilities = getAssetCapabilities(asset);
+
+  if (!isVehicle || !capabilities.hasVehicleServiceSchedule) {
+    return {
+      assetId: asset?.id || asset?.assetId || 'unknown',
+      assetName: asset?.assetName || asset?.name || 'Asset',
+      category: asset?.categoryLabel || asset?.category || 'General',
+      identifier: asset?.serialNumber || asset?.imei || '—',
+      serviceNumber: 0,
+      serviceLabel: 'Vehicle service schedule not applicable',
+      currentOdometerKm: 0,
+      oemTargetKm: 0,
+      oemTargetCalendarDate: 'N/A',
+      oemIntervalKm: 0,
+      oemIntervalDays: 0,
+      remainingKm: 0,
+      remainingDays: 0,
+      avgDailyKm: null,
+      avgMonthlyKm: null,
+      hasDrivingHistory: false,
+      projectedKmThresholdDate: null,
+      finalEstimatedDueDate: 'N/A',
+      whicheverComesFirstCriterion: capabilities.serviceDueUnavailableNotice || 'Vehicle service schedule not applicable for this asset type',
+      whicheverReasonType: 'INSUFFICIENT_HISTORY',
+      estimatedDaysToReachKm: null,
+      estimatedWeeks: null,
+      status: 'GREEN',
+      statusLabel: 'HEALTHY',
+      predictionConfidence: 'INSUFFICIENT_HISTORY',
+      hasOdometerAnomaly: false,
+      scheduleSource: 'None',
+      scheduleSourceType: 'GENERIC_FALLBACK',
+      scheduleVersion: 'N/A',
+      scheduleLabel: 'Vehicle service schedule not applicable',
+      isFirstService: false,
+      severeUsageActive: false,
+      componentChecklist: [],
+      calculatedAt: new Date().toISOString(),
+      targetKm: 0,
+      estimatedDueDate: 'N/A',
+      finalDueDate: 'N/A',
+      currentOdometer: 0,
+      lastServiceOdometer: 0,
+      serviceIntervalKm: 0,
+      serviceIntervalDays: 0,
+      scheduleUnavailableOffline: true,
+      offlineNotice: capabilities.serviceDueUnavailableNotice || 'Vehicle service schedule not applicable for this asset type'
+    };
+  }
+
+  // 2. Normalize Asset Odometer & Fields (Vehicles ONLY)
   const rawOdo = typeof asset.odometerKm === 'number' ? asset.odometerKm :
                  typeof asset.currentOdometer === 'number' ? asset.currentOdometer :
                  typeof asset.currentKm === 'number' ? asset.currentKm :
@@ -166,59 +230,10 @@ export function predictNextServiceDue(
     currentOdometer: rawOdo
   };
 
-  const capabilities = getAssetCapabilities(normalizedAsset);
-  if (!capabilities.hasVehicleServiceSchedule) {
-    return {
-      assetId: normalizedAsset.id || 'unknown',
-      assetName: normalizedAsset.assetName || normalizedAsset.name || 'Asset',
-      category: normalizedAsset.categoryLabel || normalizedAsset.category || 'General',
-      identifier: normalizedAsset.serialNumber || normalizedAsset.imei || '—',
-      serviceNumber: 0,
-      serviceLabel: 'Maintenance schedule not configured',
-      currentOdometerKm: 0,
-      oemTargetKm: 0,
-      oemTargetCalendarDate: 'N/A',
-      oemIntervalKm: 0,
-      oemIntervalDays: 0,
-      remainingKm: 0,
-      remainingDays: 0,
-      avgDailyKm: null,
-      avgMonthlyKm: null,
-      hasDrivingHistory: false,
-      projectedKmThresholdDate: null,
-      finalEstimatedDueDate: 'N/A',
-      whicheverComesFirstCriterion: capabilities.serviceDueUnavailableNotice || 'Maintenance schedule not configured for this asset type',
-      whicheverReasonType: 'INSUFFICIENT_HISTORY',
-      estimatedDaysToReachKm: null,
-      estimatedWeeks: null,
-      status: 'GREEN',
-      statusLabel: 'HEALTHY',
-      predictionConfidence: 'INSUFFICIENT_HISTORY',
-      hasOdometerAnomaly: false,
-      scheduleSource: 'None',
-      scheduleSourceType: 'GENERIC_FALLBACK',
-      scheduleVersion: 'N/A',
-      scheduleLabel: 'Maintenance schedule not configured',
-      isFirstService: false,
-      severeUsageActive: false,
-      componentChecklist: [],
-      calculatedAt: new Date().toISOString(),
-      targetKm: 0,
-      estimatedDueDate: 'N/A',
-      finalDueDate: 'N/A',
-      currentOdometer: 0,
-      lastServiceOdometer: 0,
-      serviceIntervalKm: 0,
-      serviceIntervalDays: 0,
-      scheduleUnavailableOffline: true,
-      offlineNotice: capabilities.serviceDueUnavailableNotice || 'Maintenance schedule not configured for this asset type'
-    };
-  }
-
   const schedule: OemServiceSchedule = matchOemSchedule(normalizedAsset);
   const isSevere = Boolean(options?.usageProfile === 'SEVERE' || normalizedAsset.usageProfile === 'SEVERE');
 
-  // 2. Normalize and filter verified service records
+  // 3. Normalize and filter verified service records
   const normalizedRecords: ServiceRecord[] = (serviceRecords || []).map(r => {
     const odo = typeof r.odometerKm === 'number' ? r.odometerKm :
                 typeof r.odometer === 'number' ? r.odometer :
@@ -249,49 +264,46 @@ export function predictNextServiceDue(
   let severeUsageActive = false;
   let severeUsageNote: string | undefined;
 
+  const firstRule = schedule.intervals[0];
+
   if (!latestRecord) {
-    // Break-in First Service
     isFirstService = true;
     serviceNumber = 1;
-    serviceLabel = schedule.serviceSteps[0]?.label || '1st Service (Break-in Check)';
-    lastServiceDate = normalizedAsset.purchaseDate ? normalizedAsset.purchaseDate.split('T')[0] : refDateStr;
+    serviceLabel = firstRule ? firstRule.label : '1st Periodic Service';
+    lastServiceDate = normalizedAsset.purchaseDate || normalizedAsset.registrationDate || refDateStr;
     lastServiceOdometerKm = 0;
-    oemIntervalKm = schedule.firstServiceRule.intervalKm;
-    oemIntervalDays = schedule.firstServiceRule.intervalDays;
+    oemIntervalKm = firstRule ? firstRule.km : 1000;
+    oemIntervalDays = firstRule ? firstRule.months * 30 : 30;
   } else {
-    // Subsequent Periodic Service
     isFirstService = false;
     serviceNumber = (latestRecord.serviceNumber || verifiedRecords.length) + 1;
-    const stepDef = schedule.serviceSteps.find(s => s.serviceNumber === serviceNumber);
-    serviceLabel = stepDef ? stepDef.label : `Service #${serviceNumber} (Periodic Maintenance)`;
-    lastServiceDate = latestRecord.serviceDate.split('T')[0];
+    serviceLabel = `${serviceNumber}${serviceNumber === 2 ? 'nd' : serviceNumber === 3 ? 'rd' : 'th'} Periodic Service`;
+    lastServiceDate = latestRecord.serviceDate;
     lastServiceOdometerKm = latestRecord.odometerKm;
 
-    if (isSevere && schedule.severeSubsequentRule) {
-      // Use documented OEM severe schedule
-      oemIntervalKm = schedule.severeSubsequentRule.intervalKm;
-      oemIntervalDays = schedule.severeSubsequentRule.intervalDays;
-      severeUsageActive = true;
-      severeUsageNote = schedule.severeSubsequentRule.source;
-    } else {
-      oemIntervalKm = schedule.subsequentServiceRule.intervalKm;
-      oemIntervalDays = schedule.subsequentServiceRule.intervalDays;
-      if (isSevere && !schedule.severeSubsequentRule) {
-        severeUsageActive = false;
-        severeUsageNote = 'OEM severe-service interval unavailable — using standard manufacturer interval';
-      }
-    }
+    oemIntervalKm = isSevere && schedule.severeIntervalKm ? schedule.severeIntervalKm : schedule.standardIntervalKm;
+    oemIntervalDays = isSevere && schedule.severeIntervalMonths ? schedule.severeIntervalMonths * 30 : schedule.standardIntervalMonths * 30;
+    severeUsageActive = isSevere;
+    severeUsageNote = isSevere ? `Severe schedule active (${schedule.severeUsageThreshold || '50% interval'})` : undefined;
   }
 
-  // Official OEM Targets (Unmodified)
-  const oemTargetKm = lastServiceOdometerKm + oemIntervalKm;
+  // 4. Calculate OEM Targets
+  const currentOdometerKm = normalizedAsset.odometerKm;
+  let oemTargetKm = lastServiceOdometerKm + oemIntervalKm;
+  if (currentOdometerKm > oemTargetKm) {
+    const elapsedSinceLast = currentOdometerKm - lastServiceOdometerKm;
+    const intervalsPassed = Math.floor(elapsedSinceLast / oemIntervalKm);
+    oemTargetKm = lastServiceOdometerKm + (intervalsPassed + 1) * oemIntervalKm;
+    serviceNumber += intervalsPassed;
+    serviceLabel = `${serviceNumber}th Periodic Service (Overdue Catchup)`;
+  }
+
   const oemTargetCalendarDate = addDaysToDateString(lastServiceDate, oemIntervalDays);
-  const currentOdometerKm = Math.max(normalizedAsset.odometerKm || 0, lastServiceOdometerKm);
   const remainingKm = Math.max(0, oemTargetKm - currentOdometerKm);
   const remainingDays = diffDaysBetweenDates(refDateStr, oemTargetCalendarDate);
 
-  // Calculate Velocity & Projected KM Threshold Date
-  const { avgDailyKm, avgMonthlyKm, confidence, hasOdometerAnomaly, odometerAnomalyReason } = calculateDrivingVelocity(
+  // 5. Calculate Driving Velocity & Whichever Comes First
+  const { avgDailyKm, confidence, hasOdometerAnomaly, odometerAnomalyReason } = calculateDrivingVelocity(
     normalizedAsset,
     verifiedRecords,
     refDateStr
@@ -321,13 +333,12 @@ export function predictNextServiceDue(
       whicheverComesFirstCriterion = `OEM calendar limit reached first (${oemTargetCalendarDate})`;
     }
   } else {
-    // Insufficient driving history
     finalEstimatedDueDate = oemTargetCalendarDate;
     whicheverReasonType = 'INSUFFICIENT_HISTORY';
     whicheverComesFirstCriterion = 'Estimated service date unavailable — insufficient driving history';
   }
 
-  // Dynamic Status Evaluation
+  // 6. Dynamic Status Evaluation
   let status: 'GREEN' | 'AMBER' | 'RED';
   let statusLabel: 'HEALTHY' | 'DUE_SOON' | 'OVERDUE';
 
@@ -346,7 +357,7 @@ export function predictNextServiceDue(
     statusLabel = 'HEALTHY';
   }
 
-  // Component Checklist
+  // 7. Component Checklist
   const componentChecklist: ComponentChecklistItem[] = (schedule.componentRules || []).map(cr => {
     const compDueKm = lastServiceOdometerKm + cr.intervalKm;
     const compDueDate = addDaysToDateString(lastServiceDate, cr.intervalMonths * 30);
@@ -368,10 +379,10 @@ export function predictNextServiceDue(
     : 'Manufacturer Recommended';
 
   return {
-    assetId: asset.id || 'unknown',
-    assetName: asset.assetName || asset.name || 'Vehicle',
-    category: asset.categoryLabel || asset.category || 'Vehicles',
-    identifier: asset.registration || asset.registrationNumber || asset.serialNumber || '—',
+    assetId: normalizedAsset.id || 'unknown',
+    assetName: normalizedAsset.assetName || normalizedAsset.name || 'Vehicle',
+    category: normalizedAsset.categoryLabel || normalizedAsset.category || 'Vehicles',
+    identifier: normalizedAsset.registration || normalizedAsset.registrationNumber || normalizedAsset.serialNumber || '—',
     serviceNumber,
     serviceLabel,
     currentOdometerKm,
@@ -414,7 +425,6 @@ export function predictNextServiceDue(
     componentChecklist,
     calculatedAt: new Date().toISOString(),
 
-    // Canonical compatibility aliases
     targetKm: oemTargetKm,
     estimatedDueDate: finalEstimatedDueDate,
     finalDueDate: finalEstimatedDueDate,
@@ -426,3 +436,10 @@ export function predictNextServiceDue(
     offlineNotice: schedule.sourceType === 'GENERIC_FALLBACK' ? 'Service schedule unavailable offline. Will update when connected.' : undefined
   };
 }
+
+export default {
+  addDaysToDateString,
+  diffDaysBetweenDates,
+  calculateDrivingVelocity,
+  predictNextServiceDue
+};

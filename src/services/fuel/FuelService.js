@@ -185,6 +185,8 @@ export class FuelService {
         previousLogId: previous ? previous.id || null : null,
         needsNextFullTank: result.needsNextFullTank,
         isFirstEntry: result.isFirstEntry,
+        createdByUid: input.createdByUid || userId,
+        createdByName: input.createdByName || 'Owner',
         createdAt: new Date().toISOString(),
         updatedAt: firestore.FieldValue.serverTimestamp(),
         timestamp: firestore.FieldValue.serverTimestamp(),

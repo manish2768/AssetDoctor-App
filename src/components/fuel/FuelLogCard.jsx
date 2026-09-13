@@ -73,9 +73,9 @@ export function FuelLogCard({ log }) {
         ) : null}
       </View>
 
-      {log.distanceSincePreviousKM != null ? (
-        <Text style={[TYPE.micro, { color: colors.textMuted, marginTop: 2 }]}>
-          Since previous fill: {fmtKm(log.distanceSincePreviousKM)} km
+      {log.distanceSincePreviousKM != null && Number(log.distanceSincePreviousKM) > 0 ? (
+        <Text style={[TYPE.micro, { color: colors.textMuted, marginTop: 4 }]}>
+          {fmtKm(log.distanceSincePreviousKM)} km since previous valid fill
         </Text>
       ) : null}
     </View>

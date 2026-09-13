@@ -41,7 +41,7 @@ export async function runProductionSmokeTest(): Promise<{ passed: boolean; resul
 
   // D & E & F. OCR Service Invoice & Odometer Extraction
   const invoiceSample = `
-    RAFTAAR MOTO LEGENDS PVT LTD
+    APEX MOTO SERVICES PVT LTD
     SERVICE INVOICE
     Invoice No: 81587
     Date: 20/08/2024

@@ -95,4 +95,175 @@ export class DuplicateProtectionService {
 
     return { isDuplicate: false };
   }
+
+  /**
+   * Check if an insurance policy already exists for the target vehicle
+   */
+  public static checkInsuranceDuplicate(
+    policyNumber: string,
+    targetVehicle: any,
+    existingDocs: any[] = [],
+  ): DuplicateCheckResult {
+    const cleanPolicy = String(policyNumber || '').trim().toUpperCase();
+    if (!cleanPolicy || cleanPolicy.length < 4) {
+      return { isDuplicate: false };
+    }
+
+    // Check if vehicle itself already has this exact policy number
+    const vehiclePolicy = String(
+      targetVehicle?.insurancePolicyNumber ||
+      targetVehicle?.policyNumber ||
+      targetVehicle?.insurance?.policyNumber ||
+      ''
+    ).trim().toUpperCase();
+
+    if (vehiclePolicy && vehiclePolicy === cleanPolicy) {
+      return {
+        isDuplicate: true,
+        existingAsset: targetVehicle,
+        matchField: 'EXACT_NAME',
+        reason: `Policy number "${cleanPolicy}" is already recorded on this vehicle.`,
+      };
+    }
+
+    const docMatch = existingDocs.find(d => {
+      const p = String(d.policyNumber || d.invoiceNumber || d.identifier || '').trim().toUpperCase();
+      const vId = d.assetId || d.linkedAssetId;
+      const targetId = targetVehicle?.assetId || targetVehicle?.id;
+      return p === cleanPolicy && (!targetId || vId === targetId);
+    });
+
+    if (docMatch) {
+      return {
+        isDuplicate: true,
+        matchField: 'EXACT_NAME',
+        reason: `An insurance policy with number "${cleanPolicy}" already exists in your vault.`,
+      };
+    }
+
+    return { isDuplicate: false };
+  }
+
+  /**
+   * Check if a PUC certificate already exists for the target vehicle
+   */
+  public static checkPucDuplicate(
+    certificateNumber: string,
+    targetVehicle: any,
+    existingDocs: any[] = [],
+  ): DuplicateCheckResult {
+    const cleanCert = String(certificateNumber || '').trim().toUpperCase();
+    if (!cleanCert || cleanCert.length < 4) {
+      return { isDuplicate: false };
+    }
+
+    const vehicleCert = String(
+      targetVehicle?.pucCertificateNumber ||
+      targetVehicle?.certificateNumber ||
+      targetVehicle?.puc?.certificateNumber ||
+      ''
+    ).trim().toUpperCase();
+
+    if (vehicleCert && vehicleCert === cleanCert) {
+      return {
+        isDuplicate: true,
+        existingAsset: targetVehicle,
+        matchField: 'EXACT_NAME',
+        reason: `PUC certificate "${cleanCert}" is already recorded on this vehicle.`,
+      };
+    }
+
+    const docMatch = existingDocs.find(d => {
+      const c = String(d.certificateNumber || d.invoiceNumber || d.identifier || '').trim().toUpperCase();
+      const vId = d.assetId || d.linkedAssetId;
+      const targetId = targetVehicle?.assetId || targetVehicle?.id;
+      return c === cleanCert && (!targetId || vId === targetId);
+    });
+
+    if (docMatch) {
+      return {
+        isDuplicate: true,
+        matchField: 'EXACT_NAME',
+        reason: `A PUC certificate with number "${cleanCert}" already exists in your vault.`,
+      };
+    }
+
+    return { isDuplicate: false };
+  }
+
+  /**
+   * Check if an electricity bill already exists for consumer & billing period
+   */
+  public static checkElectricityDuplicate(
+    bill: { consumerNumber?: string; billingPeriod?: string; billDate?: string },
+    existingBills: any[] = [],
+  ): DuplicateCheckResult {
+    const cleanConsumer = String(bill.consumerNumber || '').trim().toUpperCase();
+    const cleanPeriod = String(bill.billingPeriod || bill.billDate || '').trim().toLowerCase();
+
+    if (!cleanConsumer || !cleanPeriod) {
+      return { isDuplicate: false };
+    }
+
+    const match = existingBills.find(b => {
+      const bConsumer = String(b.consumerId || b.consumerNumber || '').trim().toUpperCase();
+      const bPeriod = String(b.billingMonth || b.billingPeriod || b.billDate || '').trim().toLowerCase();
+      return bConsumer === cleanConsumer && bPeriod === cleanPeriod;
+    });
+
+    if (match) {
+      return {
+        isDuplicate: true,
+        reason: `Electricity bill for consumer "${cleanConsumer}" for period "${cleanPeriod}" already exists.`,
+      };
+    }
+
+    return { isDuplicate: false };
+  }
+
+  /**
+   * Check if a vehicle service bill already exists for the target vehicle
+   */
+  public static checkVehicleServiceDuplicate(
+    invoiceNumber: string,
+    serviceDate: string,
+    targetVehicle: any,
+  ): DuplicateCheckResult {
+    const cleanInv = String(invoiceNumber || '').trim().toUpperCase();
+    const cleanDate = String(serviceDate || '').trim();
+
+    if (!targetVehicle || (!cleanInv && !cleanDate)) {
+      return { isDuplicate: false };
+    }
+
+    const history: any[] = Array.isArray(targetVehicle.serviceHistory)
+      ? targetVehicle.serviceHistory
+      : [];
+
+    const match = history.find((record) => {
+      const recInv = String(record.serviceInvoiceNumber || record.invoiceNumber || '').trim().toUpperCase();
+      const recDate = String(record.serviceDate || record.invoiceDate || '').trim();
+
+      if (cleanInv && cleanInv.length >= 3 && recInv === cleanInv) {
+        return true;
+      }
+      if (cleanDate && recDate === cleanDate && cleanInv && recInv === cleanInv) {
+        return true;
+      }
+      return false;
+    });
+
+    if (match) {
+      return {
+        isDuplicate: true,
+        existingAsset: targetVehicle,
+        matchField: 'EXACT_NAME',
+        reason: cleanInv
+          ? `Service invoice "${cleanInv}" is already recorded on this vehicle.`
+          : `A service record for date "${cleanDate}" already exists on this vehicle.`,
+      };
+    }
+
+    return { isDuplicate: false };
+  }
 }

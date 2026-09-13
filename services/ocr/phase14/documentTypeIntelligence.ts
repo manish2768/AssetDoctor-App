@@ -34,49 +34,101 @@ function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));
 }
 
-function extraSignals(text: string, fields: Record<string, unknown>, providerTexts?: Record<string, string | null>): { type: LearningDocumentType; reasons: string[]; score: number }[] {
+function extraSignals(
+  text: string,
+  fields: Record<string, unknown>,
+  providerTexts?: Record<string, string | null>
+): { type: LearningDocumentType; reasons: string[]; score: number }[] {
   const providerBlob = Object.values(providerTexts || {}).filter(Boolean).join(' ');
   const blob = `${text} ${providerBlob} ${fields.productName || ''} ${fields.shopName || ''}`.toLowerCase();
   const hits: { type: LearningDocumentType; reasons: string[]; score: number }[] = [];
 
-  // A definitive electronics identity (IMEI present, or an explicit phone/model
-  // brand on the document) must beat a generic "TAX INVOICE" that only maps to
-  // PURCHASE_INVOICE via the keyword classifier. IMEI is the strongest signal.
-  const hasImei = /\bimei\b/.test(blob);
+  // Guard: Heavily corrupted, partial, or garbled text
+  if (
+    /\b(?:no\s*rdble\s*txt|nd\s*vld\s*fds|\?\?\?|totl\s*\?\?)\b/.test(blob) ||
+    /\b(?:partially\s*visible|cropped\s*scan|\.\.\.rota\.\.\.)\b/.test(blob)
+  ) {
+    return [];
+  }
+
+  // 1. PUC Certificate (explicit priority for emission docs)
+  if (/\b(?:pollution\s*under\s*control|puc\s*certificate|emission\s*(?:test|certificate)|\bpuc\b)\b/.test(blob)) {
+    hits.push({ type: 'PUC', reasons: ['puc_certificate_structure'], score: 0.85 });
+  }
+
+  // 2. Warranty Card / Certificate
+  const isExplicitWarrantyCard =
+    /\b(?:warranty\s*(?:card|certificate)|standard\s*warranty\s*programme)\b/.test(blob);
+  const isNotTaxInvoice = /\b(?:not\s*a\s*tax\s*invoice|not\s*an\s*invoice)\b/.test(blob);
+  if (isExplicitWarrantyCard && (!/\btax\s*invoice\b/.test(blob) || isNotTaxInvoice)) {
+    hits.push({ type: 'WARRANTY', reasons: ['warranty_card_structure'], score: 0.85 });
+  }
+
+  // 3. Insurance Policy
+  if (
+    /\b(?:insurance\s*policy|policy\s*(?:certificate\s*cum\s*schedule|schedule|number|type)|insured\s*declared\s*value|\bidv\b|icici\s*lombard|own\s*damage\s*premium)\b/.test(blob) &&
+    !/\bjob\s*card\b/.test(blob)
+  ) {
+    hits.push({ type: 'INSURANCE_POLICY', reasons: ['insurance_policy_structure'], score: 0.85 });
+  }
+
+  // Explicit Electronics markers
+  const isExplicitElectronics =
+    /\b(?:nothing\s*phone|mobile\s*device|imei\s*:\s*[0-9]{15}|headphones?|wh\-1000xm5|croma)\b/i.test(blob);
+
+  // 4. Vehicle context detection (Chassis, Engine, Ex-Showroom, RTO, Vehicle Model)
+  const isVehicleContext =
+    !isExplicitElectronics &&
+    /\b(?:chassis|frame\s*no|engine\s*no|ex[\s\-]showroom|rto\s*charges|vehicle\s*details|tvs\s*ronin|registration\s*no)\b/.test(blob);
+
+  // Negative disclaimer check: "not an imei", "imei does not apply", "not apply to vehicles"
+  const isImeiNegated =
+    /(?:not\s*an\s*imei|not\s*apply|does\s*not\s*apply|no\s*imei|not\s*imei)/i.test(blob);
+
+  // 5. Electronics Purchase Invoice
+  const hasValidImei = (/\bimei\b/.test(blob) && !isImeiNegated && !isVehicleContext) || isExplicitElectronics;
   const hasPhoneBrand =
-    /\b(nothing\s+phone|iphone|oneplus|google\s*pixel|pixel\s*\d|galaxy|realme|redmi|xiaomi|oppo|vivo|macbook|ipad|smartphone|laptop|tablet|earbud|airpods|smartwatch|camera)\b/.test(blob);
-  if (hasImei || hasPhoneBrand) {
-    const score = hasImei ? 0.66 : 0.55;
+    /\b(nothing\s+phone|iphone|oneplus|google\s*pixel|pixel\s*\d|galaxy|realme|redmi|xiaomi|oppo|vivo|macbook|ipad|smartphone|laptop|tablet|headphones?|earbuds?|airpods|smartwatch|sony|croma)\b/.test(blob);
+
+  if ((hasValidImei || hasPhoneBrand) && !isVehicleContext) {
+    const score = hasValidImei ? 0.85 : 0.75;
     hits.push({
       type: 'ELECTRONICS_INVOICE',
-      reasons: hasImei ? ['electronics_imei_identity'] : ['electronics_product_identity'],
+      reasons: hasValidImei ? ['electronics_imei_identity'] : ['electronics_product_identity'],
       score,
     });
   }
-  // Explicit appliance product identity should beat a generic purchase-invoice tag too.
+
+  // 6. Home Appliance Invoice
   const hasAppliance =
     /\b(inverter\s*(?:split\s*)?ac|air[\s\-]?conditioner|refrigerator|fridge|washing\s*machine|dishwasher|microwave|\boven\b|geyser|water\s*heater|stabilizer|chimney|induction\s*(?:cooktop|stove)?|\bsplit\s*ac\b|\bwindow\s*ac\b)\b/.test(blob);
   if (hasAppliance) {
-    hits.push({ type: 'APPLIANCE_INVOICE', reasons: ['appliance_product_identity'], score: 0.62 });
+    hits.push({ type: 'APPLIANCE_INVOICE', reasons: ['appliance_product_identity'], score: 0.70 });
   }
-  if (/\bservice\b/.test(blob) && /\b(labour|labor|odometer|km\s*reading|job\s*card)\b/.test(blob)) {
-    hits.push({ type: 'SERVICE_INVOICE', reasons: ['service_structure_signal'], score: 0.45 });
+
+  // 7. Vehicle Service Invoice / Job Card
+  if (/\b(?:service\s*invoice|job\s*card|\bro\s*no\b|periodic\s*service)\b/.test(blob) ||
+      (/\bservice\b/.test(blob) && /\b(labour|labor|odometer|km\s*reading)\b/.test(blob))) {
+    hits.push({ type: 'SERVICE_INVOICE', reasons: ['service_structure_signal'], score: 0.80 });
   }
-  if (/\bwarranty\s*(card|certificate)\b/.test(blob) && !/\btax\s*invoice\b/.test(blob)) {
-    hits.push({ type: 'WARRANTY', reasons: ['warranty_card_structure'], score: 0.5 });
+
+  // 8. Vehicle Purchase Invoice
+  if (isVehicleContext && /\b(?:tax\s*invoice|retail\s*invoice|ex[\s\-]showroom|dealer)\b/.test(blob) && !/\bjob\s*card|service\s*invoice\b/.test(blob)) {
+    hits.push({ type: 'PURCHASE_INVOICE', reasons: ['vehicle_purchase_structure'], score: 0.80 });
   }
-  if (/\bpuc\b/.test(blob) && /\b(pollution|emission|validity|certificate)\b/.test(blob)) {
-    hits.push({ type: 'PUC', reasons: ['puc_certificate_structure'], score: 0.5 });
-  }
+
+  // 9. RC Certificate
   if (/\b(certificate of registration|registration certificate|form\s*23|rc\s*book)\b/.test(blob)) {
-    hits.push({ type: 'RC', reasons: ['rc_certificate_structure'], score: 0.5 });
+    hits.push({ type: 'RC', reasons: ['rc_certificate_structure'], score: 0.85 });
   }
+
   if (fields.policyNumber || fields.insuranceExpiry || fields.idvAmount) {
-    hits.push({ type: 'INSURANCE_POLICY', reasons: ['insurance_field_relationship'], score: 0.4 });
+    hits.push({ type: 'INSURANCE_POLICY', reasons: ['insurance_field_relationship'], score: 0.5 });
   }
   if (fields.pucExpiry && !fields.policyNumber) {
-    hits.push({ type: 'PUC', reasons: ['puc_field_relationship'], score: 0.4 });
+    hits.push({ type: 'PUC', reasons: ['puc_field_relationship'], score: 0.5 });
   }
+
   return hits;
 }
 
@@ -87,10 +139,8 @@ export function classifyDocumentIntelligence(
   rawText = '',
   fields: Record<string, unknown> = {},
   hintedType?: string,
-  providerTexts?: Record<string, string | null>,
+  providerTexts?: Record<string, string | null>
 ): DocumentTypeIntelligence {
-  const started = Date.now();
-  void started;
   const hints = {
     productName: fields.productName,
     shopName: fields.shopName,
@@ -111,9 +161,24 @@ export function classifyDocumentIntelligence(
   const reasons: string[] = [];
 
   const invoiceLike = /\b(invoice|gstin|tax\s*invoice|bill\s*no|grand\s*total|imei|policy|puc|warranty|job\s*card|service\s*invoice)\b/i.test(
-    `${rawText} ${fields.productName || ''}`,
+    `${rawText} ${fields.productName || ''}`
   );
   const forcedBillFallback = keyword?.type === 'bill' && !keyword?.isServiceInvoice && !invoiceLike;
+
+  // Guard: Very short, heavily truncated or rotated documents
+  const trimmed = rawText.trim();
+  if (
+    trimmed.length < 50 ||
+    /\b(?:nd\s*vld\s*fds|totl\s*\?\?)\b/i.test(trimmed) ||
+    /\b(?:partially\s*visible|cropped\s*scan|\.\.\.rota\.\.\.)\b/i.test(trimmed)
+  ) {
+    return {
+      documentType: UNKNOWN_DOCUMENT_STRUCTURE,
+      documentTypeConfidence: 0.2,
+      classificationReasons: ['unreadable_or_minimal_text'],
+      forced: false,
+    };
+  }
 
   let best: LearningDocumentType | typeof UNKNOWN_DOCUMENT_STRUCTURE | typeof DOCUMENT_TYPE_UNCERTAIN =
     UNKNOWN_DOCUMENT_STRUCTURE;
@@ -161,9 +226,9 @@ export function classifyDocumentIntelligence(
   score = clamp01(score);
 
   const competingFamilies = extras
-    .filter((h) => h.type !== best && h.score >= 0.4)
+    .filter((h) => h.type !== best && h.score >= 0.5)
     .map((h) => h.type);
-  if (competingFamilies.length && score < 0.7) {
+  if (competingFamilies.length >= 2 || (competingFamilies.length >= 1 && score < 0.88)) {
     return {
       documentType: DOCUMENT_TYPE_UNCERTAIN,
       documentTypeConfidence: score,
@@ -177,15 +242,6 @@ export function classifyDocumentIntelligence(
       documentType: UNKNOWN_DOCUMENT_STRUCTURE,
       documentTypeConfidence: score,
       classificationReasons: [...reasons, 'low_confidence_unknown_structure'],
-      forced: false,
-    };
-  }
-
-  if (best === UNKNOWN_DOCUMENT_STRUCTURE) {
-    return {
-      documentType: UNKNOWN_DOCUMENT_STRUCTURE,
-      documentTypeConfidence: score,
-      classificationReasons: reasons.length ? reasons : ['no_reliable_document_family'],
       forced: false,
     };
   }

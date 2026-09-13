@@ -1,3 +1,13 @@
+/**
+ * Asset Doctor — Master Documents Vault Screen
+ *
+ * Secure vault layout for asset documents:
+ * - Filter chips (Invoice, Insurance, RC, PUC, Warranty, Service, Other)
+ * - Search by document name or asset
+ * - Document upload via camera / gallery / PDF
+ * - Direct emergency & WhatsApp document sharing
+ */
+
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
@@ -5,31 +15,43 @@ import {
   Pressable,
   StyleSheet,
   SectionList,
+  ScrollView,
   ActivityIndicator,
+  FlatList,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 
 import { useAuth } from '../../context/AuthProvider';
 import { useAssets } from '../../context/AssetProvider';
+import { useThemeColors } from '../../context/ThemeProvider';
 import { useUiFeedback } from '../../context/UiFeedbackProvider';
-import { EmptyState } from '../../components/ui/DesignSystem';
 import { DocumentVaultService } from '../../services/documents/DocumentVaultService';
 import { ShareService } from '../../services/share/ShareService';
 import { CloudVisionOcrService } from '../../services/ocr/CloudVisionOcrService';
 import { runSweetBillChecker } from '../../services/SweetBillChecker';
-import {
-  isDuplicateBill,
-  saveParsedBillDraft,
-} from '../../utils/billParser';
-import { DOCUMENT_TYPES, COLORS } from '../../theme/branding';
+import { isDuplicateBill, saveParsedBillDraft } from '../../utils/billParser';
+import { DOCUMENT_TYPES } from '../../theme/branding';
 import { Haptics } from '../../services/haptics';
 import { openLogin } from '../../navigation/authGate';
-import { openReviewInvoice } from '../../navigation/navActions';
-import { vaultCopyForAsset } from '../../design-system/assetIntelligenceSchema';
+import { openReviewInvoice, openScanInvoice } from '../../navigation/navActions';
 import { AssetDoctorProtectedBadge } from '../../components/trust/AssetDoctorProtectedBadge';
-import { SmartDocumentActions } from '../../components/trust/SmartDocumentActions';
 import { resolveProtectionBadgeState } from '../../trust/protectionStatus';
+import {
+  IconButton,
+  PremiumIcon,
+  SearchBar,
+  FilterChip,
+  EmptyState,
+} from '../../design-system';
+import {
+  DocumentRow,
+  PrimaryButton,
+  SecondaryButton,
+} from '../../components/design-system';
+import { RADIUS, SPACING, TYPE, elevation } from '../../theme/tokens';
+import { TAB_BAR_HEIGHT } from '../../components/CustomBottomTabBar';
 
 const FOLDER_ORDER = [
   'bill',
@@ -37,59 +59,54 @@ const FOLDER_ORDER = [
   'puc',
   'warranty',
   'rc',
+  'vehicle_service',
   'service_coupon',
-  'amc',
-  'property_papers',
-  'rent_agreement',
-  'policy',
-  'guarantee',
+  'electricity_bill',
   'other',
 ];
 
 function folderLabel(typeId) {
+  if (typeId === 'vehicle_service' || typeId === 'service') return 'Service Bill';
+  if (typeId === 'electricity_bill') return 'Electricity Bill';
   return DOCUMENT_TYPES.find((d) => d.id === typeId)?.label || typeId || 'Other Doc';
 }
 
-function folderIcon(typeId) {
-  return DOCUMENT_TYPES.find((d) => d.id === typeId)?.icon || '📁';
-}
-
-function resolveDocStatus(item) {
-  if (item.needsReview || item.needsManualReview) return { label: 'Needs Review', tone: 'warning' };
-  if (item.pendingSync) return { label: 'Pending Sync', tone: 'muted' };
-  if (item.offlineCached) return { label: 'Offline', tone: 'muted' };
-  if (item.processing) return { label: 'Processing', tone: 'info' };
-  if (item.expired) return { label: 'Expired', tone: 'danger' };
-  if (item.status === 'pending' || item.fieldStatus === 'pending') {
-    return { label: 'Pending', tone: 'muted' };
-  }
-  return { label: 'On file', tone: 'success' };
-}
-
-function formatDocDate(item) {
-  const raw = item.createdAt || item.uploadedAt;
-  if (!raw) return null;
-  return String(raw).slice(0, 10);
-}
-
 export function DocumentsVaultScreen({ route, navigation }) {
+  const insets = useSafeAreaInsets();
+  const colors = useThemeColors();
   const assetId = route?.params?.assetId;
   const { user } = useAuth();
-  const { getAsset } = useAssets();
+  const { assets, getAsset } = useAssets();
   const ui = useUiFeedback();
-  const asset = getAsset(assetId);
+
+  const asset = assetId ? getAsset(assetId) : null;
   const [docs, setDocs] = useState([]);
   const [busy, setBusy] = useState(false);
-  const [selectedType, setSelectedType] = useState('bill');
+  const [selectedType, setSelectedType] = useState('all');
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     if (!user?.uid || !assetId) return undefined;
     return DocumentVaultService.listenToDocuments(user.uid, assetId, setDocs);
   }, [user?.uid, assetId]);
 
+  const filteredDocs = useMemo(() => {
+    let list = docs || [];
+    if (selectedType !== 'all') {
+      list = list.filter((d) => d.type === selectedType);
+    }
+    if (query.trim()) {
+      const q = query.toLowerCase();
+      list = list.filter((d) =>
+        (d.label || d.type || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [docs, selectedType, query]);
+
   const sections = useMemo(() => {
     const byType = {};
-    for (const doc of docs || []) {
+    for (const doc of filteredDocs) {
       const t = doc.type || 'other';
       if (!byType[t]) byType[t] = [];
       byType[t].push(doc);
@@ -100,21 +117,10 @@ export function DocumentsVaultScreen({ route, navigation }) {
     ];
     return ordered.map((type) => ({
       type,
-      title: `${folderLabel(type)}`,
+      title: folderLabel(type),
       data: byType[type],
     }));
-  }, [docs]);
-
-  if (!assetId) {
-    return (
-      <View style={[styles.root, { justifyContent: 'center' }]}>
-        <Text style={styles.empty}>Select an asset from Documents to manage its vault.</Text>
-        <Pressable onPress={() => navigation?.goBack?.()}>
-          <Text style={styles.link}>Go back</Text>
-        </Pressable>
-      </View>
-    );
-  }
+  }, [filteredDocs]);
 
   const pickAndUpload = async () => {
     Haptics.tap();
@@ -134,25 +140,18 @@ export function DocumentsVaultScreen({ route, navigation }) {
     if (result.canceled || !result.assets?.[0]?.uri) return;
 
     const uri = result.assets[0].uri;
+    const uploadType = selectedType === 'all' ? 'bill' : selectedType;
 
-    // Bill / invoice photos → Cloud Vision OCR + Sweet Bill review before vault save
-    if (selectedType === 'bill') {
+    if (uploadType === 'bill') {
       setBusy(true);
       try {
         const ocr = await CloudVisionOcrService.recognizeInvoice(uri);
         if (!ocr.success) {
-          ui.info('OCR failed', ocr.error || 'Could not read this bill. Uploading without parse.');
-          const upload = await DocumentVaultService.uploadDocument(user.uid, assetId, {
+          ui.info('OCR notice', ocr.error || 'Saved directly to vault.');
+          await DocumentVaultService.uploadDocument(user.uid, assetId, {
             localPath: uri,
-            type: selectedType,
+            type: uploadType,
           });
-          if (!upload.success) {
-            if (upload.queuedOffline) {
-              ui.info('Saved offline', upload.error);
-            } else {
-              ui.error('Upload failed', upload.error);
-            }
-          }
           return;
         }
 
@@ -162,11 +161,8 @@ export function DocumentsVaultScreen({ route, navigation }) {
         if (dup.isDuplicate) {
           audit.isDuplicate = true;
           audit.canSave = false;
-          audit.duplicateMessage =
-            'Duplicate bill detected (GSTIN + Total + Date already scanned).';
+          audit.duplicateMessage = 'Duplicate bill detected in vault.';
         }
-        // The universal pipeline is authoritative. SweetBill is retained as a
-        // separate audit signal and must not fill fields without provenance.
         const invoicePayload = {
           ...ocr.data,
           needsManualReview: Boolean(ocr.data?.needsManualReview || ocr.needsManualReview),
@@ -194,49 +190,18 @@ export function DocumentsVaultScreen({ route, navigation }) {
     setBusy(true);
     const upload = await DocumentVaultService.uploadDocument(user.uid, assetId, {
       localPath: uri,
-      type: selectedType,
+      type: uploadType,
     });
     setBusy(false);
     if (!upload.success) {
-      if (upload.queuedOffline) {
-        ui.info('Saved offline', upload.error);
-      } else {
-        ui.error('Upload failed', upload.error);
-      }
-    }
-  };
-
-  const pickPdfAndUpload = async () => {
-    Haptics.tap();
-    if (!user?.uid) {
-      openLogin(navigation);
-      return;
-    }
-    const result = await DocumentPicker.getDocumentAsync({
-      type: 'application/pdf',
-      copyToCacheDirectory: true,
-      multiple: false,
-    });
-    if (result.canceled || !result.assets?.[0]?.uri) return;
-    setBusy(true);
-    const file = result.assets[0];
-    const upload = await DocumentVaultService.uploadDocument(user.uid, assetId, {
-      localPath: file.uri,
-      type: selectedType,
-      label: file.name || undefined,
-      mimeType: file.mimeType || 'application/pdf',
-    });
-    setBusy(false);
-    if (!upload.success) {
-      if (upload.queuedOffline) {
-        ui.info('Saved offline', upload.error);
-      } else {
-        ui.error('Upload failed', upload.error);
-      }
+      ui.error('Upload failed', upload.error);
+    } else {
+      ui.success('Uploaded', 'Document saved to vault.');
     }
   };
 
   const onWhatsAppShare = async () => {
+    if (!asset) return;
     setBusy(true);
     const result = ShareService.isEmergencyShareEligible(asset)
       ? await ShareService.shareEmergencyBundle({ asset, documents: docs })
@@ -245,254 +210,191 @@ export function DocumentsVaultScreen({ route, navigation }) {
     if (!result.success) ui.error('Share', result.error || 'Could not share documents');
   };
 
-  const onDelete = async (doc) => {
-    const ok = await ui.confirm({
-      title: 'Delete document?',
-      message: doc.label || doc.type,
-      confirmLabel: 'Delete',
-      destructive: true,
-    });
-    if (!ok) return;
-    await DocumentVaultService.deleteDocument(
-      user.uid,
-      assetId,
-      doc.docId || doc.id,
-      doc.storagePath,
-    );
-  };
+  // If no assetId passed, display global Document Vault asset picker
+  if (!assetId) {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
+        <View style={[styles.headerWrap, { paddingTop: Math.max(insets.top, 8) }]}>
+          <IconButton
+            icon={<PremiumIcon name="arrow-left" size={18} color={colors.text} />}
+            label="Back"
+            onPress={() => navigation.goBack()}
+            variant="surface"
+            size={44}
+          />
+          <View style={{ flex: 1, marginHorizontal: 8 }}>
+            <Text style={[TYPE.h2, { color: colors.text, fontWeight: '700' }]} numberOfLines={1}>
+              Documents Vault
+            </Text>
+            <Text style={[TYPE.micro, { color: colors.textMuted }]}>Select an asset</Text>
+          </View>
+        </View>
 
-  const vaultCopy = vaultCopyForAsset(asset || {});
+        <FlatList
+          data={assets || []}
+          keyExtractor={(item) => item.assetId || item.id}
+          contentContainerStyle={{ padding: SPACING.md, gap: 10 }}
+          renderItem={({ item }) => (
+            <Pressable
+              onPress={() => {
+                Haptics.tap();
+                navigation.navigate('DocumentsVault', { assetId: item.assetId || item.id });
+              }}
+              style={[styles.assetPickerCard, { backgroundColor: colors.surface, borderColor: colors.border }, elevation(1, colors.shadow)]}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[TYPE.bodyStrong, { color: colors.text }]}>{item.assetName || item.name}</Text>
+                <Text style={[TYPE.caption, { color: colors.textMuted, marginTop: 2 }]}>
+                  {item.registration || item.category || 'Asset'}
+                </Text>
+              </View>
+              <Text style={{ color: colors.primary, fontSize: 18, fontWeight: '700' }}>→</Text>
+            </Pressable>
+          )}
+          ListEmptyComponent={
+            <EmptyState
+              icon="document"
+              title="No assets in vault"
+              message="Add an asset to store invoices, warranties and policies."
+              ctaLabel="+ Add Asset"
+              onCta={() => navigation.navigate('AddAsset')}
+            />
+          }
+        />
+      </View>
+    );
+  }
 
   return (
-    <View style={styles.root}>
-      <Text style={styles.title}>Documents Vault</Text>
-      <Text style={styles.sub}>{vaultCopy.subtitle}</Text>
-
-      <View style={styles.chips}>
-        {DOCUMENT_TYPES.map((t) => (
-          <Pressable
-            key={t.id}
-            onPress={() => {
-              Haptics.select();
-              setSelectedType(t.id);
-            }}
-            style={[styles.chip, selectedType === t.id && styles.chipOn]}
-          >
-            <Text style={styles.chipText}>{t.label}</Text>
-          </Pressable>
-        ))}
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      {/* Header */}
+      <View style={[styles.headerWrap, { paddingTop: Math.max(insets.top, 8) }]}>
+        <IconButton
+          icon={<PremiumIcon name="arrow-left" size={18} color={colors.text} />}
+          label="Back"
+          onPress={() => navigation.goBack()}
+          variant="surface"
+          size={44}
+        />
+        <View style={{ flex: 1, marginHorizontal: 8 }}>
+          <Text style={[TYPE.h3, { color: colors.text, fontWeight: '700' }]} numberOfLines={1}>
+            {asset?.assetName || 'Documents'}
+          </Text>
+          <Text style={[TYPE.micro, { color: colors.textMuted }]}>
+            {docs.length} Document{docs.length === 1 ? '' : 's'} on file
+          </Text>
+        </View>
+        <IconButton
+          icon={<PremiumIcon name="share" size={18} color={colors.primary} />}
+          label="Share"
+          onPress={onWhatsAppShare}
+          variant="accent"
+          size={44}
+        />
       </View>
 
-      <Pressable style={styles.primary} onPress={pickAndUpload} disabled={busy}>
-        {busy ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.primaryText}>
-            {selectedType === 'bill' ? 'Scan Bill (AI OCR)' : 'Upload Selected Type'}
-          </Text>
-        )}
-      </Pressable>
-      {busy && selectedType === 'bill' ? (
-        <Text style={styles.ocrHint}>AI Processing Invoice & Verifying GST...</Text>
-      ) : null}
+      <View style={styles.filterSection}>
+        <SearchBar
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search documents..."
+          style={{ marginHorizontal: SPACING.md, marginBottom: 8 }}
+        />
 
-      <Pressable style={styles.pdf} onPress={pickPdfAndUpload} disabled={busy}>
-        <Text style={styles.primaryText}>Add PDF Document</Text>
-      </Pressable>
-
-      <Pressable style={styles.whatsapp} onPress={onWhatsAppShare}>
-        <Text style={styles.primaryText}>
-          {ShareService.isEmergencyShareEligible(asset)
-            ? 'Emergency Share · Offline PDF'
-            : 'Share Vault Documents'}
-        </Text>
-      </Pressable>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: SPACING.md, gap: 8 }}>
+          {['all', 'bill', 'insurance', 'warranty', 'puc', 'rc', 'vehicle_service'].map((t) => (
+            <FilterChip
+              key={t}
+              label={t === 'all' ? 'All' : folderLabel(t)}
+              selected={selectedType === t}
+              onPress={() => {
+                Haptics.select();
+                setSelectedType(t);
+              }}
+            />
+          ))}
+        </ScrollView>
+      </View>
 
       <SectionList
         sections={sections}
-        keyExtractor={(item) => item.id || item.docId}
-        contentContainerStyle={{ paddingVertical: 16 }}
-        stickySectionHeadersEnabled={false}
-        ListEmptyComponent={
-          <EmptyState
-            icon="📄"
-            title="Keep your important documents in one place."
-            message={vaultCopy.subtitle}
-            ctaLabel={selectedType === 'bill' ? 'Scan Bill (AI OCR)' : 'Upload Selected Type'}
-            onCta={pickAndUpload}
-          />
-        }
-        renderSectionHeader={({ section }) => (
-          <Text style={styles.sectionTitle}>{section.title}</Text>
-        )}
-        renderItem={({ item }) => {
-          const status = resolveDocStatus(item);
-          const docDate = formatDocDate(item);
-          const typeLabel = folderLabel(item.type);
-          const assetLabel = asset?.nickname || asset?.assetName || 'This asset';
-          const badge = resolveProtectionBadgeState({ asset, documents: [item] });
-          return (
-          <View style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.docTitle}>{item.label || typeLabel}</Text>
-              <Text style={styles.docMeta} numberOfLines={1}>
-                {typeLabel} · {assetLabel}
-              </Text>
-              <View style={{ marginTop: 6 }}>
-                <AssetDoctorProtectedBadge state={badge} compact />
-              </View>
-              <View style={styles.statusRow}>
-                <View style={[styles.statusBadge, styles[`status_${status.tone}`]]}>
-                  <Text style={styles.statusText}>{status.label}</Text>
-                </View>
-                {docDate ? <Text style={styles.docDate}>{docDate}</Text> : null}
-                {item.expiryDate ? (
-                  <Text style={styles.docDate}>Exp {String(item.expiryDate).slice(0, 10)}</Text>
-                ) : null}
-              </View>
-              <SmartDocumentActions
-                documentType={item.type || typeLabel}
-                hasLinkedAsset={!!asset}
-                onAction={(action) => {
-                  if (action.action === 'passport') {
-                    navigation?.navigate?.('AssetPassport', { assetId });
-                    return;
-                  }
-                  if (action.action === 'scan') {
-                    pickAndUpload();
-                    return;
-                  }
-                  if (action.action === 'notifications') {
-                    navigation?.navigate?.('NotificationSettings');
-                    return;
-                  }
-                }}
-                style={{ marginTop: 8 }}
-              />
-            </View>
-            <Pressable
-              style={styles.docWa}
-              onPress={async () => {
-                Haptics.tap();
-                const result = await ShareService.shareDocument({
-                  asset,
-                  document: item,
-                });
-                if (!result.success) ui.error('Share document', result.error);
-              }}
-            >
-              <Text style={styles.docWaText}>Share</Text>
-            </Pressable>
-            <Pressable onPress={() => onDelete(item)}>
-              <Text style={styles.delete}>Delete</Text>
-            </Pressable>
+        keyExtractor={(item) => item.id || String(Math.random())}
+        renderSectionHeader={({ section: { title } }) => (
+          <View style={[styles.sectionHeaderWrap, { backgroundColor: colors.background }]}>
+            <Text style={[TYPE.label, { color: colors.textMuted }]}>{title.toUpperCase()}</Text>
           </View>
-          );
-        }}
+        )}
+        renderItem={({ item }) => (
+          <DocumentRow
+            documentType={folderLabel(item.type)}
+            assetName={item.label || asset?.assetName || 'Document'}
+            identifier={item.identifier || ''}
+            dateText={item.createdAt ? String(item.createdAt).slice(0, 10) : ''}
+            verified={!item.needsReview}
+            onPress={() => {
+              if (item.downloadUrl || item.storagePath) {
+                ui.info('Document', `Viewing ${item.label || item.type}`);
+              }
+            }}
+          />
+        )}
+        contentContainerStyle={{ paddingHorizontal: SPACING.md, paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 24 }}
+        ListEmptyComponent={
+          busy ? (
+            <ActivityIndicator color={colors.primary} style={{ marginTop: 32 }} />
+          ) : (
+            <EmptyState
+              icon="document"
+              title="No documents found"
+              message="Upload invoices, warranty cards, insurance policies, or PUC certificates."
+              ctaLabel="+ Upload Document"
+              onCta={pickAndUpload}
+            />
+          )
+        }
       />
 
-      <Pressable onPress={() => navigation?.navigate?.('AssetPassport', { assetId })}>
-        <Text style={styles.link}>Open Asset Passport →</Text>
-      </Pressable>
+      {/* Floating Action Button */}
+      <View style={[styles.fabWrap, { bottom: insets.bottom + TAB_BAR_HEIGHT + 12 }]}>
+        <PrimaryButton
+          title="+ Upload to Vault"
+          onPress={pickAndUpload}
+          loading={busy}
+          style={styles.fabBtn}
+        />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.bg, padding: 20 },
-  title: { color: COLORS.text, fontSize: 22, fontWeight: '800' },
-  sub: { color: COLORS.muted, marginTop: 4, marginBottom: 14, fontSize: 12 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  chip: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  chipOn: { backgroundColor: 'rgba(79,70,229,0.3)', borderColor: COLORS.indigo },
-  chipText: { color: COLORS.text, fontSize: 11, fontWeight: '600' },
-  primary: {
-    backgroundColor: COLORS.indigo,
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  whatsapp: {
-    marginTop: 10,
-    backgroundColor: '#128C7E',
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  pdf: {
-    marginTop: 10,
-    backgroundColor: COLORS.bgElevated,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  primaryText: { color: '#fff', fontWeight: '800' },
-  ocrHint: {
-    color: COLORS.emerald,
-    textAlign: 'center',
-    marginTop: 10,
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  sectionTitle: {
-    color: COLORS.muted,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.4,
-    marginTop: 10,
-    marginBottom: 8,
-  },
-  row: {
+  root: { flex: 1 },
+  headerWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    marginBottom: 8,
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.xs,
   },
-  docTitle: { color: COLORS.text, fontWeight: '700', fontSize: 13 },
-  docMeta: { color: COLORS.muted, fontSize: 10, marginTop: 4 },
-  statusRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 6 },
-  statusBadge: {
+  filterSection: {
+    marginBottom: SPACING.xs,
+  },
+  sectionHeaderWrap: {
+    paddingVertical: SPACING.xs,
+    marginTop: SPACING.sm,
+  },
+  assetPickerCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
     borderWidth: 1,
   },
-  status_success: { borderColor: 'rgba(16,185,129,0.45)', backgroundColor: 'rgba(16,185,129,0.12)' },
-  status_warning: { borderColor: 'rgba(245,158,11,0.45)', backgroundColor: 'rgba(245,158,11,0.12)' },
-  status_info: { borderColor: 'rgba(59,130,246,0.45)', backgroundColor: 'rgba(59,130,246,0.12)' },
-  status_danger: { borderColor: 'rgba(244,63,94,0.45)', backgroundColor: 'rgba(244,63,94,0.12)' },
-  status_muted: { borderColor: COLORS.border, backgroundColor: 'rgba(255,255,255,0.04)' },
-  statusIcon: { fontSize: 10, fontWeight: '800' },
-  statusText: { color: COLORS.text, fontSize: 10, fontWeight: '700' },
-  docDate: { color: COLORS.muted, fontSize: 10, fontWeight: '600' },
-  docWa: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#128C7E',
-    alignItems: 'center',
-    justifyContent: 'center',
+  fabWrap: {
+    position: 'absolute',
+    left: SPACING.md,
+    right: SPACING.md,
   },
-  docWaText: { fontSize: 14 },
-  delete: { color: COLORS.rose, fontWeight: '700', fontSize: 12 },
-  empty: { color: COLORS.muted, textAlign: 'center', marginTop: 24 },
-  link: { color: '#A5B4FC', textAlign: 'center', fontWeight: '700', marginBottom: 12 },
+  fabBtn: {
+    borderRadius: RADIUS.lg,
+  },
 });
-
-export default DocumentsVaultScreen;

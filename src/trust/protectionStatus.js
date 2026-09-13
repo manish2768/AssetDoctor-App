@@ -5,6 +5,8 @@
  */
 
 import { assetMatchesCategory } from '../utils/categoryNormalization.js';
+import { validateIndianPincode } from '../services/identity/identityNormalizer';
+import { computeProfileCompletion } from '../utils/profileCompletion';
 
 export const BADGE_STATES = Object.freeze({
   PROTECTED: Object.freeze({
@@ -73,7 +75,8 @@ const INTELLIGENCE_SPECS = Object.freeze([
   Object.freeze({ key: 'vendor', aliases: ['shopName', 'storeName', 'insurerName', 'insurer'], label: 'Vendor' }),
   Object.freeze({ key: 'warrantyMonths', aliases: ['warrantyPeriodMonths'], label: 'Warranty' }),
   Object.freeze({ key: 'warrantyExpiry', aliases: [], label: 'Warranty expiry' }),
-  Object.freeze({ key: 'invoiceNumber', aliases: ['invoice_or_policy_no'], label: 'Invoice Number' }),
+  Object.freeze({ key: 'invoiceNumber', aliases: ['invoice_or_policy_no', 'billNumber'], label: 'Invoice Number' }),
+  Object.freeze({ key: 'totalAmount', aliases: ['amount', 'price', 'purchasePrice', 'grandTotal', 'total'], label: 'Total Amount' }),
   Object.freeze({ key: 'registration', aliases: [], label: 'Registration' }),
   Object.freeze({ key: 'policyNumber', aliases: ['insurancePolicyNumber'], label: 'Policy Number' }),
   Object.freeze({ key: 'insuranceExpiry', aliases: [], label: 'Insurance expiry' }),
@@ -423,7 +426,7 @@ function pickIntelligenceSpecs(extracted = {}, documentType) {
     );
   }
   return INTELLIGENCE_SPECS.filter((s) =>
-    ['productName', 'purchaseDate', 'vendor', 'warrantyMonths', 'invoiceNumber'].includes(s.key),
+    ['productName', 'purchaseDate', 'vendor', 'totalAmount', 'invoiceNumber', 'warrantyMonths'].includes(s.key),
   );
 }
 
@@ -455,9 +458,17 @@ export function summarizeDocumentIntelligence(extracted = {}, { documentType } =
     summary = `PUC is recorded until ${expiry.value}.`;
   } else if (detected.length) {
     const product = detected.find((d) => d.key === 'productName');
-    summary = product
-      ? `Extracted record for ${product.value}.`
-      : `Extracted ${detected.length} field${detected.length === 1 ? '' : 's'} from this document.`;
+    const vendor = detected.find((d) => d.key === 'vendor');
+    const total = detected.find((d) => d.key === 'totalAmount');
+    if (product && total) {
+      summary = `Extracted record for ${product.value} (₹${total.value}).`;
+    } else if (product) {
+      summary = `Extracted record for ${product.value}.`;
+    } else if (vendor && total) {
+      summary = `Extracted document from ${vendor.value} (₹${total.value}).`;
+    } else {
+      summary = `Extracted ${detected.length} field${detected.length === 1 ? '' : 's'} from this document.`;
+    }
   }
 
   return {
@@ -588,38 +599,78 @@ export function buildAssetTimeline(asset = {}, documents = []) {
   });
 }
 
-export function profileProtectionChecklist(user = {}, assets = [], documents = []) {
+/**
+ * Canonical Protection Status Engine
+ * Derives protection completeness, score (0-100), badge state, and checklist items.
+ * Guarantees: if all 5 items are complete => score is 100/100 and badge is "Protection Setup Complete".
+ */
+export function computeProtectionStatus({ user = {}, assets = [], documents = [] } = {}) {
   const list = Array.isArray(assets) ? assets.filter((a) => !a?.isDemo && !a?.deletedAt) : [];
-  const docs = documents || [];
-  const identity = isPresent(user.name) || isPresent(user.displayName);
-  const mobile = isPresent(user.phone) || isPresent(user.phoneNumber);
-  const whatsapp = user.whatsappOptIn === true;
-  const pin = isPresent(user.pincode) || isPresent(user.city) || user.appLockEnabled === true;
+  const docs = Array.isArray(documents) ? documents : [];
+
+  // Strictly delegate user profile validation to Canonical Profile Completion
+  const profileCompletion = computeProfileCompletion(user);
+  const pinCheck = validateIndianPincode(user?.pincode);
+
+  const nameValid = profileCompletion.requiredChecks.find((c) => c.id === 'name')?.complete ?? false;
+  const pinValid = pinCheck.valid;
+  const locationValid = Boolean(user?.city && String(user.city).trim() && user?.state && String(user.state).trim());
+  const identityVerified = profileCompletion.requiredChecks.find((c) => c.id === 'identity')?.complete ?? false;
   const assetsConnected = list.length > 0;
+
   const items = [
-    { id: 'identity', label: 'Identity complete', complete: identity },
-    { id: 'mobile', label: 'Mobile added', complete: mobile },
-    { id: 'whatsapp', label: 'WhatsApp ready', complete: whatsapp },
-    { id: 'pin', label: 'PIN added', complete: pin },
+    { id: 'name', label: 'Full Name complete', complete: nameValid },
+    { id: 'pin', label: '6-digit PIN added', complete: pinValid },
+    { id: 'location', label: 'City & State added', complete: locationValid },
+    { id: 'identity', label: 'Verified Login Identity', complete: identityVerified },
     { id: 'assets', label: 'Assets connected', complete: assetsConnected },
   ];
+
+  const completeCount = items.filter((it) => it.complete).length;
+  const totalCount = items.length;
+  const isComplete = completeCount === totalCount;
+  const scoreValue = Math.round((completeCount / totalCount) * 100);
+
+  const badge = isComplete
+    ? { id: 'PROTECTED', label: 'Protection Setup Complete', tone: 'success' }
+    : { id: 'INCOMPLETE', label: 'Protection Setup Incomplete', tone: 'neutral' };
+
+  const assetsProtected = list.filter((a) => isPresent(a.name || a.assetName || a.model)).length;
+  const documentsProtected = docs.filter((d) => !documentNeedsReview(d)).length;
+
   const attention = [];
   for (const a of list) {
-    const badge = resolveProtectionBadgeState({ asset: a, documents: docs.filter((d) => (d.assetId || d.linkedAssetId) === (a.assetId || a.id)) });
-    if (badge.id !== 'PROTECTED') attention.push(a);
+    if (
+      (isPresent(a.warrantyExpiry) && daysUntilDate(a.warrantyExpiry) != null && daysUntilDate(a.warrantyExpiry) <= 30) ||
+      (isPresent(a.insuranceExpiry) && daysUntilDate(a.insuranceExpiry) != null && daysUntilDate(a.insuranceExpiry) <= 30) ||
+      (isPresent(a.nextServiceDue) && daysUntilDate(a.nextServiceDue) != null && daysUntilDate(a.nextServiceDue) <= 30)
+    ) {
+      attention.push(a);
+    }
   }
   const docsNeedingReview = docs.filter(documentNeedsReview);
+  const upcomingAttention = attention.length + docsNeedingReview.length;
+
   return {
+    status: isComplete ? 'COMPLETE' : 'INCOMPLETE',
+    isComplete,
+    score: {
+      value: scoreValue,
+      display: `${scoreValue} / 100`,
+      totalDimensions: totalCount,
+    },
+    badge,
     items,
-    assetsProtected: list.filter((a) => {
-      const linked = docs.filter((d) => (d.assetId || d.linkedAssetId) === (a.assetId || a.id));
-      return resolveProtectionBadgeState({ asset: a, documents: linked }).id === 'PROTECTED';
-    }).length,
-    documentsProtected: docs.filter((d) => !documentNeedsReview(d)).length,
-    upcomingAttention: attention.length + docsNeedingReview.length,
+    assetsProtected,
+    documentsProtected,
+    upcomingAttention,
     assetsCount: list.length,
     documentsCount: docs.length,
   };
+}
+
+export function profileProtectionChecklist(user = {}, assets = [], documents = []) {
+  return computeProtectionStatus({ user, assets, documents });
 }
 
 export function emptyStateForKind(kind) {

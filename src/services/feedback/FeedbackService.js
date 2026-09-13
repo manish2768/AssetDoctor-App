@@ -10,6 +10,8 @@ import { Haptics } from '../haptics/triggerHaptic';
 
 const DRAFT_KEY = '@asset_doctor/feedback_draft_v1';
 
+import { buildWhatsAppLink, isValidPhoneNumber } from '../../utils/phoneUtils';
+
 export class FeedbackService {
   static async saveLocalDraft(payload) {
     try {
@@ -25,21 +27,43 @@ export class FeedbackService {
   static async sendWhatsApp({ phone, text }) {
     Haptics.tap();
     try {
-      const digits = String(phone || '').replace(/\D/g, '');
-      const encoded = encodeURIComponent(text || '');
-      if (!digits) {
+      if (phone && !isValidPhoneNumber(phone)) {
+        Haptics.error();
+        return {
+          success: false,
+          error: `Invalid phone number (${phone}). Please provide a valid 10-digit number.`,
+        };
+      }
+
+      const { appUrl, webUrl, hasPhone } = buildWhatsAppLink({ phone, message: text || '' });
+
+      if (!hasPhone) {
         await Share.share({ message: text || '' });
         return { success: true, via: 'share' };
       }
-      const url = `whatsapp://send?phone=${digits}&text=${encoded}`;
-      const can = await Linking.canOpenURL(url);
-      if (!can) {
-        const web = `https://wa.me/${digits}?text=${encoded}`;
-        await Linking.openURL(web);
-        return { success: true, via: 'wa_web' };
+
+      try {
+        const can = await Linking.canOpenURL(appUrl);
+        if (can) {
+          await Linking.openURL(appUrl);
+          return { success: true, via: 'whatsapp' };
+        }
+      } catch {
+        /* fallback to wa.me */
       }
-      await Linking.openURL(url);
-      return { success: true, via: 'whatsapp' };
+
+      try {
+        const canWeb = await Linking.canOpenURL(webUrl);
+        if (canWeb) {
+          await Linking.openURL(webUrl);
+          return { success: true, via: 'wa_web' };
+        }
+      } catch {
+        /* fallback to share */
+      }
+
+      await Share.share({ message: text || '' });
+      return { success: true, via: 'system_share' };
     } catch (error) {
       return { success: false, error: error?.message || 'WhatsApp failed' };
     }

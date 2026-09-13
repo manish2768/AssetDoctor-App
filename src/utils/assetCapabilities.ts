@@ -1,8 +1,18 @@
 /**
  * Asset Doctor — Smart Asset Capability Engine
  * Centralized capability resolver for Vehicles, Smartphones, Electronics, and Home Appliances.
- * Determines exactly what data, cards, and prediction modules each asset type is entitled to.
+ * Strictly driven by canonical domain guards — NEVER guesses vehicle status from asset names or registrations.
  */
+
+import {
+  isVehicleAsset,
+  isElectronicsAsset,
+  isHomeApplianceAsset,
+  supportsOdometer,
+  supportsMileage,
+  supportsFuelTracking,
+  supportsVehicleDocuments,
+} from '../domain/asset/assetGuards';
 
 export interface AssetCapabilities {
   // Vehicle Specific
@@ -48,49 +58,20 @@ export interface AssetCapabilities {
 }
 
 /**
- * Resolves full capabilities for any asset object
+ * Resolves full capabilities for any asset object using authoritative domain rules.
  */
 export function getAssetCapabilities(asset: any): AssetCapabilities {
   if (!asset) {
     return getFallbackCapabilities();
   }
 
-  const category = String(asset.category || asset.categoryLabel || asset.categoryId || '').toLowerCase();
-  const name = String(asset.name || asset.assetName || asset.model || '').toLowerCase();
-  const brand = String(asset.brand || asset.brandName || asset.make || '').toLowerCase();
-  const vehicleType = String(asset.vehicleType || '').toLowerCase();
-  const fuelType = String(asset.fuelType || '').toLowerCase();
+  // 1. VEHICLE ASSETS (Authoritative: strictly isVehicleAsset)
+  if (isVehicleAsset(asset)) {
+    const fuelType = String(asset.fuelType || '').toLowerCase();
+    const name = String(asset.name || asset.assetName || '').toLowerCase();
+    const categoryId = String(asset.categoryId || '').toLowerCase();
+    const isEV = fuelType === 'ev' || fuelType === 'electric' || categoryId === 'ev' || name.includes('ev ');
 
-  // 1. VEHICLE DETECTION (Cars, Motorcycles, Scooters, EVs, Commercial Vehicles)
-  const isVehicleExplicit =
-    category === 'vehicles' ||
-    category === 'vehicle' ||
-    category === 'automotive' ||
-    ['car', 'motorcycle', 'scooter', 'bike', 'ev', 'commercial'].includes(vehicleType);
-
-  const isVehicleKeywords =
-    name.includes('ronin') ||
-    name.includes('creta') ||
-    name.includes('activa') ||
-    name.includes('jupiter') ||
-    name.includes('classic 350') ||
-    name.includes('hunter 350') ||
-    name.includes('bullet') ||
-    name.includes('nexon') ||
-    name.includes('ather') ||
-    name.includes('ola s1') ||
-    name.includes('tvs') ||
-    name.includes('royal enfield') ||
-    name.includes('hyundai') ||
-    name.includes('honda bike') ||
-    name.includes('motorcycle') ||
-    name.includes('scooter') ||
-    name.includes('car ');
-
-  const isVehicle = isVehicleExplicit || isVehicleKeywords;
-
-  if (isVehicle) {
-    const isEV = fuelType === 'ev' || name.includes('ev') || name.includes('electric') || brand.includes('ather') || brand.includes('ola');
     return {
       isVehicle: true,
       hasOdometer: true,
@@ -125,27 +106,24 @@ export function getAssetCapabilities(asset: any): AssetCapabilities {
 
       maintenanceCategory: 'VEHICLE_SERVICE',
       primaryIdentifierLabel: 'Vehicle Registration No.',
-      maintenanceScheduleLabel: 'Next Periodic Vehicle Service'
+      maintenanceScheduleLabel: 'Next Periodic Vehicle Service',
     };
   }
 
-  // 2. SMARTPHONE / PHONE DETECTION
-  const isPhone =
-    category === 'gadgets' ||
-    category === 'electronics' ||
-    name.includes('phone') ||
-    name.includes('iphone') ||
-    name.includes('galaxy') ||
-    name.includes('pixel') ||
-    name.includes('oneplus') ||
-    name.includes('redmi') ||
-    name.includes('nothing phone') ||
-    name.includes('realme') ||
-    name.includes('vivo') ||
-    name.includes('oppo') ||
-    name.includes('mobile');
+  // 2. ELECTRONICS / SMARTPHONE ASSETS
+  if (isElectronicsAsset(asset)) {
+    const name = String(asset.name || asset.assetName || asset.model || '').toLowerCase();
+    const categoryId = String(asset.categoryId || '').toLowerCase();
+    const isPhoneLike =
+      categoryId === 'mobile' ||
+      categoryId === 'phone' ||
+      categoryId === 'smartphone' ||
+      name.includes('phone') ||
+      name.includes('iphone') ||
+      name.includes('pixel') ||
+      name.includes('galaxy') ||
+      name.includes('mobile');
 
-  if (isPhone && (name.includes('phone') || name.includes('iphone') || name.includes('pixel') || name.includes('galaxy') || name.includes('mobile') || name.includes('oneplus') || name.includes('redmi') || name.includes('realme') || name.includes('vivo') || name.includes('oppo') || name.includes('nothing'))) {
     return {
       isVehicle: false,
       hasOdometer: false,
@@ -158,8 +136,8 @@ export function getAssetCapabilities(asset: any): AssetCapabilities {
       hasRegistrationNumber: false,
       hasChassisNumber: false,
 
-      isPhone: true,
-      hasImei: true,
+      isPhone: isPhoneLike,
+      hasImei: isPhoneLike,
       hasBatteryHealth: true,
       hasScreenDisplay: true,
       hasStorageCapacity: true,
@@ -179,15 +157,21 @@ export function getAssetCapabilities(asset: any): AssetCapabilities {
       hasResaleEstimate: true,
 
       maintenanceCategory: 'ELECTRONICS_CARE',
-      primaryIdentifierLabel: 'IMEI / Serial Number',
+      primaryIdentifierLabel: isPhoneLike ? 'IMEI / Serial Number' : 'Serial Number',
       maintenanceScheduleLabel: 'Device Care & Warranty Surveillance',
-      serviceDueUnavailableNotice: 'Vehicle service schedule not applicable for smartphones.'
+      serviceDueUnavailableNotice: 'Vehicle service schedule not applicable for electronic devices.',
     };
   }
 
-  // 3. AIR CONDITIONER (AC)
-  const isAC = name.includes('ac') || name.includes('air conditioner') || name.includes('split ac') || name.includes('inverter ac');
-  if (isAC) {
+  // 3. HOME APPLIANCES (AC, Geyser, RO, Washing Machine, Refrigerator, etc.)
+  if (isHomeApplianceAsset(asset)) {
+    const name = String(asset.name || asset.assetName || asset.model || '').toLowerCase();
+    const categoryId = String(asset.categoryId || '').toLowerCase();
+
+    const isAC = categoryId === 'ac' || name.includes('ac') || name.includes('air conditioner');
+    const isGeyser = categoryId === 'geyser' || name.includes('geyser') || name.includes('water heater');
+    const isRO = categoryId === 'purifier' || categoryId === 'water_purifier' || name.includes('ro') || name.includes('purifier');
+
     return {
       isVehicle: false,
       hasOdometer: false,
@@ -208,11 +192,11 @@ export function getAssetCapabilities(asset: any): AssetCapabilities {
       hasOsSoftwareUpdates: false,
 
       isAppliance: true,
-      hasFilterCleaning: true,
-      hasGasRefrigerant: true,
-      hasHeatingElement: false,
-      hasAnodeRod: false,
-      hasDescaling: false,
+      hasFilterCleaning: isAC || isRO,
+      hasGasRefrigerant: isAC,
+      hasHeatingElement: isGeyser,
+      hasAnodeRod: isGeyser,
+      hasDescaling: isGeyser,
       hasApplianceServiceSchedule: true,
 
       hasWarranty: true,
@@ -222,103 +206,22 @@ export function getAssetCapabilities(asset: any): AssetCapabilities {
 
       maintenanceCategory: 'APPLIANCE_MAINTENANCE',
       primaryIdentifierLabel: 'Serial / Model Number',
-      maintenanceScheduleLabel: 'Periodic Filter Clean (Every 90 Days)',
-      serviceDueUnavailableNotice: 'Vehicle service schedule not applicable for Air Conditioners.'
+      maintenanceScheduleLabel: isAC
+        ? 'Periodic Filter Clean (Every 90 Days)'
+        : isGeyser
+        ? 'Annual Anode Rod & Heating Inspection'
+        : isRO
+        ? 'Sediment & Carbon Filter Replacement'
+        : 'Appliance Maintenance Schedule',
+      serviceDueUnavailableNotice: 'Vehicle service schedule not applicable for home appliances.',
     };
   }
 
-  // 4. GEYSER / WATER HEATER
-  const isGeyser = name.includes('geyser') || name.includes('water heater') || name.includes('immersion');
-  if (isGeyser) {
-    return {
-      isVehicle: false,
-      hasOdometer: false,
-      hasVehicleServiceSchedule: false,
-      hasInsurance: false,
-      hasPuc: false,
-      hasEngineMaintenance: false,
-      hasDriveTrain: false,
-      hasTyres: false,
-      hasRegistrationNumber: false,
-      hasChassisNumber: false,
-
-      isPhone: false,
-      hasImei: false,
-      hasBatteryHealth: false,
-      hasScreenDisplay: false,
-      hasStorageCapacity: false,
-      hasOsSoftwareUpdates: false,
-
-      isAppliance: true,
-      hasFilterCleaning: false,
-      hasGasRefrigerant: false,
-      hasHeatingElement: true,
-      hasAnodeRod: true,
-      hasDescaling: true,
-      hasApplianceServiceSchedule: true,
-
-      hasWarranty: true,
-      hasInvoice: true,
-      hasSerial: true,
-      hasResaleEstimate: true,
-
-      maintenanceCategory: 'APPLIANCE_MAINTENANCE',
-      primaryIdentifierLabel: 'Serial / Model Number',
-      maintenanceScheduleLabel: 'Annual Anode Rod & Heating Inspection',
-      serviceDueUnavailableNotice: 'Vehicle service schedule not applicable for Water Heaters.'
-    };
-  }
-
-  // 5. WATER PURIFIER / RO
-  const isRO = name.includes('ro') || name.includes('purifier') || name.includes('aquaguard') || name.includes('kent');
-  if (isRO) {
-    return {
-      isVehicle: false,
-      hasOdometer: false,
-      hasVehicleServiceSchedule: false,
-      hasInsurance: false,
-      hasPuc: false,
-      hasEngineMaintenance: false,
-      hasDriveTrain: false,
-      hasTyres: false,
-      hasRegistrationNumber: false,
-      hasChassisNumber: false,
-
-      isPhone: false,
-      hasImei: false,
-      hasBatteryHealth: false,
-      hasScreenDisplay: false,
-      hasStorageCapacity: false,
-      hasOsSoftwareUpdates: false,
-
-      isAppliance: true,
-      hasFilterCleaning: true,
-      hasGasRefrigerant: false,
-      hasHeatingElement: false,
-      hasAnodeRod: false,
-      hasDescaling: false,
-      hasApplianceServiceSchedule: true,
-
-      hasWarranty: true,
-      hasInvoice: true,
-      hasSerial: true,
-      hasResaleEstimate: true,
-
-      maintenanceCategory: 'APPLIANCE_MAINTENANCE',
-      primaryIdentifierLabel: 'Serial Number',
-      maintenanceScheduleLabel: 'Sediment & Carbon Filter Replacement',
-      serviceDueUnavailableNotice: 'Vehicle service schedule not applicable for Water Purifiers.'
-    };
-  }
-
-  // 6. DEFAULT APPLIANCE / ELECTRONIC FALLBACK
-  return getFallbackCapabilities(category);
+  // 4. BUSINESS & PERSONAL DOCUMENTS / OTHER FALLBACK
+  return getFallbackCapabilities();
 }
 
-function getFallbackCapabilities(category: string = ''): AssetCapabilities {
-  const isAppl = category === 'appliances' || category === 'home';
-  const isElec = category === 'electronics' || category === 'gadgets';
-
+function getFallbackCapabilities(): AssetCapabilities {
   return {
     isVehicle: false,
     hasOdometer: false,
@@ -332,13 +235,13 @@ function getFallbackCapabilities(category: string = ''): AssetCapabilities {
     hasChassisNumber: false,
 
     isPhone: false,
-    hasImei: isElec,
-    hasBatteryHealth: isElec,
-    hasScreenDisplay: isElec,
-    hasStorageCapacity: isElec,
-    hasOsSoftwareUpdates: isElec,
+    hasImei: false,
+    hasBatteryHealth: false,
+    hasScreenDisplay: false,
+    hasStorageCapacity: false,
+    hasOsSoftwareUpdates: false,
 
-    isAppliance: isAppl,
+    isAppliance: false,
     hasFilterCleaning: false,
     hasGasRefrigerant: false,
     hasHeatingElement: false,
@@ -352,8 +255,12 @@ function getFallbackCapabilities(category: string = ''): AssetCapabilities {
     hasResaleEstimate: true,
 
     maintenanceCategory: 'NONE',
-    primaryIdentifierLabel: 'Serial Number',
-    maintenanceScheduleLabel: 'Standard Warranty Care',
-    serviceDueUnavailableNotice: 'Maintenance schedule not configured for this asset type.'
+    primaryIdentifierLabel: 'Identifier / Serial',
+    maintenanceScheduleLabel: 'Standard Warranty & Document Care',
+    serviceDueUnavailableNotice: 'Vehicle service schedule not applicable for this asset.',
   };
 }
+
+export default {
+  getAssetCapabilities,
+};

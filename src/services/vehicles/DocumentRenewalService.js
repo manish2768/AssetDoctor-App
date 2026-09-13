@@ -10,6 +10,7 @@ import { DocumentVaultService } from '../documents/DocumentVaultService';
 import { AssetService } from '../assets/AssetService';
 import { ExpiryAlertService } from '../notifications/ExpiryAlertService';
 import { resolveVaultDocumentMeta } from '../ocr/documentTypeClassifier';
+import { OfflineVaultCache } from '../offline/OfflineVaultCache';
 import { Haptics } from '../haptics';
 
 export const DOC_STATUS = Object.freeze({
@@ -115,18 +116,32 @@ export async function activateRenewalDocument(userId, assetId, form = {}, localI
       fileUrl = uploaded.document.fileUrl || '';
       storagePath = uploaded.document.storagePath || '';
       // Ensure status ACTIVE_CURRENT on the uploaded record
+      const uploadedRecord = {
+        status: DOC_STATUS.ACTIVE_CURRENT,
+        expiryDate: expiryValue || null,
+        ocrExtract: form.ocrExtract || null,
+        billThumbDataUrl: form.billThumbDataUrl || null,
+        invoiceOrPolicyNo:
+          form.invoiceNumber || form.ocrExtract?.invoice_or_policy_no || '',
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      };
       await docsRef(userId, assetId).doc(uploaded.document.docId || docId).set(
-        {
-          status: DOC_STATUS.ACTIVE_CURRENT,
-          expiryDate: expiryValue || null,
-          ocrExtract: form.ocrExtract || null,
-          billThumbDataUrl: form.billThumbDataUrl || null,
-          invoiceOrPolicyNo:
-            form.invoiceNumber || form.ocrExtract?.invoice_or_policy_no || '',
-          updatedAt: firestore.FieldValue.serverTimestamp(),
-        },
+        uploadedRecord,
         { merge: true },
       );
+      await OfflineVaultCache.cacheDocument(userId, assetId, {
+        docId: uploaded.document.docId || docId,
+        type: docType,
+        label: vaultMeta.label,
+        status: DOC_STATUS.ACTIVE_CURRENT,
+        fileUrl,
+        storagePath,
+        expiryDate: expiryValue || null,
+        ocrExtract: form.ocrExtract || null,
+        billThumbDataUrl: form.billThumbDataUrl || null,
+        invoiceOrPolicyNo: form.invoiceNumber || form.ocrExtract?.invoice_or_policy_no || '',
+      }).catch(() => {});
+
       return {
         success: true,
         docId: uploaded.document.docId || docId,
@@ -156,6 +171,7 @@ export async function activateRenewalDocument(userId, assetId, form = {}, localI
     updatedAt: firestore.FieldValue.serverTimestamp(),
   };
   await docsRef(userId, assetId).doc(docId).set(record);
+  await OfflineVaultCache.cacheDocument(userId, assetId, record).catch(() => {});
   return { success: true, docId, docType, expiryField, expiryValue, fileUrl, storagePath };
 }
 
@@ -203,6 +219,22 @@ export async function renewVehicleDocument({
       ...(form.engineNumber ? { engineNumber: form.engineNumber } : {}),
       ...(form.registration ? { registration: form.registration } : {}),
       ...(form.nextServiceDue ? { nextServiceDue: form.nextServiceDue } : {}),
+      ...(form.policyNumber ? { policyNumber: form.policyNumber, insurancePolicyNumber: form.policyNumber } : {}),
+      ...(form.insurancePolicyNumber ? { policyNumber: form.insurancePolicyNumber, insurancePolicyNumber: form.insurancePolicyNumber } : {}),
+      ...(form.insurerName ? { insurerName: form.insurerName, insuranceInsurer: form.insurerName } : {}),
+      ...(form.insuranceInsurer ? { insurerName: form.insuranceInsurer, insuranceInsurer: form.insuranceInsurer } : {}),
+      ...(form.idv != null ? { idv: form.idv, insuranceIdv: form.idv } : {}),
+      ...(form.insuranceIdv != null ? { idv: form.insuranceIdv, insuranceIdv: form.insuranceIdv } : {}),
+      ...(form.premium != null ? { premium: form.premium, insurancePremium: form.premium } : {}),
+      ...(form.insurancePremium != null ? { premium: form.insurancePremium, insurancePremium: form.insurancePremium } : {}),
+      ...(form.policyStartDate ? { policyStartDate: form.policyStartDate, insuranceStartDate: form.policyStartDate } : {}),
+      ...(form.insuranceStartDate ? { policyStartDate: form.insuranceStartDate, insuranceStartDate: form.insuranceStartDate } : {}),
+      ...(form.certificateNumber ? { certificateNumber: form.certificateNumber, pucCertificateNumber: form.certificateNumber } : {}),
+      ...(form.pucCertificateNumber ? { certificateNumber: form.pucCertificateNumber, pucCertificateNumber: form.pucCertificateNumber } : {}),
+      ...(form.testingCentre ? { testingCentre: form.testingCentre } : {}),
+      ...(form.workshopName ? { workshopName: form.workshopName } : {}),
+      ...(form.serviceDate ? { lastServiceDate: form.serviceDate } : {}),
+      ...(form.odometerKm != null ? { odometerKm: form.odometerKm } : {}),
       activeDocumentIds: {
         ...(existingAsset?.activeDocumentIds || {}),
         [docType]: activated.docId,
@@ -225,6 +257,7 @@ export async function renewVehicleDocument({
       assetId,
       id: assetId,
     };
+    await OfflineVaultCache.upsertAsset(userId, mergedAsset).catch(() => {});
     try {
       const clearFields = [];
       if (expiryField === 'insuranceExpiry') clearFields.push('insuranceExpiry');

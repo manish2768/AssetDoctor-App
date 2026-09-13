@@ -71,11 +71,25 @@ export class AzureOcrService {
       (typeof process !== 'undefined' && process.env && process.env.EXPO_PUBLIC_OCR_AZURE_URL) ||
       DEFAULT_AZURE_PROXY_URL;
 
-    const timeoutMs = Math.max(1, Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : 12000);
+    const timeoutMs = Math.min(
+      Math.max(1, Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : 4000),
+      4000
+    );
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
 
+    console.log('[OCR_DEBUG] request_start', {
+      engine: 'azure',
+      endpoint: proxyUrl ? proxyUrl.split('?')[0] : 'missing',
+      timeoutMs,
+      payloadBytes: trimmed.length,
+    });
+    console.log(`[OCR_DEBUG] endpoint_present: ${Boolean(proxyUrl)}`);
+    console.log(`[OCR_DEBUG] api_key_present: ${Boolean(token || (process.env && process.env.AZURE_VISION_KEY))}`);
+
+    const tStart = Date.now();
     try {
+      console.log('[OCR_DEBUG] request_sent', { timestamp: tStart, proxyUrl: proxyUrl.split('?')[0] });
       const res = await fetch(proxyUrl, {
         method: 'POST',
         headers,
@@ -87,8 +101,13 @@ export class AzureOcrService {
         signal: controller ? controller.signal : undefined,
       });
 
+      const latencyMs = Date.now() - tStart;
+      console.log(`[OCR_DEBUG] response_status: ${res.status} (latency=${latencyMs}ms)`);
+      console.log('[OCR_DEBUG] response_received', { ok: res.ok, status: res.status, latencyMs });
+
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json?.success) {
+        console.warn('[OCR_DEBUG] response_error:', json?.error || `HTTP ${res.status}`);
         return {
           success: false,
           text: '',
@@ -99,9 +118,16 @@ export class AzureOcrService {
 
       const text = String(json.text || '');
       const lines = text ? text.split('\n').filter(Boolean) : [];
+      console.log(`[OCR_DEBUG] normalized_text_length: ${text.length} (lines=${lines.length})`);
       return { success: true, text, lines };
     } catch (err) {
+      const latencyMs = Date.now() - tStart;
       const aborted = /abort/i.test(String(err?.message || err || ''));
+      console.warn('[OCR_DEBUG] request_exception:', {
+        aborted,
+        message: err?.message || String(err),
+        latencyMs,
+      });
       return {
         success: false,
         text: '',
@@ -187,6 +213,7 @@ export class AzureOcrService {
       }
 
       const operationLocation = submitRes.headers.get('Operation-Location') || submitRes.headers.get('operation-location');
+      console.log(`[OCR_DEBUG] operation_location_present: ${Boolean(operationLocation)}`);
       if (!operationLocation) {
         return {
           success: false,
@@ -196,6 +223,7 @@ export class AzureOcrService {
         };
       }
 
+      console.log('[OCR_DEBUG] poll_start');
       let attempts = 0;
       const maxAttempts = 15;
       const pollIntervalMs = 700;
@@ -214,6 +242,7 @@ export class AzureOcrService {
         if (pollRes.ok) {
           const pollJson = await pollRes.json();
           const status = pollJson?.status;
+          console.log(`[OCR_DEBUG] poll_status: ${status} (attempt=${attempts})`);
 
           if (status === 'succeeded') {
             const readResults = pollJson?.analyzeResult?.readResults || [];
@@ -223,9 +252,11 @@ export class AzureOcrService {
                 if (line.text) lines.push(line.text);
               }
             }
+            const text = lines.join('\n');
+            console.log(`[OCR_DEBUG] normalized_text_length: ${text.length}`);
             return {
               success: true,
-              text: lines.join('\n'),
+              text,
               lines
             };
           }
@@ -241,6 +272,7 @@ export class AzureOcrService {
         }
       }
 
+      console.warn('[OCR_DEBUG] poll_timeout');
       return {
         success: false,
         text: '',

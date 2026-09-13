@@ -202,19 +202,41 @@ export function toVaultDocumentType(classification) {
  */
 export function resolveVaultDocumentMeta(form = {}) {
   const t = String(
-    form.scanDocumentType || form.documentType || form.documentKind || DOC_TYPES.BILL,
+    form.scanDocumentType ||
+      form.documentType ||
+      form.classifiedDocumentType ||
+      form.documentKind ||
+      DOC_TYPES.BILL,
   ).toLowerCase();
   const isVehicle = Boolean(form.isVehicleInvoice) || t === DOC_TYPES.VEHICLE_INVOICE;
 
-  if (t === DOC_TYPES.RC) return { type: DOC_TYPES.RC, label: 'RC Book' };
-  if (t === DOC_TYPES.PUC) return { type: DOC_TYPES.PUC, label: 'PUC Certificate' };
-  if (t === DOC_TYPES.INSURANCE) {
+  if (t === DOC_TYPES.RC || t === 'rc' || t.includes('vehicle_rc') || t.includes('registration_certificate')) {
+    return { type: DOC_TYPES.RC, label: 'RC Book' };
+  }
+  if (t === DOC_TYPES.PUC || t === 'puc' || t.includes('vehicle_puc') || t.includes('puc_certificate')) {
+    return { type: DOC_TYPES.PUC, label: 'PUC Certificate' };
+  }
+  if (t === DOC_TYPES.INSURANCE || t === 'insurance' || t.includes('vehicle_insurance') || t.includes('insurance_policy')) {
     return { type: DOC_TYPES.INSURANCE, label: 'Insurance Policy' };
   }
-  if (t === DOC_TYPES.WARRANTY || t === 'warranty') {
+  if (t === 'electricity_bill' || t === 'electricity' || t.includes('electricity')) {
+    return { type: 'electricity_bill', label: 'Electricity Bill' };
+  }
+  if (
+    t === 'vehicle_service' ||
+    t === 'service' ||
+    t === DOC_TYPES.SERVICE ||
+    t.includes('service_bill') ||
+    t.includes('service_invoice') ||
+    t.includes('job_card') ||
+    t.includes('vehicle_service')
+  ) {
+    return { type: 'vehicle_service', label: 'Vehicle Service Bill' };
+  }
+  if (t === DOC_TYPES.WARRANTY || t === 'warranty' || t.includes('warranty')) {
     return { type: 'warranty', label: 'Warranty Certificate' };
   }
-  if (isVehicle) {
+  if (isVehicle || t.includes('vehicle_purchase') || t.includes('vehicle_invoice')) {
     return {
       type: DOC_TYPES.BILL,
       label: form.documentLabel || 'Vehicle Invoice',

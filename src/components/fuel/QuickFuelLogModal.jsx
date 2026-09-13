@@ -39,33 +39,44 @@ import { MobileNumericField } from '../ui/MobileNumericField';
 import { FuelResultCard } from './FuelResultCard';
 import { RefillImpactCard } from './RefillImpactCard';
 import { VehicleSelectCard } from './VehicleSelectCard';
+import { isVehicleAsset } from '../../domain/asset/assetGuards';
 
-export function QuickFuelLogModal({ visible, asset: passedAsset, onClose }) {
+export function QuickFuelLogModal({ visible, asset: passedAsset, onClose, onSaved, selectedPeriod }) {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { assets } = useAssets();
   const ui = useUiFeedback();
+  const isSubmittingRef = React.useRef(false);
 
   // Multi-vehicle assets filtering
   const vehicleAssets = useMemo(() => {
     return (assets || []).filter(
-      (a) => !a.isArchived && !a.deletedAt && (a.category === 'VEHICLE' || String(a.categoryId) === 'vehicles' || a.isVehicleInvoice || a.registrationNumber || a.registration)
+      (a) => !a.isArchived && !a.deletedAt && isVehicleAsset(a)
     );
   }, [assets]);
 
-  const [selectedAsset, setSelectedAsset] = useState(passedAsset || vehicleAssets[0] || null);
+  const [selectedVehicleId, setSelectedVehicleId] = useState(() => {
+    if (passedAsset) return passedAsset.assetId || passedAsset.id || null;
+    const first = vehicleAssets[0];
+    return (first && (first.assetId || first.id)) || null;
+  });
 
   useEffect(() => {
     if (passedAsset) {
-      setSelectedAsset(passedAsset);
-    } else if (vehicleAssets.length > 0 && !selectedAsset) {
-      setSelectedAsset(vehicleAssets[0]);
+      setSelectedVehicleId(passedAsset.assetId || passedAsset.id || null);
+    } else if (vehicleAssets.length > 0 && !selectedVehicleId) {
+      const first = vehicleAssets[0];
+      setSelectedVehicleId((first && (first.assetId || first.id)) || null);
     }
-  }, [passedAsset, vehicleAssets]);
+  }, [passedAsset, vehicleAssets, selectedVehicleId]);
 
-  const activeAsset = selectedAsset || passedAsset;
-  const assetId = (activeAsset && (activeAsset.assetId || activeAsset.id)) || null;
+  const activeAsset = useMemo(() => {
+    if (!selectedVehicleId) return null;
+    return vehicleAssets.find((v) => (v.assetId || v.id) === selectedVehicleId) || passedAsset || null;
+  }, [selectedVehicleId, vehicleAssets, passedAsset]);
+
+  const assetId = selectedVehicleId;
 
   // Entry fields (strings managed by MobileNumericField)
   const [mode, setMode] = useState('amount'); // 'amount' | 'liters'
@@ -76,6 +87,7 @@ export function QuickFuelLogModal({ visible, asset: passedAsset, onClose }) {
   const [isFullTank, setIsFullTank] = useState(true);
   const [previousLog, setPreviousLog] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   // Refill Impact Card — shown after a successful save that yields a 2nd+ reading.
   const [impactVisible, setImpactVisible] = useState(false);
 
@@ -87,11 +99,13 @@ export function QuickFuelLogModal({ visible, asset: passedAsset, onClose }) {
       setAmount('');
       setLiters('');
       setPrice('');
+      setSaveError(null);
+      isSubmittingRef.current = false;
 
       setIsFullTank(true);
       setPreviousLog(null);
       const uid = user?.uid;
-      if (uid && assetId && !asset?.isDemo) {
+      if (uid && assetId && !activeAsset?.isDemo) {
         FuelService.getPreviousLog(uid, assetId)
           .then((prev) => setPreviousLog(prev || null))
           .catch(() => setPreviousLog(null));
@@ -115,9 +129,9 @@ export function QuickFuelLogModal({ visible, asset: passedAsset, onClose }) {
     };
     if (mode === 'amount' && !amount) return null;
     if (mode === 'liters' && !liters) return null;
-    const previewResult = computeFuelCalculation(input, previousLog, asset || {});
+    const previewResult = computeFuelCalculation(input, previousLog, activeAsset || {});
     return { result: previewResult, validation: validateFuelInput(input, previousOdometerKM) };
-  }, [odometer, amount, liters, price, isFullTank, mode, previousLog, asset, previousOdometerKM]);
+  }, [odometer, amount, liters, price, isFullTank, mode, previousLog, activeAsset, previousOdometerKM]);
 
   const toggleMode = (next) => {
     if (next === mode) return;
@@ -126,6 +140,8 @@ export function QuickFuelLogModal({ visible, asset: passedAsset, onClose }) {
   };
 
   const onSave = async () => {
+    if (isSubmittingRef.current || saving) return;
+
     if (!user?.uid) {
       ui.info('Sign in to save', 'Create a free account to keep your fuel logs in the vault.');
       return;
@@ -134,7 +150,7 @@ export function QuickFuelLogModal({ visible, asset: passedAsset, onClose }) {
       ui.error('Save failed', 'Asset passport is missing.');
       return;
     }
-    if (asset?.isDemo) {
+    if (activeAsset?.isDemo) {
       ui.info('Demo asset', 'Sign in to save your own fuel & mileage history.');
       return;
     }
@@ -155,13 +171,33 @@ export function QuickFuelLogModal({ visible, asset: passedAsset, onClose }) {
       return;
     }
 
+    isSubmittingRef.current = true;
     setSaving(true);
+    setSaveError(null);
+
     try {
-      const res = await FuelService.logFuel(user.uid, assetId, input, asset || {});
+      const res = await FuelService.logFuel(user.uid, assetId, input, activeAsset || {});
       if (res.success) {
         Haptics.success();
-        ui.success('Fuel logged', 'Your mileage & cost update is saved to the vault.');
+
+        // Format success feedback with key details
+        const now = new Date();
+        const curMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const savedMonthLabel = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+        const formattedOdo = `${Number(odometer).toLocaleString('en-IN')} km`;
+        const formattedAmount = mode === 'amount' && amount ? `₹${Number(amount).toLocaleString('en-IN')}` : (liters ? `${liters} L` : '');
+        const formattedDate = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+
+        let successMsg = `Fuel log saved: ${formattedAmount ? formattedAmount + ' · ' : ''}${formattedOdo} · ${formattedDate}`;
+        if (selectedPeriod && selectedPeriod !== curMonthKey) {
+          successMsg = `Fuel log saved — view ${savedMonthLabel} to see this entry.`;
+        }
+
+        ui.success(successMsg);
         onClose?.();
+        onSaved?.(res.log || res.result);
+
         // Show the premium Refill Impact Card when there is at least one prior
         // fuel reading (2nd+ entry → we have a real distance/mileage span).
         const hasPrior = Boolean(previousLog && Number(previousLog.odometerKM) > 0);
@@ -171,13 +207,18 @@ export function QuickFuelLogModal({ visible, asset: passedAsset, onClose }) {
         }
       } else {
         Haptics.error();
-        ui.error('Could not log', res.error || res.validation?.error || 'Please check the values.');
+        const err = res.error || res.validation?.error || "Couldn't save fuel log";
+        setSaveError(err);
+        ui.error("Couldn't save fuel log", err);
       }
     } catch (error) {
       Haptics.error();
-      ui.error('Could not log', error?.message || 'Something went wrong.');
+      const err = error?.message || 'Something went wrong. Please retry.';
+      setSaveError(err);
+      ui.error("Couldn't save fuel log", err);
     } finally {
       setSaving(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -194,8 +235,8 @@ export function QuickFuelLogModal({ visible, asset: passedAsset, onClose }) {
               <Text style={[TYPE.h2, { color: colors.text }]}>Log Fuel ⛽</Text>
               <VehicleSelectCard
                 vehicleAssets={vehicleAssets}
-                selectedAssetId={assetId}
-                onSelectAsset={(v) => setSelectedAsset(v)}
+                selectedVehicleId={selectedVehicleId}
+                onSelectVehicleId={(vId) => setSelectedVehicleId(vId)}
               />
               <Text style={[TYPE.caption, { color: colors.textMuted, marginTop: 4 }]}>
                 {activeAsset?.assetName || activeAsset?.model ? `${activeAsset.assetName || activeAsset.model} — real mileage comes from full-tank refills.` : 'Record a fuel top-up for this vehicle.'}
@@ -209,7 +250,10 @@ export function QuickFuelLogModal({ visible, asset: passedAsset, onClose }) {
               <MobileNumericField
                 label="Current odometer (KM) *"
                 value={odometer}
-                onChangeText={setOdometer}
+                onChangeText={(val) => {
+                  setSaveError(null);
+                  setOdometer(val);
+                }}
                 placeholder="e.g. 12480"
               />
 
@@ -217,7 +261,10 @@ export function QuickFuelLogModal({ visible, asset: passedAsset, onClose }) {
                 <MobileNumericField
                   label="Amount paid (₹) *"
                   value={amount}
-                  onChangeText={setAmount}
+                  onChangeText={(val) => {
+                    setSaveError(null);
+                    setAmount(val);
+                  }}
                   allowDecimal
                   placeholder="e.g. 1500"
                 />
@@ -225,7 +272,10 @@ export function QuickFuelLogModal({ visible, asset: passedAsset, onClose }) {
                 <MobileNumericField
                   label="Fuel quantity (Litres) *"
                   value={liters}
-                  onChangeText={setLiters}
+                  onChangeText={(val) => {
+                    setSaveError(null);
+                    setLiters(val);
+                  }}
                   allowDecimal
                   placeholder="e.g. 12.5"
                 />
@@ -258,7 +308,26 @@ export function QuickFuelLogModal({ visible, asset: passedAsset, onClose }) {
                 />
               </View>
 
-              <FuelResultCard result={preview} />
+              <FuelResultCard
+                result={preview}
+                onCorrectOdometer={() => setOdometer('')}
+              />
+
+              {saveError ? (
+                <View style={[styles.errorBanner, { backgroundColor: 'rgba(239, 68, 68, 0.1)', borderColor: colors.danger || '#EF4444' }]}>
+                  <Text style={[TYPE.caption, { color: colors.danger || '#EF4444', flex: 1, fontWeight: '600' }]}>
+                    Couldn't save fuel log: {saveError}
+                  </Text>
+                  <Pressable
+                    onPress={onSave}
+                    style={[styles.retryChip, { backgroundColor: colors.danger || '#EF4444' }]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Retry saving fuel log"
+                  >
+                    <Text style={styles.retryChipText}>Retry</Text>
+                  </Pressable>
+                </View>
+              ) : null}
 
               {saving ? (
                 <ActivityIndicator color={colors.primary} style={{ marginTop: SPACING.md }} />
@@ -266,7 +335,7 @@ export function QuickFuelLogModal({ visible, asset: passedAsset, onClose }) {
                 <View style={styles.actions}>
                   <SecondaryButton title="Cancel" onPress={onClose} style={styles.cancelBtn} />
                   <PrimaryButton
-                    title="Save fuel log"
+                    title={saveError ? "Retry Save" : "Save fuel log"}
                     onPress={onSave}
                     style={styles.saveBtn}
                     loading={saving}
@@ -279,7 +348,7 @@ export function QuickFuelLogModal({ visible, asset: passedAsset, onClose }) {
       </KeyboardAvoidingView>
       <RefillImpactCard
         visible={impactVisible}
-        asset={asset}
+        asset={activeAsset}
         onClose={() => setImpactVisible(false)}
         onPreview={(canvas) => {
           setImpactVisible(false);
@@ -351,6 +420,26 @@ const styles = StyleSheet.create({
   },
   cancelBtn: { flex: 1 },
   saveBtn: { flex: 2 },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: SPACING.sm,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    marginTop: SPACING.md,
+    gap: 8,
+  },
+  retryChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: RADIUS.sm,
+  },
+  retryChipText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
+  },
 });
 
 export default QuickFuelLogModal;

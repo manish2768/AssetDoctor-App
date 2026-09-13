@@ -2,16 +2,25 @@
  * Asset Doctor — Vehicle Selection Card for Fuel & Mileage
  * Displays highlighted active vehicle context with registration, model, and current odometer.
  * Allows instant switching when multiple vehicles exist in portfolio.
+ * Strict vehicle isolation: passes selected vehicle ID directly to parent.
  */
 
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { useThemeColors } from '../../context/ThemeProvider';
 import { TYPE, SPACING, RADIUS } from '../../theme/tokens';
-import { Haptics } from '../../services/haptics';
+import { PremiumIcon } from '../../design-system/icons';
+import { getVehiclePresentation } from '../../utils/vehiclePresentation';
 
-export function VehicleSelectCard({ vehicleAssets = [], selectedAssetId, onSelectAsset }) {
+export function VehicleSelectCard({
+  vehicleAssets = [],
+  selectedAssetId,
+  selectedVehicleId,
+  onSelectVehicleId,
+  onSelectAsset,
+}) {
   const colors = useThemeColors();
+  const currentSelectedId = selectedVehicleId || selectedAssetId;
 
   if (!vehicleAssets || vehicleAssets.length === 0) {
     return (
@@ -32,9 +41,10 @@ export function VehicleSelectCard({ vehicleAssets = [], selectedAssetId, onSelec
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollList}>
         {vehicleAssets.map((v) => {
           const vId = v.assetId || v.id;
-          const isSelected = vId === selectedAssetId;
-          const reg = v.registrationNumber || v.registration || 'No Reg';
-          const modelName = v.model || v.assetName || v.name || 'Vehicle';
+          const isSelected = vId === currentSelectedId;
+          const pres = getVehiclePresentation(v);
+          const reg = pres.registration || 'NO REG';
+          const modelName = pres.displayName;
           const odo = v.odometerKm != null ? `${Number(v.odometerKm).toLocaleString('en-IN')} km` : 'No odo';
 
           return (
@@ -42,6 +52,7 @@ export function VehicleSelectCard({ vehicleAssets = [], selectedAssetId, onSelec
               key={vId}
               onPress={() => {
                 Haptics.select();
+                onSelectVehicleId?.(vId);
                 onSelectAsset?.(v);
               }}
               style={({ pressed }) => [
@@ -58,7 +69,13 @@ export function VehicleSelectCard({ vehicleAssets = [], selectedAssetId, onSelec
               accessibilityLabel={`Select vehicle ${modelName} registration ${reg}`}
             >
               <View style={styles.itemHeader}>
-                <Text style={styles.icon}>🏍️</Text>
+                <View style={styles.iconWrap}>
+                  <PremiumIcon
+                    name={pres.icon}
+                    size={20}
+                    color={isSelected ? (colors.primary || '#0F766E') : colors.text}
+                  />
+                </View>
                 {isSelected ? (
                   <View style={[styles.badge, { backgroundColor: colors.primary || '#0F766E' }]}>
                     <Text style={styles.badgeText}>✓ Selected</Text>
@@ -69,7 +86,7 @@ export function VehicleSelectCard({ vehicleAssets = [], selectedAssetId, onSelec
                 {modelName}
               </Text>
               <Text style={[TYPE.micro, { color: isSelected ? (colors.primary || '#0F766E') : colors.textMuted, fontWeight: '700' }]}>
-                {reg.toUpperCase()}
+                {reg}
               </Text>
               <Text style={[TYPE.caption, { color: colors.textMuted, marginTop: 4 }]} numberOfLines={1}>
                 {odo}
@@ -98,13 +115,18 @@ const styles = StyleSheet.create({
   },
   vehicleItem: {
     width: 155,
-    padding: SPACING.sm + 4,
+    padding: SPACING.sm,
     borderRadius: RADIUS.md,
-    justifyContent: 'space-between',
   },
   itemHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  iconWrap: {
+    width: 28,
+    height: 28,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   icon: {
@@ -113,11 +135,13 @@ const styles = StyleSheet.create({
   badge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: RADIUS.sm,
+    borderRadius: RADIUS.full,
   },
   badgeText: {
-    fontSize: 10,
-    fontWeight: '800',
     color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
   },
 });
+
+export default VehicleSelectCard;

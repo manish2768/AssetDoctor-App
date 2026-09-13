@@ -12,118 +12,126 @@ import { GlassCard, GlassInput, GlassButton } from '../ui/Glass';
 import { AppLogo } from '../AppLogo';
 import { BRAND, COLORS, SPACING } from '../../theme/branding';
 import { Haptics } from '../../services/haptics';
-import { normalizePhone } from '../../utils/profileSetup';
+import { validateIndianPincode, lookupPincode, normalizeCanonicalEmail } from '../../services/identity/identityNormalizer';
+import { computeProfileCompletion } from '../../utils/profileCompletion';
 import { toErrorMessage } from '../../utils/errors';
-import { SMS_OTP_TEMPLATE } from '../../constants/smsOtp';
+import { goHomeDashboard } from '../../navigation/navActions';
 
 export function ProfileSetupModal() {
-  // Forced gate disabled via needsProfileSetup() === false.
-  // Keep component mounted for optional future soft prompts.
-  const { user, profile, completeProfileSetup, needsProfileSetup, sendOTP, verifyOTP } = useAuth();
+  const {
+    user,
+    profile,
+    completeProfileSetup,
+    needsProfileSetup,
+    needsProfileOnboarding,
+    profileHydrationPending,
+    profileStatus,
+  } = useAuth();
   const ui = useUiFeedback();
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpSession, setOtpSession] = useState(null);
+  const [pincode, setPincode] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [dismissed, setDismissed] = useState(false);
 
-  const visible = Boolean(user && needsProfileSetup);
-  const needsPhoneOtp = Boolean(user && !user.phoneNumber);
+  const shouldShow = typeof needsProfileOnboarding === 'boolean' ? needsProfileOnboarding : needsProfileSetup;
+  const visible = Boolean(
+    user &&
+    !profileHydrationPending &&
+    profileStatus !== 'PROFILE_LOADING' &&
+    profileStatus !== 'PROFILE_FOUND_COMPLETE' &&
+    shouldShow &&
+    !dismissed
+  );
 
   useEffect(() => {
     if (!visible) return;
-    setName(profile?.name || user?.displayName || '');
-    setPhone(profile?.phone || profile?.phoneNumber || '');
-    setOtp('');
-    setOtpSession(null);
+    const initialName = (profile?.fullName || (profile?.name && profile.name !== 'Name not set' && profile.name !== 'Asset Owner'))
+      ? (profile.fullName || profile.name)
+      : (user?.displayName && !/^\+?[0-9\s\-()]{7,18}$/.test(user.displayName))
+        ? user.displayName
+        : '';
+    setName(initialName);
+    setPincode(profile?.pinCode || profile?.pincode || '');
+    setCity(profile?.city || '');
+    setState(profile?.state || '');
+    setEmail(profile?.email || user?.email || '');
     setError('');
-  }, [visible, profile?.name, profile?.phone, profile?.phoneNumber, user?.displayName]);
+  }, [visible, profile, user]);
 
-  const onSkip = async () => {
-    setBusy(true);
-    setError('');
-    try {
-      const cleanName = String(name || profile?.name || user?.displayName || 'Asset Owner').trim();
-      await completeProfileSetup({
-        name: cleanName,
-        skipPhone: true,
-      });
-      Haptics.select();
-    } catch (e) {
-      // Even if cloud write fails, dismiss — never trap user
-      console.warn('[ProfileSetup] skip failed:', e?.message || e);
-      Haptics.select();
-    } finally {
-      setBusy(false);
+  const handlePincodeChange = (text) => {
+    setPincode(text);
+    const check = validateIndianPincode(text);
+    if (check.valid) {
+      const derived = lookupPincode(check.pincode);
+      if (derived) {
+        if (!city && derived.city) setCity(derived.city);
+        if (!state && derived.state) setState(derived.state);
+      }
     }
   };
 
-  const onSendPhoneOtp = async () => {
+  const onSaveProfile = async () => {
     setBusy(true);
     setError('');
+    console.log('[PROFILE_SAVE_START]', { uid: user?.uid });
     try {
       const cleanName = String(name || '').trim();
-      const cleanPhone = normalizePhone(phone);
       if (!cleanName || cleanName.length < 2) {
-        throw new Error('Enter your full name');
+        throw new Error('Please enter your Full Name (min 2 characters).');
       }
-      if (!/^\+[1-9]\d{9,14}$/.test(cleanPhone)) {
-        throw new Error('Enter a valid mobile number (e.g. 9876543210 or +919876543210)');
-      }
-      setPhone(cleanPhone);
-
-      if (!needsPhoneOtp) {
-        const result = await completeProfileSetup({
-          name: cleanName,
-          phone: cleanPhone,
-          phoneNumber: cleanPhone,
-        });
-        if (!result.success) throw new Error(result.error);
-        Haptics.success();
-        return;
+      if (/^\+?[0-9\s\-\(\)\.]{7,18}$/.test(cleanName)) {
+        throw new Error('Full Name cannot be a mobile number.');
       }
 
-      // Prefer sign-in OTP so existing phone accounts merge instead of blocking
-      const otpResult = await sendOTP(cleanPhone, { mode: 'signIn' });
-      if (!otpResult.success) throw new Error(otpResult.error);
-      if (!otpResult.confirmation) throw new Error('OTP session missing');
-      setOtpSession(otpResult.confirmation);
-      ui.info('SMS OTP sent', SMS_OTP_TEMPLATE.userHint);
-      Haptics.success();
-    } catch (e) {
-      Haptics.error();
-      setError(toErrorMessage(e, 'Could not send OTP'));
-    } finally {
-      setBusy(false);
-    }
-  };
+      const pinCheck = validateIndianPincode(pincode);
+      if (!pinCheck.valid) {
+        throw new Error(pinCheck.error || 'Please enter a valid 6-digit Indian PIN Code.');
+      }
 
-  const onVerifyAndSave = async () => {
-    setBusy(true);
-    setError('');
-    try {
-      const cleanName = String(name || '').trim();
-      const cleanPhone = normalizePhone(phone);
-      if (!otpSession) throw new Error('Request OTP first');
-      // signIn mode: existing phone users log in; new users get an account
-      const verified = await verifyOTP(otpSession, otp, { name: cleanName, mode: 'signIn' });
-      if (!verified.success) throw new Error(verified.error);
+      const cleanCity = String(city || '').trim();
+      if (!cleanCity) {
+        throw new Error('City is required.');
+      }
 
-      const result = await completeProfileSetup({
+      const cleanState = String(state || '').trim();
+      if (!cleanState) {
+        throw new Error('State is required.');
+      }
+
+      console.log('[PROFILE_SAVE_VALIDATED]', { name: cleanName, pincode: pinCheck.pincode, city: cleanCity, state: cleanState });
+
+      const payload = {
         name: cleanName,
-        phone: cleanPhone,
-        phoneNumber: cleanPhone,
-        skipPhoneCheck: true,
-      });
+        fullName: cleanName,
+        pincode: pinCheck.pincode,
+        pinCode: pinCheck.pincode,
+        city: cleanCity,
+        state: cleanState,
+        email: email ? normalizeCanonicalEmail(email) : undefined,
+        profileSetupComplete: true,
+      };
+
+      const result = await completeProfileSetup(payload);
       if (!result.success) {
-        // Auth already succeeded — don't trap on profile write
-        console.warn('[ProfileSetup] profile write:', result.error);
+        throw new Error(result.error || 'Failed to complete profile.');
       }
+
+      console.log('[PROFILE_SAVE_PERSISTED]');
+      console.log('[PROFILE_STATE_UPDATED]');
+      console.log('[PROFILE_COMPLETION_CONFIRMED]');
+
+      setDismissed(true);
+      console.log('[PROFILE_NAVIGATION_START]');
       Haptics.success();
+      goHomeDashboard();
+      console.log('[PROFILE_NAVIGATION_SUCCESS]');
     } catch (e) {
       Haptics.error();
-      setError(toErrorMessage(e, 'Could not verify phone'));
+      setError(toErrorMessage(e, 'Could not complete profile'));
     } finally {
       setBusy(false);
     }
@@ -134,52 +142,68 @@ export function ProfileSetupModal() {
   return (
     <Modal visible animationType="slide" presentationStyle="fullScreen">
       <View style={styles.root}>
-        <AppLogo size={72} style={styles.logo} />
-        <Text style={styles.title}>Add a few details</Text>
+        <AppLogo size={64} style={styles.logo} />
+        <Text style={styles.title}>Complete Your Profile</Text>
         <Text style={styles.sub}>
-          Optional — you can skip and use {BRAND.name} now. Link a mobile later in Settings.
+          Complete your profile once to secure and personalize your Asset Doctor Vault.
         </Text>
 
         <GlassCard glow style={styles.card}>
           <GlassInput
-            label="Full Name"
+            label="Full Name *"
             value={name}
             onChangeText={setName}
-            placeholder="Ashutosh Rai"
+            placeholder="e.g. Ayush Rai"
             autoCapitalize="words"
-            editable={!otpSession}
           />
+
           <GlassInput
-            label="Mobile Number (optional)"
-            value={phone}
-            onChangeText={setPhone}
-            keyboardType="phone-pad"
-            placeholder="+91 98765 43210"
-            editable={!otpSession}
+            label="6-Digit PIN Code *"
+            value={pincode}
+            onChangeText={handlePincodeChange}
+            keyboardType="number-pad"
+            maxLength={6}
+            placeholder="e.g. 226010"
           />
-          {otpSession ? (
-            <>
+
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <View style={{ flex: 1 }}>
               <GlassInput
-                label="6-digit SMS OTP"
-                value={otp}
-                onChangeText={setOtp}
-                keyboardType="number-pad"
-                maxLength={6}
-                placeholder="550066"
+                label="City *"
+                value={city}
+                onChangeText={setCity}
+                placeholder="e.g. Lucknow"
               />
-              <GlassButton title="Verify & Continue" onPress={onVerifyAndSave} loading={busy} />
-            </>
-          ) : (
-            <GlassButton
-              title={phone.trim() ? 'Send SMS OTP & Continue' : 'Save name & Continue'}
-              onPress={phone.trim() ? onSendPhoneOtp : onSkip}
-              loading={busy}
+            </View>
+            <View style={{ flex: 1 }}>
+              <GlassInput
+                label="State *"
+                value={state}
+                onChangeText={setState}
+                placeholder="e.g. Uttar Pradesh"
+              />
+            </View>
+          </View>
+
+          {!user?.email ? (
+            <GlassInput
+              label="Email Address (optional)"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              placeholder="you@email.com"
             />
-          )}
+          ) : null}
+
           {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Pressable onPress={onSkip} disabled={busy} style={styles.skipWrap}>
-            <Text style={styles.skip}>Skip for now → Go to Home</Text>
-          </Pressable>
+
+          <GlassButton
+            title="Save & Enter Vault"
+            onPress={onSaveProfile}
+            loading={busy}
+            style={{ marginTop: 14 }}
+          />
         </GlassCard>
 
         <Text style={styles.footer}>{BRAND.creatorCredit}</Text>

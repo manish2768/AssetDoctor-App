@@ -1,12 +1,13 @@
 /**
- * Asset Doctor — 🖤 RIDE PASSPORT (Vehicle Monthly Passport)
+ * Asset Doctor — Master Digital Vehicle Passport Screen
  *
- * A dedicated screen rendering the matte-black Monthly Vehicle Passport card
- * with privacy controls (mask plate / mask spend) and 1-tap share. Wired into
- * the navigation stack; reachable from Fuel Vault / Asset Passport.
+ * Renders the high-definition Obsidian Digital Vehicle Passport
+ * with visual tier switcher (Standard, Gold, Black), Front Certificate &
+ * Back Specifications/Audit flip, privacy masking toggles,
+ * and 1-tap 1080px PNG image export to WhatsApp / Android Share sheet.
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -24,14 +25,15 @@ import { useAuth } from '../context/AuthProvider';
 import { useUiFeedback } from '../context/UiFeedbackProvider';
 import { Haptics } from '../services/haptics';
 import { TAB_BAR_HEIGHT } from '../theme/tabMetrics';
-import { SPACING, TYPE, RADIUS } from '../theme/tokens';
+import { SPACING, TYPE, RADIUS, elevation } from '../theme/tokens';
 import { PremiumIcon } from '../design-system/icons';
 import { useFuelLogs } from '../hooks/useFuelLogs';
-import { monthKeyOf, computeMonthlyMetrics } from '../services/fuel/fuelMetrics';
+import { monthKeyOf, computeFuelAnalytics, type FuelAnalyticsResult } from '../services/fuel/fuelMetrics';
+import { MonthlyBlackCard, type PassportTier } from '../components/fuel/MonthlyBlackCard';
+import { IconButton, FilterChip, PrimaryButton } from '../components/design-system';
 import { captureView, shareCard } from '../services/share/cardShare';
-import { MonthlyBlackCard } from '../components/fuel/MonthlyBlackCard';
-import { IconButton } from '../components/design-system';
-// Capturable ViewShot
+import { getVehiclePresentation } from '../utils/vehiclePresentation';
+
 let ViewShot: any = null;
 try {
   // eslint-disable-next-line global-require, import/no-extraneous-dependencies
@@ -39,6 +41,12 @@ try {
 } catch {
   ViewShot = null;
 }
+
+const TIER_OPTIONS: Array<{ id: PassportTier; label: string }> = [
+  { id: 'standard', label: 'Standard' },
+  { id: 'gold', label: 'Gold' },
+  { id: 'black', label: 'Black' },
+];
 
 export function VehiclePassportScreen({ route, navigation }: any) {
   const colors = useThemeColors();
@@ -50,15 +58,31 @@ export function VehiclePassportScreen({ route, navigation }: any) {
 
   const assetId = route?.params?.assetId as string | undefined;
   const asset = assetId ? getAsset?.(assetId) : undefined;
+  const routeMode = route?.params?.mode as 'MONTHLY' | 'LIFETIME' | undefined;
+  const routeMonthKey = (route?.params?.monthKey || route?.params?.period) as string | undefined;
+
+  const mode = routeMode || 'MONTHLY';
+  const monthKey = routeMonthKey || monthKeyOf();
 
   const { logs, loading } = useFuelLogs(user?.uid, assetId, { enabled: Boolean(assetId) });
 
+  const [selectedTier, setSelectedTier] = useState<PassportTier | undefined>(undefined);
   const [maskNumber, setMaskNumber] = useState(false);
   const [maskAmount, setMaskAmount] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [showBack, setShowBack] = useState(false);
 
-  const monthKey = monthKeyOf();
-  const metric = computeMonthlyMetrics(monthKey, logs, asset || {});
+  // Canonical Single Source of Truth Analytics
+  const analytics: FuelAnalyticsResult = useMemo(() => {
+    return computeFuelAnalytics({
+      asset: asset || {},
+      logs,
+      mode,
+      month: monthKey,
+    });
+  }, [asset, logs, mode, monthKey]);
+
+  const pres = useMemo(() => getVehiclePresentation(asset), [asset]);
 
   const onShare = async () => {
     Haptics.tap();
@@ -69,14 +93,21 @@ export function VehiclePassportScreen({ route, navigation }: any) {
       if (shotRef.current) {
         uri = await captureView(shotRef, { width: 1080, format: 'png' });
       }
+
+      const periodLabel = mode === 'LIFETIME' ? 'ALL HISTORY' : monthKey;
       const lines = [
-        `${asset?.assetName || vehicleName(asset)} · Ride Passport`,
-        `Total distance: ${metric.totalDistanceKm != null ? `${metric.totalDistanceKm} km` : '—'}`,
-        metric.averageMileageKmPerL != null ? `Avg mileage: ${metric.averageMileageKmPerL} km/L` : null,
-        metric.runningCostPerKm != null ? `Cost/km: ₹${metric.runningCostPerKm}` : null,
-        metric.totalSpendInr != null ? `Total spend: ₹${metric.totalSpendInr}` : null,
+        `${pres.displayName} · Digital Vehicle Passport (${periodLabel})`,
+        `Registration: ${maskNumber ? '•• •• ••••' : (pres.registration || 'Verified')}`,
+        `Vehicle Type: ${pres.vehicleType}`,
+        `Total distance: ${analytics.totalDistanceKm != null && analytics.totalDistanceKm > 0 ? `${analytics.totalDistanceKm.toLocaleString('en-IN')} km` : '—'}`,
+        analytics.averageMileageKmPerL != null && analytics.averageMileageKmPerL > 0
+          ? `Avg mileage: ${analytics.averageMileageKmPerL} km/L`
+          : null,
+        analytics.costPerKm != null && analytics.costPerKm > 0 ? `Running cost: ₹${analytics.costPerKm}/km` : null,
+        analytics.totalSpend > 0 && !maskAmount ? `Fuel spend: ₹${analytics.totalSpend.toLocaleString('en-IN')}` : null,
+        `Refill count: ${analytics.refillCount}`,
         '',
-        'Shared from Asset Doctor · assetdoctor.in',
+        'Verified by Asset Doctor · assetdoctor.in',
       ]
         .filter(Boolean)
         .join('\n');
@@ -85,7 +116,7 @@ export function VehiclePassportScreen({ route, navigation }: any) {
         const res = await shareCard(asset, {
           uri,
           caption: lines,
-          fileName: `ride-passport-${monthKey}`,
+          fileName: `asset-doctor-passport-${mode === 'LIFETIME' ? 'lifetime' : monthKey}`,
           mime: 'image/png',
         });
         if (res?.success) Haptics.success();
@@ -97,7 +128,7 @@ export function VehiclePassportScreen({ route, navigation }: any) {
       }
     } catch (error: any) {
       Haptics.error();
-      ui?.error?.('Share', error?.message || 'Could not share');
+      ui?.error?.('Share', error?.message || 'Could not export passport image');
     } finally {
       setSharing(false);
     }
@@ -114,11 +145,13 @@ export function VehiclePassportScreen({ route, navigation }: any) {
           variant="surface"
           size={44}
         />
-        <Text style={[TYPE.h2, { color: colors.text, flex: 1, textAlign: 'center', marginHorizontal: 8 }]} numberOfLines={1}>
-          Ride Passport
-        </Text>
+        <View style={{ flex: 1, marginHorizontal: 8 }}>
+          <Text style={[TYPE.h2, { color: colors.text, textAlign: 'center', fontWeight: '700' }]} numberOfLines={1}>
+            Digital Vehicle Passport
+          </Text>
+        </View>
         <IconButton
-          icon={<PremiumIcon name="share" size={18} color={colors.text} />}
+          icon={<PremiumIcon name="share" size={18} color={colors.primary} />}
           label="Share"
           onPress={onShare}
           variant="surface"
@@ -133,53 +166,121 @@ export function VehiclePassportScreen({ route, navigation }: any) {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={[TYPE.caption, { color: colors.textMuted, textAlign: 'center', marginBottom: SPACING.md }]}>
-          Monthly Passport
-        </Text>
+        {/* Tier Selector Chips */}
+        <View style={styles.tierChipRow}>
+          {TIER_OPTIONS.map((t) => (
+            <FilterChip
+              key={t.id}
+              label={t.label}
+              selected={selectedTier === t.id}
+              onPress={() => {
+                Haptics.select();
+                setSelectedTier((prev) => (prev === t.id ? undefined : t.id));
+              }}
+            />
+          ))}
+        </View>
 
-        {/* The card — wrapped in a capture ref so future work can screenshot it.
-            Because capturing a live screen needs the ref mounted, use ViewShot. */}
-        {ViewShot ? (
-          <ViewShot
-            ref={shotRef}
-            style={{ width: '100%', alignItems: 'center' }}
-            options={{ format: 'png', quality: 0.96, result: 'tmpfile', width: 1080 }}
+        {/* View Switcher: Certificate Front vs Specifications Back */}
+        <View style={[styles.passportViewSwitcher, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Pressable
+            onPress={() => {
+              Haptics.select();
+              setShowBack(false);
+            }}
+            style={[
+              styles.viewTab,
+              !showBack && [styles.viewTabActive, { backgroundColor: colors.primary }],
+            ]}
           >
-            <MonthlyBlackCard
-              asset={asset || {}}
-              logs={logs}
-              monthKey={monthKey}
-              maskNumber={maskNumber}
-              maskSpend={maskAmount}
-              width={340}
-            />
-          </ViewShot>
-        ) : (
-          <View style={{ width: '100%', alignItems: 'center' }}>
-            <MonthlyBlackCard
-              asset={asset || {}}
-              logs={logs}
-              monthKey={monthKey}
-              maskNumber={maskNumber}
-              maskSpend={maskAmount}
-              width={340}
-            />
-          </View>
-        )}
+            <Text
+              style={[
+                styles.viewTabText,
+                { color: !showBack ? '#FFFFFF' : colors.textMuted },
+              ]}
+            >
+              Certificate (Front)
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              Haptics.select();
+              setShowBack(true);
+            }}
+            style={[
+              styles.viewTab,
+              showBack && [styles.viewTabActive, { backgroundColor: colors.primary }],
+            ]}
+          >
+            <Text
+              style={[
+                styles.viewTabText,
+                { color: showBack ? '#FFFFFF' : colors.textMuted },
+              ]}
+            >
+              Specifications & Audit (Back)
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Capturable Passport Card */}
+        <View style={styles.cardContainer}>
+          {ViewShot ? (
+            <ViewShot
+              ref={shotRef}
+              style={{ width: '100%', alignItems: 'center' }}
+              options={{ format: 'png', quality: 0.98, result: 'tmpfile', width: 1080 }}
+            >
+              <MonthlyBlackCard
+                asset={asset || {}}
+                logs={logs}
+                monthKey={monthKey}
+                mode={mode}
+                analytics={analytics}
+                maskNumber={maskNumber}
+                maskSpend={maskAmount}
+                tier={selectedTier}
+                width={340}
+                showBack={showBack}
+                onToggleFlip={() => setShowBack((b) => !b)}
+              />
+            </ViewShot>
+          ) : (
+            <View style={{ width: '100%', alignItems: 'center' }}>
+              <MonthlyBlackCard
+                asset={asset || {}}
+                logs={logs}
+                monthKey={monthKey}
+                mode={mode}
+                analytics={analytics}
+                maskNumber={maskNumber}
+                maskSpend={maskAmount}
+                tier={selectedTier}
+                width={340}
+                showBack={showBack}
+                onToggleFlip={() => setShowBack((b) => !b)}
+              />
+            </View>
+          )}
+        </View>
 
         {loading ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: SPACING.md }} />
-        ) : metric.entryCount === 0 ? (
+        ) : analytics.refillCount === 0 ? (
           <Text style={[TYPE.caption, { color: colors.textMuted, textAlign: 'center', marginTop: SPACING.md }]}>
-            No fuel logs this month yet. Log a full-tank refill to build your passport.
+            No fuel logs recorded for this period. Consecutive full-tank refills automatically compute verified mileage.
           </Text>
         ) : null}
 
-        {/* Privacy controls */}
-        <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        {/* Privacy Controls Panel */}
+        <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }, elevation(1, colors.shadow)]}>
           <Text style={[TYPE.label, { color: colors.textMuted }]}>PRIVACY CONTROLS</Text>
+          <Text style={[TYPE.micro, { color: colors.textMuted, marginTop: 2, marginBottom: 8 }]}>
+            Controls what appears on your exported image certificate.
+          </Text>
+
           <View style={styles.switchRow}>
-            <Text style={[TYPE.body, { color: colors.text, flex: 1 }]}>Mask number plate</Text>
+            <Text style={[TYPE.body, { color: colors.text, flex: 1, fontWeight: '600' }]}>Mask number plate</Text>
             <Switch
               value={maskNumber}
               onValueChange={(v) => {
@@ -190,39 +291,31 @@ export function VehiclePassportScreen({ route, navigation }: any) {
             />
           </View>
           <View style={styles.switchRow}>
-            <Text style={[TYPE.body, { color: colors.text, flex: 1 }]}>Mask total spend</Text>
+            <Text style={[TYPE.body, { color: colors.text, flex: 1, fontWeight: '600' }]}>Mask fuel spend</Text>
             <Switch
               value={maskAmount}
               onValueChange={(v) => {
                 Haptics.select();
                 setMaskAmount(v);
               }}
-              accessibilityLabel="Mask total spend"
+              accessibilityLabel="Mask fuel spend"
             />
           </View>
         </View>
 
-        {/* Share CTA */}
-        <Pressable
-          onPress={onShare}
-          disabled={sharing}
-          style={[styles.shareBtn, { backgroundColor: colors.primary }]}
-          accessibilityRole="button"
-          accessibilityLabel="Share Ride Passport"
-        >
-          {sharing ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.shareText}>✨ Share Ride Passport</Text>
-          )}
-        </Pressable>
+        {/* Share Action */}
+        <View style={{ marginTop: SPACING.lg }}>
+          <PrimaryButton
+            title="✨ Share Digital Vehicle Passport Image"
+            onPress={onShare}
+            loading={sharing}
+            size="lg"
+            style={{ borderRadius: RADIUS.lg }}
+          />
+        </View>
       </ScrollView>
     </View>
   );
-}
-
-function vehicleName(asset: any): string {
-  return String(asset?.assetName || asset?.name || 'Vehicle');
 }
 
 const styles = StyleSheet.create({
@@ -234,6 +327,40 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.xs,
   },
   scroll: { paddingHorizontal: SPACING.md, paddingTop: SPACING.xs },
+  tierChipRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: SPACING.sm,
+  },
+  passportViewSwitcher: {
+    flexDirection: 'row',
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    padding: 3,
+    marginBottom: SPACING.md,
+  },
+  viewTab: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: RADIUS.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewTabActive: {
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  viewTabText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  cardContainer: {
+    alignItems: 'center',
+    marginVertical: 4,
+  },
   panel: {
     marginTop: SPACING.lg,
     padding: SPACING.md,
@@ -246,14 +373,6 @@ const styles = StyleSheet.create({
     minHeight: 44,
     marginTop: SPACING.xs,
   },
-  shareBtn: {
-    marginTop: SPACING.lg,
-    height: 50,
-    borderRadius: RADIUS.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shareText: { color: '#fff', fontWeight: '900', fontSize: 15 },
 });
 
 export default VehiclePassportScreen;

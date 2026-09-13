@@ -22,7 +22,11 @@ import {
   FileSearch,
   DollarSign,
   FolderLock,
-  Plus
+  Plus,
+  Car,
+  Wind,
+  BookOpen,
+  Download
 } from 'lucide-react';
 import { PublicHomepageView } from './PublicHomepageView';
 import { GooglePlayDownloadButton } from './GooglePlayDownloadButton';
@@ -58,6 +62,29 @@ import { AnalyticsService } from '../../platform/analytics/analyticsService';
 import { auth } from '../../firebase';
 import type { Asset } from '../../types';
 
+// New Multi-Page Ecosystem Views
+import { VehicleDoctorLanding, VehicleDoctorSubPage } from './vehicles/VehicleDoctorLanding';
+import { ApplianceDoctorLanding, ApplianceSubPage } from './appliances/ApplianceDoctorLanding';
+import { WarrantyManagementPage } from './pages/WarrantyManagementPage';
+import { MaintenanceManagementPage } from './pages/MaintenanceManagementPage';
+import { SmartQrPage } from './pages/SmartQrPage';
+import { DownloadAppPage } from './pages/DownloadAppPage';
+
+// New Interactive Browser Free Tools
+import { WarrantyCalculatorTool } from './tools/WarrantyCalculatorTool';
+import { AssetAgeCalculatorTool } from './tools/AssetAgeCalculatorTool';
+import { AcElectricityCalculatorTool } from './tools/AcElectricityCalculatorTool';
+import { ServiceDueCalculatorTool } from './tools/ServiceDueCalculatorTool';
+
+// New Blog & Knowledge Hub Views
+import { BlogHubView } from './blog/BlogHubView';
+import { BlogPostView } from './blog/BlogPostView';
+import { BlogRepository, BlogCategory, BlogPost } from '../../platform/blog/blogData';
+
+// SEO & Schema Head Engine
+import { SeoHeadManager } from '../../platform/seo/seoHeadManager';
+import { getRouteMetadata } from '../../platform/seo/routeMetadata';
+
 interface PublicPlatformViewProps {
   onOpenAppVault: () => void;
   onOpenLoginModal?: () => void;
@@ -68,13 +95,24 @@ interface PublicPlatformViewProps {
 
 export type PlatformTab =
   | 'home'
-  | 'knowledge_hub'
+  | 'vehicle_doctor'
+  | 'appliance_doctor'
+  | 'warranty_page'
+  | 'maintenance_page'
+  | 'smart_qr_page'
+  | 'download_page'
   | 'tools_hub'
+  | 'tool_warranty'
+  | 'tool_asset_age'
+  | 'tool_ac_electricity'
+  | 'tool_service_due'
   | 'repair_vs_replace'
-  | 'warranty_checker'
   | 'maintenance_checker'
   | 'health_score'
   | 'invoice_analyzer'
+  | 'blog_hub'
+  | 'blog_post'
+  | 'knowledge_hub'
   | 'asset_explorer'
   | 'passport'
   | 'seo_page'
@@ -94,6 +132,10 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
   onSelectAsset
 }) => {
   const [activeTab, setActiveTab] = useState<PlatformTab>('home');
+  const [activeVehicleSubPage, setActiveVehicleSubPage] = useState<VehicleDoctorSubPage>('landing');
+  const [activeApplianceSubPage, setActiveApplianceSubPage] = useState<ApplianceSubPage>('landing');
+  const [activeBlogCategory, setActiveBlogCategory] = useState<BlogCategory | undefined>(undefined);
+  const [activeBlogPost, setActiveBlogPost] = useState<BlogPost | null>(null);
   const [activeKnowledgeCat, setActiveKnowledgeCat] = useState<KnowledgeCategory | undefined>(undefined);
   const [activeSeoSlug, setActiveSeoSlug] = useState<string>('tools/warranty-checker');
 
@@ -124,109 +166,168 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
   };
 
   // ----------------------------------------------------
-  // REAL SPA BROWSER ROUTING & HISTORY ARCHITECTURE
+  // MULTIPAGE ROUTING & HISTORY ARCHITECTURE
   // ----------------------------------------------------
-  const ROUTE_CONFIGS: Record<string, { tab: PlatformTab; title: string; desc: string }> = {
-    '/': {
-      tab: 'home',
-      title: 'Asset Doctor — Universal Asset Intelligence & Lifecycle Platform',
-      desc: 'Know what you own, what it needs, what it\'s worth, and what to do next. Universal asset tracking, warranty alerts, and preventive maintenance across 7 asset categories.'
-    },
-    '/about': {
-      tab: 'about',
-      title: 'About Asset Doctor | Universal Asset Intelligence Platform',
-      desc: 'Discover the story behind Asset Doctor, the universal asset lifecycle intelligence platform created by Ashutosh Rai to understand, protect, and manage physical assets.'
-    },
-    '/contact': {
-      tab: 'contact',
-      title: 'Contact Asset Doctor',
-      desc: 'Get in touch with Asset Doctor. Submit product feedback, report technical issues, or inquire about business asset portfolio partnerships.'
-    },
-    '/privacy-policy': {
-      tab: 'privacy_policy',
-      title: 'Privacy Policy | Asset Doctor',
-      desc: 'Asset Doctor Privacy Policy: Learn how we protect your asset data, enforce automated PII scrubbing, and maintain client-side zero-advertiser data isolation.'
-    },
-    '/terms-and-conditions': {
-      tab: 'terms',
-      title: 'Terms & Conditions | Asset Doctor',
-      desc: 'Asset Doctor Terms and Conditions: User agreement, service capabilities, calculation heuristics, and intellectual property terms.'
-    },
-    '/terms': {
-      tab: 'terms',
-      title: 'Terms & Conditions | Asset Doctor',
-      desc: 'Asset Doctor Terms and Conditions: User agreement, service capabilities, calculation heuristics, and intellectual property terms.'
-    },
-    '/cookie-policy': {
-      tab: 'cookie_policy',
-      title: 'Cookie Policy | Asset Doctor',
-      desc: 'Learn how Asset Doctor uses essential local storage and privacy-scrubbed analytics without third-party advertising tracking cookies.'
-    },
-    '/tools': {
-      tab: 'tools_hub',
-      title: 'Free Asset Intelligence Tools Suite | Asset Doctor',
-      desc: 'Interactive calculators for repair vs replace, warranty expiration, depreciation, and maintenance tracking.'
-    },
-    '/tools/repair-or-replace': {
-      tab: 'repair_vs_replace',
-      title: 'Repair vs Replace Calculator | Asset Doctor',
-      desc: 'Make data-backed decisions on whether to repair or replace failing equipment.'
-    },
-    '/tools/maintenance-checker': {
-      tab: 'maintenance_checker',
-      title: 'Predictive Maintenance Checker | Asset Doctor',
-      desc: 'Check preventive maintenance intervals and upcoming service requirements.'
-    },
-    '/tools/asset-health-score': {
-      tab: 'health_score',
-      title: 'Asset Health Score Calculator | Asset Doctor',
-      desc: 'Audit the condition, reliability, and lifespan score of your physical assets.'
-    },
-    '/tools/document-analyzer': {
-      tab: 'invoice_analyzer',
-      title: 'Smart Document & Bill Analyzer OCR | Asset Doctor',
-      desc: 'Extract key purchase metadata, serial numbers, and warranty terms from invoices.'
-    },
-    '/tools/invoice-analyzer': {
-      tab: 'invoice_analyzer',
-      title: 'Smart Document & Bill Analyzer OCR | Asset Doctor',
-      desc: 'Extract key purchase metadata, serial numbers, and warranty terms from invoices.'
-    },
-    '/tools/asset-passport': {
-      tab: 'passport',
-      title: 'Digital Asset Passport | Asset Doctor',
-      desc: 'Complete immutable digital passport and lifecycle timeline for physical assets.'
-    },
-    '/knowledge': {
-      tab: 'knowledge_hub',
-      title: 'Asset Intelligence Knowledge Hub | Asset Doctor',
-      desc: 'Comprehensive maintenance schedules, warranty insights, and depreciation norms across 6 asset sectors.'
-    },
-    '/assets/explore': {
-      tab: 'asset_explorer',
-      title: 'Explore Your Asset Universe | Asset Doctor',
-      desc: 'Explore intelligence, depreciation models, and care schedules across all asset categories.'
-    },
-    '/vault': {
-      tab: 'my_vault',
-      title: 'My Asset Vault | Asset Doctor',
-      desc: 'Manage and protect your vaulted assets with offline-first synchronization.'
-    }
-  };
-
   const navigateToPath = (path: string, pushHistory: boolean = true) => {
     const cleanPath = (path || '/').toLowerCase().replace(/\/$/, '') || '/';
 
     let targetTab: PlatformTab = 'home';
-    let targetTitle = 'Asset Doctor — Universal Asset Intelligence & Lifecycle Platform';
-    let targetDesc = 'Know what you own, what it needs, what it\'s worth, and what to do next.';
     let found = false;
 
-    if (ROUTE_CONFIGS[cleanPath]) {
-      const cfg = ROUTE_CONFIGS[cleanPath];
-      targetTab = cfg.tab;
-      targetTitle = cfg.title;
-      targetDesc = cfg.desc;
+    // 1. Core Top-Level Routes
+    if (cleanPath === '/') {
+      targetTab = 'home';
+      found = true;
+    } else if (cleanPath === '/about') {
+      targetTab = 'about';
+      found = true;
+    } else if (cleanPath === '/contact') {
+      targetTab = 'contact';
+      found = true;
+    } else if (cleanPath === '/download') {
+      targetTab = 'download_page';
+      found = true;
+    } else if (cleanPath === '/privacy' || cleanPath === '/privacy-policy') {
+      targetTab = 'privacy_policy';
+      found = true;
+    } else if (cleanPath === '/terms' || cleanPath === '/terms-and-conditions') {
+      targetTab = 'terms';
+      found = true;
+    } else if (cleanPath === '/cookie-policy') {
+      targetTab = 'cookie_policy';
+      found = true;
+    } else if (cleanPath === '/warranty') {
+      targetTab = 'warranty_page';
+      found = true;
+    } else if (cleanPath === '/maintenance') {
+      targetTab = 'maintenance_page';
+      found = true;
+    } else if (cleanPath === '/smart-qr') {
+      targetTab = 'smart_qr_page';
+      found = true;
+    } else if (cleanPath === '/vault') {
+      targetTab = 'my_vault';
+      found = true;
+    }
+
+    // 2. Vehicle Doctor Ecosystem Routes
+    else if (cleanPath === '/vehicle-doctor') {
+      setActiveVehicleSubPage('landing');
+      targetTab = 'vehicle_doctor';
+      found = true;
+    } else if (cleanPath === '/vehicle-doctor/cars') {
+      setActiveVehicleSubPage('cars');
+      targetTab = 'vehicle_doctor';
+      found = true;
+    } else if (cleanPath === '/vehicle-doctor/bikes') {
+      setActiveVehicleSubPage('bikes');
+      targetTab = 'vehicle_doctor';
+      found = true;
+    } else if (cleanPath === '/vehicle-doctor/warranty') {
+      setActiveVehicleSubPage('warranty');
+      targetTab = 'vehicle_doctor';
+      found = true;
+    } else if (cleanPath === '/vehicle-doctor/service') {
+      setActiveVehicleSubPage('service');
+      targetTab = 'vehicle_doctor';
+      found = true;
+    } else if (cleanPath === '/vehicle-doctor/documents') {
+      setActiveVehicleSubPage('documents');
+      targetTab = 'vehicle_doctor';
+      found = true;
+    }
+
+    // 3. Appliance Doctor Ecosystem Routes
+    else if (cleanPath === '/appliance-doctor') {
+      setActiveApplianceSubPage('landing');
+      targetTab = 'appliance_doctor';
+      found = true;
+    } else if (cleanPath === '/appliance-doctor/ac') {
+      setActiveApplianceSubPage('ac');
+      targetTab = 'appliance_doctor';
+      found = true;
+    } else if (cleanPath === '/appliance-doctor/refrigerator') {
+      setActiveApplianceSubPage('refrigerator');
+      targetTab = 'appliance_doctor';
+      found = true;
+    } else if (cleanPath === '/appliance-doctor/washing-machine') {
+      setActiveApplianceSubPage('washing-machine');
+      targetTab = 'appliance_doctor';
+      found = true;
+    } else if (cleanPath === '/appliance-doctor/ro') {
+      setActiveApplianceSubPage('ro');
+      targetTab = 'appliance_doctor';
+      found = true;
+    } else if (cleanPath === '/appliance-doctor/geyser') {
+      setActiveApplianceSubPage('geyser');
+      targetTab = 'appliance_doctor';
+      found = true;
+    } else if (cleanPath === '/appliance-doctor/microwave') {
+      setActiveApplianceSubPage('microwave');
+      targetTab = 'appliance_doctor';
+      found = true;
+    } else if (cleanPath === '/appliance-doctor/chimney') {
+      setActiveApplianceSubPage('chimney');
+      targetTab = 'appliance_doctor';
+      found = true;
+    }
+
+    // 4. Free Tools Routes
+    else if (cleanPath === '/tools') {
+      targetTab = 'tools_hub';
+      found = true;
+    } else if (cleanPath === '/tools/warranty-calculator' || cleanPath === '/tools/warranty-checker') {
+      targetTab = 'tool_warranty';
+      found = true;
+    } else if (cleanPath === '/tools/asset-age-calculator') {
+      targetTab = 'tool_asset_age';
+      found = true;
+    } else if (cleanPath === '/tools/ac-electricity-calculator') {
+      targetTab = 'tool_ac_electricity';
+      found = true;
+    } else if (cleanPath === '/tools/service-due-calculator') {
+      targetTab = 'tool_service_due';
+      found = true;
+    } else if (cleanPath === '/tools/repair-vs-replace' || cleanPath === '/tools/repair-or-replace') {
+      targetTab = 'repair_vs_replace';
+      found = true;
+    } else if (cleanPath === '/tools/maintenance-checker') {
+      targetTab = 'maintenance_checker';
+      found = true;
+    } else if (cleanPath === '/tools/asset-health-score' || cleanPath === '/tools/asset-health-check') {
+      targetTab = 'health_score';
+      found = true;
+    } else if (cleanPath === '/tools/document-analyzer' || cleanPath === '/tools/invoice-analyzer') {
+      targetTab = 'invoice_analyzer';
+      found = true;
+    } else if (cleanPath === '/tools/asset-passport') {
+      targetTab = 'passport';
+      found = true;
+    }
+
+    // 5. Blog & Knowledge Hub Routes
+    else if (cleanPath === '/blog') {
+      setActiveBlogCategory(undefined);
+      targetTab = 'blog_hub';
+      found = true;
+    } else if (cleanPath.startsWith('/blog/category/')) {
+      const cat = cleanPath.replace('/blog/category/', '') as BlogCategory;
+      setActiveBlogCategory(cat);
+      targetTab = 'blog_hub';
+      found = true;
+    } else if (cleanPath.startsWith('/blog/')) {
+      const slug = cleanPath.replace('/blog/', '');
+      const post = BlogRepository.getBySlug(slug);
+      if (post) {
+        setActiveBlogPost(post);
+        targetTab = 'blog_post';
+        found = true;
+      }
+    }
+
+    // 6. Legacy Knowledge & Assets Routes
+    else if (cleanPath === '/knowledge') {
+      targetTab = 'knowledge_hub';
       found = true;
     } else if (cleanPath.startsWith('/knowledge/')) {
       const sub = cleanPath.replace('/knowledge/', '');
@@ -237,13 +338,9 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
       else if (sub === 'business-assets') cat = 'BUSINESS';
       setActiveKnowledgeCat(cat);
       targetTab = 'knowledge_hub';
-      targetTitle = `${cat.charAt(0) + cat.slice(1).toLowerCase()} Asset Intelligence | Asset Doctor`;
-      targetDesc = `Comprehensive maintenance and lifecycle intelligence for ${cat.toLowerCase()} assets.`;
       found = true;
-    } else if (cleanPath.startsWith('/assets/')) {
+    } else if (cleanPath === '/assets/explore' || cleanPath.startsWith('/assets/')) {
       targetTab = 'asset_explorer';
-      targetTitle = 'Explore Your Asset Universe | Asset Doctor';
-      targetDesc = 'Explore asset intelligence, valuation, and care schedules.';
       found = true;
     } else if (cleanPath.startsWith('/tools/')) {
       const slug = cleanPath.replace(/^\//, '');
@@ -251,27 +348,54 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
       if (seoPage) {
         setActiveSeoSlug(slug);
         targetTab = 'seo_page';
-        targetTitle = seoPage.title;
-        targetDesc = seoPage.metaDescription;
         found = true;
       }
     }
 
     if (!found && cleanPath !== '/') {
       targetTab = 'not_found';
-      targetTitle = 'Page Not Found (404) | Asset Doctor';
-      targetDesc = 'The requested page could not be found.';
     }
 
     setActiveTab(targetTab);
 
+    // Apply Dynamic SEO & Metadata
     if (typeof window !== 'undefined') {
       if (pushHistory && window.location.pathname !== cleanPath) {
         window.history.pushState({ path: cleanPath, tab: targetTab }, '', cleanPath);
       }
-      document.title = targetTitle;
-      const metaDesc = document.querySelector('meta[name="description"]');
-      if (metaDesc) metaDesc.setAttribute('content', targetDesc);
+
+      if (targetTab === 'blog_post' && activeBlogPost) {
+        SeoHeadManager.updateHead({
+          title: `${activeBlogPost.title} | Asset Doctor`,
+          description: activeBlogPost.metaDescription,
+          canonicalUrl: `https://assetdoctor.in/blog/${activeBlogPost.slug}`,
+          ogType: 'article',
+          author: activeBlogPost.author,
+          publishedTime: activeBlogPost.publishedDate,
+          modifiedTime: activeBlogPost.updatedDate,
+          schema: {
+            '@type': 'BlogPosting',
+            headline: activeBlogPost.h1,
+            description: activeBlogPost.metaDescription,
+            url: `https://assetdoctor.in/blog/${activeBlogPost.slug}`,
+            author: {
+              '@type': 'Organization',
+              name: activeBlogPost.author
+            },
+            publisher: {
+              '@type': 'Organization',
+              name: 'Asset Doctor',
+              logo: 'https://assetdoctor.in/icon.svg'
+            },
+            datePublished: activeBlogPost.publishedDate,
+            dateModified: activeBlogPost.updatedDate
+          }
+        });
+      } else {
+        const meta = getRouteMetadata(cleanPath);
+        SeoHeadManager.updateHead(meta);
+      }
+
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
@@ -326,9 +450,7 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
     navigateToPath(clean);
   };
 
-  // ----------------------------------------------------
-  // SAVE-TO-VAULT CONVERSION HANDLERS
-  // ----------------------------------------------------
+  // Save-To-Vault Handlers
   const handleSaveCalculation = async (calcData: {
     toolType: 'REPAIR_VS_REPLACE' | 'DEPRECIATION' | 'WARRANTY' | 'TCO' | 'MAINTENANCE' | 'HEALTH_SCORE';
     assetName: string;
@@ -354,7 +476,6 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
         showToast('Failed to save calculation to Vault.');
       }
     } else {
-      // Guest Mode: Store in local guest session first, then prompt optional sign-up
       GuestSessionService.addGuestCalculation({
         toolType: calcData.toolType,
         assetName: calcData.assetName,
@@ -366,35 +487,6 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
       });
       setPendingSaveCalculation(calcData);
       setAuthContextMessage(`Save your ${calcData.assetName} calculation`);
-      setIsAuthModalOpen(true);
-    }
-  };
-
-  const handleSaveAssetCandidate = async (candidate: Partial<Asset>) => {
-    if (currentUser && currentUser.uid && currentUser.uid !== 'guest_user') {
-      // Check for duplicate asset in user's vault
-      const existingAssets = MobileAssetService.getCachedAssets(currentUser.uid);
-      const dupCheck = DuplicateProtectionService.checkForDuplicate(candidate, existingAssets);
-
-      if (dupCheck.isDuplicate && dupCheck.existingAsset) {
-        setDuplicateModalState({
-          isOpen: true,
-          candidate,
-          existingAsset: dupCheck.existingAsset,
-          reason: dupCheck.reason
-        });
-        return;
-      }
-
-      try {
-        await MobileAssetService.saveAsset(candidate, currentUser.uid);
-        showToast(`Added "${candidate.name}" to your Asset Vault!`, 'View Vault', () => setActiveTab('my_vault'));
-      } catch (e) {
-        showToast('Failed to add asset to Vault.');
-      }
-    } else {
-      setPendingSaveAsset(candidate);
-      setAuthContextMessage(`Sign in to save ${candidate.name || 'this asset'} to your Vault`);
       setIsAuthModalOpen(true);
     }
   };
@@ -428,7 +520,6 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
       }
     }
 
-    // Check if other guest calculations exist
     const guestItems = GuestSessionService.getGuestCalculations();
     if (guestItems.length > 0) {
       setPendingGuestCalculations(guestItems);
@@ -448,34 +539,24 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
     try {
       await auth.signOut();
       setIsProfileMenuOpen(false);
-      setActiveTab('home');
-      showToast('Signed out of Asset Doctor Vault.');
+      showToast('Signed out of Asset Doctor');
+      navigateToPath('/');
     } catch (e) {
-      console.warn('Sign out error:', e);
+      showToast('Error signing out');
     }
   };
 
-  const trackAppDownload = () => {
-    AnalyticsService.trackEvent('app_download_click', {
-      path: '/',
-      metadata: {
-        platform: 'android',
-        destination: 'google_play'
-      }
-    });
-  };
-
   return (
-    <div className="min-h-screen bg-[#070D18] text-slate-100 flex flex-col selection:bg-emerald-500 selection:text-slate-950">
+    <div className="min-h-screen bg-[#070D18] text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl bg-slate-900 border border-emerald-500/50 shadow-2xl shadow-emerald-500/20 text-xs font-bold text-emerald-400 animate-slide-up">
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl bg-[#0B1220] border border-emerald-500/50 shadow-2xl text-xs font-bold text-emerald-400 animate-slide-up">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           <span>{toastMessage.text}</span>
           {toastMessage.actionLabel && toastMessage.onAction && (
             <button
               onClick={toastMessage.onAction}
-              className="px-2.5 py-1 rounded-lg bg-emerald-500 text-slate-950 font-black text-[11px] hover:bg-emerald-400 cursor-pointer ml-1"
+              className="ml-2 px-2.5 py-1 rounded-lg bg-emerald-500 text-slate-950 text-[11px] font-black uppercase tracking-wider hover:bg-emerald-400 transition cursor-pointer"
             >
               {toastMessage.actionLabel}
             </button>
@@ -483,26 +564,27 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
         </div>
       )}
 
-      {/* 1. Global Header Navigation Bar */}
-      <header className="sticky top-0 z-50 bg-[#070D18]/90 backdrop-blur-2xl border-b border-slate-800/80 px-4 sm:px-8 py-3.5 flex items-center justify-between gap-4">
-        {/* Brand Logo & Universal Positioning */}
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => { setActiveTab('home'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 via-teal-400 to-cyan-400 p-0.5 shadow-lg shadow-emerald-500/20">
-            <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
-              <Shield className="w-5 h-5 text-emerald-400" />
-            </div>
+      {/* 1. Global Platform Navigation Header */}
+      <header className="sticky top-0 z-40 w-full border-b border-white/10 bg-[#070D18]/90 backdrop-blur-md px-4 sm:px-8 py-3.5 flex items-center justify-between transition-colors">
+        {/* Left: Brand Identity */}
+        <div
+          onClick={() => navigateToPath('/')}
+          className="flex items-center gap-2.5 cursor-pointer group"
+        >
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-emerald-500/20 group-hover:scale-105 transition-transform">
+            <Shield className="w-5 h-5" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="font-black text-lg sm:text-xl tracking-tight text-white font-sans">
-                Asset<span className="text-emerald-400">Doctor</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-white font-black text-base sm:text-lg tracking-tight">
+                Asset Doctor
               </span>
               <span className="hidden sm:inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-mono">
-                v2.8 Universal
+                Home &amp; Vehicle
               </span>
             </div>
             <p className="text-[10px] text-slate-400 font-medium hidden md:block">
-              Universal Asset Intelligence & Lifecycle Platform
+              Your Home &amp; Vehicle Doctor
             </p>
           </div>
         </div>
@@ -511,16 +593,39 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
         <nav className="hidden lg:flex items-center gap-1 bg-slate-950/80 border border-slate-800/90 p-1 rounded-2xl text-xs font-bold">
           <button
             onClick={() => navigateToPath('/')}
-            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
+            className={`px-3 py-2 rounded-xl transition-all cursor-pointer ${
               activeTab === 'home' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
             Home
           </button>
           <button
+            onClick={() => navigateToPath('/vehicle-doctor')}
+            className={`px-3 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'vehicle_doctor' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Car className="w-3.5 h-3.5" />
+            <span>Vehicle Doctor</span>
+          </button>
+          <button
+            onClick={() => navigateToPath('/appliance-doctor')}
+            className={`px-3 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'appliance_doctor' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Wrench className="w-3.5 h-3.5" />
+            <span>Appliance Doctor</span>
+          </button>
+          <button
             onClick={() => navigateToPath('/tools')}
-            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'tools_hub' || activeTab === 'repair_vs_replace' || activeTab === 'maintenance_checker' || activeTab === 'health_score'
+            className={`px-3 py-2 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'tools_hub' ||
+              activeTab === 'tool_warranty' ||
+              activeTab === 'tool_asset_age' ||
+              activeTab === 'tool_ac_electricity' ||
+              activeTab === 'tool_service_due' ||
+              activeTab === 'repair_vs_replace'
                 ? 'bg-emerald-500 text-slate-950 font-black shadow-md'
                 : 'text-slate-400 hover:text-white'
             }`}
@@ -528,32 +633,17 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
             Free Tools
           </button>
           <button
-            onClick={() => handleNavigateToKnowledge()}
-            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'knowledge_hub' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
+            onClick={() => navigateToPath('/blog')}
+            className={`px-3 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'blog_hub' || activeTab === 'blog_post' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
-            Knowledge Hub
-          </button>
-          <button
-            onClick={() => navigateToPath('/assets/explore')}
-            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'asset_explorer' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Explore Assets
-          </button>
-          <button
-            onClick={() => navigateToPath('/tools/document-analyzer')}
-            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'invoice_analyzer' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Bill Analyzer
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Knowledge Hub</span>
           </button>
           <button
             onClick={() => navigateToPath('/about')}
-            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
+            className={`px-3 py-2 rounded-xl transition-all cursor-pointer ${
               activeTab === 'about' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -564,7 +654,7 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
           {currentUser && (
             <button
               onClick={() => navigateToPath('/vault')}
-              className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
                 activeTab === 'my_vault' ? 'bg-emerald-500 text-slate-950 font-black shadow-md' : 'text-emerald-400 hover:text-white'
               }`}
             >
@@ -574,7 +664,7 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
           )}
         </nav>
 
-        {/* Right: Guest vs Authenticated User Actions */}
+        {/* Right: Actions */}
         <div className="flex items-center gap-2">
           {currentUser ? (
             <div className="flex items-center gap-2">
@@ -588,7 +678,7 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
               <div className="relative">
                 <button
                   onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                  className="px-3.5 py-2 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs font-bold text-slate-200 transition-all cursor-pointer flex items-center gap-2 shadow-md"
+                  className="px-3 py-2 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs font-bold text-slate-200 transition-all cursor-pointer flex items-center gap-2 shadow-md"
                 >
                   <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-[11px]">
                     {currentUser.email ? currentUser.email.charAt(0).toUpperCase() : 'U'}
@@ -643,17 +733,20 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <GooglePlayDownloadButton
-                variant="header"
-                placement="header"
-                label="Download Now"
-              />
+              <button
+                onClick={() => navigateToPath('/download')}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-300 hover:text-white border border-slate-800 hover:border-slate-700 bg-slate-900/80 cursor-pointer transition"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-400" />
+                <span>App</span>
+              </button>
+
               <button
                 onClick={() => {
                   setAuthContextMessage(undefined);
                   setIsAuthModalOpen(true);
                 }}
-                className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-300 hover:text-white border border-slate-800 hover:border-slate-700 bg-slate-900/80 cursor-pointer hidden sm:block transition"
+                className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-300 hover:text-white border border-slate-800 hover:border-slate-700 bg-slate-900/80 cursor-pointer hidden md:block transition"
               >
                 Sign In
               </button>
@@ -679,48 +772,48 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
         <div className="flex lg:hidden items-center gap-1.5 overflow-x-auto pb-2 scrollbar-thin">
           <button
             onClick={() => navigateToPath('/')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap border ${
               activeTab === 'home' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
             }`}
           >
             Home
           </button>
           <button
+            onClick={() => navigateToPath('/vehicle-doctor')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap border ${
+              activeTab === 'vehicle_doctor' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
+            }`}
+          >
+            Vehicle Doctor
+          </button>
+          <button
+            onClick={() => navigateToPath('/appliance-doctor')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap border ${
+              activeTab === 'appliance_doctor' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
+            }`}
+          >
+            Appliance Doctor
+          </button>
+          <button
             onClick={() => navigateToPath('/tools')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${
-              activeTab === 'tools_hub' || activeTab === 'repair_vs_replace' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap border ${
+              activeTab === 'tools_hub' || activeTab.startsWith('tool_') ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
             }`}
           >
-            Free Tools
+            Tools
           </button>
           <button
-            onClick={() => handleNavigateToKnowledge()}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${
-              activeTab === 'knowledge_hub' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
+            onClick={() => navigateToPath('/blog')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap border ${
+              activeTab === 'blog_hub' || activeTab === 'blog_post' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
             }`}
           >
-            Knowledge Hub
-          </button>
-          <button
-            onClick={() => navigateToPath('/assets/explore')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${
-              activeTab === 'asset_explorer' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
-            }`}
-          >
-            Explore Assets
-          </button>
-          <button
-            onClick={() => navigateToPath('/about')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${
-              activeTab === 'about' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
-            }`}
-          >
-            About
+            Blog
           </button>
           {currentUser && (
             <button
               onClick={() => navigateToPath('/vault')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap border ${
                 activeTab === 'my_vault' ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400' : 'bg-slate-950 text-emerald-400 border-slate-800'
               }`}
             >
@@ -737,7 +830,138 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
               onSelectKnowledge={(id) => handleNavigateToKnowledge()}
               onOpenVaultApp={currentUser ? () => setActiveTab('my_vault') : () => setIsAuthModalOpen(true)}
               onOpenLoginModal={() => setIsAuthModalOpen(true)}
+              onNavigate={(p) => navigateToPath(p)}
             />
+          )}
+
+          {/* Vehicle Doctor Ecosystem */}
+          {activeTab === 'vehicle_doctor' && (
+            <VehicleDoctorLanding
+              subPage={activeVehicleSubPage}
+              onNavigate={(p) => navigateToPath(p)}
+              onOpenVaultApp={currentUser ? () => setActiveTab('my_vault') : () => setIsAuthModalOpen(true)}
+            />
+          )}
+
+          {/* Appliance Doctor Ecosystem */}
+          {activeTab === 'appliance_doctor' && (
+            <ApplianceDoctorLanding
+              subPage={activeApplianceSubPage}
+              onNavigate={(p) => navigateToPath(p)}
+              onOpenVaultApp={currentUser ? () => setActiveTab('my_vault') : () => setIsAuthModalOpen(true)}
+            />
+          )}
+
+          {/* Dedicated Feature Pages */}
+          {activeTab === 'warranty_page' && (
+            <WarrantyManagementPage
+              onNavigate={(p) => navigateToPath(p)}
+              onOpenVaultApp={currentUser ? () => setActiveTab('my_vault') : () => setIsAuthModalOpen(true)}
+            />
+          )}
+
+          {activeTab === 'maintenance_page' && (
+            <MaintenanceManagementPage
+              onNavigate={(p) => navigateToPath(p)}
+              onOpenVaultApp={currentUser ? () => setActiveTab('my_vault') : () => setIsAuthModalOpen(true)}
+            />
+          )}
+
+          {activeTab === 'smart_qr_page' && (
+            <SmartQrPage
+              onNavigate={(p) => navigateToPath(p)}
+              onOpenVaultApp={currentUser ? () => setActiveTab('my_vault') : () => setIsAuthModalOpen(true)}
+            />
+          )}
+
+          {activeTab === 'download_page' && (
+            <DownloadAppPage
+              onNavigate={(p) => navigateToPath(p)}
+              onOpenVaultApp={currentUser ? () => setActiveTab('my_vault') : () => setIsAuthModalOpen(true)}
+            />
+          )}
+
+          {/* Interactive Browser Free Tools */}
+          {activeTab === 'tool_warranty' && (
+            <WarrantyCalculatorTool
+              onSaveToVault={() => {
+                handleSaveCalculation({
+                  toolType: 'WARRANTY',
+                  assetName: 'Warranty Evaluation',
+                  assetCategory: 'General',
+                  summary: 'Calculated using Warranty Expiry Calculator',
+                  primaryMetricLabel: 'Status',
+                  primaryMetricValue: 'Evaluated'
+                });
+              }}
+              onDownloadApp={() => navigateToPath('/download')}
+            />
+          )}
+
+          {activeTab === 'tool_asset_age' && (
+            <AssetAgeCalculatorTool
+              onSaveToVault={() => {
+                handleSaveCalculation({
+                  toolType: 'DEPRECIATION',
+                  assetName: 'Asset Age Evaluation',
+                  assetCategory: 'General',
+                  summary: 'Calculated using Asset Age Calculator',
+                  primaryMetricLabel: 'Age',
+                  primaryMetricValue: 'Calculated'
+                });
+              }}
+              onDownloadApp={() => navigateToPath('/download')}
+            />
+          )}
+
+          {activeTab === 'tool_ac_electricity' && (
+            <AcElectricityCalculatorTool
+              onSaveToVault={() => {
+                handleSaveCalculation({
+                  toolType: 'TCO',
+                  assetName: 'AC Electricity Estimate',
+                  assetCategory: 'APPLIANCE',
+                  summary: 'Estimated power consumption and monthly bill',
+                  primaryMetricLabel: 'Cost',
+                  primaryMetricValue: 'Estimated'
+                });
+              }}
+              onDownloadApp={() => navigateToPath('/download')}
+            />
+          )}
+
+          {activeTab === 'tool_service_due' && (
+            <ServiceDueCalculatorTool
+              onSaveToVault={() => {
+                handleSaveCalculation({
+                  toolType: 'MAINTENANCE',
+                  assetName: 'Service Due Prediction',
+                  assetCategory: 'VEHICLE',
+                  summary: 'Whichever-comes-first service milestone calculation',
+                  primaryMetricLabel: 'Upkeep Due',
+                  primaryMetricValue: 'Scheduled'
+                });
+              }}
+              onDownloadApp={() => navigateToPath('/download')}
+            />
+          )}
+
+          {activeTab === 'repair_vs_replace' && (
+            <div className="space-y-6">
+              <RepairVsReplaceTool
+                onSaveToVault={() => {
+                  handleSaveCalculation({
+                    toolType: 'REPAIR_VS_REPLACE',
+                    assetName: 'Repair vs Replace Evaluation',
+                    assetCategory: 'APPLIANCE',
+                    summary: '50% economic decision threshold calculation',
+                    primaryMetricLabel: 'Decision',
+                    primaryMetricValue: 'Evaluated'
+                  });
+                }}
+                onDownloadApp={() => navigateToPath('/download')}
+              />
+            </div>
           )}
 
           {activeTab === 'tools_hub' && (
@@ -755,21 +979,20 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
             />
           )}
 
-          {activeTab === 'repair_vs_replace' && (
-            <div className="space-y-6">
-              <RepairVsReplaceTool
-                onSaveToVault={() => {
-                  handleSaveCalculation({
-                    toolType: 'REPAIR_VS_REPLACE',
-                    assetName: 'Repair vs Replace Evaluation',
-                    assetCategory: 'APPLIANCE',
-                    summary: '50% economic decision threshold calculation',
-                    primaryMetricLabel: 'Decision',
-                    primaryMetricValue: 'Evaluated'
-                  });
-                }}
-              />
-            </div>
+          {/* Blog & Knowledge Hub Views */}
+          {activeTab === 'blog_hub' && (
+            <BlogHubView
+              activeCategory={activeBlogCategory}
+              onNavigate={(p) => navigateToPath(p)}
+            />
+          )}
+
+          {activeTab === 'blog_post' && activeBlogPost && (
+            <BlogPostView
+              post={activeBlogPost}
+              onNavigate={(p) => navigateToPath(p)}
+              onOpenVaultApp={currentUser ? () => setActiveTab('my_vault') : () => setIsAuthModalOpen(true)}
+            />
           )}
 
           {activeTab === 'maintenance_checker' && (
@@ -931,37 +1154,7 @@ export const PublicPlatformView: React.FC<PublicPlatformViewProps> = ({
 
       {/* 6. Global Trust & Platform Footer */}
       <GlobalTrustFooter
-        onNavigateTab={(tab) => {
-          if (tab.startsWith('/')) {
-            navigateToPath(tab);
-          } else if (tab === 'home') {
-            navigateToPath('/');
-          } else if (tab === 'about') {
-            navigateToPath('/about');
-          } else if (tab === 'contact') {
-            navigateToPath('/contact');
-          } else if (tab === 'privacy_policy') {
-            navigateToPath('/privacy-policy');
-          } else if (tab === 'terms') {
-            navigateToPath('/terms-and-conditions');
-          } else if (tab === 'cookie_policy') {
-            navigateToPath('/cookie-policy');
-          } else if (tab === 'my_vault') {
-            navigateToPath('/vault');
-          } else if (tab === 'tools_hub') {
-            navigateToPath('/tools');
-          } else if (tab === 'asset_explorer') {
-            navigateToPath('/assets/explore');
-          } else if (tab === 'knowledge_hub') {
-            navigateToPath('/knowledge');
-          } else if (tab === 'invoice_analyzer') {
-            navigateToPath('/tools/document-analyzer');
-          } else if (tab === 'passport') {
-            navigateToPath('/tools/asset-passport');
-          } else {
-            navigateToPath(`/${tab}`);
-          }
-        }}
+        onNavigateTab={(path) => navigateToPath(path)}
         onSelectTool={handleNavigateToTool}
       />
     </div>

@@ -134,6 +134,50 @@ export function openReviewInvoice(params = {}) {
   return false;
 }
 
+/**
+ * Open category-appropriate review screen dynamically.
+ * Never silently falls back to Purchase Invoice.
+ */
+export function openReviewDocument(params = {}) {
+  const docType =
+    params.documentType ||
+    params.invoice?.documentType ||
+    params.assetData?.documentType ||
+    params.selectedDocType;
+  const { normalizeToCanonicalDocType, getRouteForCanonicalDocType } = require('../types/assetDocumentTypes');
+  const canonical = normalizeToCanonicalDocType(docType);
+  const routeName = getRouteForCanonicalDocType(canonical);
+
+  try {
+    if (navigationRef.isReady()) {
+      try {
+        navigationRef.navigate(routeName, params);
+        return true;
+      } catch (navErr) {
+        console.warn(`[nav] openReviewDocument navigate to ${routeName} failed:`, navErr?.message || navErr);
+      }
+      try {
+        navigationRef.dispatch(
+          CommonActions.navigate({
+            name: routeName,
+            params,
+          }),
+        );
+        return true;
+      } catch (error) {
+        console.error(`[nav] openReviewDocument dispatch to ${routeName} failed:`, error?.message || error);
+      }
+    }
+  } catch (error) {
+    console.warn('[nav] openReviewDocument not ready:', error?.message || error);
+  }
+
+  setTimeout(() => {
+    safeNavigate(routeName, params).catch(() => {});
+  }, 500);
+  return false;
+}
+
 /** Re-open scanner for another attempt. */
 export function openRescanInvoice(params = {}) {
   try {

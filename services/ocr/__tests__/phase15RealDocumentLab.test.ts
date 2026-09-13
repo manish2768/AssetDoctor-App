@@ -60,7 +60,7 @@ assert(insurance?.actualType === 'INSURANCE_POLICY', 'insurance is not generic b
 
 const phone = labResults.find((r) => r.id === 'mobile-phone-invoice');
 assert(
-  phone?.actualType === 'ELECTRONICS_INVOICE' || phone?.typeOk,
+  Boolean(phone?.actualType === 'ELECTRONICS_INVOICE' || phone?.typeOk),
   'phone invoice is not a vehicle document',
   String(phone?.actualType),
 );
@@ -122,7 +122,7 @@ console.log('\n--- Document type uncertain, never force bill ---');
     'ambiguous families are not forced to bill',
     String(mixed.documentType),
   );
-  assert(mixed.documentType !== 'bill', 'never returns bill');
+  assert((mixed.documentType as string) !== 'bill', 'never returns bill');
 }
 
 console.log('\n--- Provider transparency ---');

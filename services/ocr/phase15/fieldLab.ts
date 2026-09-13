@@ -93,7 +93,7 @@ export function evaluateFixture(fixture: RedactedDocumentFixture) {
             hardened.documentType === 'APPLIANCE_INVOICE' ||
             hardened.documentType === 'PURCHASE_INVOICE'));
 
-  const forcedBill = hardened.documentType === 'bill' || hardened.classificationReasons?.includes('forced_bill');
+  const forcedBill = (hardened.documentType as string) === 'bill' || hardened.classificationReasons?.includes('forced_bill');
   const forbiddenHit = fixture.forbiddenTypes.some(
     (t) => String(hardened.documentType).toUpperCase() === String(t).toUpperCase() || hardened.documentType === t,
   );

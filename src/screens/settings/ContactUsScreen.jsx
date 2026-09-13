@@ -1,74 +1,133 @@
 /**
- * Contact Us — support mailto for Asset Doctor
+ * Asset Doctor — Master Contact & Help Center Screen
+ * Clear support options + subtle creator credit
  */
 
 import React from 'react';
-import { ScrollView, Text, StyleSheet, Pressable, Linking } from 'react-native';
+import { ScrollView, Text, StyleSheet, Pressable, Linking, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Screen, GlassCard, BrandFooter } from '../../components/ui/Glass';
-import { BRAND, COLORS, SPACING } from '../../theme/branding';
+import { BRAND } from '../../theme/branding';
+import { useThemeColors } from '../../context/ThemeProvider';
 import { Haptics } from '../../services/haptics';
 import { useUiFeedback } from '../../context/UiFeedbackProvider';
+import { IconButton, PremiumIcon } from '../../design-system';
+import { RADIUS, SPACING, TYPE, elevation } from '../../theme/tokens';
 
 const SUPPORT_EMAIL = 'support@assetdoctor.in';
 
-export function ContactUsScreen() {
+export function ContactUsScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
+  const colors = useThemeColors();
   const ui = useUiFeedback();
+
   const openMail = async () => {
     Haptics.tap();
-    const url = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('[Asset Doctor] Support')}`;
+    const url = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('[Asset Doctor] Support Inquiry')}`;
     try {
       const can = await Linking.canOpenURL(url);
       if (!can) {
-        ui.info('Email', `Write to us at ${SUPPORT_EMAIL}`);
+        ui.info('Support Email', `Reach us at ${SUPPORT_EMAIL}`);
         return;
       }
       await Linking.openURL(url);
     } catch {
-      ui.info('Email', `Write to us at ${SUPPORT_EMAIL}`);
+      ui.info('Support Email', `Reach us at ${SUPPORT_EMAIL}`);
     }
   };
 
   return (
-    <Screen>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Contact Us</Text>
-        <GlassCard glow>
-          <Text style={styles.label}>Customer support</Text>
-          <Text style={styles.body}>
-            Questions about your vault, OCR scans, or Play Store listing? Reach the Asset Doctor
-            team anytime.
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      {/* Header */}
+      <View style={[styles.headerWrap, { paddingTop: Math.max(insets.top, 8) }]}>
+        <IconButton
+          icon={<PremiumIcon name="arrow-left" size={18} color={colors.text} />}
+          label="Back"
+          onPress={() => navigation?.goBack?.()}
+          variant="surface"
+          size={44}
+        />
+        <View style={{ flex: 1, marginHorizontal: 8 }}>
+          <Text style={[TYPE.h2, { color: colors.text, fontWeight: '700' }]} numberOfLines={1}>
+            Help & Support
           </Text>
-          <Pressable onPress={openMail} style={styles.mailBtn}>
-            <Text style={styles.mailText}>{SUPPORT_EMAIL}</Text>
-            <Text style={styles.mailHint}>Tap to open your email app →</Text>
+        </View>
+      </View>
+
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, elevation(1, colors.shadow)]}>
+          <Text style={[TYPE.label, { color: colors.textMuted }]}>CUSTOMER SUPPORT</Text>
+          <Text style={[TYPE.body, { color: colors.text, marginTop: 6, lineHeight: 22 }]}>
+            Have questions about your asset vault, OCR document recognition, or account security?
+            We are here to assist you.
+          </Text>
+
+          <Pressable
+            onPress={openMail}
+            style={[styles.mailBtn, { backgroundColor: colors.accentLight, borderColor: colors.primary }]}
+          >
+            <Text style={[styles.mailText, { color: colors.primary }]}>{SUPPORT_EMAIL}</Text>
+            <Text style={[TYPE.micro, { color: colors.textMuted, marginTop: 4 }]}>
+              Tap to open email client →
+            </Text>
           </Pressable>
-        </GlassCard>
-        <GlassCard style={{ marginTop: 12 }}>
-          <Text style={styles.label}>Built by</Text>
-          <Text style={styles.body}>{BRAND.creatorCredit} — 14-year-old innovator Ashutosh.</Text>
-        </GlassCard>
-        <BrandFooter />
+        </View>
+
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, elevation(1, colors.shadow)]}>
+          <Text style={[TYPE.label, { color: colors.textMuted }]}>RESPONSE TIME</Text>
+          <Text style={[TYPE.body, { color: colors.text, marginTop: 6 }]}>
+            All inquiries are typically resolved within 24 hours.
+          </Text>
+        </View>
+
+        {/* Subtle Creator Credit Footer */}
+        <View style={styles.footerWrap}>
+          <Text style={[TYPE.micro, { color: colors.textMuted }]}>
+            {BRAND.creatorCredit}
+          </Text>
+          <Text style={[TYPE.micro, { color: colors.textMuted, marginTop: 2 }]}>
+            Asset Doctor · Universal Asset Intelligence
+          </Text>
+        </View>
       </ScrollView>
-    </Screen>
+    </View>
   );
 }
 
 export default ContactUsScreen;
 
 const styles = StyleSheet.create({
-  content: { padding: SPACING.lg, paddingTop: 48, paddingBottom: 40 },
-  title: { color: COLORS.text, fontSize: 26, fontWeight: '900', marginBottom: SPACING.md },
-  label: { color: COLORS.muted, fontSize: 11, fontWeight: '800', letterSpacing: 0.4 },
-  body: { color: COLORS.text, fontSize: 14, lineHeight: 21, marginTop: 8, fontWeight: '500' },
-  mailBtn: {
-    marginTop: 16,
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: 'rgba(37,99,235,0.10)',
-    borderWidth: 1,
-    borderColor: 'rgba(37,99,235,0.35)',
+  root: { flex: 1 },
+  headerWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.xs,
   },
-  mailText: { color: '#2563EB', fontWeight: '900', fontSize: 16 },
-  mailHint: { color: COLORS.muted, fontSize: 12, marginTop: 4, fontWeight: '600' },
+  content: {
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.sm,
+    paddingBottom: 40,
+    gap: 12,
+  },
+  card: {
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+  },
+  mailBtn: {
+    marginTop: SPACING.md,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+  },
+  mailText: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  footerWrap: {
+    alignItems: 'center',
+    marginTop: SPACING.xl,
+    paddingVertical: SPACING.md,
+  },
 });

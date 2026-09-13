@@ -7,6 +7,7 @@
 import { daysUntil, yearsSince } from './dates';
 import { clamp } from './format';
 import { resolveAssetCapabilities } from '../services/assets/assetCapabilities';
+import { TrustEngine } from '../smartCore/TrustEngine';
 
 /**
  * @param {object} asset
@@ -54,7 +55,12 @@ export function calculateHealthScore(asset = {}) {
   ].filter(Boolean);
   for (const { key, label } of checks) {
     const days = daysUntil(asset[key]);
-    if (days === null) continue;
+    if (days === null) {
+      const missingPenalty = (key === 'insuranceExpiry' || key === 'pucExpiry') ? 10 : 5;
+      expiryPenalty += missingPenalty;
+      tips.push(`Add ${label} details to protect your asset`);
+      continue;
+    }
     if (days < 0) {
       expiryPenalty += 15;
       tips.push(`${label} expired — renew ASAP`);
@@ -88,11 +94,20 @@ export function calculateHealthScore(asset = {}) {
 
   score = Math.round(clamp(score, 0, 100));
 
+  const trustEval = TrustEngine.evaluateAssetHealth(asset);
+
   let grade = 'Critical';
   if (score >= 85) grade = 'Excellent';
   else if (score >= 70) grade = 'Good';
   else if (score >= 50) grade = 'Fair';
   else if (score >= 30) grade = 'At Risk';
+
+  // Truthful override: missing mandatory compliance or expired documents prevent optimistic health ratings
+  if (trustEval.status === 'EXPIRED') {
+    if (grade === 'Excellent' || grade === 'Good') grade = 'At Risk';
+  } else if (trustEval.status === 'MISSING_DATA') {
+    if (grade === 'Excellent') grade = 'Fair';
+  }
 
   const statusTone = (penalty) => {
     if (penalty >= 0) return 'success';
@@ -149,10 +164,14 @@ export function calculateHealthScore(asset = {}) {
     score: validScore,
     grade,
     band: grade,
+    status: trustEval.status,
+    trustStatus: trustEval.status,
     factors,
     tips: tips.slice(0, 4),
     ageYears: Number.isFinite(ageYears) ? Number(ageYears.toFixed(1)) : 0,
     explainFactors,
+    truthfulSummary: trustEval.truthfulSummary,
+    missingRequirements: trustEval.missingRequirements,
   };
 }
 
